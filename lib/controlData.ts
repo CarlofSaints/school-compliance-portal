@@ -1,43 +1,46 @@
-import fs from "fs";
-import path from "path";
+import { put, head, del, list } from "@vercel/blob";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+const PREFIX = "hvps/";
 
-function ensureDir(dir: string) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+function blobKey(path: string): string {
+  return PREFIX + path;
 }
 
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
-  // Local file fallback for dev
-  const filePath = path.join(DATA_DIR, blobPath);
   try {
-    ensureDir(path.dirname(filePath));
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      return JSON.parse(raw) as T;
+    const result = await head(blobKey(blobPath));
+    if (result) {
+      const res = await fetch(result.url);
+      if (res.ok) {
+        return (await res.json()) as T;
+      }
     }
   } catch {
-    // fall through
+    // blob not found
   }
   return fallback;
 }
 
 export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
-  const filePath = path.join(DATA_DIR, blobPath);
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  await put(blobKey(blobPath), JSON.stringify(data, null, 2), {
+    access: "public",
+    contentType: "application/json",
+    addRandomSuffix: false,
+  });
 }
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {
-  const filePath = path.join(DATA_DIR, blobPath);
   try {
-    if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath);
+    const result = await head(blobKey(blobPath));
+    if (result) {
+      const res = await fetch(result.url);
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      }
     }
   } catch {
-    // fall through
+    // blob not found
   }
   return null;
 }
@@ -46,16 +49,17 @@ export async function writeFile(
   blobPath: string,
   data: Buffer | Uint8Array
 ): Promise<void> {
-  const filePath = path.join(DATA_DIR, blobPath);
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, data);
+  await put(blobKey(blobPath), Buffer.from(data), {
+    access: "public",
+    addRandomSuffix: false,
+  });
 }
 
 export async function deleteFile(blobPath: string): Promise<void> {
-  const filePath = path.join(DATA_DIR, blobPath);
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    const result = await head(blobKey(blobPath));
+    if (result) {
+      await del(result.url);
     }
   } catch {
     // ignore
@@ -63,10 +67,15 @@ export async function deleteFile(blobPath: string): Promise<void> {
 }
 
 export async function listFiles(dirPath: string): Promise<string[]> {
-  const fullPath = path.join(DATA_DIR, dirPath);
   try {
-    ensureDir(fullPath);
-    return fs.readdirSync(fullPath);
+    const result = await list({ prefix: blobKey(dirPath + "/") });
+    return result.blobs.map((b) => {
+      const full = b.pathname;
+      const prefix = blobKey(dirPath + "/");
+      const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
+      // Return just the filename (no subdirectories)
+      return relative.split("/")[0];
+    }).filter((name) => name.length > 0);
   } catch {
     return [];
   }
