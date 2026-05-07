@@ -1,4 +1,4 @@
-import { put, del, list, getDownloadUrl } from "@vercel/blob";
+import { put, del, list } from "@vercel/blob";
 
 const PREFIX = "hvps/";
 
@@ -6,21 +6,24 @@ function blobKey(path: string): string {
   return PREFIX + path;
 }
 
+async function fetchBlob(url: string): Promise<Response> {
+  return fetch(url, {
+    headers: {
+      Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
+    },
+  });
+}
+
 async function findBlob(blobPath: string) {
   const result = await list({ prefix: blobKey(blobPath), limit: 1 });
   return result.blobs.find((b) => b.pathname === blobKey(blobPath)) || null;
-}
-
-async function fetchBlobContent(blobUrl: string): Promise<Response> {
-  const url = getDownloadUrl(blobUrl);
-  return fetch(url);
 }
 
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   try {
     const blob = await findBlob(blobPath);
     if (blob) {
-      const res = await fetchBlobContent(blob.url);
+      const res = await fetchBlob(blob.url);
       if (res.ok) {
         return (await res.json()) as T;
       }
@@ -44,7 +47,7 @@ export async function readFile(blobPath: string): Promise<Buffer | null> {
   try {
     const blob = await findBlob(blobPath);
     if (blob) {
-      const res = await fetchBlobContent(blob.url);
+      const res = await fetchBlob(blob.url);
       if (res.ok) {
         const arrayBuffer = await res.arrayBuffer();
         return Buffer.from(arrayBuffer);
