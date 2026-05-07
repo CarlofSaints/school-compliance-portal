@@ -1,11 +1,22 @@
 import { readJson, writeJson, writeFile, readFile } from "./controlData";
 
+export interface QuoteDetail {
+  supplierName: string;
+  supplierWebsite?: string;
+  supplierEmail: string;
+  supplierPhone?: string;
+}
+
 export interface SpendApplication {
   id: string;
   projectName: string;
   description: string;
   estimatedAmount: number;
+  supplierConnection: string;
+  budgeted: boolean;
+  sourceOfFunds: string;
   quotes: string[]; // file paths
+  quoteDetails: QuoteDetail[];
   status: "pending" | "approved" | "rejected" | "requires_changes";
   submittedBy: string;
   submittedByName: string;

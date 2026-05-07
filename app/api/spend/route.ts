@@ -5,6 +5,7 @@ import {
   createSpendApplication,
   uploadQuoteFile,
 } from "@/lib/spendData";
+import type { QuoteDetail } from "@/lib/spendData";
 import { getPeopleByPositions } from "@/lib/peopleData";
 import { sendSpendNotificationEmail } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
     const estimatedAmount = parseFloat(
       formData.get("estimatedAmount") as string
     );
+    const supplierConnection =
+      (formData.get("supplierConnection") as string) || "None";
+    const budgeted = (formData.get("budgeted") as string) === "yes";
+    const sourceOfFunds =
+      (formData.get("sourceOfFunds") as string) || "Fundraising";
 
     if (!projectName || !description || isNaN(estimatedAmount)) {
       return NextResponse.json(
@@ -44,6 +50,7 @@ export async function POST(req: NextRequest) {
 
     const spendId = uuidv4();
     const quotePaths: string[] = [];
+    const quoteDetails: QuoteDetail[] = [];
 
     // Handle up to 4 quote files
     for (let i = 1; i <= 4; i++) {
@@ -53,6 +60,16 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(await quoteFile.arrayBuffer());
         const path = await uploadQuoteFile(spendId, i, ext, buffer);
         quotePaths.push(path);
+        quoteDetails.push({
+          supplierName:
+            (formData.get(`quote${i}_supplierName`) as string) || "",
+          supplierWebsite:
+            (formData.get(`quote${i}_supplierWebsite`) as string) || undefined,
+          supplierEmail:
+            (formData.get(`quote${i}_supplierEmail`) as string) || "",
+          supplierPhone:
+            (formData.get(`quote${i}_supplierPhone`) as string) || undefined,
+        });
       }
     }
 
@@ -61,7 +78,11 @@ export async function POST(req: NextRequest) {
       projectName,
       description,
       estimatedAmount,
+      supplierConnection,
+      budgeted,
+      sourceOfFunds,
       quotes: quotePaths,
+      quoteDetails,
       status: "pending" as const,
       submittedBy: session.id,
       submittedByName: `${session.name} ${session.surname}`,
