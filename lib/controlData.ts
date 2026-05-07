@@ -1,4 +1,4 @@
-import { put, head, del, list } from "@vercel/blob";
+import { put, del, list, getDownloadUrl } from "@vercel/blob";
 
 const PREFIX = "hvps/";
 
@@ -6,12 +6,21 @@ function blobKey(path: string): string {
   return PREFIX + path;
 }
 
+async function findBlob(blobPath: string) {
+  const result = await list({ prefix: blobKey(blobPath), limit: 1 });
+  return result.blobs.find((b) => b.pathname === blobKey(blobPath)) || null;
+}
+
+async function fetchBlobContent(blobUrl: string): Promise<Response> {
+  const url = getDownloadUrl(blobUrl);
+  return fetch(url);
+}
+
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   try {
-    const result = await list({ prefix: blobKey(blobPath), limit: 1 });
-    const blob = result.blobs.find((b) => b.pathname === blobKey(blobPath));
+    const blob = await findBlob(blobPath);
     if (blob) {
-      const res = await fetch(blob.downloadUrl);
+      const res = await fetchBlobContent(blob.url);
       if (res.ok) {
         return (await res.json()) as T;
       }
@@ -33,10 +42,9 @@ export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {
   try {
-    const result = await list({ prefix: blobKey(blobPath), limit: 1 });
-    const blob = result.blobs.find((b) => b.pathname === blobKey(blobPath));
+    const blob = await findBlob(blobPath);
     if (blob) {
-      const res = await fetch(blob.downloadUrl);
+      const res = await fetchBlobContent(blob.url);
       if (res.ok) {
         const arrayBuffer = await res.arrayBuffer();
         return Buffer.from(arrayBuffer);
@@ -61,8 +69,7 @@ export async function writeFile(
 
 export async function deleteFile(blobPath: string): Promise<void> {
   try {
-    const result = await list({ prefix: blobKey(blobPath), limit: 1 });
-    const blob = result.blobs.find((b) => b.pathname === blobKey(blobPath));
+    const blob = await findBlob(blobPath);
     if (blob) {
       await del(blob.url);
     }

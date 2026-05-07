@@ -53,12 +53,12 @@ export async function GET(req: NextRequest) {
         id: uuidv4(),
         name: "Super",
         surname: "Admin",
-        email: "admin@hvps.co.za",
+        email: "carl@outerjoin.co.za",
         password: "Admin@123",
         role: "super-admin",
         forcePasswordChange: true,
       });
-      results.push("Created super admin (admin@hvps.co.za / Admin@123)");
+      results.push("Created super admin (carl@outerjoin.co.za / Admin@123)");
     } else {
       results.push("Super admin already exists");
     }
