@@ -1,11 +1,11 @@
 "use client";
 
 import { useAuth, authFetch, updateSession, getSession, setSession } from "@/lib/useAuth";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Toast from "@/components/Toast";
 
-export default function AccountPage() {
+function AccountContent() {
   const { session, loading } = useAuth();
   const searchParams = useSearchParams();
   const forceChange = searchParams.get("changePassword") === "1";
@@ -198,5 +198,13 @@ export default function AccountPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading...</div>}>
+      <AccountContent />
+    </Suspense>
   );
 }

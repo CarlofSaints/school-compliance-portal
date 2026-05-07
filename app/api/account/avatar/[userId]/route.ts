@@ -31,7 +31,7 @@ export async function GET(
         ? "image/png"
         : "image/webp";
 
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: { "Content-Type": contentType },
     });
   } catch {

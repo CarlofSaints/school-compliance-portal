@@ -1,3 +1,5 @@
+import { PDFParse } from "pdf-parse";
+
 export async function extractTextFromBuffer(
   buffer: Buffer,
   ext: string
@@ -6,9 +8,10 @@ export async function extractTextFromBuffer(
 
   if (extension === "pdf") {
     try {
-      const pdfParse = (await import("pdf-parse")).default;
-      const data = await pdfParse(buffer);
-      return data.text;
+      const parser = new PDFParse({ data: new Uint8Array(buffer) });
+      const result = await parser.getText();
+      await parser.destroy();
+      return result.text || "[No text found in PDF]";
     } catch (err) {
       console.error("PDF parse error:", err);
       return "[Could not extract text from PDF]";
@@ -20,13 +23,11 @@ export async function extractTextFromBuffer(
   }
 
   if (extension === "docx") {
-    // Basic DOCX text extraction (XML-based)
     try {
       const JSZip = (await import("jszip" as string)).default;
       const zip = await JSZip.loadAsync(buffer);
       const doc = await zip.file("word/document.xml")?.async("text");
       if (doc) {
-        // Strip XML tags to get plain text
         return doc
           .replace(/<[^>]+>/g, " ")
           .replace(/\s+/g, " ")

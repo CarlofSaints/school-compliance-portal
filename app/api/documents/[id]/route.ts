@@ -21,7 +21,7 @@ export async function GET(
     if (!buffer) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="${doc.filename}"`,

@@ -2,7 +2,7 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
-import { POSITIONS } from "@/lib/peopleData";
+import { POSITIONS } from "@/lib/positions";
 import Toast from "@/components/Toast";
 
 interface PersonRecord {

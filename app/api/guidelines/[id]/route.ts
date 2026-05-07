@@ -27,7 +27,7 @@ export async function GET(
         { status: 404 }
       );
     }
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="${guideline.filename}"`,

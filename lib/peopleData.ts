@@ -1,4 +1,7 @@
 import { readJson, writeJson } from "./controlData";
+import { POSITIONS } from "./positions";
+
+export { POSITIONS };
 
 export interface Person {
   id: string;
@@ -9,21 +12,6 @@ export interface Person {
   phone: string;
   profilePic: string;
 }
-
-export const POSITIONS = [
-  "Principal",
-  "Deputy Principal",
-  "SGB Chairperson",
-  "SGB Vice Chairperson",
-  "SGB Treasurer",
-  "Secretary",
-  "Head of Fundraising",
-  "Grounds and Building",
-  "Business Administration",
-  "Maintenance Manager",
-  "Co-opted SGB",
-  "IT & E-learning",
-];
 
 const PEOPLE_PATH = "people.json";
 
