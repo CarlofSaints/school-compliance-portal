@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { setSession, getSession } from "@/lib/useAuth";
 
 export default function LoginPage() {
@@ -50,9 +51,14 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-white text-2xl font-bold">HVPS</span>
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Hurlyvale Primary School Crest"
+            width={100}
+            height={120}
+            className="mx-auto mb-4"
+            priority
+          />
           <h1 className="text-2xl font-bold text-dark">
             Hurlyvale Primary School
           </h1>
