@@ -29,6 +29,7 @@ interface QuoteEntry {
   supplierWebsite: string;
   supplierEmail: string;
   supplierPhone: string;
+  priceExclVat: string;
 }
 
 const emptyQuote = (): QuoteEntry => ({
@@ -37,6 +38,7 @@ const emptyQuote = (): QuoteEntry => ({
   supplierWebsite: "",
   supplierEmail: "",
   supplierPhone: "",
+  priceExclVat: "",
 });
 
 export default function NewSpendPage() {
@@ -85,6 +87,7 @@ export default function NewSpendPage() {
         formData.append(`quote${i + 1}_supplierWebsite`, quote.supplierWebsite);
         formData.append(`quote${i + 1}_supplierEmail`, quote.supplierEmail);
         formData.append(`quote${i + 1}_supplierPhone`, quote.supplierPhone);
+        formData.append(`quote${i + 1}_priceExclVat`, quote.priceExclVat);
       }
     });
 
@@ -337,6 +340,29 @@ export default function NewSpendPage() {
                           }
                           placeholder="012 345 6789"
                           className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <label className="block text-xs text-gray-500 mb-1">
+                        Total Price Excluding VAT (ZAR)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+                          R
+                        </span>
+                        <input
+                          type="number"
+                          value={quotes[i].priceExclVat}
+                          onChange={(e) =>
+                            updateQuote(i, {
+                              priceExclVat: e.target.value,
+                            })
+                          }
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          className="w-full pl-7 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                         />
                       </div>
                     </div>

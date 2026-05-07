@@ -5,6 +5,7 @@ export interface QuoteDetail {
   supplierWebsite?: string;
   supplierEmail: string;
   supplierPhone?: string;
+  priceExclVat: number;
 }
 
 export interface SpendApplication {

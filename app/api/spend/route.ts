@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(await quoteFile.arrayBuffer());
         const path = await uploadQuoteFile(spendId, i, ext, buffer);
         quotePaths.push(path);
+        const priceStr = (formData.get(`quote${i}_priceExclVat`) as string) || "0";
         quoteDetails.push({
           supplierName:
             (formData.get(`quote${i}_supplierName`) as string) || "",
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
             (formData.get(`quote${i}_supplierEmail`) as string) || "",
           supplierPhone:
             (formData.get(`quote${i}_supplierPhone`) as string) || undefined,
+          priceExclVat: parseFloat(priceStr) || 0,
         });
       }
     }

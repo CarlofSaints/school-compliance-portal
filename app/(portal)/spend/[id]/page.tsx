@@ -10,6 +10,7 @@ interface QuoteDetail {
   supplierWebsite?: string;
   supplierEmail: string;
   supplierPhone?: string;
+  priceExclVat?: number;
 }
 
 interface SpendDetail {
@@ -202,6 +203,44 @@ export default function SpendDetailPage() {
             </div>
           </div>
 
+          {/* Quote Price Summary */}
+          {data.quoteDetails && data.quoteDetails.some((d) => d.priceExclVat) && (() => {
+            const prices = data.quoteDetails!
+              .map((d) => d.priceExclVat || 0)
+              .filter((p) => p > 0);
+            if (prices.length === 0) return null;
+            const highest = Math.max(...prices);
+            const lowest = Math.min(...prices);
+            const average = prices.reduce((a, b) => a + b, 0) / prices.length;
+            return (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h3 className="font-medium text-sm text-gray-500 mb-3">
+                  QUOTE PRICE SUMMARY (Excl. VAT)
+                </h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-4 bg-risk-high/5 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Highest</p>
+                    <p className="text-xl font-bold text-risk-high mt-1">
+                      R{highest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-emerald-50 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Lowest</p>
+                    <p className="text-xl font-bold text-emerald-600 mt-1">
+                      R{lowest.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-primary/5 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">Average</p>
+                    <p className="text-xl font-bold text-primary mt-1">
+                      R{average.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Quotes */}
           {data.quotes.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -261,52 +300,62 @@ export default function SpendDetailPage() {
                         </button>
                       </div>
                       {detail && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-xs">
-                          {detail.supplierName && (
-                            <div>
-                              <span className="text-gray-400">Supplier</span>
-                              <p className="text-gray-700">
-                                {detail.supplierName}
-                              </p>
+                        <>
+                          {detail.priceExclVat !== undefined && detail.priceExclVat > 0 && (
+                            <div className="mt-2 p-2 bg-gray-50 rounded inline-block">
+                              <span className="text-xs text-gray-400">Price Excl. VAT: </span>
+                              <span className="text-sm font-semibold text-dark">
+                                R{detail.priceExclVat.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
                             </div>
                           )}
-                          {detail.supplierEmail && (
-                            <div>
-                              <span className="text-gray-400">Email</span>
-                              <p className="text-gray-700">
-                                <a
-                                  href={`mailto:${detail.supplierEmail}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {detail.supplierEmail}
-                                </a>
-                              </p>
-                            </div>
-                          )}
-                          {detail.supplierPhone && (
-                            <div>
-                              <span className="text-gray-400">Phone</span>
-                              <p className="text-gray-700">
-                                {detail.supplierPhone}
-                              </p>
-                            </div>
-                          )}
-                          {detail.supplierWebsite && (
-                            <div>
-                              <span className="text-gray-400">Website</span>
-                              <p className="text-gray-700">
-                                <a
-                                  href={detail.supplierWebsite}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline"
-                                >
-                                  Visit
-                                </a>
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-xs">
+                            {detail.supplierName && (
+                              <div>
+                                <span className="text-gray-400">Supplier</span>
+                                <p className="text-gray-700">
+                                  {detail.supplierName}
+                                </p>
+                              </div>
+                            )}
+                            {detail.supplierEmail && (
+                              <div>
+                                <span className="text-gray-400">Email</span>
+                                <p className="text-gray-700">
+                                  <a
+                                    href={`mailto:${detail.supplierEmail}`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {detail.supplierEmail}
+                                  </a>
+                                </p>
+                              </div>
+                            )}
+                            {detail.supplierPhone && (
+                              <div>
+                                <span className="text-gray-400">Phone</span>
+                                <p className="text-gray-700">
+                                  {detail.supplierPhone}
+                                </p>
+                              </div>
+                            )}
+                            {detail.supplierWebsite && (
+                              <div>
+                                <span className="text-gray-400">Website</span>
+                                <p className="text-gray-700">
+                                  <a
+                                    href={detail.supplierWebsite}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline"
+                                  >
+                                    Visit
+                                  </a>
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   );
