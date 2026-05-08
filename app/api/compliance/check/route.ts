@@ -34,9 +34,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error("Compliance check failed:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Compliance check failed:", message, err);
     return NextResponse.json(
-      { error: "Compliance check failed" },
+      { error: `Compliance check failed: ${message}` },
       { status: 500 }
     );
   }

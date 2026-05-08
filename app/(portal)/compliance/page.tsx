@@ -70,15 +70,19 @@ export default function CompliancePage() {
           method: "POST",
           body: formData,
         });
-        if (res.ok) {
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
           setResult(await res.json());
-        } else {
+        } else if (contentType.includes("application/json")) {
           const err = await res.json();
           setToast({ message: err.error || "Check failed", type: "error" });
+        } else {
+          setToast({ message: `Server error (${res.status}). The check may have timed out — try a smaller document.`, type: "error" });
         }
       }
-    } catch {
-      setToast({ message: "Network error", type: "error" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      setToast({ message: `Request failed: ${msg}`, type: "error" });
     }
 
     setChecking(false);
