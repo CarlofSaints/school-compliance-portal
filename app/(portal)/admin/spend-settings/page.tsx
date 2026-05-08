@@ -151,17 +151,25 @@ export default function SpendSettingsPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Budget Year
               </label>
-              <input
-                type="number"
+              <select
                 value={settings.capexYear}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
-                    capexYear: parseInt(e.target.value) || 0,
+                    capexYear: parseInt(e.target.value),
                   })
                 }
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-              />
+              >
+                {Array.from({ length: 7 }, (_, i) => {
+                  const year = new Date().getFullYear() - 2 + i;
+                  return (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

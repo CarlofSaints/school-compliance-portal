@@ -3,6 +3,9 @@ import { requirePermission } from "@/lib/rolesData";
 import { runComplianceCheck } from "@/lib/complianceEngine";
 import { extractTextFromBuffer } from "@/lib/pdfParser";
 
+// Web search + large PDF extraction + Claude API can take time
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, "check_compliance");
   if (session instanceof NextResponse) return session;

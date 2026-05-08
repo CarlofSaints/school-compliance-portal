@@ -12,6 +12,20 @@ interface ComplianceResult {
     guideline_reference: string;
     suggestion: string;
   }[];
+  sources?: { title: string; url: string }[];
+}
+
+// Truncate text to stay within reasonable token limits
+// ~4 chars per token, aim for ~50k tokens max per guideline
+const MAX_CHARS_PER_GUIDELINE = 200000;
+const MAX_CHARS_POLICY = 200000;
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return (
+    text.slice(0, maxChars) +
+    "\n\n[... Document truncated due to length. Key sections above should cover primary compliance areas.]"
+  );
 }
 
 export async function runComplianceCheck(
@@ -36,7 +50,7 @@ export async function runComplianceCheck(
       try {
         const text = await extractTextFromBuffer(fileBuffer, g.ext);
         guidelineTexts.push(
-          `--- Guideline: ${g.name} (Source: ${g.source}) ---\n${text}\n`
+          `--- Guideline: ${g.name} (Source: ${g.source}) ---\n${truncateText(text, MAX_CHARS_PER_GUIDELINE)}\n`
         );
       } catch {
         guidelineTexts.push(
@@ -49,19 +63,27 @@ export async function runComplianceCheck(
   const guidelineSection =
     guidelineTexts.length > 0
       ? `\n\nREFERENCE GUIDELINES:\n${guidelineTexts.join("\n")}`
-      : "\n\n(No specific guideline documents uploaded. Use your knowledge of SASA, GDE circulars, and SA education policy.)";
+      : "";
 
   const typeLabel = mode === "policy" ? "school policy" : "school document";
+  const truncatedPolicy = truncateText(policyText, MAX_CHARS_POLICY);
 
-  const prompt = `You are a South African education compliance expert. Analyze the following ${typeLabel} for compliance with GDE (Gauteng Department of Education) and DoE (national Department of Education) guidelines, SASA (South African Schools Act), and best practices for school governance.
+  const prompt = `You are a South African education compliance expert. Analyze the following ${typeLabel} for compliance with GDE (Gauteng Department of Education) and DoE (national Department of Education) guidelines, SASA (South African Schools Act), the BELA Act (Basic Education Laws Amendment Act), and best practices for school governance.
+
+IMPORTANT: Use the web search tool to look up the latest versions of relevant South African education legislation, including:
+- BELA Act (Basic Education Laws Amendment Act) requirements
+- SASA (South African Schools Act) current provisions
+- GDE (Gauteng Department of Education) latest circulars and guidelines
+- DoE (Department of Basic Education) current regulations
+Search for any specific regulations mentioned in or relevant to this document.
 
 DOCUMENT NAME: ${policyName}
 
 DOCUMENT TEXT:
-${policyText}
+${truncatedPolicy}
 ${guidelineSection}
 
-Analyze this ${typeLabel} and return a JSON object with this exact structure:
+After researching the latest regulations online and reviewing the uploaded guidelines above, analyze this ${typeLabel} and return a JSON object with this exact structure:
 {
   "score": <number 0-100 representing overall compliance score>,
   "summary": "<overall assessment in 2-3 sentences>",
@@ -80,12 +102,41 @@ Be thorough but fair. A score of 100 means fully compliant. Identify specific se
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [{ role: "user", content: prompt }],
+    tools: [
+      {
+        type: "web_search_20250305" as const,
+        name: "web_search",
+        max_uses: 5,
+      },
+    ],
   });
 
-  const responseText =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  // Extract text from response - with web search, there may be multiple content blocks
+  let responseText = "";
+  const sources: { title: string; url: string }[] = [];
+
+  for (const block of message.content) {
+    if (block.type === "text") {
+      responseText += block.text;
+      // Collect citations if present
+      if ("citations" in block && Array.isArray(block.citations)) {
+        for (const citation of block.citations) {
+          if (
+            citation.type === "web_search_result_location" &&
+            citation.url &&
+            citation.title
+          ) {
+            // Avoid duplicate sources
+            if (!sources.some((s) => s.url === citation.url)) {
+              sources.push({ title: citation.title, url: citation.url });
+            }
+          }
+        }
+      }
+    }
+  }
 
   try {
     // Extract JSON from response (handle potential markdown wrapping)
@@ -102,6 +153,11 @@ Be thorough but fair. A score of 100 means fully compliant. Identify specific se
       !Array.isArray(result.risks)
     ) {
       throw new Error("Invalid response structure");
+    }
+
+    // Attach web sources
+    if (sources.length > 0) {
+      result.sources = sources;
     }
 
     return result;

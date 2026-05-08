@@ -202,6 +202,24 @@ export default function SpendDetailPage() {
     setCompleting(false);
   };
 
+  const handleForceApprove = async () => {
+    if (!confirm("Mark this application as already approved? This skips the normal approval flow.")) return;
+    setSubmitting(true);
+    const res = await authFetch(`/api/spend/${spendId}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ forceApprove: true }),
+    });
+    if (res.ok) {
+      setToast({ message: "Marked as approved", type: "success" });
+      fetchData();
+    } else {
+      const err = await res.json();
+      setToast({ message: err.error || "Failed", type: "error" });
+    }
+    setSubmitting(false);
+  };
+
   if (loading || !data) return <div className="p-6">Loading...</div>;
 
   const canApprove = session?.permissions.includes("approve_spend");
@@ -298,6 +316,15 @@ export default function SpendDetailPage() {
               className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
             >
               Complete Project
+            </button>
+          )}
+          {isAdmin && data.status !== "approved" && data.status !== "completed" && (
+            <button
+              onClick={handleForceApprove}
+              disabled={submitting}
+              className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              Already Approved
             </button>
           )}
         </div>

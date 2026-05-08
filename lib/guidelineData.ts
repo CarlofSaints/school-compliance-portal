@@ -4,7 +4,7 @@ export interface GuidelineMeta {
   id: string;
   name: string;
   description: string;
-  source: string; // "GDE" | "DoE" | "SASA" | "Other"
+  source: string; // "GDE" | "DoE" | "SASA" | "BELA" | "Other"
   filename: string;
   ext: string;
   uploadedBy: string;

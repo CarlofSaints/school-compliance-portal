@@ -83,7 +83,7 @@ export default function GuidelinesPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark">Guidelines</h1>
           <p className="text-gray-500 text-sm">
-            GDE/DoE guideline documents used for compliance checks
+            GDE/DoE/BELA guideline documents used for compliance checks
           </p>
         </div>
         <button
@@ -131,6 +131,7 @@ export default function GuidelinesPage() {
                 <option value="GDE">GDE (Gauteng Dept of Education)</option>
                 <option value="DoE">DoE (National Dept of Education)</option>
                 <option value="SASA">SASA (SA Schools Act)</option>
+                <option value="BELA">BELA (Basic Education Laws Amendment Act)</option>
                 <option value="Other">Other</option>
               </select>
             </div>
@@ -197,7 +198,7 @@ export default function GuidelinesPage() {
             {guidelines.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                  No guidelines uploaded. Upload GDE/DoE documents to enable compliance checking.
+                  No guidelines uploaded. Upload GDE/DoE/BELA documents to enable compliance checking.
                 </td>
               </tr>
             )}

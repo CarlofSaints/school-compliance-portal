@@ -11,6 +11,7 @@ async function fetchBlob(url: string): Promise<Response> {
     headers: {
       Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
     },
+    cache: "no-store",
   });
 }
 
@@ -19,11 +20,23 @@ async function findBlob(blobPath: string) {
   return result.blobs.find((b) => b.pathname === blobKey(blobPath)) || null;
 }
 
+// In-memory cache of recent writes to avoid stale reads from Vercel Blob
+const recentWrites = new Map<string, { data: unknown; ts: number }>();
+const CACHE_TTL = 10000; // 10 seconds
+
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
+  // Check if we have a recent write for this path (avoids stale blob reads)
+  const cached = recentWrites.get(blobPath);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data as T;
+  }
+
   try {
     const blob = await findBlob(blobPath);
     if (blob) {
-      const res = await fetchBlob(blob.url);
+      // Append cache-buster to avoid CDN/edge caching
+      const url = blob.url + (blob.url.includes("?") ? "&" : "?") + `_t=${Date.now()}`;
+      const res = await fetchBlob(url);
       if (res.ok) {
         return (await res.json()) as T;
       }
@@ -41,6 +54,8 @@ export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
     addRandomSuffix: false,
     allowOverwrite: true,
   });
+  // Cache the write so immediate re-reads get fresh data
+  recentWrites.set(blobPath, { data, ts: Date.now() });
 }
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {

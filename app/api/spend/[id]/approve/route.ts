@@ -21,7 +21,34 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { decision, comments, preferredQuoteIndex } = body;
+    const { decision, comments, preferredQuoteIndex, forceApprove } = body;
+
+    // Admin force-approve: skip normal flow, set status directly
+    if (forceApprove) {
+      if (!session.permissions.includes("manage_spend_settings")) {
+        return NextResponse.json(
+          { error: "Only admins can force-approve" },
+          { status: 403 }
+        );
+      }
+
+      await updateSpendApplication(id, {
+        status: "approved",
+        approvals: [
+          ...app.approvals,
+          {
+            userId: session.id,
+            userName: `${session.name} ${session.surname}`,
+            position: "Admin",
+            decision: "approved" as const,
+            comments: comments || "Marked as already approved by admin",
+            decidedAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      return NextResponse.json({ success: true, status: "approved" });
+    }
 
     if (!["approved", "rejected", "requires_changes"].includes(decision)) {
       return NextResponse.json(

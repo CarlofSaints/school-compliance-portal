@@ -22,6 +22,7 @@ interface CheckResult {
     guideline_reference: string;
     suggestion: string;
   }[];
+  sources?: { title: string; url: string }[];
 }
 
 export default function CompliancePage() {
@@ -92,7 +93,7 @@ export default function CompliancePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-dark">Compliance Check</h1>
         <p className="text-gray-500 text-sm">
-          Analyze policies against GDE/DoE guidelines using AI
+          Analyze policies against GDE/DoE/BELA guidelines using AI
         </p>
       </div>
 
@@ -174,8 +175,11 @@ export default function CompliancePage() {
           {checking && (
             <div className="mt-4 text-center">
               <div className="animate-pulse text-sm text-gray-500">
-                AI is analyzing the document against guidelines...
+                AI is searching for the latest regulations and analyzing the document...
               </div>
+              <p className="text-xs text-gray-400 mt-2">
+                This may take a minute — checking uploaded guidelines and searching online for the latest GDE, DoE, SASA, and BELA Act requirements.
+              </p>
             </div>
           )}
         </div>
@@ -214,6 +218,28 @@ export default function CompliancePage() {
                 <p className="text-sm text-emerald-600">No risks found.</p>
               )}
             </div>
+
+            {result.sources && result.sources.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  ONLINE SOURCES CONSULTED
+                </h3>
+                <ul className="space-y-1">
+                  {result.sources.map((source, i) => (
+                    <li key={i}>
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        {source.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
