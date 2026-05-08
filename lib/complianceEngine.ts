@@ -1,6 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getGuidelines, downloadGuidelineFile } from "./guidelineData";
-import { extractTextFromBuffer } from "./pdfParser";
 
 interface ComplianceResult {
   score: number;
@@ -15,17 +13,13 @@ interface ComplianceResult {
   sources?: { title: string; url: string }[];
 }
 
-// Conservative limits to stay within Vercel memory and Claude context
-// ~4 chars per token — keep total under ~60k tokens input
-const MAX_CHARS_PER_GUIDELINE = 40000; // ~10k tokens each
-const MAX_CHARS_POLICY = 80000; // ~20k tokens
-const MAX_GUIDELINE_FILE_SIZE = 2 * 1024 * 1024; // Skip files > 2MB (too large to parse in serverless)
+const MAX_CHARS_POLICY = 80000;
 
 function truncateText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return (
     text.slice(0, maxChars) +
-    "\n\n[... Document truncated. Use web search to look up the full text of this legislation online.]"
+    "\n\n[... Document truncated due to length.]"
   );
 }
 
@@ -41,64 +35,17 @@ export async function runComplianceCheck(
 
   const client = new Anthropic({ apiKey });
 
-  // Load guideline texts (skip files that are too large to parse in serverless)
-  const guidelines = await getGuidelines();
-  const guidelineTexts: string[] = [];
-  const skippedGuidelines: string[] = [];
-
-  for (const g of guidelines) {
-    if (g.size > MAX_GUIDELINE_FILE_SIZE) {
-      skippedGuidelines.push(`${g.name} (${g.source})`);
-      guidelineTexts.push(
-        `--- Guideline: ${g.name} (Source: ${g.source}) ---\n[Document too large to include inline. Search online for the full text of this legislation.]\n`
-      );
-      continue;
-    }
-
-    const fileBuffer = await downloadGuidelineFile(g.id, g.ext);
-    if (fileBuffer) {
-      try {
-        const text = await extractTextFromBuffer(fileBuffer, g.ext);
-        guidelineTexts.push(
-          `--- Guideline: ${g.name} (Source: ${g.source}) ---\n${truncateText(text, MAX_CHARS_PER_GUIDELINE)}\n`
-        );
-      } catch {
-        guidelineTexts.push(
-          `--- Guideline: ${g.name} (Source: ${g.source}) ---\n[Could not extract text. Search online for this legislation.]\n`
-        );
-      }
-    }
-  }
-
-  const guidelineSection =
-    guidelineTexts.length > 0
-      ? `\n\nREFERENCE GUIDELINES:\n${guidelineTexts.join("\n")}`
-      : "";
-
-  const searchNote =
-    skippedGuidelines.length > 0
-      ? `\nNOTE: The following guideline documents were too large to include in full. You MUST use web search to look up their current provisions: ${skippedGuidelines.join(", ")}.`
-      : "";
-
   const typeLabel = mode === "policy" ? "school policy" : "school document";
   const truncatedPolicy = truncateText(policyText, MAX_CHARS_POLICY);
 
   const prompt = `You are a South African education compliance expert. Analyze the following ${typeLabel} for compliance with GDE (Gauteng Department of Education) and DoE (national Department of Education) guidelines, SASA (South African Schools Act), the BELA Act (Basic Education Laws Amendment Act), and best practices for school governance.
 
-IMPORTANT: Use the web search tool to look up the latest versions of relevant South African education legislation, including:
-- BELA Act (Basic Education Laws Amendment Act) requirements
-- SASA (South African Schools Act) current provisions
-- GDE (Gauteng Department of Education) latest circulars and guidelines
-- DoE (Department of Basic Education) current regulations
-Search for any specific regulations mentioned in or relevant to this document.${searchNote}
-
 DOCUMENT NAME: ${policyName}
 
 DOCUMENT TEXT:
 ${truncatedPolicy}
-${guidelineSection}
 
-After researching the latest regulations online and reviewing any uploaded guidelines above, analyze this ${typeLabel} and return a JSON object with this exact structure:
+Analyze this ${typeLabel} and return a JSON object with this exact structure:
 {
   "score": <number 0-100 representing overall compliance score>,
   "summary": "<overall assessment in 2-3 sentences>",
@@ -117,61 +64,26 @@ Be thorough but fair. A score of 100 means fully compliant. Identify specific se
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 8192,
+    max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
-    tools: [
-      {
-        type: "web_search_20250305" as const,
-        name: "web_search",
-        max_uses: 5,
-      },
-    ],
   });
 
-  // Extract text from response - with web search, there may be multiple content blocks
-  let responseText = "";
-  const sources: { title: string; url: string }[] = [];
-
-  for (const block of message.content) {
-    if (block.type === "text") {
-      responseText += block.text;
-      // Collect citations if present
-      if ("citations" in block && Array.isArray(block.citations)) {
-        for (const citation of block.citations) {
-          if (
-            citation.type === "web_search_result_location" &&
-            citation.url &&
-            citation.title
-          ) {
-            if (!sources.some((s) => s.url === citation.url)) {
-              sources.push({ title: citation.title, url: citation.url });
-            }
-          }
-        }
-      }
-    }
-  }
+  const responseText =
+    message.content[0].type === "text" ? message.content[0].text : "";
 
   try {
-    // Extract JSON from response (handle potential markdown wrapping)
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("No JSON found in response");
     }
     const result = JSON.parse(jsonMatch[0]) as ComplianceResult;
 
-    // Validate structure
     if (
       typeof result.score !== "number" ||
       !result.summary ||
       !Array.isArray(result.risks)
     ) {
       throw new Error("Invalid response structure");
-    }
-
-    // Attach web sources
-    if (sources.length > 0) {
-      result.sources = sources;
     }
 
     return result;
