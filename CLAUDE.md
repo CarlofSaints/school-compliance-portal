@@ -12,6 +12,10 @@ Upload-based checks (`/api/compliance/check`) were stateless — nothing saved, 
 - Compliance page re-loads a saved check from `?check=<id>` (reads `window.location.search`, no `useSearchParams` → avoids Suspense build req) and shows a **Download** button. Download uses `authFetch`→blob (header auth `x-user-id` means a bare `<a download>` would 401 — known project gotcha).
 - **Caveat:** only checks run AFTER this deploy are saved; pre-existing runs won't appear.
 
+### Dedup + resilience (later same day)
+- **Duplicate detection:** route computes `sha256` of the upload (`hash` on the record); `findComplianceCheckByHash` short-circuits an identical re-upload and returns the saved result with `duplicate:true` (no AI re-run). Catches renamed-identical files; an edited file hashes differently → new check. Frontend shows "already checked — showing the saved result" + loads it. **Caveat:** checks saved before this deploy have no `hash`, so they won't dedup until re-run.
+- **Transient Anthropic 5xx:** the AI call uses `maxRetries:4`; a persistent `api_error`/overloaded (HTTP ≥500, has `request_id`) is translated to a friendly "AI service temporarily unavailable, please try again" message (raw JSON no longer shown). This is an Anthropic-side error, not ours — usually transient; retry succeeds.
+
 ## RESOLVED 2026-06-16: Compliance Check failures (TWO root causes, both fixed)
 
 **Bug 1 — "fast timeout" / instant 404 (retired model).** `lib/complianceEngine.ts` pinned model `claude-sonnet-4-20250514`, which **retired June 15, 2026**. From June 16 on, the Anthropic API returns an immediate 404 `not_found_error` — surfaces in the UI as a fast failure / "timed out very quickly". Fixed by switching to `claude-opus-4-8`. (The old fallback note suggesting `claude-3-5-sonnet-20241022` is even more retired — Oct 2025 — do NOT use it. Current valid IDs: `claude-opus-4-8`, `claude-sonnet-4-6`, `claude-haiku-4-5`. Verify IDs against the live catalog; never pin dated snapshots.)

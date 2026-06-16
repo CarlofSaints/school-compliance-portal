@@ -62,6 +62,62 @@ Analyze this ${typeLabel} and return a JSON object with this exact structure:
 Be thorough but fair. A score of 100 means fully compliant. Identify specific sections that need attention. Return ONLY the JSON object, no other text.`;
 }
 
+// JSON Schema for structured outputs — guarantees the model returns valid,
+// complete JSON in this exact shape (no regex extraction needed).
+const RESULT_SCHEMA = {
+  type: "object",
+  properties: {
+    score: { type: "number" },
+    summary: { type: "string" },
+    risks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          severity: { type: "string", enum: ["low", "medium", "high"] },
+          section: { type: "string" },
+          description: { type: "string" },
+          guideline_reference: { type: "string" },
+          suggestion: { type: "string" },
+        },
+        required: [
+          "severity",
+          "section",
+          "description",
+          "guideline_reference",
+          "suggestion",
+        ],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["score", "summary", "risks"],
+  additionalProperties: false,
+} as const;
+
+function tryParseResult(text: string): ComplianceResult | null {
+  // Structured output → the whole text is valid JSON. The regex is a belt-and-
+  // braces fallback for any stray wrapping prose.
+  const candidates = [text];
+  const match = text.match(/\{[\s\S]*\}/);
+  if (match) candidates.push(match[0]);
+  for (const candidate of candidates) {
+    try {
+      const result = JSON.parse(candidate) as ComplianceResult;
+      if (
+        typeof result.score === "number" &&
+        result.summary &&
+        Array.isArray(result.risks)
+      ) {
+        return result;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+}
+
 async function analyze(
   content: Anthropic.ContentBlockParam[]
 ): Promise<ComplianceResult> {
@@ -77,7 +133,12 @@ async function analyze(
   try {
     message = await client.messages.create({
       model: "claude-opus-4-8",
-      max_tokens: 4096,
+      max_tokens: 8192,
+      // Structured output guarantees valid, complete JSON — eliminates the
+      // intermittent "Unable to parse" fallback from truncated/wrapped output.
+      output_config: {
+        format: { type: "json_schema", schema: RESULT_SCHEMA },
+      },
       messages: [{ role: "user", content }],
     });
   } catch (err) {
@@ -96,33 +157,27 @@ async function analyze(
     throw err;
   }
 
-  const responseText =
-    message.content[0].type === "text" ? message.content[0].text : "";
+  const textBlock = message.content.find((b) => b.type === "text");
+  const responseText = textBlock && textBlock.type === "text" ? textBlock.text : "";
 
-  try {
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No JSON found in response");
-    }
-    const result = JSON.parse(jsonMatch[0]) as ComplianceResult;
+  const parsed = tryParseResult(responseText);
+  if (parsed) return parsed;
 
-    if (
-      typeof result.score !== "number" ||
-      !result.summary ||
-      !Array.isArray(result.risks)
-    ) {
-      throw new Error("Invalid response structure");
-    }
-
-    return result;
-  } catch {
-    return {
-      score: 0,
-      summary:
-        "Unable to parse compliance check results. Please try again.",
-      risks: [],
-    };
-  }
+  // Distinguish a truncated analysis (token ceiling) from genuinely unparseable
+  // output so the message is actionable rather than a silent score of 0.
+  const truncated = message.stop_reason === "max_tokens";
+  console.error(
+    "Compliance check parse failed",
+    truncated ? "(truncated at max_tokens)" : "",
+    responseText.slice(0, 200)
+  );
+  return {
+    score: 0,
+    summary: truncated
+      ? "The analysis was too long to finish in one response. Please try again or split the document."
+      : "Unable to parse compliance check results. Please try again.",
+    risks: [],
+  };
 }
 
 // Text entry point (kept for callers that already have extracted text).

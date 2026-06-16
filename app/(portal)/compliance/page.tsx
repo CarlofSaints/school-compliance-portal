@@ -65,6 +65,20 @@ export default function CompliancePage() {
     })();
   }, [session]);
 
+  const runNew = () => {
+    setResult(null);
+    setLoadedCheck(null);
+    setFile(null);
+    setName("");
+    setSelectedPolicy("");
+    setMode("upload");
+    setToast(null);
+    // Drop ?check=<id> so the load-saved-check effect doesn't re-fire.
+    if (window.location.search) {
+      window.history.replaceState(null, "", "/compliance");
+    }
+  };
+
   const downloadDoc = async () => {
     if (!loadedCheck) return;
     const res = await authFetch(`/api/compliance/checks/${loadedCheck.id}/file`);
@@ -147,11 +161,24 @@ export default function CompliancePage() {
     <div>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-dark">Compliance Check</h1>
-        <p className="text-gray-500 text-sm">
-          Analyze policies against GDE/DoE/BELA guidelines using AI
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-dark">Compliance Check</h1>
+          <p className="text-gray-500 text-sm">
+            Analyze policies against GDE/DoE/BELA guidelines using AI
+          </p>
+        </div>
+        {result && (
+          <button
+            onClick={runNew}
+            className="shrink-0 inline-flex items-center gap-1.5 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Run New Check
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
