@@ -1,22 +1,11 @@
-import { PDFParse } from "pdf-parse";
-
+// PDFs are no longer parsed here — they are sent to Claude as a native
+// document block by the compliance engine. This module only handles the
+// lightweight, dependency-free formats.
 export async function extractTextFromBuffer(
   buffer: Buffer,
   ext: string
 ): Promise<string> {
   const extension = ext.toLowerCase().replace(".", "");
-
-  if (extension === "pdf") {
-    try {
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      const result = await parser.getText();
-      await parser.destroy();
-      return result.text || "[No text found in PDF]";
-    } catch (err) {
-      console.error("PDF parse error:", err);
-      return "[Could not extract text from PDF]";
-    }
-  }
 
   if (extension === "txt" || extension === "md") {
     return buffer.toString("utf-8");

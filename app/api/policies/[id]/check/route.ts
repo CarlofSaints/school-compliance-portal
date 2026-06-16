@@ -7,8 +7,7 @@ import {
   updatePolicy,
   getPolicyVersions,
 } from "@/lib/policyData";
-import { runComplianceCheck } from "@/lib/complianceEngine";
-import { extractTextFromBuffer } from "@/lib/pdfParser";
+import { runComplianceCheckOnFile } from "@/lib/complianceEngine";
 import { v4 as uuidv4 } from "uuid";
 
 // Web search + large PDF extraction + Claude API can take time
@@ -49,8 +48,12 @@ export async function POST(
       );
     }
 
-    const policyText = await extractTextFromBuffer(fileBuffer, latest.ext);
-    const result = await runComplianceCheck(policyText, policy.name, "policy");
+    const result = await runComplianceCheckOnFile(
+      fileBuffer,
+      latest.ext,
+      policy.name,
+      "policy"
+    );
 
     const checkId = uuidv4();
     const check = {

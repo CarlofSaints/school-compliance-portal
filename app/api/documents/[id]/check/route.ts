@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getDocumentById, downloadDocumentFile, saveDocumentCheck } from "@/lib/documentData";
-import { runComplianceCheck } from "@/lib/complianceEngine";
-import { extractTextFromBuffer } from "@/lib/pdfParser";
+import { runComplianceCheckOnFile } from "@/lib/complianceEngine";
 import { v4 as uuidv4 } from "uuid";
 
 export async function POST(
@@ -27,8 +26,12 @@ export async function POST(
       );
     }
 
-    const docText = await extractTextFromBuffer(fileBuffer, doc.ext);
-    const result = await runComplianceCheck(docText, doc.name, "document");
+    const result = await runComplianceCheckOnFile(
+      fileBuffer,
+      doc.ext,
+      doc.name,
+      "document"
+    );
 
     const checkId = uuidv4();
     const check = {
