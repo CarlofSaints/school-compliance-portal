@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
-@theme inline {
+/* Brand colours (--color-primary / -dark, --color-dark) are overridden per
+   school via an inline style on <html> in layout.tsx. Non-inline @theme so the
+   utilities compile to var(--color-*) instead of baking the hex in. */
+@theme {
   --color-primary: #00BCD4;
   --color-primary-dark: #00838F;
+  --color-accent: #00BCD4;
   --color-dark: #1A1A1A;
   --color-risk-low: #EAB308;
   --color-risk-medium: #F97316;

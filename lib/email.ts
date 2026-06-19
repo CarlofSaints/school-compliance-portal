@@ -1,13 +1,18 @@
 import { Resend } from "resend";
+import { branding } from "@/lib/branding";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-const FROM_EMAIL = "HVPS Compliance <noreply@hvps.co.za>";
+const FROM_EMAIL = branding.fromEmail;
+const PRIMARY = branding.colors.primary;
 
 function emailShell(title: string, body: string): string {
+  const footerSlogan = branding.slogan
+    ? `${branding.fullName} &mdash; "${branding.slogan}"`
+    : branding.fullName;
   return `
 <!DOCTYPE html>
 <html>
@@ -17,16 +22,16 @@ function emailShell(title: string, body: string): string {
 </head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <div style="background:#00BCD4;padding:20px;text-align:center;border-radius:8px 8px 0 0;">
-      <h1 style="color:#fff;margin:0;font-size:24px;">Hurlyvale Primary School</h1>
-      <p style="color:#e0f7fa;margin:4px 0 0;font-size:14px;">SGB Compliance Portal</p>
+    <div style="background:${PRIMARY};padding:20px;text-align:center;border-radius:8px 8px 0 0;">
+      <h1 style="color:#fff;margin:0;font-size:24px;">${branding.fullName}</h1>
+      <p style="color:${branding.colors.primaryTint};margin:4px 0 0;font-size:14px;">${branding.tagline}</p>
     </div>
     <div style="background:#fff;padding:30px;border-radius:0 0 8px 8px;">
-      <h2 style="color:#1A1A1A;margin:0 0 16px;">${title}</h2>
+      <h2 style="color:${branding.colors.dark};margin:0 0 16px;">${title}</h2>
       ${body}
     </div>
     <div style="text-align:center;padding:20px;color:#888;font-size:12px;">
-      <p>Hurlyvale Primary School &mdash; "We are family!"</p>
+      <p>${footerSlogan}</p>
     </div>
   </div>
 </body>
@@ -40,15 +45,15 @@ export async function sendWelcomeEmail(
 ): Promise<boolean> {
   const body = `
     <p style="color:#333;">Dear ${name},</p>
-    <p style="color:#333;">Welcome to the HVPS SGB Compliance Portal. Your account has been created.</p>
+    <p style="color:#333;">Welcome to the ${branding.shortName} ${branding.tagline}. Your account has been created.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
       <p style="margin:0;color:#333;"><strong>Email:</strong> ${to}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${password}</p>
     </div>
     <p style="color:#333;">Please log in and change your password immediately.</p>
-    <a href="${SITE_URL}/login" style="display:inline-block;background:#00BCD4;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
+    <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
   `;
-  return sendEmail(to, "Welcome to HVPS Compliance Portal", emailShell("Welcome!", body));
+  return sendEmail(to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell("Welcome!", body));
 }
 
 export async function sendSpendNotificationEmail(
@@ -66,7 +71,7 @@ export async function sendSpendNotificationEmail(
       <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${submittedBy}</p>
     </div>
-    <a href="${SITE_URL}/spend" style="display:inline-block;background:#00BCD4;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
+    <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
   `;
   return sendEmail(to, `Spend Application: ${projectName}`, emailShell("New Spend Application", body));
 }
@@ -83,9 +88,9 @@ export async function sendPasswordResetEmail(
       <p style="margin:0;color:#333;"><strong>New Password:</strong> ${newPassword}</p>
     </div>
     <p style="color:#333;">Please log in and change your password immediately.</p>
-    <a href="${SITE_URL}/login" style="display:inline-block;background:#00BCD4;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
+    <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
   `;
-  return sendEmail(to, "Password Reset - HVPS Portal", emailShell("Password Reset", body));
+  return sendEmail(to, `Password Reset - ${branding.shortName} Portal`, emailShell("Password Reset", body));
 }
 
 export async function sendApplicantConfirmationEmail(
@@ -102,7 +107,7 @@ export async function sendApplicantConfirmationEmail(
     <p style="color:#333;">${submitterName} has submitted an application for school funds spend for: <strong>"${projectName}"</strong></p>
     <p style="color:#333;">${quoteCount} quote${quoteCount !== 1 ? "s were" : " was"} submitted — see copies attached.</p>
     <p style="color:#333;">A copy of this application has been sent to: ${approverList}.</p>
-    <a href="${SITE_URL}/spend" style="display:inline-block;background:#00BCD4;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View Application</a>
+    <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View Application</a>
   `;
   return sendEmail(
     to,

@@ -6,6 +6,7 @@ import FileUpload from "@/components/FileUpload";
 import ComplianceScore from "@/components/ComplianceScore";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
+import { branding } from "@/lib/branding";
 
 interface PolicyOption {
   id: string;
@@ -38,7 +39,7 @@ const STATUS_META: {
   { key: "needs_addressing", label: "Needs to be addressed", active: "bg-risk-high border-risk-high text-white", text: "text-risk-high" },
   { key: "in_progress", label: "In progress", active: "bg-amber-500 border-amber-500 text-white", text: "text-amber-600" },
   { key: "addressed", label: "Has been addressed in new policy", active: "bg-emerald-500 border-emerald-500 text-white", text: "text-emerald-600" },
-  { key: "not_an_issue", label: "Not an issue for HVPS", active: "bg-gray-500 border-gray-500 text-white", text: "text-gray-600" },
+  { key: "not_an_issue", label: `Not an issue for ${branding.shortName}`, active: "bg-gray-500 border-gray-500 text-white", text: "text-gray-600" },
 ];
 
 export default function CompliancePage() {

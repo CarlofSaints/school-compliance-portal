@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { setSession, getSession } from "@/lib/useAuth";
+import { branding } from "@/lib/branding";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -52,17 +53,17 @@ export default function LoginPage() {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <Image
-            src="/logo.png"
-            alt="Hurlyvale Primary School Crest"
+            src={branding.logo}
+            alt={branding.logoAlt}
             width={100}
             height={120}
             className="mx-auto mb-4"
             priority
           />
           <h1 className="text-2xl font-bold text-dark">
-            Hurlyvale Primary School
+            {branding.fullName}
           </h1>
-          <p className="text-gray-500 mt-1">SGB Compliance Portal</p>
+          <p className="text-gray-500 mt-1">{branding.tagline}</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
@@ -131,9 +132,12 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          &quot;We are family!&quot; &mdash; STRIVE
-        </p>
+        {branding.slogan && (
+          <p className="text-center text-xs text-gray-400 mt-6">
+            &quot;{branding.slogan}&quot;
+            {branding.sloganSuffix ? ` — ${branding.sloganSuffix}` : ""}
+          </p>
+        )}
       </div>
     </div>
   );

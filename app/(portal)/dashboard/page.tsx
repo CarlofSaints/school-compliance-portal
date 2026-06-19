@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import DashboardCard from "@/components/DashboardCard";
+import { branding } from "@/lib/branding";
 
 interface StatusCounts {
   not_an_issue: number;
@@ -27,7 +28,7 @@ const DASH_STATUS_META: { key: keyof StatusCounts; label: string; text: string }
   { key: "needs_addressing", label: "Needs to be addressed", text: "text-risk-high" },
   { key: "in_progress", label: "In progress", text: "text-amber-600" },
   { key: "addressed", label: "Addressed in new policy", text: "text-emerald-600" },
-  { key: "not_an_issue", label: "Not an issue for HVPS", text: "text-gray-600" },
+  { key: "not_an_issue", label: `Not an issue for ${branding.shortName}`, text: "text-gray-600" },
 ];
 
 // Compact per-row pills for the grid's Status column.
@@ -76,10 +77,10 @@ export default function DashboardPage() {
           Welcome, {session?.name}
         </h1>
         <p className="text-gray-500 text-sm">
-          Hurlyvale Primary School SGB Compliance Portal
+          {branding.fullName} {branding.tagline}
         </p>
         </div>
-        <Image src="/logo.png" alt="Hurlyvale Primary School" width={60} height={72} />
+        <Image src={branding.logo} alt={branding.fullName} width={60} height={72} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

@@ -2,6 +2,9 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { branding, hexToRgb } from "@/lib/branding";
+
+const PRIMARY_RGB = hexToRgb(branding.colors.primary);
 
 interface QuoteDetail {
   supplierName: string;
@@ -47,7 +50,7 @@ const STATUS_DISPLAY: Record<string, string> = {
 
 async function loadLogoBase64(): Promise<string | null> {
   try {
-    const response = await fetch("/logo.png");
+    const response = await fetch(branding.logo);
     const blob = await response.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -73,12 +76,12 @@ export async function generateSpendPDF(app: SpendApp) {
 
   // Title
   doc.setFontSize(18);
-  doc.setTextColor(0, 188, 212); // primary color
-  doc.text("Hurlyvale Primary School", logo ? 40 : 14, y);
+  doc.setTextColor(...PRIMARY_RGB); // primary color
+  doc.text(branding.fullName, logo ? 40 : 14, y);
   y += 7;
   doc.setFontSize(10);
   doc.setTextColor(136, 136, 136);
-  doc.text("SGB Compliance Portal", logo ? 40 : 14, y);
+  doc.text(branding.tagline, logo ? 40 : 14, y);
   y += 12;
 
   // Application title
@@ -102,7 +105,7 @@ export async function generateSpendPDF(app: SpendApp) {
   autoTable(doc, {
     startY: y,
     theme: "grid",
-    headStyles: { fillColor: [0, 188, 212] },
+    headStyles: { fillColor: PRIMARY_RGB },
     body: [
       ["Description", app.description],
       [
@@ -153,7 +156,7 @@ export async function generateSpendPDF(app: SpendApp) {
     autoTable(doc, {
       startY: y,
       theme: "grid",
-      headStyles: { fillColor: [0, 188, 212] },
+      headStyles: { fillColor: PRIMARY_RGB },
       head: [["#", "Supplier", "Email", "Phone", "Price Excl. VAT"]],
       body: app.quoteDetails.map((q, i) => [
         `${i + 1}`,
@@ -183,7 +186,7 @@ export async function generateSpendPDF(app: SpendApp) {
     autoTable(doc, {
       startY: y,
       theme: "grid",
-      headStyles: { fillColor: [0, 188, 212] },
+      headStyles: { fillColor: PRIMARY_RGB },
       head: [["Name", "Position", "Decision", "Comments", "Date"]],
       body: app.approvals.map((a) => [
         a.userName,

@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { getSession, clearSession } from "@/lib/useAuth";
+import { branding } from "@/lib/branding";
 import { useState } from "react";
 
 interface NavItem {
@@ -123,14 +124,14 @@ export default function Sidebar() {
         <div className="flex items-center justify-between">
           {!collapsed ? (
             <div className="flex items-center gap-3">
-              <Image src="/logo.png" alt="HVPS" width={36} height={43} />
+              <Image src={branding.logo} alt={branding.shortName} width={36} height={43} />
               <div>
-                <h1 className="text-lg font-bold text-primary">HVPS</h1>
-                <p className="text-xs text-gray-400">Compliance Portal</p>
+                <h1 className="text-lg font-bold text-accent">{branding.shortName}</h1>
+                <p className="text-xs text-gray-400">{branding.portalSubtitle}</p>
               </div>
             </div>
           ) : (
-            <Image src="/logo.png" alt="HVPS" width={28} height={33} />
+            <Image src={branding.logo} alt={branding.shortName} width={28} height={33} />
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -164,7 +165,7 @@ export default function Sidebar() {
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors ${
                   isActive
-                    ? "bg-primary/20 text-primary border-r-2 border-primary"
+                    ? "bg-accent/20 text-accent border-r-2 border-accent"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
                 title={collapsed ? item.label : undefined}
@@ -215,7 +216,7 @@ export default function Sidebar() {
       <div className="border-t border-gray-700 p-4">
         {!collapsed ? (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-sm font-bold">
+            <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-sm font-bold">
               {session.name?.[0]}
               {session.surname?.[0]}
             </div>

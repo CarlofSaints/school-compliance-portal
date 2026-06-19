@@ -3,6 +3,15 @@
 ## Project Location
 `C:\Users\CarlDosSantos-(OUTER\Projects\hvps-compliance`
 
+## NEXT (2026-06-16, not started): Reporting for funding applications
+Build reporting on the **Spend / funding applications** module (`lib/spendData.ts`, `app/api/spend/*`, `app/(portal)/spend/*`). Spend apps have: submittedBy, status (submitted/approved/etc.), quotes, approve/complete/select-quote flows, CAPEX year, source of funds. Likely wants: totals by status, by year, by source of funds, approved-vs-pending spend, per-applicant breakdown, maybe export. Confirm exact metrics with Carl. Mirror the compliance-checks dashboard pattern (lean list API → client grid + summary cards). Dashboard "Spend Pending" card is still hardcoded `0` — wire it as part of this.
+
+## Status workflow on compliance issues (2026-06-16, DONE + deployed)
+Each risk in a saved check can be tagged: `not_an_issue` / `needs_addressing` / `in_progress` / `addressed` (click active again to clear). Types + `updateRiskStatus()` + `countStatuses()` in `lib/complianceCheckData.ts`. PATCH `/api/compliance/checks/[id]` `{riskIndex,status}`. List API returns per-check `statusCounts`. Compliance page: buttons under each risk (optimistic update + revert) + 4 summary cards (in the RIGHT results panel, not under the left upload block). Dashboard: "Issues by Status" aggregate cards + per-row **Status** column (compact pills) in the grid. Status controls only show for upload-based checks (they carry an `id`); "Select Existing" policy mode uses the separate policy-check store and has no status UI.
+
+## AI engine hardening (2026-06-16, DONE)
+`lib/complianceEngine.ts`: model `claude-opus-4-8`; **structured outputs** (`output_config.format` json_schema, `RESULT_SCHEMA`) guarantee valid JSON → killed the intermittent "Unable to parse results / score 0" (was `max_tokens:4096` truncating + free-form wrap). `max_tokens:8192`; `stop_reason==="max_tokens"` → actionable "analysis too long" message. Prompt instructs **grouping** of related findings (consolidate same gap/section/requirement into ONE risk) to cut run-to-run count variance (±1 still normal — LLM nondeterminism; Opus 4.8 has no temperature). PDFs sent as native `document` blocks; txt/docx via `lib/pdfParser.ts` (jszip). `pdf-parse` removed.
+
 ## Feature 2026-06-16: Persisted compliance checks + dashboard grid
 Upload-based checks (`/api/compliance/check`) were stateless — nothing saved, dashboard cards hardcoded to `0`, results vanished on navigation. Now:
 - `lib/complianceCheckData.ts` — Blob-backed store (`compliance/checks.json` index + `compliance/<id>/<filename>` for the original file).
