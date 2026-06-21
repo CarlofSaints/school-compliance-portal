@@ -7,9 +7,25 @@ import Toast from "@/components/Toast";
 interface SpendSettings {
   capexBudget: number;
   capexYear: number;
+  financialYearEndMonth: number;
   sourcesOfFunds: string[];
   supplierConnections: string[];
 }
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 export default function SpendSettingsPage() {
   const { session, loading } = useAuth("manage_spend_settings");
@@ -146,7 +162,7 @@ export default function SpendSettingsPage() {
           <h3 className="font-medium text-sm text-gray-500 mb-4">
             CAPEX BUDGET
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Budget Year
@@ -194,7 +210,34 @@ export default function SpendSettingsPage() {
                 />
               </div>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Financial Year Ends
+              </label>
+              <select
+                value={settings.financialYearEndMonth || 12}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    financialYearEndMonth: parseInt(e.target.value),
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+              >
+                {MONTHS.map((m, i) => (
+                  <option key={m} value={i + 1}>
+                    End of {m}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+          <p className="text-xs text-gray-400 mt-3">
+            The financial year is labelled by the year it <strong>ends</strong>.
+            E.g. &ldquo;ends February&rdquo; means FY {settings.capexYear} runs
+            Mar {settings.capexYear - 1} – Feb {settings.capexYear}.
+            &ldquo;Ends December&rdquo; is a standard Jan–Dec calendar year.
+          </p>
         </div>
 
         {/* Sources of Funds */}

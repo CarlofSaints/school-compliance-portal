@@ -60,23 +60,39 @@ const COMMITTED_STATUSES = new Set(["approved", "completed"]);
 export const PENDING_STATUSES = new Set(["pending", "pending_decision"]);
 
 /**
- * Whether an application belongs to a given financial year. The school's
- * financial year runs Jan–Dec (calendar year), matched on the submission date.
- * (If a school ever needs an April-start FY, change the bracketing here.)
+ * The financial-year-END year a date falls in, given the FY end month (1–12,
+ * per school). A FY is labelled by the year it ENDS. Examples:
+ *   - end month 12 (December): FY = calendar year (Jan–Dec).
+ *   - end month 2 (February): Mar 2025–Feb 2026 → 2026.
  */
-export function inFinancialYear(iso: string, year: number): boolean {
-  if (!iso) return false;
+export function financialYearEndOf(iso: string, fyEndMonth = 12): number {
   const d = new Date(iso);
-  return !isNaN(d.getTime()) && d.getFullYear() === year;
+  if (isNaN(d.getTime())) return NaN;
+  const m = d.getMonth() + 1;
+  const y = d.getFullYear();
+  return m <= fyEndMonth ? y : y + 1;
+}
+
+/** Whether an application belongs to a given financial year (by end year). */
+export function inFinancialYear(
+  iso: string,
+  fyEndYear: number,
+  fyEndMonth = 12
+): boolean {
+  if (!iso) return false;
+  return financialYearEndOf(iso, fyEndMonth) === fyEndYear;
 }
 
 /** Count of applications awaiting an approval decision in a financial year. */
 export function pendingSpendCount(
   apps: { status: string; submittedAt: string }[],
-  year: number
+  year: number,
+  fyEndMonth = 12
 ): number {
   return apps.filter(
-    (a) => PENDING_STATUSES.has(a.status) && inFinancialYear(a.submittedAt, year)
+    (a) =>
+      PENDING_STATUSES.has(a.status) &&
+      inFinancialYear(a.submittedAt, year, fyEndMonth)
   ).length;
 }
 
@@ -152,13 +168,21 @@ function allocate(
 
 export function buildSpendReport(
   apps: SpendApplication[],
-  opts: { capexBudget: number; capexYear: number; financialYear?: number }
+  opts: {
+    capexBudget: number;
+    capexYear: number;
+    financialYear?: number;
+    fyEndMonth?: number;
+  }
 ): SpendReport {
   // Scope to a financial year when asked (defaults to the CAPEX budget year),
   // so budget-vs-spend compares like-for-like against the annual budget.
+  const fyEndMonth = opts.fyEndMonth ?? 12;
   const fy =
     typeof opts.financialYear === "number" ? opts.financialYear : opts.capexYear;
-  const scoped = apps.filter((a) => inFinancialYear(a.submittedAt, fy));
+  const scoped = apps.filter((a) =>
+    inFinancialYear(a.submittedAt, fy, fyEndMonth)
+  );
 
   const sourceMap = new Map<string, SourceBreakdown>();
   const ensure = (source: string): SourceBreakdown => {

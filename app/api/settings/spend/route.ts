@@ -17,8 +17,13 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { capexBudget, capexYear, sourcesOfFunds, supplierConnections } =
-      body;
+    const {
+      capexBudget,
+      capexYear,
+      financialYearEndMonth,
+      sourcesOfFunds,
+      supplierConnections,
+    } = body;
 
     if (
       typeof capexBudget !== "number" ||
@@ -32,9 +37,18 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    // Financial year end month: 1–12, default December.
+    const fyEnd =
+      typeof financialYearEndMonth === "number" &&
+      financialYearEndMonth >= 1 &&
+      financialYearEndMonth <= 12
+        ? financialYearEndMonth
+        : 12;
+
     await saveSpendSettings({
       capexBudget,
       capexYear,
+      financialYearEndMonth: fyEnd,
       sourcesOfFunds,
       supplierConnections,
     });

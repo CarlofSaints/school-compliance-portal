@@ -31,6 +31,7 @@ const PROGRESS_PILL: Record<string, string> = {
 interface SpendSettings {
   capexBudget: number;
   capexYear: number;
+  financialYearEndMonth?: number;
 }
 
 export default function SpendReportsPage() {
@@ -93,6 +94,7 @@ export default function SpendReportsPage() {
       buildSpendReport(apps, {
         capexBudget: s.capexBudget,
         capexYear: s.capexYear,
+        fyEndMonth: s.financialYearEndMonth ?? 12,
       })
     );
     setFetching(false);

@@ -3,6 +3,7 @@ import { readJson, writeJson } from "./controlData";
 export interface SpendSettings {
   capexBudget: number;
   capexYear: number;
+  financialYearEndMonth: number; // 1–12; the month the financial year ends (12 = Dec)
   sourcesOfFunds: string[];
   supplierConnections: string[];
 }
@@ -22,6 +23,7 @@ export const CANONICAL_SOURCES = [
 const DEFAULT_SPEND_SETTINGS: SpendSettings = {
   capexBudget: 0,
   capexYear: new Date().getFullYear(),
+  financialYearEndMonth: 12, // December (calendar year) by default
   sourcesOfFunds: [...CANONICAL_SOURCES, "Grade 7 Gift", "Expensed"],
   supplierConnections: [
     "None",
@@ -50,6 +52,7 @@ export async function getSpendSettings(): Promise<SpendSettings> {
   );
   return {
     ...settings,
+    financialYearEndMonth: settings.financialYearEndMonth || 12,
     sourcesOfFunds: withCanonicalSources(settings.sourcesOfFunds || []),
   };
 }

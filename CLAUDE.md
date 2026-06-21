@@ -3,7 +3,16 @@
 ## Project Location
 `C:\Users\CarlDosSantos-(OUTER\Projects\hvps-compliance`
 
-## Spend reporting + multi-source funding (2026-06-21, BUILT — not yet deployed)
+## Spend reporting + multi-source funding (2026-06-21, DEPLOYED to both HVPS + Jeppe)
+Deploy model confirmed: ONE repo `school-compliance-portal` → TWO git-connected Vercel projects (`hvps-compliance`, `jeppe-girls-compliance`), each with own `NEXT_PUBLIC_SCHOOL` + Blob store. **`git push origin main` auto-deploys BOTH** (do NOT `vercel --prod` — only hits one + skips branding). Pushed `22f82f1` then `065ecee`.
+
+**Projects grid (reports page).** Columns: owner (requestor — applicant if on-behalf), total requested, # quotes, selected service provider, total spend, spend-vs-request %, progress. **Sortable** (click any header) + **Export to Excel** (.xlsx via SheetJS `xlsx@0.18.5`, dynamic import). Helpers in `lib/spendReport.ts` ProjectRow.
+
+**Manual project progress.** `SpendApplication.projectProgress?: not_started|in_progress|completed`. UI control on detail page (`spend/[id]`) gated submitter/approvers/admins → `PATCH /api/spend/[id]/progress`. Report shows manual value else status-derived (completed→Complete, approved→In Progress, rejected→Declined, else Not Started).
+
+**Financial year.** `inFinancialYear()` = calendar year (Jan–Dec) matched on `submittedAt`, year = configured `capexYear`. Report + dashboard "Spend Pending" card both FY-scoped. Dashboard card now live (was hardcoded 0). To change FY to April-start: edit `inFinancialYear` in `lib/spendReport.ts` (one place).
+
+### Earlier same session (foundation)
 Built the Spend reporting layer + changed funding source from a single dropdown to a **multi-source split**.
 
 **Funding model change (splitting allowed).** `SpendApplication` now has `fundingAllocations?: {source, amount}[]` alongside the legacy `sourceOfFunds` string (kept = comma-joined source names, for the list view + back-compat). Helper `getFundingAllocations(app)` in `lib/spendData.ts` returns the split, falling back to a single allocation from `sourceOfFunds`/`estimatedAmount` for old records. New shared control `components/FundingSplit.tsx` (checkbox per source + amount each, running total vs estimate). Wired into **New** (`spend/new`) and **Edit** (`spend/[id]/edit`) forms; both POST/PUT now send `fundingAllocations` (JSON) + a joined `sourceOfFunds`. APIs `app/api/spend/route.ts` (POST) and `app/api/spend/[id]/route.ts` (PUT) parse it. Detail page shows the per-source breakdown.

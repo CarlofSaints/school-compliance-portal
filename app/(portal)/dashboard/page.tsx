@@ -62,7 +62,9 @@ export default function DashboardPage() {
         const settings = await settingsRes.json();
         const year = settings.capexYear || new Date().getFullYear();
         setFinancialYear(year);
-        setPendingSpend(pendingSpendCount(apps, year));
+        setPendingSpend(
+          pendingSpendCount(apps, year, settings.financialYearEndMonth ?? 12)
+        );
       }
     })();
   }, [session]);
