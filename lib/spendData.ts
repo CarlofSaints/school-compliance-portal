@@ -1,4 +1,10 @@
-import { readJson, writeJson, writeFile, readFile } from "./controlData";
+import {
+  readJson,
+  writeJson,
+  writeFile,
+  readFile,
+  deleteFile,
+} from "./controlData";
 
 export interface QuoteDetail {
   supplierName: string;
@@ -49,6 +55,11 @@ export interface SpendApplication {
   preferredQuotes: { userId: string; quoteIndex: number }[];
   selectedQuoteIndex?: number;
   approvedAmount?: number;
+  // Set on applications created by a bulk project-list import. The batch id is
+  // what makes an import undoable - there is no other delete path for a spend
+  // application, so a mis-mapped import would otherwise be permanent.
+  importBatchId?: string;
+  importedFrom?: string;
   // Completion fields
   completedAt?: string;
   completedBy?: string;
@@ -123,6 +134,45 @@ export async function createSpendApplication(
   apps.push(app);
   await saveSpendApplications(apps);
   await writeJson(`spend/${app.id}.json`, app);
+}
+
+// Batch equivalent of createSpendApplication for bulk import. Reads and writes
+// the shared index ONCE for the whole batch - creating them one at a time would
+// re-read and re-write the index per row.
+export async function createSpendApplications(
+  newApps: SpendApplication[]
+): Promise<void> {
+  if (newApps.length === 0) return;
+  const apps = await getSpendApplications();
+  apps.push(...newApps);
+  await saveSpendApplications(apps);
+  for (const app of newApps) {
+    await writeJson(`spend/${app.id}.json`, app);
+  }
+}
+
+// Removes every application created by one import batch. Returns how many were
+// removed. Only ever called with a batch id, so it cannot touch an application
+// somebody captured by hand.
+export async function deleteSpendImportBatch(
+  batchId: string
+): Promise<number> {
+  const apps = await getSpendApplications();
+  const doomed = apps.filter((a) => a.importBatchId === batchId);
+  if (doomed.length === 0) return 0;
+  await saveSpendApplications(
+    apps.filter((a) => a.importBatchId !== batchId)
+  );
+  for (const app of doomed) {
+    // Best effort: the index is the source of truth for the list, so a failed
+    // per-application blob delete must not fail the undo.
+    try {
+      await deleteFile(`spend/${app.id}.json`);
+    } catch {
+      // ignore
+    }
+  }
+  return doomed.length;
 }
 
 export async function updateSpendApplication(

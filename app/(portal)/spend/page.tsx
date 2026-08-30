@@ -84,6 +84,11 @@ export default function SpendPage() {
   const capexRemaining = capexBudget - totalApprovedSpend;
   const capexYear = settings?.capexYear || new Date().getFullYear();
 
+  // Bulk import writes applications on other people's behalf, so it matches the
+  // permission the import API enforces rather than plain submit_spend.
+  const canImport =
+    session?.permissions.includes("manage_spend_settings") ?? false;
+
   const statusColors: Record<string, string> = {
     pending: "bg-risk-low/10 text-risk-low",
     pending_decision: "bg-blue-50 text-blue-700",
@@ -152,6 +157,14 @@ export default function SpendPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {canImport && (
+            <Link
+              href="/spend/import"
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              Import from Excel
+            </Link>
+          )}
           <button
             onClick={handleCSVExport}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
