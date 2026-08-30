@@ -285,3 +285,58 @@ export async function sendFullyApprovedEmail(
     emailShell("Application Approved", body)
   );
 }
+
+// A nudge sent by hand from the grid, as opposed to the scheduled cron. Says
+// plainly that it is a reminder, who asked for it, and how long the request has
+// been sitting - a bare re-send of the original reads like a duplicate.
+export async function sendApprovalReminderEmail(
+  to: string,
+  approverName: string,
+  spendId: string,
+  projectName: string,
+  sourceOfFunds: string,
+  quoteCount: number,
+  amount: number,
+  waitingDays: number,
+  chasedBy: string,
+  stillWaitingOn: string[]
+): Promise<boolean> {
+  const url = `${SITE_URL}/spend/${spendId}`;
+  const others = stillWaitingOn.filter((n) => n !== approverName);
+  const alsoWaiting =
+    others.length > 0
+      ? `<p style="margin:8px 0 0;color:#333;"><strong>Also still to decide:</strong> ${others.join(", ")}</p>`
+      : "";
+  const waited =
+    waitingDays > 0
+      ? `It has been waiting ${waitingDays} day${waitingDays === 1 ? "" : "s"}.`
+      : "It was submitted today.";
+  const body = `
+    <p style="color:#333;">Dear ${approverName},</p>
+    <p style="color:#333;">This is a reminder that a fund application is waiting for your decision. ${waited}</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${sourceOfFunds || "Not stated"}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Quotes submitted:</strong> ${quoteCount}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Estimated cost:</strong> R${amount.toLocaleString()}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Reminder sent by:</strong> ${chasedBy}</p>
+      ${alsoWaiting}
+    </div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;">
+      <tr>
+        <td style="padding-right:8px;">
+          <a href="${url}?decision=approve" style="display:inline-block;background:#059669;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Approve</a>
+        </td>
+        <td>
+          <a href="${url}?decision=decline" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Decline</a>
+        </td>
+      </tr>
+    </table>
+    <p style="color:#888;font-size:12px;margin-top:16px;">Both buttons open the application in the portal, where your decision is recorded against your name.</p>
+  `;
+  return sendEmail(
+    to,
+    `Reminder: ${projectName} is waiting for your approval`,
+    emailShell("Approval Reminder", body)
+  );
+}

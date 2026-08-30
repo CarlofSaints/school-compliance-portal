@@ -59,6 +59,9 @@ export interface SpendApplication {
   // Set when the bands could not name anybody, so the application is visibly
   // stuck rather than silently waiting forever.
   approvalWarning?: string;
+  // Trail of manual "remind the approvers now" nudges. Kept so a chased
+  // approver is a matter of record and so the cooldown has something to check.
+  manualReminders?: ManualReminder[];
   // Notes live on the record itself rather than in a separate store, so the
   // grid's count is derived from the same data the detail page renders and
   // there is no second copy to fall out of step.
@@ -104,6 +107,13 @@ export interface SpendNote {
   authorId: string;
   authorName: string;
   createdAt: string;
+}
+
+export interface ManualReminder {
+  at: string;
+  byUserId: string;
+  byName: string;
+  sentTo: string[];
 }
 
 export interface SpendApproval {

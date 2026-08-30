@@ -62,6 +62,8 @@ interface SpendRecord {
   approvalTierLabel?: string;
   approvalLogOnly?: boolean;
   approvalWarning?: string;
+  submittedBy?: string;
+  manualReminders?: { at: string; byName: string; sentTo: string[] }[];
   approvals: {
     userId: string;
     userName: string;
@@ -162,6 +164,8 @@ export default function SpendPage() {
   const canImport =
     session?.permissions.includes("manage_spend_settings") ?? false;
   const canDelete = session?.permissions.includes("delete_spend") ?? false;
+  const isSpendAdmin =
+    session?.permissions.includes("manage_spend_settings") ?? false;
   // Editing status and custodian in the grid matches what the PATCH routes
   // enforce, so the control never appears where the save would be refused.
   const canEditInline =
@@ -326,6 +330,51 @@ export default function SpendPage() {
       { custodianUserId: userId },
       "Could not change the custodian"
     );
+  };
+
+  // Whoever the money is for, whoever captured it, whoever is accountable, and
+  // admins. Mirrors what POST /api/spend/[id]/remind enforces, so the action
+  // never appears where the send would be refused.
+  const canRemind = (app: SpendRecord) => {
+    if (app.approvalLogOnly) return false;
+    if (!["pending", "pending_decision", "requires_changes"].includes(app.status))
+      return false;
+    if (evaluateProgress(app).outstanding.length === 0) return false;
+    return (
+      isSpendAdmin ||
+      app.applicantUserId === session?.id ||
+      app.submittedBy === session?.id ||
+      custodianOf(app).userId === session?.id
+    );
+  };
+
+  const handleRemind = async (app: SpendRecord) => {
+    const outstanding = evaluateProgress(app).outstanding.map((o) => o.name);
+    if (
+      !confirm(
+        `Email a reminder to ${outstanding.join(", ")} about "${app.projectName}"?`
+      )
+    ) {
+      return;
+    }
+    const res = await authFetch(`/api/spend/${app.id}/remind`, {
+      method: "POST",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      setToast({
+        message:
+          `Reminder sent to ${data.sentTo.join(", ")}` +
+          (data.failed?.length ? ` (failed for ${data.failed.join(", ")})` : ""),
+        type: data.failed?.length ? "error" : "success",
+      });
+      fetchData();
+    } else {
+      setToast({
+        message: data.error || "Could not send the reminder",
+        type: "error",
+      });
+    }
   };
 
   const handleDelete = async (app: SpendRecord) => {
@@ -756,10 +805,18 @@ export default function SpendPage() {
                                 },
                               ]
                             : []),
+                          ...(canRemind(app)
+                            ? [
+                                {
+                                  label: "Remind approvers now",
+                                  onClick: () => handleRemind(app),
+                                },
+                              ]
+                            : []),
                           ...(canEditInline
                             ? [
                                 {
-                                  label: "Set reminder",
+                                  label: "Schedule reminders",
                                   onClick: () => setReminderFor(app),
                                 },
                               ]
