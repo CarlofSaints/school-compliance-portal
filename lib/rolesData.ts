@@ -118,6 +118,22 @@ export async function requireLogin(
   return session;
 }
 
+// Passes when the session holds ANY of the listed permissions. Used where a
+// narrower read permission sits alongside a broader manage one.
+export async function requireAnyPermission(
+  req: NextRequest,
+  permissionKeys: string[]
+): Promise<SessionPayload | NextResponse> {
+  const session = await getSessionFromRequest(req);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!permissionKeys.some((k) => session.permissions.includes(k))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return session;
+}
+
 export async function requirePermission(
   req: NextRequest,
   permissionKey: string

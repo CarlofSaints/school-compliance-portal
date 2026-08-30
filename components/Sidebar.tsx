@@ -6,12 +6,22 @@ import { getSession, clearSession } from "@/lib/useAuth";
 import { branding } from "@/lib/branding";
 import { useState } from "react";
 
+interface NavChild {
+  label: string;
+  href: string;
+  permission?: string;
+  // ANY of these is enough. Used where a narrow read permission sits beside a
+  // broader manage one.
+  permissions?: string[];
+}
+
 interface NavItem {
   label: string;
   href: string;
   icon: React.ReactNode;
   permission?: string;
-  children?: { label: string; href: string; permission?: string }[];
+  permissions?: string[];
+  children?: NavChild[];
 }
 
 const navItems: NavItem[] = [
@@ -84,7 +94,11 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { label: "Users", href: "/admin/users", permission: "manage_users" },
+      {
+        label: "Users",
+        href: "/admin/users",
+        permissions: ["view_users", "manage_users"],
+      },
       { label: "Roles", href: "/admin/roles", permission: "manage_roles" },
       { label: "People", href: "/admin/people", permission: "manage_people" },
       { label: "Tags", href: "/admin/tags", permission: "manage_tags" },
@@ -106,8 +120,17 @@ export default function Sidebar() {
 
   const userPerms = session.permissions || [];
 
+  const allows = (perm?: string, perms?: string[]) => {
+    if (perms && perms.length > 0) return perms.some((p) => userPerms.includes(p));
+    return !perm || userPerms.includes(perm);
+  };
+
+  // A section is visible if the user may open it OR any of its children are
+  // visible - otherwise a read-only child hides behind its manage-only parent.
   const filteredNav = navItems.filter(
-    (item) => !item.permission || userPerms.includes(item.permission)
+    (item) =>
+      allows(item.permission, item.permissions) ||
+      (item.children || []).some((c) => allows(c.permission, c.permissions))
   );
 
   const toggleMenu = (label: string) => {
@@ -155,8 +178,8 @@ export default function Sidebar() {
         {filteredNav.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           const hasChildren = item.children && item.children.length > 0;
-          const visibleChildren = item.children?.filter(
-            (c) => !c.permission || userPerms.includes(c.permission)
+          const visibleChildren = item.children?.filter((c) =>
+            allows(c.permission, c.permissions)
           );
 
           return (

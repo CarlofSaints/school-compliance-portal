@@ -14,6 +14,7 @@ interface UserRecord {
   forcePasswordChange: boolean;
   createdAt: string;
   tagIds?: string[];
+  roleName?: string;
 }
 
 interface RoleRecord {
@@ -40,7 +41,8 @@ interface PersonRecord {
 }
 
 export default function UsersPage() {
-  const { session, loading } = useAuth("manage_users");
+  // Open to anyone who may view users; editing is gated separately below.
+  const { session, loading } = useAuth(["view_users", "manage_users"]);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [people, setPeople] = useState<PersonRecord[]>([]);
@@ -60,6 +62,7 @@ export default function UsersPage() {
     tagIds: [] as string[],
   });
   const [showPassword, setShowPassword] = useState(false);
+  const canManage = session?.permissions.includes("manage_users") ?? false;
 
   const fetchData = useCallback(async () => {
     const [usersRes, rolesRes, peopleRes, tagsRes] = await Promise.all([
@@ -222,14 +225,20 @@ export default function UsersPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-dark">Users</h1>
-          <p className="text-gray-500 text-sm">Manage user accounts</p>
+          <p className="text-gray-500 text-sm">
+            {canManage
+              ? "Manage user accounts"
+              : "Who is on the portal, and what they are tagged as"}
+          </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
-          + Add User
-        </button>
+        {canManage && (
+          <button
+            onClick={openCreate}
+            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            + Add User
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -239,6 +248,7 @@ export default function UsersPage() {
               <th className="text-left px-6 py-3 font-medium text-gray-500">Name</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Email</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Role</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">Tags</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Person</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
               <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
@@ -246,7 +256,10 @@ export default function UsersPage() {
           </thead>
           <tbody>
             {users.map((user) => {
-              const roleName = roles.find((r) => r.id === user.role)?.name || user.role;
+              const roleName =
+                roles.find((r) => r.id === user.role)?.name ||
+                user.roleName ||
+                user.role;
               const person = personForUser(user.id);
               return (
                 <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50">
@@ -263,6 +276,29 @@ export default function UsersPage() {
                     <span className="bg-primary/10 text-primary-dark px-2 py-1 rounded text-xs font-medium">
                       {roleName}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {user.tagIds && user.tagIds.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {user.tagIds.map((id) => {
+                          const tag = tags.find((t) => t.id === id);
+                          if (!tag) return null;
+                          return (
+                            <span
+                              key={id}
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                TAG_COLOR_CLASSES[tag.color] ||
+                                TAG_COLOR_CLASSES.slate
+                              }`}
+                            >
+                              {tag.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300 text-xs">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     {person ? (
@@ -284,26 +320,32 @@ export default function UsersPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => openEdit(user)}
-                      className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user.id)}
-                      className="text-risk-high hover:text-red-700 text-xs font-medium"
-                    >
-                      Delete
-                    </button>
+                    {canManage ? (
+                      <>
+                        <button
+                          onClick={() => openEdit(user)}
+                          className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(user.id)}
+                          className="text-risk-high hover:text-red-700 text-xs font-medium"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-gray-300 text-xs">View only</span>
+                    )}
                   </td>
                 </tr>
               );
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                  No users yet. Click &quot;+ Add User&quot; to create one.
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                  No users yet.
                 </td>
               </tr>
             )}

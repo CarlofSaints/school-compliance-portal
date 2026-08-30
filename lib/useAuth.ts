@@ -44,7 +44,11 @@ export async function authFetch(
   return fetch(url, { ...options, headers });
 }
 
-export function useAuth(requiredPermission?: string) {
+// `requiredPermission` may be a single key or a list, in which case ANY of them
+// is enough. A list matters where a new, narrower permission is introduced
+// alongside an existing broader one - gating on the new key alone would lock
+// out everyone who only holds the old one.
+export function useAuth(requiredPermission?: string | string[]) {
   const router = useRouter();
   const [session, setSessionState] = useState<SessionPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,7 +59,13 @@ export function useAuth(requiredPermission?: string) {
       router.replace("/login");
       return;
     }
-    if (requiredPermission && !s.permissions.includes(requiredPermission)) {
+    const needed =
+      requiredPermission === undefined
+        ? []
+        : Array.isArray(requiredPermission)
+          ? requiredPermission
+          : [requiredPermission];
+    if (needed.length > 0 && !needed.some((p) => s.permissions.includes(p))) {
       router.replace("/dashboard");
       return;
     }

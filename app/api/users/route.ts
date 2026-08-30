@@ -1,15 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/rolesData";
+import {
+  requirePermission,
+  requireAnyPermission,
+  getRoles,
+} from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
 import { sendWelcomeEmail } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
 
+// Readable with either permission: view_users opens the page read-only.
 export async function GET(req: NextRequest) {
-  const session = await requirePermission(req, "manage_users");
+  const session = await requireAnyPermission(req, [
+    "view_users",
+    "manage_users",
+  ]);
   if (session instanceof NextResponse) return session;
 
-  const users = await getUsers();
-  const safe = users.map(({ password, ...u }) => u);
+  const [users, roles] = await Promise.all([getUsers(), getRoles()]);
+  // The role NAME is included so a read-only viewer, who cannot call
+  // /api/roles, still sees "SGB Admin" rather than a raw role id.
+  const safe = users.map(({ password, ...u }) => ({
+    ...u,
+    roleName: roles.find((r) => r.id === u.role)?.name || u.role,
+  }));
   return NextResponse.json(safe);
 }
 

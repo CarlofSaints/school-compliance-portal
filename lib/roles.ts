@@ -37,6 +37,9 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   // Deliberately its own key rather than riding on manage_spend_settings:
   // deleting a project is not the same authority as editing settings.
   { key: "delete_spend", name: "Delete Spend Applications", category: "Spend" },
+  // Seeing who is on the portal is separate from being able to change them:
+  // view_users opens the Users page read-only, manage_users allows editing.
+  { key: "view_users", name: "View Users", category: "Admin" },
   { key: "manage_users", name: "Manage Users", category: "Admin" },
   { key: "manage_roles", name: "Manage Roles & Permissions", category: "Admin" },
   { key: "manage_people", name: "Manage People", category: "Admin" },
