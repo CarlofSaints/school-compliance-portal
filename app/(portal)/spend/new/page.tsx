@@ -63,6 +63,10 @@ export default function NewSpendPage() {
   const [applicantUserId, setApplicantUserId] = useState("");
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [applicantName, setApplicantName] = useState("");
+  const [remindersOn, setRemindersOn] = useState(false);
+  const [approvalRequiredBy, setApprovalRequiredBy] = useState("");
+  const [reminderIntervalCount, setReminderIntervalCount] = useState("1");
+  const [reminderIntervalUnit, setReminderIntervalUnit] = useState("week");
   const [applicantSurname, setApplicantSurname] = useState("");
   const [applicantEmail, setApplicantEmail] = useState("");
 
@@ -129,6 +133,12 @@ export default function NewSpendPage() {
     );
 
     // On-behalf-of fields
+    formData.append("remindersOn", remindersOn ? "yes" : "no");
+    if (remindersOn) {
+      formData.append("approvalRequiredBy", approvalRequiredBy);
+      formData.append("reminderIntervalCount", reminderIntervalCount);
+      formData.append("reminderIntervalUnit", reminderIntervalUnit);
+    }
     formData.append("onBehalf", onBehalf ? "yes" : "no");
     if (onBehalf) {
       formData.append("applicantUserId", applicantUserId);
@@ -516,6 +526,80 @@ export default function NewSpendPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Chasing the approvers */}
+          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={remindersOn}
+                onChange={(e) => setRemindersOn(e.target.checked)}
+                className="w-4 h-4 text-primary focus:ring-primary rounded"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Switch on reminders until this is approved
+              </span>
+            </label>
+
+            {remindersOn && (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Approval required by
+                  </label>
+                  <input
+                    type="date"
+                    value={approvalRequiredBy}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setApprovalRequiredBy(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Shown to the approvers in their email.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Remind them
+                  </label>
+                  <div className="flex gap-2">
+                    <span className="text-sm text-gray-500 self-center">
+                      every
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={reminderIntervalCount}
+                      onChange={(e) =>
+                        setReminderIntervalCount(e.target.value)
+                      }
+                      className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                    />
+                    <select
+                      value={reminderIntervalUnit}
+                      onChange={(e) => setReminderIntervalUnit(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                    >
+                      <option value="day">
+                        day{reminderIntervalCount !== "1" ? "s" : ""}
+                      </option>
+                      <option value="week">
+                        week{reminderIntervalCount !== "1" ? "s" : ""}
+                      </option>
+                      <option value="month">
+                        month{reminderIntervalCount !== "1" ? "s" : ""}
+                      </option>
+                    </select>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Anything from every day to once every few months. Reminders
+                    stop on their own once the decision is made.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">

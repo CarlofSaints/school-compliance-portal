@@ -4,6 +4,13 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { POSITIONS, GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
+import { TAG_COLOR_CLASSES } from "@/lib/tagData";
+
+interface TagRecord {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface PersonRecord {
   id: string;
@@ -12,6 +19,7 @@ interface PersonRecord {
   name: string;
   email: string;
   phone: string;
+  tagIds?: string[];
 }
 
 interface UserOption {
@@ -28,21 +36,25 @@ export default function PeoplePage() {
   const [showModal, setShowModal] = useState(false);
   const [editPerson, setEditPerson] = useState<PersonRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [tags, setTags] = useState<TagRecord[]>([]);
   const [form, setForm] = useState({
     position: POSITIONS[0],
     userId: "",
     name: "",
     email: "",
     phone: "",
+    tagIds: [] as string[],
   });
 
   const fetchData = useCallback(async () => {
-    const [peopleRes, usersRes] = await Promise.all([
+    const [peopleRes, usersRes, tagsRes] = await Promise.all([
       authFetch("/api/people"),
       authFetch("/api/users"),
+      authFetch("/api/tags"),
     ]);
     if (peopleRes.ok) setPeople(await peopleRes.json());
     if (usersRes.ok) setUsers(await usersRes.json());
+    if (tagsRes.ok) setTags(await tagsRes.json());
   }, []);
 
   useEffect(() => {
@@ -51,7 +63,7 @@ export default function PeoplePage() {
 
   const openCreate = () => {
     setEditPerson(null);
-    setForm({ position: POSITIONS[0], userId: "", name: "", email: "", phone: "" });
+    setForm({ position: POSITIONS[0], userId: "", name: "", email: "", phone: "", tagIds: [] });
     setShowModal(true);
   };
 
@@ -63,6 +75,7 @@ export default function PeoplePage() {
       name: person.name,
       email: person.email,
       phone: person.phone,
+      tagIds: person.tagIds || [],
     });
     setShowModal(true);
   };
@@ -82,6 +95,7 @@ export default function PeoplePage() {
     const payload = {
       position: form.position,
       userId: form.userId || null,
+      tagIds: form.tagIds,
       name: form.name,
       email: form.email,
       phone: form.phone,
@@ -221,6 +235,43 @@ export default function PeoplePage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                {tags.length === 0 ? (
+                  <p className="text-xs text-gray-400">
+                    No tags yet. Create them in Admin &gt; Tags.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((t) => {
+                      const on = form.tagIds.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              tagIds: on
+                                ? form.tagIds.filter((x) => x !== t.id)
+                                : [...form.tagIds, t.id],
+                            })
+                          }
+                          className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                            TAG_COLOR_CLASSES[t.color] || TAG_COLOR_CLASSES.slate
+                          } ${on ? "ring-2 ring-primary" : "opacity-40 hover:opacity-70"}`}
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 mt-1">
+                  Tags decide who has to approve a fund application. Someone
+                  without a login can be emailed but cannot click Approve.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>

@@ -6,10 +6,11 @@ import {
   uploadQuoteFile,
 } from "@/lib/spendData";
 import type { QuoteDetail, FundingAllocation } from "@/lib/spendData";
-import { getPeopleByPositions } from "@/lib/peopleData";
-import { APPROVER_POSITIONS } from "@/lib/positions";
+import { resolveApprovers } from "@/lib/approvalResolver";
+import { createReminder, todayIso } from "@/lib/reminderData";
+import type { ReminderUnit } from "@/lib/reminderData";
 import {
-  sendSpendNotificationEmail,
+  sendApprovalRequestEmail,
   sendApplicantConfirmationEmail,
 } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
@@ -119,6 +120,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Who has to approve an amount of this size. Resolved once, here, and
+    // frozen onto the record - see lib/approvalEngine.ts for why.
+    const approval = await resolveApprovers(estimatedAmount);
+
+    // Optional chasing, set up on the application form itself.
+    const remindersOn = (formData.get("remindersOn") as string) === "yes";
+    const approvalRequiredBy =
+      (formData.get("approvalRequiredBy") as string) || "";
+    const reminderIntervalCount = Math.max(
+      1,
+      parseInt((formData.get("reminderIntervalCount") as string) || "1", 10) ||
+        1
+    );
+    const reminderIntervalUnit = ((formData.get("reminderIntervalUnit") as
+      | ReminderUnit
+      | null) || "week") as ReminderUnit;
+
     const app = {
       id: spendId,
       projectName,
@@ -130,7 +148,18 @@ export async function POST(req: NextRequest) {
       fundingAllocations,
       quotes: quotePaths,
       quoteDetails,
-      status: "pending" as const,
+      // A "logged only" band needs no approval, so it is recorded as approved
+      // straight away. Every other band waits for real people - nothing else
+      // auto-approves.
+      status: (approval.logOnly ? "approved" : "pending") as
+        | "pending"
+        | "approved",
+      approvalTierId: approval.tierId,
+      approvalTierLabel: approval.tierLabel,
+      approvalLogOnly: approval.logOnly,
+      requiredApprovers: approval.approvers,
+      approvalWarning: approval.warning,
+      ...(approval.logOnly ? { approvedAmount: estimatedAmount } : {}),
       submittedBy: session.id,
       submittedByName: `${session.name} ${session.surname}`,
       submittedAt: new Date().toISOString(),
@@ -145,24 +174,29 @@ export async function POST(req: NextRequest) {
 
     await createSpendApplication(app);
 
-    // Send email notifications to key positions
-    const approvers = await getPeopleByPositions(APPROVER_POSITIONS);
-
-    for (const person of approvers) {
-      if (person.email) {
-        await sendSpendNotificationEmail(
-          person.email,
-          person.name,
-          projectName,
-          estimatedAmount,
-          `${session.name} ${session.surname}`
-        );
-      }
+    // Ask exactly the people this amount requires - not every key position.
+    // A logged-only band asks nobody.
+    for (const approver of approval.approvers) {
+      if (!approver.email) continue;
+      await sendApprovalRequestEmail(
+        approver.email,
+        approver.name,
+        spendId,
+        projectName,
+        sourceOfFunds,
+        quoteDetails.length,
+        estimatedAmount,
+        `${session.name} ${session.surname}`,
+        approval.tierLabel || "Approval required",
+        approvalRequiredBy || undefined
+      );
     }
 
     // Send confirmation email to applicant (if on behalf of someone)
     if (isOnBehalf && applicantEmail) {
-      const approverNames = approvers.map((p) => `${p.name} (${p.position})`);
+      const approverNames = approval.approvers.map(
+        (a) => `${a.name} (${a.tagName})`
+      );
       await sendApplicantConfirmationEmail(
         applicantEmail,
         `${applicantName} ${applicantSurname}`,
@@ -171,6 +205,33 @@ export async function POST(req: NextRequest) {
         quotePaths.length,
         approverNames
       );
+    }
+
+    // Chase the approvers (and keep the applicant in the loop) until a decision
+    // is made. Skipped entirely for a logged-only band, where there is nobody
+    // to chase.
+    if (remindersOn && !approval.logOnly && approval.approvers.length > 0) {
+      const start = approvalRequiredBy || todayIso();
+      await createReminder({
+        id: uuidv4(),
+        spendId,
+        projectName,
+        recipients: ["custodian", "submitter"],
+        nextRunAt: start < todayIso() ? todayIso() : start,
+        frequency: "custom",
+        intervalCount: reminderIntervalCount,
+        intervalUnit: reminderIntervalUnit,
+        anchorDay: Number((start || todayIso()).slice(8, 10)),
+        note: approvalRequiredBy
+          ? `This application is still waiting for approval. It was needed by ${approvalRequiredBy}.`
+          : "This application is still waiting for approval.",
+        active: true,
+        spendStopOnDecision: true,
+        approvalRequiredBy: approvalRequiredBy || undefined,
+        createdBy: session.id,
+        createdByName: `${session.name} ${session.surname}`,
+        createdAt: new Date().toISOString(),
+      });
     }
 
     return NextResponse.json({ id: spendId }, { status: 201 });

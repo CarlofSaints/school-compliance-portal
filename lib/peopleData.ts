@@ -11,6 +11,8 @@ export interface Person {
   email: string;
   phone: string;
   profilePic: string;
+  // See lib/tagData.ts - a tag can sit on a Person or on a User.
+  tagIds?: string[];
 }
 
 const PEOPLE_PATH = "people.json";

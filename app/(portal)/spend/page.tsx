@@ -8,6 +8,8 @@ import RowActions from "@/components/RowActions";
 import ReminderModal from "@/components/ReminderModal";
 import Toast from "@/components/Toast";
 import { useTableSort, useColumnWidths } from "@/lib/useTable";
+import { evaluateProgress } from "@/lib/approvalEngine";
+import type { RequiredApprover } from "@/lib/approvalEngine";
 
 const STATUS_DISPLAY: Record<string, string> = {
   pending: "APPLIED",
@@ -56,7 +58,18 @@ interface SpendRecord {
   finishedWithinBudget?: boolean;
   quoteDetails?: { supplierName: string; priceExclVat?: number }[];
   notes?: { id: string }[];
-  approvals: { userName: string; decision: string }[];
+  requiredApprovers?: RequiredApprover[];
+  approvalTierLabel?: string;
+  approvalLogOnly?: boolean;
+  approvalWarning?: string;
+  approvals: {
+    userId: string;
+    userName: string;
+    position: string;
+    decision: "approved" | "rejected" | "requires_changes" | "responded";
+    comments: string;
+    decidedAt: string;
+  }[];
 }
 
 interface SpendSettings {
@@ -95,6 +108,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   sourceOfFunds: 130,
   budgeted: 90,
   quotes: 80,
+  approvals: 95,
   notes: 75,
   submittedByName: 140,
   applicant: 140,
@@ -168,6 +182,11 @@ export default function SpendPage() {
             return app.quoteDetails?.length || 0;
           case "notes":
             return app.notes?.length || 0;
+          case "approvals": {
+            const p = evaluateProgress(app);
+            // Sort by how far along it is, so the nearly-done sit together.
+            return p.total === 0 ? -1 : p.approved / p.total;
+          }
           case "applicant":
             return applicantOf(app);
           case "custodian":
@@ -515,6 +534,7 @@ export default function SpendPage() {
                 {th("Source", "sourceOfFunds")}
                 {th("Budgeted", "budgeted")}
                 {th("Quotes", "quotes")}
+                {th("Approvals", "approvals")}
                 {th("Notes", "notes")}
                 {th("Submitted By", "submittedByName")}
                 {th("Applicant", "applicant")}
@@ -570,6 +590,63 @@ export default function SpendPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {app.quoteDetails?.length || 0}
+                    </td>
+                    {/* How many of the required approvals are in, e.g. 1/3. */}
+                    <td className="px-4 py-3 text-xs">
+                      {(() => {
+                        const p = evaluateProgress(app);
+                        if (app.approvalLogOnly) {
+                          return (
+                            <span
+                              className="text-gray-400"
+                              title="This amount needs no approval, it is only logged"
+                            >
+                              Logged
+                            </span>
+                          );
+                        }
+                        if (p.total === 0) {
+                          return (
+                            <span
+                              className="text-risk-high font-medium"
+                              title={
+                                app.approvalWarning ||
+                                "No approvers were resolved for this application"
+                              }
+                            >
+                              None set
+                            </span>
+                          );
+                        }
+                        return (
+                          <span
+                            className={
+                              p.complete
+                                ? "text-emerald-600 font-medium"
+                                : "text-gray-600"
+                            }
+                            title={
+                              p.outstanding.length > 0
+                                ? "Waiting on: " +
+                                  p.outstanding.map((o) => o.name).join(", ")
+                                : "All approvals in"
+                            }
+                          >
+                            {p.approved}/{p.total}
+                            {p.responded.length > 0 && (
+                              <span
+                                className="text-risk-medium ml-1"
+                                title={
+                                  p.responded.map((r) => r.name).join(", ") +
+                                  " asked a question"
+                                }
+                              >
+                                ?
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </td>
                     {/* Count only - the notes themselves live on the project. */}
                     <td className="px-4 py-3 text-xs">
@@ -705,7 +782,7 @@ export default function SpendPage() {
               {sorted.length === 0 && (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={14}
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     No spend projects found.

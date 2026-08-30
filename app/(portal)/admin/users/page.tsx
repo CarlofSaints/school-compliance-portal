@@ -3,6 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
+import { TAG_COLOR_CLASSES } from "@/lib/tagData";
 
 interface UserRecord {
   id: string;
@@ -12,6 +13,7 @@ interface UserRecord {
   role: string;
   forcePasswordChange: boolean;
   createdAt: string;
+  tagIds?: string[];
 }
 
 interface RoleRecord {
@@ -23,6 +25,12 @@ interface RoleRecord {
 // person lives on the PERSON record (person.userId) and is also editable from
 // Admin > People - this page is the same relationship seen from the user's
 // side, not a second copy of it.
+interface TagRecord {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface PersonRecord {
   id: string;
   position: string;
@@ -36,6 +44,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [people, setPeople] = useState<PersonRecord[]>([]);
+  const [tags, setTags] = useState<TagRecord[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -48,20 +57,23 @@ export default function UsersPage() {
     forcePasswordChange: true,
     sendEmail: false,
     personId: "",
+    tagIds: [] as string[],
   });
   const [showPassword, setShowPassword] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [usersRes, rolesRes, peopleRes] = await Promise.all([
+    const [usersRes, rolesRes, peopleRes, tagsRes] = await Promise.all([
       authFetch("/api/users"),
       authFetch("/api/roles"),
       authFetch("/api/people"),
+      authFetch("/api/tags"),
     ]);
     if (usersRes.ok) setUsers(await usersRes.json());
     if (rolesRes.ok) setRoles(await rolesRes.json());
     // Needs manage_people. An admin without it simply sees no People column
     // rather than a broken page.
     if (peopleRes.ok) setPeople(await peopleRes.json());
+    if (tagsRes.ok) setTags(await tagsRes.json());
   }, []);
 
   const personForUser = useCallback(
@@ -84,6 +96,7 @@ export default function UsersPage() {
       forcePasswordChange: true,
       sendEmail: false,
       personId: "",
+      tagIds: [],
     });
     setShowModal(true);
   };
@@ -99,6 +112,7 @@ export default function UsersPage() {
       forcePasswordChange: user.forcePasswordChange,
       sendEmail: false,
       personId: personForUser(user.id)?.id || "",
+      tagIds: user.tagIds || [],
     });
     setShowModal(true);
   };
@@ -138,6 +152,7 @@ export default function UsersPage() {
         email: form.email,
         role: form.role,
         forcePasswordChange: form.forcePasswordChange,
+        tagIds: form.tagIds,
       };
       if (form.password) updates.password = form.password;
       const res = await authFetch(`/api/users/${editUser.id}`, {
@@ -368,6 +383,45 @@ export default function UsersPage() {
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tags
+                </label>
+                {tags.length === 0 ? (
+                  <p className="text-xs text-gray-400">
+                    No tags yet. Create them in Admin &gt; Tags.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map((t) => {
+                      const on = form.tagIds.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              tagIds: on
+                                ? form.tagIds.filter((x) => x !== t.id)
+                                : [...form.tagIds, t.id],
+                            })
+                          }
+                          className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                            TAG_COLOR_CLASSES[t.color] || TAG_COLOR_CLASSES.slate
+                          } ${on ? "ring-2 ring-primary" : "opacity-40 hover:opacity-70"}`}
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 mt-1">
+                  Tags decide who has to approve a fund application.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

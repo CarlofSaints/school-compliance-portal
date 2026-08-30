@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, surname, email, password, role, forcePasswordChange, sendEmail } = body;
+    const { name, surname, email, password, role, forcePasswordChange, sendEmail, tagIds } = body;
 
     if (!name || !surname || !email || !password || !role) {
       return NextResponse.json(
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       password,
       role,
       forcePasswordChange: forcePasswordChange ?? true,
+      tagIds: Array.isArray(tagIds) ? tagIds : [],
     });
 
     if (sendEmail) {

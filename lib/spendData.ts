@@ -5,6 +5,7 @@ import {
   readFile,
   deleteFile,
 } from "./controlData";
+import type { RequiredApprover } from "./approvalEngine";
 
 export interface QuoteDetail {
   supplierName: string;
@@ -46,6 +47,18 @@ export interface SpendApplication {
   // Manually-tracked execution progress, independent of the approval status.
   projectProgress?: "not_started" | "in_progress" | "completed";
   approvals: SpendApproval[];
+  // --- Approval workflow, resolved when the application is submitted ---
+  approvalTierId?: string;
+  approvalTierLabel?: string;
+  // True when the amount fell in a "logged only" band: recorded, no approval
+  // needed, nobody chased.
+  approvalLogOnly?: boolean;
+  // The approvers this application needed, frozen at submission. See
+  // lib/approvalEngine.ts for why this is a snapshot, not a live lookup.
+  requiredApprovers?: RequiredApprover[];
+  // Set when the bands could not name anybody, so the application is visibly
+  // stuck rather than silently waiting forever.
+  approvalWarning?: string;
   // Notes live on the record itself rather than in a separate store, so the
   // grid's count is derived from the same data the detail page renders and
   // there is no second copy to fall out of step.
@@ -97,10 +110,15 @@ export interface SpendApproval {
   userId: string;
   userName: string;
   position: string;
-  decision: "approved" | "rejected" | "requires_changes";
+  // "responded" is an approver asking a question or leaving a comment. It is
+  // recorded and visible, but counts as NO decision - the application does not
+  // move until they come back and actually approve or decline.
+  decision: "approved" | "rejected" | "requires_changes" | "responded";
   comments: string;
   decidedAt: string;
   preferredQuoteIndex?: number;
+  // Set on an admin override, which must always carry a reason.
+  isOverride?: boolean;
 }
 
 // Returns the per-source split for an application, falling back to a single

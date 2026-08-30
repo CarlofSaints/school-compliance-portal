@@ -9,7 +9,17 @@ export type ReminderRecipient =
   | "submitter"
   | "custodian";
 
-export type ReminderFrequency = "once" | "daily" | "weekly" | "monthly";
+export type ReminderFrequency =
+  | "once"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "custom";
+
+// A custom interval: "every N days/weeks/months". Lets a reminder be anything
+// from every day until approved through to once a month, without being tied to
+// a fixed list of choices.
+export type ReminderUnit = "day" | "week" | "month";
 
 export interface SpendReminder {
   id: string;
@@ -25,7 +35,16 @@ export interface SpendReminder {
   // nextRunAt gets clamped in a short month. Without it a monthly reminder set
   // for the 31st would land on 28 February and then stay on the 28th forever.
   anchorDay?: number;
+  // Used when frequency is "custom".
+  intervalCount?: number;
+  intervalUnit?: ReminderUnit;
   note: string;
+  // Set on a reminder created alongside an application: it stops itself once
+  // the application is approved or declined, so nobody is chased about a
+  // decision that has already been made.
+  spendStopOnDecision?: boolean;
+  // The "approval required by" date, shown in the reminder email.
+  approvalRequiredBy?: string;
   active: boolean;
   createdBy: string;
   createdByName: string;
@@ -48,7 +67,19 @@ export const FREQUENCY_LABELS: Record<ReminderFrequency, string> = {
   daily: "Every day",
   weekly: "Every week",
   monthly: "Every month",
+  custom: "Custom interval",
 };
+
+export function describeSchedule(r: {
+  frequency: ReminderFrequency;
+  intervalCount?: number;
+  intervalUnit?: ReminderUnit;
+}): string {
+  if (r.frequency !== "custom") return FREQUENCY_LABELS[r.frequency];
+  const n = r.intervalCount || 1;
+  const unit = r.intervalUnit || "day";
+  return n === 1 ? "Every " + unit : "Every " + n + " " + unit + "s";
+}
 
 const REMINDERS_PATH = "spend/reminders.json";
 const RUNS_PATH = "spend/reminder-runs.json";
@@ -132,13 +163,28 @@ export function advance(
   let date = new Date(`${reminder.nextRunAt}T00:00:00Z`);
   const anchorDay = reminder.anchorDay || date.getUTCDate();
   const today = new Date(`${todayIso(now)}T00:00:00Z`);
+  // Normalise every frequency to a count + unit so there is one stepping rule
+  // rather than a branch per named frequency.
+  const count =
+    reminder.frequency === "custom"
+      ? Math.max(1, reminder.intervalCount || 1)
+      : 1;
+  const unit: ReminderUnit =
+    reminder.frequency === "custom"
+      ? reminder.intervalUnit || "day"
+      : reminder.frequency === "daily"
+        ? "day"
+        : reminder.frequency === "weekly"
+          ? "week"
+          : "month";
+
   do {
-    if (reminder.frequency === "daily") {
-      date.setUTCDate(date.getUTCDate() + 1);
-    } else if (reminder.frequency === "weekly") {
-      date.setUTCDate(date.getUTCDate() + 7);
+    if (unit === "day") {
+      date.setUTCDate(date.getUTCDate() + count);
+    } else if (unit === "week") {
+      date.setUTCDate(date.getUTCDate() + 7 * count);
     } else {
-      date = addMonths(date, 1, anchorDay);
+      date = addMonths(date, count, anchorDay);
     }
   } while (date <= today);
 

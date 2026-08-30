@@ -69,6 +69,22 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
+    // A reminder attached to an application stops itself once the decision is
+    // in - nobody should be chased about something already settled.
+    if (
+      reminder.spendStopOnDecision &&
+      ["approved", "rejected", "completed"].includes(app.status)
+    ) {
+      await updateReminder(reminder.id, {
+        active: false,
+        lastRunAt: new Date().toISOString(),
+        lastResult: `Application is ${app.status} - reminder stopped`,
+      });
+      skipped++;
+      detail.push(`${app.projectName}: ${app.status}, reminder stopped`);
+      continue;
+    }
+
     const { resolved, missing } = await resolveRecipients(
       app,
       reminder.recipients

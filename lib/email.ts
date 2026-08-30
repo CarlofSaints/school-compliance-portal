@@ -171,3 +171,117 @@ export async function sendSpendReminderEmail(
     emailShell("Project Reminder", body)
   );
 }
+
+// --- Fund application approval workflow ------------------------------------
+
+// Sent to each required approver when an application is submitted. The buttons
+// deep-link into the app rather than carrying a one-click approval token: an
+// approval is a decision of record, so the approver signs in and makes it in
+// the portal where the full application, the quotes and the other approvers'
+// comments are in front of them.
+export async function sendApprovalRequestEmail(
+  to: string,
+  approverName: string,
+  spendId: string,
+  projectName: string,
+  sourceOfFunds: string,
+  quoteCount: number,
+  amount: number,
+  submittedBy: string,
+  tierLabel: string,
+  requiredBy?: string
+): Promise<boolean> {
+  const url = `${SITE_URL}/spend/${spendId}`;
+  const deadline = requiredBy
+    ? `<p style="margin:8px 0 0;color:#333;"><strong>Approval required by:</strong> ${requiredBy}</p>`
+    : "";
+  const body = `
+    <p style="color:#333;">Dear ${approverName},</p>
+    <p style="color:#333;">A fund application needs your decision.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${sourceOfFunds || "Not stated"}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Quotes submitted:</strong> ${quoteCount}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Estimated cost:</strong> R${amount.toLocaleString()}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${submittedBy}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Approval level:</strong> ${tierLabel}</p>
+      ${deadline}
+    </div>
+    <p style="color:#333;">Open the application to read it in full, then approve, decline, or ask a question.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;">
+      <tr>
+        <td style="padding-right:8px;">
+          <a href="${url}?decision=approve" style="display:inline-block;background:#059669;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Approve</a>
+        </td>
+        <td>
+          <a href="${url}?decision=decline" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Decline</a>
+        </td>
+      </tr>
+    </table>
+    <p style="color:#888;font-size:12px;margin-top:16px;">Both buttons open the application in the portal, where your decision is recorded against your name.</p>
+  `;
+  return sendEmail(
+    to,
+    `Approval needed: ${projectName} (R${amount.toLocaleString()})`,
+    emailShell("Fund Application Approval", body)
+  );
+}
+
+// Sent to the applicant each time one approver decides.
+export async function sendApprovalProgressEmail(
+  to: string,
+  applicantName: string,
+  spendId: string,
+  projectName: string,
+  approverName: string,
+  decision: string,
+  comments: string,
+  approved: number,
+  total: number
+): Promise<boolean> {
+  const note = comments
+    ? `<p style="margin:8px 0 0;color:#333;"><strong>Their comment:</strong> ${comments}</p>`
+    : "";
+  const body = `
+    <p style="color:#333;">Dear ${applicantName},</p>
+    <p style="color:#333;">There has been an update on your fund application.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>${approverName}:</strong> ${decision}</p>
+      ${note}
+      <p style="margin:8px 0 0;color:#333;"><strong>Progress:</strong> ${approved} of ${total} approvals in</p>
+    </div>
+    <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
+  `;
+  return sendEmail(
+    to,
+    `Update on ${projectName}: ${approved} of ${total} approved`,
+    emailShell("Application Update", body)
+  );
+}
+
+// Sent to the applicant once the last approver is in.
+export async function sendFullyApprovedEmail(
+  to: string,
+  applicantName: string,
+  spendId: string,
+  projectName: string,
+  amount: number,
+  approverNames: string[]
+): Promise<boolean> {
+  const body = `
+    <p style="color:#333;">Dear ${applicantName},</p>
+    <p style="color:#333;">Your fund application has been <strong>fully approved</strong>.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Approved amount:</strong> R${amount.toLocaleString()}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Approved by:</strong> ${approverNames.join(", ")}</p>
+    </div>
+    <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
+  `;
+  return sendEmail(
+    to,
+    `Approved: ${projectName}`,
+    emailShell("Application Approved", body)
+  );
+}

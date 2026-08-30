@@ -11,6 +11,9 @@ export interface User {
   forcePasswordChange: boolean;
   createdAt: string;
   updatedAt: string;
+  // Tags naming this individual as part of a group (FINCOM, Principal...).
+  // See lib/tagData.ts - a tag can sit on a User or on a Person.
+  tagIds?: string[];
 }
 
 const USERS_PATH = "users.json";

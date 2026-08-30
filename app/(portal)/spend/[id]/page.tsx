@@ -2,6 +2,8 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
+import { evaluateProgress } from "@/lib/approvalEngine";
+import type { RequiredApprover } from "@/lib/approvalEngine";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Toast from "@/components/Toast";
@@ -52,6 +54,10 @@ interface SpendDetail {
   finishedWithinBudget?: boolean;
   budgetOverrunAmount?: number;
   budgetOverrunExplanation?: string;
+  approvalTierLabel?: string;
+  approvalLogOnly?: boolean;
+  approvalWarning?: string;
+  requiredApprovers?: RequiredApprover[];
   notes?: {
     id: string;
     body: string;
@@ -63,10 +69,11 @@ interface SpendDetail {
     userId: string;
     userName: string;
     position: string;
-    decision: string;
+    decision: "approved" | "rejected" | "requires_changes" | "responded";
     comments: string;
     decidedAt: string;
     preferredQuoteIndex?: number;
+    isOverride?: boolean;
   }[];
 }
 
@@ -287,10 +294,17 @@ export default function SpendDetailPage() {
 
   if (loading || !data) return <div className="p-6">Loading...</div>;
 
-  const canApprove = session?.permissions.includes("approve_spend");
-  const alreadyApproved = data.approvals.some(
+  // Whether this person is one of the approvers THIS application asked for.
+  // The permission alone is not enough - the list was frozen at submission.
+  const myEntries = data.approvals.filter((a) => a.userId === session?.id);
+  const myApproval = myEntries[myEntries.length - 1];
+  const isRequired = (data.requiredApprovers || []).some(
     (a) => a.userId === session?.id
   );
+  const canApprove = isRequired;
+  // A "responded" entry is a question, not a decision - they may come back.
+  const alreadyApproved = myEntries.some((a) => a.decision !== "responded");
+  const progress = evaluateProgress(data);
   const isSubmitter = data.submittedBy === session?.id;
   const isAdmin =
     session?.permissions.includes("manage_spend_settings") ||
@@ -303,9 +317,7 @@ export default function SpendDetailPage() {
     canApprove &&
     !alreadyApproved &&
     (data.status === "pending" || data.status === "pending_decision");
-  const canComplete =
-    data.status === "approved" &&
-    (canApprove || isAdmin);
+  const canComplete = data.status === "approved" && (canApprove || isAdmin);
   const canSelectQuote =
     data.status === "approved" &&
     data.selectedQuoteIndex === undefined &&
@@ -826,6 +838,104 @@ export default function SpendDetailPage() {
             )}
           </div>
 
+          {/* Who this application needs, and where each of them stands */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 className="font-medium text-sm text-gray-500 mb-1">
+              APPROVALS REQUIRED
+            </h3>
+            {data.approvalTierLabel && (
+              <p className="text-xs text-gray-400 mb-3">
+                {data.approvalTierLabel}
+              </p>
+            )}
+
+            {data.approvalWarning && (
+              <div className="bg-risk-medium/10 border border-risk-medium/30 rounded-lg p-3 mb-3">
+                <p className="text-xs text-risk-medium">
+                  {data.approvalWarning}
+                </p>
+              </div>
+            )}
+
+            {data.approvalLogOnly ? (
+              <p className="text-sm text-gray-500">
+                This amount needs no approval. It is recorded for the record
+                only.
+              </p>
+            ) : (data.requiredApprovers || []).length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                No approvers were set for this application.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm text-gray-700 mb-3">
+                  <span
+                    className={
+                      progress.complete
+                        ? "text-emerald-600 font-semibold"
+                        : "font-semibold"
+                    }
+                  >
+                    {progress.approved} of {progress.total}
+                  </span>{" "}
+                  approved
+                </p>
+                <div className="space-y-2">
+                  {(data.requiredApprovers || []).map((approver) => {
+                    const entries = data.approvals.filter(
+                      (a) => a.userId === approver.userId
+                    );
+                    const decision = entries[entries.length - 1];
+                    const label =
+                      decision?.decision === "approved"
+                        ? "Approved"
+                        : decision?.decision === "rejected"
+                          ? "Declined"
+                          : decision?.decision === "responded"
+                            ? "Asked a question"
+                            : decision?.decision === "requires_changes"
+                              ? "Needs more work"
+                              : "Waiting";
+                    const tone =
+                      decision?.decision === "approved"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : decision?.decision === "rejected"
+                          ? "bg-risk-high/10 text-risk-high"
+                          : decision?.decision === "responded"
+                            ? "bg-blue-50 text-blue-700"
+                            : "bg-gray-100 text-gray-500";
+                    return (
+                      <div
+                        key={approver.key}
+                        className="flex items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="text-gray-700">
+                          {approver.name}
+                          <span className="text-xs text-gray-400 ml-2">
+                            {approver.tagName}
+                            {approver.mode === "any" && " (any one)"}
+                            {!approver.userId && " - no login"}
+                          </span>
+                        </span>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${tone}`}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {progress.responded.length > 0 && (
+                  <p className="text-xs text-blue-700 mt-3">
+                    A question is outstanding. The application does not move
+                    until it is answered and that approver decides.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+
           {/* Notes - open to anyone who can see the project */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
@@ -1044,6 +1154,13 @@ export default function SpendDetailPage() {
                       className="w-full bg-risk-high hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
                     >
                       Decline
+                    </button>
+                    <button
+                      onClick={() => setShowCommentsFor("responded")}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
+                      title="Ask a question or leave a comment without deciding yet"
+                    >
+                      Respond with a question
                     </button>
                     <button
                       onClick={() => setShowCommentsFor("requires_changes")}
