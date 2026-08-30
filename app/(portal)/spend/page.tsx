@@ -55,6 +55,7 @@ interface SpendRecord {
   approvedAmount?: number;
   finishedWithinBudget?: boolean;
   quoteDetails?: { supplierName: string; priceExclVat?: number }[];
+  notes?: { id: string }[];
   approvals: { userName: string; decision: string }[];
 }
 
@@ -94,6 +95,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   sourceOfFunds: 130,
   budgeted: 90,
   quotes: 80,
+  notes: 75,
   submittedByName: 140,
   applicant: 140,
   custodian: 170,
@@ -164,6 +166,8 @@ export default function SpendPage() {
         switch (key) {
           case "quotes":
             return app.quoteDetails?.length || 0;
+          case "notes":
+            return app.notes?.length || 0;
           case "applicant":
             return applicantOf(app);
           case "custodian":
@@ -333,6 +337,7 @@ export default function SpendPage() {
       "Source of Funds",
       "Budgeted",
       "# Quotes",
+      "# Notes",
       "Submitted By",
       "Applicant",
       "Custodian",
@@ -349,6 +354,7 @@ export default function SpendPage() {
       quote(app.sourceOfFunds || ""),
       app.budgeted ? "Yes" : "No",
       app.quoteDetails?.length || 0,
+      app.notes?.length || 0,
       quote(app.submittedByName),
       quote(applicantOf(app)),
       quote(custodianOf(app).name),
@@ -509,6 +515,7 @@ export default function SpendPage() {
                 {th("Source", "sourceOfFunds")}
                 {th("Budgeted", "budgeted")}
                 {th("Quotes", "quotes")}
+                {th("Notes", "notes")}
                 {th("Submitted By", "submittedByName")}
                 {th("Applicant", "applicant")}
                 {th("Custodian", "custodian")}
@@ -563,6 +570,20 @@ export default function SpendPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {app.quoteDetails?.length || 0}
+                    </td>
+                    {/* Count only - the notes themselves live on the project. */}
+                    <td className="px-4 py-3 text-xs">
+                      {app.notes?.length ? (
+                        <Link
+                          href={`/spend/${app.id}`}
+                          className="text-primary hover:underline font-medium"
+                          title="View the notes on this project"
+                        >
+                          {app.notes.length}
+                        </Link>
+                      ) : (
+                        <span className="text-gray-300">0</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs truncate">
                       {app.submittedByName}
@@ -684,7 +705,7 @@ export default function SpendPage() {
               {sorted.length === 0 && (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={13}
                     className="px-6 py-12 text-center text-gray-400"
                   >
                     No spend projects found.

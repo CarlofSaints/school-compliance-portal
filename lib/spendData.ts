@@ -46,6 +46,10 @@ export interface SpendApplication {
   // Manually-tracked execution progress, independent of the approval status.
   projectProgress?: "not_started" | "in_progress" | "completed";
   approvals: SpendApproval[];
+  // Notes live on the record itself rather than in a separate store, so the
+  // grid's count is derived from the same data the detail page renders and
+  // there is no second copy to fall out of step.
+  notes?: SpendNote[];
   // Applicant (on-behalf-of) fields. applicantUserId points at the portal user
   // the request belongs to - the name/surname/email are kept alongside it so
   // older records (and anyone since removed as a user) still display.
@@ -76,6 +80,17 @@ export interface SpendApplication {
   finishedWithinBudget?: boolean;
   budgetOverrunAmount?: number;
   budgetOverrunExplanation?: string;
+}
+
+// A free-text note anyone with sight of a project can add. Notes are an
+// append-only record - the author and the moment are stamped on the note
+// itself so the trail cannot drift from who actually wrote it.
+export interface SpendNote {
+  id: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  createdAt: string;
 }
 
 export interface SpendApproval {

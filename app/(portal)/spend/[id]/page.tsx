@@ -52,6 +52,13 @@ interface SpendDetail {
   finishedWithinBudget?: boolean;
   budgetOverrunAmount?: number;
   budgetOverrunExplanation?: string;
+  notes?: {
+    id: string;
+    body: string;
+    authorId: string;
+    authorName: string;
+    createdAt: string;
+  }[];
   approvals: {
     userId: string;
     userName: string;
@@ -82,6 +89,8 @@ export default function SpendDetailPage() {
   } | null>(null);
 
   // Complete project modal state
+  const [newNote, setNewNote] = useState("");
+  const [addingNote, setAddingNote] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [finishedOnTime, setFinishedOnTime] = useState(true);
   const [finishedWithinBudget, setFinishedWithinBudget] = useState(true);
@@ -97,6 +106,41 @@ export default function SpendDetailPage() {
   useEffect(() => {
     if (session) fetchData();
   }, [session, fetchData]);
+
+  // Newest first, matching what the API returns.
+  const notes = [...(data?.notes || [])].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
+
+  const handleAddNote = async () => {
+    const body = newNote.trim();
+    if (!body) return;
+    setAddingNote(true);
+    try {
+      const res = await authFetch(`/api/spend/${spendId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (res.ok) {
+        setNewNote("");
+        // Re-read rather than appending locally, so the note shown is the one
+        // the server stamped with the author and time.
+        await fetchData();
+        setToast({ message: "Note added", type: "success" });
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setToast({
+          message: err.error || "Could not add the note",
+          type: "error",
+        });
+      }
+    } catch {
+      setToast({ message: "Could not add the note", type: "error" });
+    } finally {
+      setAddingNote(false);
+    }
+  };
 
   const handleDownloadQuote = async (quoteNum: number) => {
     setDownloading(quoteNum);
@@ -779,6 +823,57 @@ export default function SpendDetailPage() {
               <p className="text-sm text-gray-400 italic">
                 No decisions yet.
               </p>
+            )}
+          </div>
+
+          {/* Notes - open to anyone who can see the project */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h3 className="font-medium text-sm text-gray-500 mb-3">
+              NOTES ({notes.length})
+            </h3>
+
+            <div className="mb-4">
+              <textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                rows={3}
+                maxLength={2000}
+                placeholder="Add a note about this project..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-gray-400">
+                  Your name and the date and time are recorded on the note.
+                </p>
+                <button
+                  onClick={handleAddNote}
+                  disabled={addingNote || !newNote.trim()}
+                  className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  {addingNote ? "Adding..." : "Add Note"}
+                </button>
+              </div>
+            </div>
+
+            {notes.length > 0 ? (
+              <div className="space-y-3">
+                {notes.map((note) => (
+                  <div
+                    key={note.id}
+                    className="border-l-2 border-primary/30 pl-3 py-1"
+                  >
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {note.body}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {note.authorName} &middot;{" "}
+                      {new Date(note.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic">No notes yet.</p>
             )}
           </div>
         </div>
