@@ -251,6 +251,11 @@ export default function SpendPage() {
                 ...(saved.status !== undefined
                   ? { status: saved.status }
                   : {}),
+                // The server fills in approvedAmount when a row is approved
+                // or completed, and the summary cards are computed from it.
+                ...(saved.approvedAmount !== undefined
+                  ? { approvedAmount: saved.approvedAmount }
+                  : {}),
                 ...(saved.custodianUserId !== undefined ||
                 saved.custodianName !== undefined
                   ? {
@@ -265,14 +270,26 @@ export default function SpendPage() {
     }
   };
 
-  const changeStatus = (id: string, status: string) =>
-    patchRow(
+  const changeStatus = (id: string, status: string) => {
+    const app = apps.find((a) => a.id === id);
+    // Mirror the server's backfill so the summary cards move immediately
+    // rather than only after the response lands.
+    const optimistic: Partial<SpendRecord> = { status };
+    if (
+      (status === "approved" || status === "completed") &&
+      app &&
+      app.approvedAmount === undefined
+    ) {
+      optimistic.approvedAmount = app.estimatedAmount;
+    }
+    return patchRow(
       id,
-      { status },
+      optimistic,
       `/api/spend/${id}/status`,
       { status },
       "Could not change the status"
     );
+  };
 
   const changeCustodian = (id: string, userId: string) => {
     const user = users.find((u) => u.id === userId);
@@ -361,7 +378,8 @@ export default function SpendPage() {
   const th = (
     label: string,
     key: string,
-    align?: "left" | "right" | "center"
+    align?: "left" | "right" | "center",
+    stickyLeft = false
   ) => (
     <SortableTh
       label={label}
@@ -372,6 +390,8 @@ export default function SpendPage() {
       width={widths[key]}
       onResize={setWidth}
       align={align}
+      stickyTop
+      stickyLeft={stickyLeft}
     />
   );
 
@@ -477,12 +497,14 @@ export default function SpendPage() {
       </div>
 
       {/* Grid */}
+      {/* The grid scrolls inside this box in both directions, which is what
+          lets the header row and the Project column stay frozen. */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm table-fixed">
-            <thead className="bg-gray-50 border-b border-gray-100">
+        <div className="overflow-auto max-h-[65vh]">
+          <table className="w-full text-sm table-fixed border-separate border-spacing-0">
+            <thead className="bg-gray-50">
               <tr>
-                {th("Project", "projectName")}
+                {th("Project", "projectName", "left", true)}
                 {th("Est. Amount", "estimatedAmount")}
                 {th("Source", "sourceOfFunds")}
                 {th("Budgeted", "budgeted")}
@@ -515,9 +537,13 @@ export default function SpendPage() {
                 return (
                   <tr
                     key={app.id}
-                    className="border-b border-gray-50 hover:bg-gray-50"
+                    className="group hover:bg-gray-50 [&>td]:border-b [&>td]:border-gray-100"
                   >
-                    <td className="px-4 py-3 font-medium truncate">
+                    {/* Frozen alongside its header so the row stays
+                        identifiable when the grid is scrolled sideways. It
+                        carries its own background, so the row hover has to be
+                        repeated here. */}
+                    <td className="px-4 py-3 font-medium truncate sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-200">
                       <Link
                         href={`/spend/${app.id}`}
                         className="hover:text-primary"

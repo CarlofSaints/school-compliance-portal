@@ -56,13 +56,25 @@ export async function PATCH(
   const next = status as SpendApplication["status"];
   const updates: Partial<SpendApplication> = { status: next };
 
-  // Approving from the grid has no quote selection behind it, so fall back to
-  // the estimate rather than leaving the approved amount empty - the CAPEX
-  // report reads approvedAmount.
-  if (next === "approved" && app.approvedAmount === undefined) {
+  // Changing the status from the grid has no quote selection behind it, so
+  // fall back to the estimate rather than leaving the approved amount empty.
+  // "Total Approved Spend" and the CAPEX report both sum approvedAmount, so a
+  // row without one silently counts as zero. Completed counts too - a project
+  // can be marked completed straight from the grid without passing through
+  // approved.
+  if (
+    (next === "approved" || next === "completed") &&
+    app.approvedAmount === undefined
+  ) {
     updates.approvedAmount = app.estimatedAmount;
   }
 
   const updated = await updateSpendApplication(id, updates);
-  return NextResponse.json({ success: true, status: updated?.status });
+  // approvedAmount is returned so the grid can update its totals without a
+  // reload - the card is computed from the rows it already holds.
+  return NextResponse.json({
+    success: true,
+    status: updated?.status,
+    approvedAmount: updated?.approvedAmount,
+  });
 }

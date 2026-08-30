@@ -15,6 +15,11 @@ interface Props {
   // Key used for the resize handle when the column is not sortable.
   resizeKey?: string;
   align?: "left" | "right" | "center";
+  // Freeze the header to the top of its scroll container. Needs an opaque
+  // background, otherwise the rows show through as they pass underneath.
+  stickyTop?: boolean;
+  // Freeze the column to the left edge as the grid scrolls sideways.
+  stickyLeft?: boolean;
 }
 
 // A grid header cell that can be clicked to sort and dragged on its right edge
@@ -30,6 +35,8 @@ export default function SortableTh({
   onResize,
   resizeKey,
   align = "left",
+  stickyTop = false,
+  stickyLeft = false,
 }: Props) {
   const thRef = useRef<HTMLTableCellElement>(null);
   const key = resizeKey || sortKey;
@@ -69,11 +76,24 @@ export default function SortableTh({
         ? "text-center"
         : "text-left";
 
+  // A frozen column has to sit above a frozen row's neighbours, so the
+  // top-left cell (both frozen) gets the highest layer of the three.
+  const stickyClass = [
+    stickyTop || stickyLeft ? "sticky bg-gray-50" : "",
+    // border-collapse is off on a frozen grid, so the header's underline has
+    // to live on the cells rather than on the row.
+    stickyTop ? "top-0 border-b border-gray-200" : "",
+    stickyLeft ? "left-0 border-r border-gray-200" : "",
+    stickyTop && stickyLeft ? "z-30" : stickyTop ? "z-20" : stickyLeft ? "z-10" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <th
       ref={thRef}
       style={width ? { width } : undefined}
-      className={`${alignClass} px-4 py-3 font-medium text-gray-500 relative select-none ${
+      className={`${alignClass} ${stickyClass} px-4 py-3 font-medium text-gray-500 relative select-none ${
         sortable ? "cursor-pointer hover:text-gray-700" : ""
       }`}
       onClick={sortable ? () => onSort!(sortKey!) : undefined}
