@@ -7,9 +7,12 @@ import {
   IMPORT_FIELDS,
   buildDrafts,
   detectHeaderRow,
+  distinctCustodians,
+  guessCustodianUsers,
   guessMapping,
   isImportable,
   type ColumnMapping,
+  type DirectoryUser,
   type ImportDraft,
   type ImportField,
 } from "@/lib/spendImport";
@@ -52,6 +55,11 @@ export default function SpendImportPage() {
 
   const [existingNames, setExistingNames] = useState<string[]>([]);
   const [sources, setSources] = useState<string[]>([]);
+  const [users, setUsers] = useState<DirectoryUser[]>([]);
+  // Custodian text from the sheet -> portal user id ("" means unassigned).
+  const [custodianUsers, setCustodianUsers] = useState<Record<string, string>>(
+    {}
+  );
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
@@ -59,10 +67,12 @@ export default function SpendImportPage() {
   const [undone, setUndone] = useState(0);
 
   const loadContext = useCallback(async () => {
-    const [appsRes, settingsRes] = await Promise.all([
+    const [appsRes, settingsRes, usersRes] = await Promise.all([
       authFetch("/api/spend"),
       authFetch("/api/settings/spend"),
+      authFetch("/api/users/directory"),
     ]);
+    if (usersRes.ok) setUsers(await usersRes.json());
     if (appsRes.ok) {
       const apps = await appsRes.json();
       setExistingNames(
@@ -139,6 +149,28 @@ export default function SpendImportPage() {
     existingNames,
   ]);
 
+  const custodians = useMemo(() => distinctCustodians(drafts), [drafts]);
+
+  // Seed the custodian dropdowns from the user list, keeping anything already
+  // picked by hand.
+  useEffect(() => {
+    if (custodians.length === 0) return;
+    setCustodianUsers((prev) => guessCustodianUsers(custodians, users, prev));
+  }, [custodians, users]);
+
+  const userById = useMemo(() => {
+    const map = new Map<string, DirectoryUser>();
+    for (const u of users) map.set(u.id, u);
+    return map;
+  }, [users]);
+
+  const resolvedUser = (custodian: string): DirectoryUser | undefined => {
+    const id = custodianUsers[custodian];
+    return id ? userById.get(id) : undefined;
+  };
+
+  const unassignedCustodians = custodians.filter((c) => !custodianUsers[c]);
+
   const importable = drafts.filter(isImportable);
   const duplicates = drafts.filter((d) => d.duplicate && d.errors.length === 0);
   const broken = drafts.filter((d) => d.errors.length > 0);
@@ -160,6 +192,7 @@ export default function SpendImportPage() {
             estimatedAmount: d.estimatedAmount,
             sourceOfFunds: d.sourceOfFunds,
             custodian: d.custodian,
+            applicantUserId: custodianUsers[d.custodian] || "",
             budgeted: d.budgeted,
           })),
         }),
@@ -351,9 +384,59 @@ export default function SpendImportPage() {
             </div>
           </div>
 
-          {/* Step 4: options */}
+          {/* Step 4: custodians */}
+          {custodians.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
+              <h2 className="font-semibold text-dark mb-1">
+                4. Match custodians to users
+              </h2>
+              <p className="text-xs text-gray-500 mb-3">
+                Each custodian becomes the applicant on their projects. Names
+                that match a portal user are filled in already; pick the rest.
+                {unassignedCustodians.length > 0 && (
+                  <span className="text-risk-medium">
+                    {" "}
+                    {unassignedCustodians.length} still unassigned - those
+                    projects will be logged under you, with the custodian name
+                    kept in the description.
+                  </span>
+                )}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {custodians.map((custodian) => (
+                  <label key={custodian} className="text-xs text-gray-500">
+                    {custodian}
+                    <select
+                      value={custodianUsers[custodian] || ""}
+                      onChange={(e) =>
+                        setCustodianUsers((prev) => ({
+                          ...prev,
+                          [custodian]: e.target.value,
+                        }))
+                      }
+                      className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-dark"
+                    >
+                      <option value="">Not assigned to a user</option>
+                      {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} {u.surname} ({u.email})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+              {users.length === 0 && (
+                <p className="text-xs text-risk-medium mt-3">
+                  No portal users loaded, so custodians cannot be matched yet.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Step 5: options */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
-            <h2 className="font-semibold text-dark mb-3">4. Import options</h2>
+            <h2 className="font-semibold text-dark mb-3">5. Import options</h2>
             <div className="flex flex-wrap gap-6 items-start">
               <label className="text-xs text-gray-500">
                 Bring them in as
@@ -396,7 +479,7 @@ export default function SpendImportPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
             <div className="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-dark">5. Preview</h2>
+                <h2 className="font-semibold text-dark">6. Preview</h2>
                 <p className="text-xs text-gray-500 mt-1">
                   {importable.length} to import
                   {duplicates.length > 0 &&
@@ -465,7 +548,17 @@ export default function SpendImportPage() {
                           {d.projectName || "(blank)"}
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          {d.custodian || "-"}
+                          {(() => {
+                            if (!d.custodian) return "-";
+                            const u = resolvedUser(d.custodian);
+                            return u ? (
+                              `${u.name} ${u.surname}`
+                            ) : (
+                              <span className="text-risk-medium">
+                                {d.custodian} (unassigned)
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           {d.sourceOfFunds}

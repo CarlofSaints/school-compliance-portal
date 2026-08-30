@@ -78,6 +78,11 @@ export async function POST(req: NextRequest) {
     const applicantEmail = isOnBehalf
       ? (formData.get("applicantEmail") as string) || ""
       : session.email;
+    // Set when the applicant was picked from the user dropdown rather than
+    // typed in as someone outside the portal.
+    const applicantUserId = isOnBehalf
+      ? (formData.get("applicantUserId") as string) || undefined
+      : session.id;
 
     if (!projectName || !description || isNaN(estimatedAmount)) {
       return NextResponse.json(
@@ -130,6 +135,7 @@ export async function POST(req: NextRequest) {
       submittedByName: `${session.name} ${session.surname}`,
       submittedAt: new Date().toISOString(),
       approvals: [],
+      applicantUserId,
       applicantName,
       applicantSurname,
       applicantEmail,

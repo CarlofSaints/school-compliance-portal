@@ -117,6 +117,15 @@ export async function PUT(
     const applicantEmail = isOnBehalf
       ? (formData.get("applicantEmail") as string) || app.applicantEmail
       : session.email;
+    // The applicant is a portal user where one was picked. An empty string is
+    // a real choice ("someone not on the portal"), so only fall back to the
+    // saved value when the form did not send the field at all.
+    const applicantUserIdRaw = formData.get("applicantUserId");
+    const applicantUserId = !isOnBehalf
+      ? undefined
+      : applicantUserIdRaw === null
+        ? app.applicantUserId
+        : (applicantUserIdRaw as string) || undefined;
 
     // Handle quote files - check for new uploads
     let quotePaths = [...app.quotes];
@@ -194,6 +203,7 @@ export async function PUT(
       fundingAllocations,
       quotes: quotePaths,
       quoteDetails,
+      applicantUserId,
       applicantName,
       applicantSurname,
       applicantEmail,

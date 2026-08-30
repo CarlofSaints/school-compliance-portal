@@ -401,3 +401,63 @@ export function buildDrafts(
 export function isImportable(draft: ImportDraft): boolean {
   return draft.errors.length === 0 && !draft.duplicate;
 }
+
+export interface DirectoryUser {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+}
+
+// Every distinct custodian value in the file, so the import page can ask for
+// one user per name rather than once per row.
+export function distinctCustodians(drafts: ImportDraft[]): string[] {
+  const seen = new Set<string>();
+  for (const d of drafts) {
+    if (d.custodian) seen.add(d.custodian);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+// Best-effort match of a custodian cell onto a portal user. A list normally
+// holds a first name only ("Graham"), so a unique first-name hit counts - but
+// anything ambiguous ("Dee/Graham/Alex") returns null and is left for the user
+// to pick, rather than guessing a person onto a spend request.
+export function matchCustodianToUser(
+  custodian: string,
+  users: DirectoryUser[]
+): DirectoryUser | null {
+  const text = custodian.trim().toLowerCase();
+  if (!text) return null;
+
+  const fullName = (u: DirectoryUser) =>
+    `${u.name} ${u.surname}`.trim().toLowerCase();
+
+  const byFull = users.filter((u) => fullName(u) === text);
+  if (byFull.length === 1) return byFull[0];
+
+  const byEmail = users.filter((u) => u.email.trim().toLowerCase() === text);
+  if (byEmail.length === 1) return byEmail[0];
+
+  const byFirst = users.filter((u) => u.name.trim().toLowerCase() === text);
+  if (byFirst.length === 1) return byFirst[0];
+
+  return null;
+}
+
+// Seeds a custodian-to-user map, keeping any choice already made by hand.
+export function guessCustodianUsers(
+  custodians: string[],
+  users: DirectoryUser[],
+  existing: Record<string, string> = {}
+): Record<string, string> {
+  const next: Record<string, string> = {};
+  for (const custodian of custodians) {
+    if (existing[custodian] !== undefined) {
+      next[custodian] = existing[custodian];
+      continue;
+    }
+    next[custodian] = matchCustodianToUser(custodian, users)?.id || "";
+  }
+  return next;
+}

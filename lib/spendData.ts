@@ -46,7 +46,10 @@ export interface SpendApplication {
   // Manually-tracked execution progress, independent of the approval status.
   projectProgress?: "not_started" | "in_progress" | "completed";
   approvals: SpendApproval[];
-  // Applicant (on-behalf-of) fields
+  // Applicant (on-behalf-of) fields. applicantUserId points at the portal user
+  // the request belongs to - the name/surname/email are kept alongside it so
+  // older records (and anyone since removed as a user) still display.
+  applicantUserId?: string;
   applicantName: string;
   applicantSurname: string;
   applicantEmail: string;

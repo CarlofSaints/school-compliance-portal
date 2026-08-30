@@ -7,6 +7,7 @@ import {
 } from "@/lib/spendData";
 import type { SpendApplication } from "@/lib/spendData";
 import { getPeople } from "@/lib/peopleData";
+import { getUsers } from "@/lib/userData";
 import { getSpendSettings } from "@/lib/settingsData";
 import { normaliseSource } from "@/lib/spendImport";
 import { v4 as uuidv4 } from "uuid";
@@ -22,6 +23,9 @@ interface IncomingRow {
   estimatedAmount?: number;
   sourceOfFunds?: string;
   custodian?: string;
+  // The portal user the custodian column was matched to. The raw custodian
+  // text is kept too, but this is what makes the applicant a real user.
+  applicantUserId?: string;
   budgeted?: boolean;
 }
 
@@ -63,10 +67,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [existing, people, settings] = await Promise.all([
+    const [existing, people, settings, users] = await Promise.all([
       getSpendApplications(),
       getPeople(),
       getSpendSettings(),
+      getUsers(),
     ]);
 
     const takenNames = new Set(
@@ -104,19 +109,37 @@ export async function POST(req: NextRequest) {
       const sourceOfFunds =
         normaliseSource(row.sourceOfFunds, settings.sourcesOfFunds) || "Other";
 
-      // Custodian becomes the applicant. If exactly one person on the school's
-      // people list matches that name we carry their email across, otherwise we
-      // leave it blank rather than guess an address.
+      // Custodian becomes the applicant. The import page resolves the custodian
+      // column to a portal user, so prefer that; fall back to a unique match on
+      // the school's people list, and otherwise leave the request with the
+      // person doing the import rather than inventing an applicant.
       const custodian = String(row.custodian ?? "").trim();
+      const chosenUser = row.applicantUserId
+        ? users.find((u) => u.id === row.applicantUserId)
+        : undefined;
+
       const custodianLower = custodian.toLowerCase();
-      const matches = custodian
-        ? people.filter((p) => {
-            const full = (p.name || "").trim().toLowerCase();
-            return full === custodianLower || full.startsWith(custodianLower + " ");
-          })
-        : [];
-      const match = matches.length === 1 ? matches[0] : null;
-      const split = splitName(match ? match.name : custodian);
+      const peopleMatches =
+        !chosenUser && custodian
+          ? people.filter((p) => {
+              const full = (p.name || "").trim().toLowerCase();
+              return (
+                full === custodianLower ||
+                full.startsWith(custodianLower + " ")
+              );
+            })
+          : [];
+      const person = peopleMatches.length === 1 ? peopleMatches[0] : null;
+
+      const applicantUserId = chosenUser?.id;
+      const applicantName = chosenUser
+        ? chosenUser.name
+        : splitName(person ? person.name : custodian).name;
+      const applicantSurname = chosenUser
+        ? chosenUser.surname
+        : splitName(person ? person.name : custodian).surname;
+      const applicantEmail = chosenUser?.email || person?.email || "";
+      const onBehalf = !!(chosenUser || custodian);
 
       toCreate.push({
         id: uuidv4(),
@@ -134,10 +157,11 @@ export async function POST(req: NextRequest) {
         submittedByName: `${session.name} ${session.surname}`,
         submittedAt: now,
         approvals: [],
-        applicantName: split.name || session.name,
-        applicantSurname: split.surname || (custodian ? "" : session.surname),
-        applicantEmail: match?.email || "",
-        submittedOnBehalf: !!custodian,
+        applicantUserId,
+        applicantName: applicantName || session.name,
+        applicantSurname: applicantName ? applicantSurname : session.surname,
+        applicantEmail,
+        submittedOnBehalf: onBehalf,
         preferredQuotes: [],
         importBatchId: batchId,
         importedFrom: sourceFile,

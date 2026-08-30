@@ -33,10 +33,18 @@ interface SpendData {
   submittedBy: string;
   quoteDetails: QuoteDetail[];
   quotes: string[];
+  applicantUserId?: string;
   applicantName?: string;
   applicantSurname?: string;
   applicantEmail?: string;
   submittedOnBehalf?: boolean;
+}
+
+interface DirectoryUser {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
 }
 
 interface QuoteEntry {
@@ -66,6 +74,8 @@ export default function EditSpendPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [onBehalf, setOnBehalf] = useState(false);
+  const [applicantUserId, setApplicantUserId] = useState("");
+  const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [applicantName, setApplicantName] = useState("");
   const [applicantSurname, setApplicantSurname] = useState("");
   const [applicantEmail, setApplicantEmail] = useState("");
@@ -77,10 +87,19 @@ export default function EditSpendPage() {
   } | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [spendRes, settingsRes] = await Promise.all([
+    const [spendRes, settingsRes, usersRes] = await Promise.all([
       authFetch(`/api/spend/${spendId}`),
       authFetch("/api/settings/spend"),
+      authFetch("/api/users/directory"),
     ]);
+
+    // Read first so an older record that only carries an applicant email can
+    // still resolve to the user it belongs to.
+    let directory: DirectoryUser[] = [];
+    if (usersRes.ok) {
+      directory = await usersRes.json();
+      setUsers(directory);
+    }
 
     if (spendRes.ok) {
       const spend: SpendData = await spendRes.json();
@@ -105,6 +124,16 @@ export default function EditSpendPage() {
       setApplicantName(spend.applicantName || "");
       setApplicantSurname(spend.applicantSurname || "");
       setApplicantEmail(spend.applicantEmail || "");
+      const linked =
+        directory.find((u) => u.id === spend.applicantUserId) ||
+        (spend.applicantEmail
+          ? directory.find(
+              (u) =>
+                u.email.toLowerCase() ===
+                (spend.applicantEmail || "").toLowerCase()
+            )
+          : undefined);
+      setApplicantUserId(linked?.id || "");
 
       // Pre-populate quotes
       const quoteEntries: QuoteEntry[] = [];
@@ -184,6 +213,7 @@ export default function EditSpendPage() {
     formData.append("onBehalf", onBehalf ? "yes" : "no");
 
     if (onBehalf) {
+      formData.append("applicantUserId", applicantUserId);
       formData.append("applicantName", applicantName);
       formData.append("applicantSurname", applicantSurname);
       formData.append("applicantEmail", applicantEmail);
@@ -272,6 +302,36 @@ export default function EditSpendPage() {
               </span>
             </label>
             {onBehalf && (
+              <div className="mt-4">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Who is this for?
+                </label>
+                <select
+                  value={applicantUserId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setApplicantUserId(id);
+                    const u = users.find((x) => x.id === id);
+                    if (u) {
+                      setApplicantName(u.name);
+                      setApplicantSurname(u.surname);
+                      setApplicantEmail(u.email);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                >
+                  <option value="">
+                    Someone not on the portal (type the details below)
+                  </option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} {u.surname} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {onBehalf && !applicantUserId && (
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
