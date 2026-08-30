@@ -10,6 +10,8 @@ import {
   type ProjectRow,
 } from "@/lib/spendReport";
 import type { SpendApplication } from "@/lib/spendData";
+import SortableTh from "@/components/SortableTh";
+import { useTableSort } from "@/lib/useTable";
 
 type SortKey =
   | "projectName"
@@ -39,25 +41,20 @@ export default function SpendReportsPage() {
   const [report, setReport] = useState<SpendReport | null>(null);
   const [settings, setSettings] = useState<SpendSettings | null>(null);
   const [fetching, setFetching] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>("requested");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const { sortKey, sortDir, toggle, sort } = useTableSort<ProjectRow>(
+    "requested",
+    "desc"
+  );
 
-  const toggleSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      // Text columns default to A→Z, numbers to high→low.
-      setSortDir(
-        key === "projectName" ||
-          key === "owner" ||
-          key === "selectedSupplier" ||
-          key === "progress"
-          ? "asc"
-          : "desc"
-      );
-    }
-  };
+  // Text columns default to A→Z on first click, numbers to high→low.
+  const TEXT_COLUMNS: string[] = [
+    "projectName",
+    "owner",
+    "selectedSupplier",
+    "progress",
+  ];
+  const toggleSort = (key: string) =>
+    toggle(key, TEXT_COLUMNS.includes(key) ? "asc" : "desc");
 
   const exportExcel = async (rows: ProjectRow[], year: number) => {
     const XLSX = await import("xlsx");
@@ -113,19 +110,10 @@ export default function SpendReportsPage() {
   const capexMax = Math.max(capex.budget, capex.committed, capex.actual, 1);
 
   // Sorted view of the projects grid.
-  const sortedProjects = [...byProject].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    let cmp: number;
-    if (av === null || av === undefined) cmp = bv === null || bv === undefined ? 0 : 1;
-    else if (bv === null || bv === undefined) cmp = -1;
-    else if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
-    else cmp = String(av).localeCompare(String(bv));
-    return sortDir === "asc" ? cmp : -cmp;
-  });
-
-  const sortArrow = (key: SortKey) =>
-    sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "";
+  const sortedProjects = sort(
+    byProject,
+    (row, key) => (row as unknown as Record<string, unknown>)[key]
+  );
 
   return (
     <div>
@@ -277,14 +265,14 @@ export default function SpendReportsPage() {
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-left text-gray-500">
                 <tr className="border-b border-gray-100">
-                  <SortTh label="Project" k="projectName" cur={sortKey} arrow={sortArrow} onClick={toggleSort} />
-                  <SortTh label="Owner" k="owner" cur={sortKey} arrow={sortArrow} onClick={toggleSort} />
-                  <SortTh label="Requested" k="requested" cur={sortKey} arrow={sortArrow} onClick={toggleSort} align="right" />
-                  <SortTh label="Quotes" k="quoteCount" cur={sortKey} arrow={sortArrow} onClick={toggleSort} align="center" />
-                  <SortTh label="Service Provider" k="selectedSupplier" cur={sortKey} arrow={sortArrow} onClick={toggleSort} />
-                  <SortTh label="Total Spend" k="totalSpend" cur={sortKey} arrow={sortArrow} onClick={toggleSort} align="right" />
-                  <SortTh label="Spend vs Req." k="spendVsRequestPct" cur={sortKey} arrow={sortArrow} onClick={toggleSort} align="right" />
-                  <SortTh label="Progress" k="progress" cur={sortKey} arrow={sortArrow} onClick={toggleSort} />
+                  <SortableTh label="Project" sortKey="projectName" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Owner" sortKey="owner" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Requested" sortKey="requested" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label="Quotes" sortKey="quoteCount" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="center" />
+                  <SortableTh label="Service Provider" sortKey="selectedSupplier" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label="Total Spend" sortKey="totalSpend" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label="Spend vs Req." sortKey="spendVsRequestPct" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label="Progress" sortKey="progress" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -355,38 +343,6 @@ export default function SpendReportsPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function SortTh({
-  label,
-  k,
-  cur,
-  arrow,
-  onClick,
-  align = "left",
-}: {
-  label: string;
-  k: SortKey;
-  cur: SortKey;
-  arrow: (k: SortKey) => string;
-  onClick: (k: SortKey) => void;
-  align?: "left" | "right" | "center";
-}) {
-  return (
-    <th
-      onClick={() => onClick(k)}
-      className={`py-2 pr-3 font-medium cursor-pointer select-none hover:text-gray-700 ${
-        align === "right"
-          ? "text-right"
-          : align === "center"
-          ? "text-center"
-          : "text-left"
-      } ${cur === k ? "text-gray-700" : ""}`}
-    >
-      {label}
-      {arrow(k)}
-    </th>
   );
 }
 

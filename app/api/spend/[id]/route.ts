@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLogin } from "@/lib/rolesData";
+import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getSpendById,
   updateSpendApplication,
   uploadQuoteFile,
+  deleteSpendApplication,
 } from "@/lib/spendData";
 import type { QuoteDetail, FundingAllocation } from "@/lib/spendData";
 
@@ -216,6 +217,37 @@ export async function PUT(
     });
 
     return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// Permanently removes a project. Gated on its own delete_spend permission -
+// deleting is not the same authority as editing, so it is not folded into the
+// edit check above.
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await requirePermission(req, "delete_spend");
+  if (session instanceof NextResponse) return session;
+
+  const { id } = await params;
+  try {
+    const removed = await deleteSpendApplication(id);
+    if (!removed) {
+      return NextResponse.json(
+        { error: "Spend application not found" },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({
+      success: true,
+      projectName: removed.projectName,
+    });
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

@@ -34,6 +34,9 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   { key: "submit_spend", name: "Submit Spend Applications", category: "Spend" },
   { key: "approve_spend", name: "Approve/Reject Spend", category: "Spend" },
   { key: "view_all_spend", name: "View All Spend Applications", category: "Spend" },
+  // Deliberately its own key rather than riding on manage_spend_settings:
+  // deleting a project is not the same authority as editing settings.
+  { key: "delete_spend", name: "Delete Spend Applications", category: "Spend" },
   { key: "manage_users", name: "Manage Users", category: "Admin" },
   { key: "manage_roles", name: "Manage Roles & Permissions", category: "Admin" },
   { key: "manage_people", name: "Manage People", category: "Admin" },

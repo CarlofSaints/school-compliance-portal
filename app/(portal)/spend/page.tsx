@@ -1,8 +1,13 @@
 "use client";
 
 import { useAuth, authFetch } from "@/lib/useAuth";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import SortableTh from "@/components/SortableTh";
+import RowActions from "@/components/RowActions";
+import ReminderModal from "@/components/ReminderModal";
+import Toast from "@/components/Toast";
+import { useTableSort, useColumnWidths } from "@/lib/useTable";
 
 const STATUS_DISPLAY: Record<string, string> = {
   pending: "APPLIED",
@@ -12,6 +17,15 @@ const STATUS_DISPLAY: Record<string, string> = {
   requires_changes: "NEEDS MORE WORK",
   completed: "COMPLETED",
 };
+
+const STATUS_ORDER = [
+  "pending",
+  "pending_decision",
+  "approved",
+  "rejected",
+  "requires_changes",
+  "completed",
+];
 
 const STATUS_FILTERS = [
   { key: "all", label: "All" },
@@ -32,9 +46,12 @@ interface SpendRecord {
   status: string;
   submittedByName: string;
   submittedAt: string;
+  applicantUserId?: string;
   applicantName?: string;
   applicantSurname?: string;
   submittedOnBehalf?: boolean;
+  custodianUserId?: string;
+  custodianName?: string;
   approvedAmount?: number;
   finishedWithinBudget?: boolean;
   quoteDetails?: { supplierName: string; priceExclVat?: number }[];
@@ -46,36 +63,136 @@ interface SpendSettings {
   capexYear: number;
 }
 
+interface DirectoryUser {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+}
+
+// Mirrors getCustodian() on the server: an unset custodian follows the
+// applicant, so every record shows one without a migration.
+function custodianOf(app: SpendRecord): { userId?: string; name: string } {
+  if (app.custodianUserId || app.custodianName) {
+    return { userId: app.custodianUserId, name: app.custodianName || "" };
+  }
+  return {
+    userId: app.applicantUserId,
+    name: `${app.applicantName || ""} ${app.applicantSurname || ""}`.trim(),
+  };
+}
+
+function applicantOf(app: SpendRecord): string {
+  return app.submittedOnBehalf
+    ? `${app.applicantName || ""} ${app.applicantSurname || ""}`.trim()
+    : app.submittedByName;
+}
+
+const DEFAULT_WIDTHS: Record<string, number> = {
+  projectName: 200,
+  estimatedAmount: 120,
+  sourceOfFunds: 130,
+  budgeted: 90,
+  quotes: 80,
+  submittedByName: 140,
+  applicant: 140,
+  custodian: 170,
+  submittedAt: 110,
+  status: 170,
+  finishedWithinBudget: 90,
+  actions: 110,
+};
+
 export default function SpendPage() {
   const { session, loading } = useAuth("submit_spend");
   const [apps, setApps] = useState<SpendRecord[]>([]);
   const [settings, setSettings] = useState<SpendSettings | null>(null);
+  const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [filter, setFilter] = useState("all");
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
+  const [reminderFor, setReminderFor] = useState<SpendRecord | null>(null);
+
+  const { sortKey, sortDir, toggle, sort } = useTableSort<SpendRecord>(
+    "submittedAt",
+    "desc"
+  );
+  const { widths, setWidth, reset } = useColumnWidths(
+    "spend-grid-widths",
+    DEFAULT_WIDTHS
+  );
 
   const fetchData = useCallback(async () => {
-    const [appsRes, settingsRes] = await Promise.all([
+    const [appsRes, settingsRes, usersRes] = await Promise.all([
       authFetch("/api/spend"),
       authFetch("/api/settings/spend"),
+      authFetch("/api/users/directory"),
     ]);
     if (appsRes.ok) setApps(await appsRes.json());
     if (settingsRes.ok) setSettings(await settingsRes.json());
+    if (usersRes.ok) setUsers(await usersRes.json());
   }, []);
 
   useEffect(() => {
     if (session) fetchData();
   }, [session, fetchData]);
 
-  const filtered =
-    filter === "all" ? apps : apps.filter((a) => a.status === filter);
+  const isAdmin =
+    (session?.permissions.includes("manage_spend_settings") ||
+      session?.permissions.includes("manage_users")) ??
+    false;
+  const canImport =
+    session?.permissions.includes("manage_spend_settings") ?? false;
+  const canDelete = session?.permissions.includes("delete_spend") ?? false;
+  // Editing status and custodian in the grid matches what the PATCH routes
+  // enforce, so the control never appears where the save would be refused.
+  const canEditInline =
+    (session?.permissions.includes("approve_spend") ||
+      session?.permissions.includes("manage_spend_settings")) ??
+    false;
+
+  const filtered = useMemo(
+    () => (filter === "all" ? apps : apps.filter((a) => a.status === filter)),
+    [apps, filter]
+  );
+
+  const sorted = useMemo(
+    () =>
+      sort(filtered, (app, key) => {
+        switch (key) {
+          case "quotes":
+            return app.quoteDetails?.length || 0;
+          case "applicant":
+            return applicantOf(app);
+          case "custodian":
+            return custodianOf(app).name;
+          case "status":
+            // Sort by workflow order rather than alphabetically, so the grid
+            // reads Applied -> Pending -> Approved rather than A to Z.
+            return STATUS_ORDER.indexOf(app.status);
+          case "budgeted":
+            return app.budgeted ? 1 : 0;
+          case "finishedWithinBudget":
+            return app.status === "completed"
+              ? app.finishedWithinBudget
+                ? 1
+                : 0
+              : undefined;
+          default:
+            return (app as unknown as Record<string, unknown>)[key];
+        }
+      }),
+    [filtered, sort]
+  );
 
   // Dashboard calculations
   const pendingCount = apps.filter(
     (a) => a.status === "pending" || a.status === "pending_decision"
   ).length;
   const totalPendingSpend = apps
-    .filter(
-      (a) => a.status === "pending" || a.status === "pending_decision"
-    )
+    .filter((a) => a.status === "pending" || a.status === "pending_decision")
     .reduce((sum, a) => sum + a.estimatedAmount, 0);
   const totalApprovedSpend = apps
     .filter((a) => a.status === "approved" || a.status === "completed")
@@ -84,11 +201,6 @@ export default function SpendPage() {
   const capexRemaining = capexBudget - totalApprovedSpend;
   const capexYear = settings?.capexYear || new Date().getFullYear();
 
-  // Bulk import writes applications on other people's behalf, so it matches the
-  // permission the import API enforces rather than plain submit_spend.
-  const canImport =
-    session?.permissions.includes("manage_spend_settings") ?? false;
-
   const statusColors: Record<string, string> = {
     pending: "bg-risk-low/10 text-risk-low",
     pending_decision: "bg-blue-50 text-blue-700",
@@ -96,6 +208,105 @@ export default function SpendPage() {
     rejected: "bg-risk-high/10 text-risk-high",
     requires_changes: "bg-risk-medium/10 text-risk-medium",
     completed: "bg-purple-100 text-purple-700",
+  };
+
+  // --- Inline edits -------------------------------------------------------
+  // Each applies to local state first so the grid responds immediately, then
+  // reverts to the previous value if the server refuses it.
+
+  const patchRow = async (
+    id: string,
+    optimistic: Partial<SpendRecord>,
+    url: string,
+    body: Record<string, unknown>,
+    failureMessage: string
+  ) => {
+    const previous = apps.find((a) => a.id === id);
+    if (!previous) return;
+    setApps((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, ...optimistic } : a))
+    );
+
+    const res = await authFetch(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      setApps((prev) => prev.map((a) => (a.id === id ? previous : a)));
+      const data = await res.json().catch(() => ({}));
+      setToast({ message: data.error || failureMessage, type: "error" });
+      return;
+    }
+    // Take the server's version of the row back, so what the grid shows is
+    // what was actually stored rather than what was clicked.
+    const saved = await res.json().catch(() => null);
+    if (saved) {
+      setApps((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                ...(saved.status !== undefined
+                  ? { status: saved.status }
+                  : {}),
+                ...(saved.custodianUserId !== undefined ||
+                saved.custodianName !== undefined
+                  ? {
+                      custodianUserId: saved.custodianUserId,
+                      custodianName: saved.custodianName,
+                    }
+                  : {}),
+              }
+            : a
+        )
+      );
+    }
+  };
+
+  const changeStatus = (id: string, status: string) =>
+    patchRow(
+      id,
+      { status },
+      `/api/spend/${id}/status`,
+      { status },
+      "Could not change the status"
+    );
+
+  const changeCustodian = (id: string, userId: string) => {
+    const user = users.find((u) => u.id === userId);
+    return patchRow(
+      id,
+      {
+        custodianUserId: userId || undefined,
+        custodianName: user ? `${user.name} ${user.surname}` : undefined,
+      },
+      `/api/spend/${id}/custodian`,
+      { custodianUserId: userId },
+      "Could not change the custodian"
+    );
+  };
+
+  const handleDelete = async (app: SpendRecord) => {
+    if (
+      !confirm(
+        `Delete "${app.projectName}"? This removes the project and its quotes permanently.`
+      )
+    ) {
+      return;
+    }
+    const res = await authFetch(`/api/spend/${app.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setApps((prev) => prev.filter((a) => a.id !== app.id));
+      setToast({ message: `Deleted "${app.projectName}"`, type: "success" });
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setToast({
+        message: data.error || "Could not delete that project",
+        type: "error",
+      });
+    }
   };
 
   const handleCSVExport = () => {
@@ -107,21 +318,23 @@ export default function SpendPage() {
       "# Quotes",
       "Submitted By",
       "Applicant",
+      "Custodian",
       "Date",
       "Status",
       "Stuck to Budget",
     ];
 
-    const rows = filtered.map((app) => [
-      `"${app.projectName.replace(/"/g, '""')}"`,
+    const quote = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
+    const rows = sorted.map((app) => [
+      quote(app.projectName),
       app.estimatedAmount,
-      app.sourceOfFunds || "",
+      quote(app.sourceOfFunds || ""),
       app.budgeted ? "Yes" : "No",
       app.quoteDetails?.length || 0,
-      `"${app.submittedByName.replace(/"/g, '""')}"`,
-      app.submittedOnBehalf
-        ? `"${app.applicantName || ""} ${app.applicantSurname || ""}"`
-        : `"${app.submittedByName.replace(/"/g, '""')}"`,
+      quote(app.submittedByName),
+      quote(applicantOf(app)),
+      quote(custodianOf(app).name),
       new Date(app.submittedAt).toLocaleDateString(),
       STATUS_DISPLAY[app.status] || app.status,
       app.status === "completed"
@@ -131,14 +344,12 @@ export default function SpendPage() {
         : "",
     ]);
 
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
-      "\n"
-    );
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `spend-applications-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `spend-projects-${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -147,13 +358,38 @@ export default function SpendPage() {
 
   if (loading) return <div className="p-6">Loading...</div>;
 
+  const th = (
+    label: string,
+    key: string,
+    align?: "left" | "right" | "center"
+  ) => (
+    <SortableTh
+      label={label}
+      sortKey={key}
+      activeKey={sortKey}
+      dir={sortDir}
+      onSort={toggle}
+      width={widths[key]}
+      onResize={setWidth}
+      align={align}
+    />
+  );
+
   return (
     <div>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Spend Applications</h1>
+          <h1 className="text-2xl font-bold text-dark">Spend Projects</h1>
           <p className="text-gray-500 text-sm">
-            {apps.length} application{apps.length !== 1 ? "s" : ""}
+            {apps.length} project{apps.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex gap-2">
@@ -183,18 +419,14 @@ export default function SpendPage() {
       {/* Dashboard Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs text-gray-500">
-            Total CAPEX {capexYear}
-          </p>
+          <p className="text-xs text-gray-500">Total CAPEX {capexYear}</p>
           <p className="text-xl font-bold text-dark mt-1">
             R{capexBudget.toLocaleString()}
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <p className="text-xs text-gray-500">Pending Projects</p>
-          <p className="text-xl font-bold text-risk-low mt-1">
-            {pendingCount}
-          </p>
+          <p className="text-xl font-bold text-risk-low mt-1">{pendingCount}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <p className="text-xs text-gray-500">Total Pending Spend</p>
@@ -221,7 +453,7 @@ export default function SpendPage() {
       </div>
 
       {/* Status Filter Tabs */}
-      <div className="flex gap-2 mb-4 flex-wrap">
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
         {STATUS_FILTERS.map((f) => (
           <button
             key={f.key}
@@ -235,74 +467,69 @@ export default function SpendPage() {
             {f.label}
           </button>
         ))}
+        <button
+          onClick={reset}
+          className="ml-auto text-xs text-gray-400 hover:text-gray-600"
+          title="Put the column widths back to their defaults"
+        >
+          Reset columns
+        </button>
       </div>
 
-      {/* Enhanced Table */}
+      {/* Grid */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Project
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Est. Amount
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Source
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Budgeted
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Quotes
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Submitted By
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Applicant
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Date
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Status
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-gray-500">
-                  Budget
-                </th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">
-                  Actions
-                </th>
+                {th("Project", "projectName")}
+                {th("Est. Amount", "estimatedAmount")}
+                {th("Source", "sourceOfFunds")}
+                {th("Budgeted", "budgeted")}
+                {th("Quotes", "quotes")}
+                {th("Submitted By", "submittedByName")}
+                {th("Applicant", "applicant")}
+                {th("Custodian", "custodian")}
+                {th("Date", "submittedAt")}
+                {th("Status", "status")}
+                {th("Budget", "finishedWithinBudget")}
+                <SortableTh
+                  label="Actions"
+                  resizeKey="actions"
+                  width={widths.actions}
+                  onResize={setWidth}
+                  align="right"
+                />
               </tr>
             </thead>
             <tbody>
-              {filtered.map((app) => {
-                const isSubmitter = app.submittedByName.includes(
-                  session?.name || ""
-                );
-                const isAdmin =
-                  session?.permissions.includes("manage_spend_settings") ||
-                  session?.permissions.includes("manage_users");
-                const canEdit =
-                  (isSubmitter || isAdmin) &&
-                  app.status !== "approved" &&
-                  app.status !== "completed";
+              {sorted.map((app) => {
+                const custodian = custodianOf(app);
+                // A custodian who is no longer a portal user must still appear
+                // as an option, otherwise the select would silently show the
+                // first user in the list instead.
+                const custodianMissing =
+                  !!custodian.userId &&
+                  !users.some((u) => u.id === custodian.userId);
 
                 return (
                   <tr
                     key={app.id}
                     className="border-b border-gray-50 hover:bg-gray-50"
                   >
-                    <td className="px-4 py-3 font-medium max-w-[180px] truncate">
-                      {app.projectName}
+                    <td className="px-4 py-3 font-medium truncate">
+                      <Link
+                        href={`/spend/${app.id}`}
+                        className="hover:text-primary"
+                        title={app.projectName}
+                      >
+                        {app.projectName}
+                      </Link>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 truncate">
                       R{app.estimatedAmount.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
+                    <td className="px-4 py-3 text-gray-500 text-xs truncate">
                       {app.sourceOfFunds || "-"}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
@@ -311,26 +538,70 @@ export default function SpendPage() {
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {app.quoteDetails?.length || 0}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">
+                    <td className="px-4 py-3 text-gray-600 text-xs truncate">
                       {app.submittedByName}
                     </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">
-                      {app.submittedOnBehalf
-                        ? `${app.applicantName} ${app.applicantSurname}`
-                        : app.submittedByName}
+                    <td className="px-4 py-3 text-gray-600 text-xs truncate">
+                      {applicantOf(app)}
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
+                    <td className="px-4 py-3 text-xs">
+                      {canEditInline ? (
+                        <select
+                          value={custodian.userId || ""}
+                          onChange={(e) =>
+                            changeCustodian(app.id, e.target.value)
+                          }
+                          className="w-full border border-transparent hover:border-gray-200 focus:border-primary rounded px-1 py-1 text-xs bg-transparent outline-none"
+                        >
+                          <option value="">Same as applicant</option>
+                          {custodianMissing && (
+                            <option value={custodian.userId}>
+                              {custodian.name || "Former user"}
+                            </option>
+                          )}
+                          {users.map((u) => (
+                            <option key={u.id} value={u.id}>
+                              {u.name} {u.surname}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-gray-600">
+                          {custodian.name || "-"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs truncate">
                       {new Date(app.submittedAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-                          statusColors[app.status] ||
-                          "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {STATUS_DISPLAY[app.status] || app.status}
-                      </span>
+                      {canEditInline ? (
+                        <select
+                          value={app.status}
+                          onChange={(e) =>
+                            changeStatus(app.id, e.target.value)
+                          }
+                          className={`w-full rounded px-2 py-1 text-xs font-medium border border-transparent hover:border-gray-300 outline-none ${
+                            statusColors[app.status] ||
+                            "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {STATUS_ORDER.map((s) => (
+                            <option key={s} value={s}>
+                              {STATUS_DISPLAY[s]}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+                            statusColors[app.status] ||
+                            "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {STATUS_DISPLAY[app.status] || app.status}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {app.status === "completed" ? (
@@ -348,33 +619,49 @@ export default function SpendPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/spend/${app.id}`}
-                          className="text-primary hover:text-primary-dark text-xs font-medium"
-                        >
-                          View
-                        </Link>
-                        {canEdit && (
-                          <Link
-                            href={`/spend/${app.id}/edit`}
-                            className="text-gray-500 hover:text-gray-700 text-xs font-medium"
-                          >
-                            Edit
-                          </Link>
-                        )}
-                      </div>
+                      <RowActions
+                        actions={[
+                          { label: "View", href: `/spend/${app.id}` },
+                          ...(isAdmin &&
+                          app.status !== "approved" &&
+                          app.status !== "completed"
+                            ? [
+                                {
+                                  label: "Edit",
+                                  href: `/spend/${app.id}/edit`,
+                                },
+                              ]
+                            : []),
+                          ...(canEditInline
+                            ? [
+                                {
+                                  label: "Set reminder",
+                                  onClick: () => setReminderFor(app),
+                                },
+                              ]
+                            : []),
+                          ...(canDelete
+                            ? [
+                                {
+                                  label: "Delete",
+                                  onClick: () => handleDelete(app),
+                                  danger: true,
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
                     </td>
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {sorted.length === 0 && (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={12}
                     className="px-6 py-12 text-center text-gray-400"
                   >
-                    No spend applications found.
+                    No spend projects found.
                   </td>
                 </tr>
               )}
@@ -382,6 +669,17 @@ export default function SpendPage() {
           </table>
         </div>
       </div>
+
+      {reminderFor && (
+        <ReminderModal
+          spendId={reminderFor.id}
+          projectName={reminderFor.projectName}
+          onClose={() => setReminderFor(null)}
+          onSaved={(message, ok) =>
+            setToast({ message, type: ok ? "success" : "error" })
+          }
+        />
+      )}
     </div>
   );
 }

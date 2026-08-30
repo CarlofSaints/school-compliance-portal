@@ -134,3 +134,40 @@ async function sendEmail(
     return false;
   }
 }
+
+// Whether a provider is actually wired up. sendEmail() deliberately returns
+// true and logs when RESEND_API_KEY is absent, which is fine for a one-off
+// action but would make the reminder cron report sends that never happened.
+export function isEmailConfigured(): boolean {
+  return resend !== null;
+}
+
+export async function sendSpendReminderEmail(
+  to: string,
+  recipientName: string,
+  projectName: string,
+  amount: number,
+  statusLabel: string,
+  note: string,
+  role: string
+): Promise<boolean> {
+  const noteBlock = note
+    ? `<p style="color:#333;">${note}</p>`
+    : `<p style="color:#333;">This is a scheduled reminder about the project below.</p>`;
+  const body = `
+    <p style="color:#333;">Dear ${recipientName},</p>
+    ${noteBlock}
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${statusLabel}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>You are receiving this as:</strong> ${role}</p>
+    </div>
+    <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the Project</a>
+  `;
+  return sendEmail(
+    to,
+    `Reminder: ${projectName}`,
+    emailShell("Project Reminder", body)
+  );
+}

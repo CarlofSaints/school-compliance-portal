@@ -54,6 +54,12 @@ export interface SpendApplication {
   applicantSurname: string;
   applicantEmail: string;
   submittedOnBehalf: boolean;
+  // The person accountable for delivering the project. Unset means "same as
+  // the applicant" - see getCustodian(). Storing it only once it is changed
+  // means every existing record shows a custodian immediately, with no
+  // migration to run and nothing to go stale.
+  custodianUserId?: string;
+  custodianName?: string;
   // Quote selection
   preferredQuotes: { userId: string; quoteIndex: number }[];
   selectedQuoteIndex?: number;
@@ -100,6 +106,28 @@ export function getFundingAllocations(
       amount: app.estimatedAmount || 0,
     },
   ];
+}
+
+// The custodian of a project, falling back to the applicant for every record
+// created before custodians existed (and for any request where nobody has
+// changed it). Client-safe - used by the grid as well as the reminder sender.
+export function getCustodian(
+  app: Pick<
+    SpendApplication,
+    | "custodianUserId"
+    | "custodianName"
+    | "applicantUserId"
+    | "applicantName"
+    | "applicantSurname"
+  >
+): { userId?: string; name: string } {
+  if (app.custodianUserId || app.custodianName) {
+    return { userId: app.custodianUserId, name: app.custodianName || "" };
+  }
+  return {
+    userId: app.applicantUserId,
+    name: `${app.applicantName || ""} ${app.applicantSurname || ""}`.trim(),
+  };
 }
 
 export const STATUS_DISPLAY: Record<string, string> = {
@@ -176,6 +204,29 @@ export async function deleteSpendImportBatch(
     }
   }
   return doomed.length;
+}
+
+// Removes one application, its per-application record and any quote files it
+// uploaded. Returns the removed record so a caller can report what went.
+export async function deleteSpendApplication(
+  id: string
+): Promise<SpendApplication | null> {
+  const apps = await getSpendApplications();
+  const app = apps.find((a) => a.id === id);
+  if (!app) return null;
+
+  await saveSpendApplications(apps.filter((a) => a.id !== id));
+
+  // Best effort: the index is the source of truth for the list, so a failed
+  // blob delete must not leave the record half-removed.
+  for (const path of [...app.quotes, `spend/${id}.json`]) {
+    try {
+      await deleteFile(path);
+    } catch {
+      // ignore
+    }
+  }
+  return app;
 }
 
 export async function updateSpendApplication(
