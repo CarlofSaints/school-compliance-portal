@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserByEmail, verifyPassword } from "@/lib/userData";
-import { getRoleById } from "@/lib/rolesData";
+import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
 import { SessionPayload } from "@/lib/roles";
 
 export async function POST(req: NextRequest) {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       email: user.email,
       role: user.role,
       roleName: role?.name || user.role,
-      permissions: role?.permissions || [],
+      permissions: resolveRolePermissions(user.role, role),
     };
 
     return NextResponse.json({

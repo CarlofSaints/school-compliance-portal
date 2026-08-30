@@ -19,10 +19,23 @@ interface RoleRecord {
   name: string;
 }
 
+// A person on the school's People register. The link between a user and a
+// person lives on the PERSON record (person.userId) and is also editable from
+// Admin > People - this page is the same relationship seen from the user's
+// side, not a second copy of it.
+interface PersonRecord {
+  id: string;
+  position: string;
+  userId: string | null;
+  name: string;
+  email: string;
+}
+
 export default function UsersPage() {
   const { session, loading } = useAuth("manage_users");
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
+  const [people, setPeople] = useState<PersonRecord[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -34,17 +47,27 @@ export default function UsersPage() {
     role: "viewer",
     forcePasswordChange: true,
     sendEmail: false,
+    personId: "",
   });
   const [showPassword, setShowPassword] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [usersRes, rolesRes] = await Promise.all([
+    const [usersRes, rolesRes, peopleRes] = await Promise.all([
       authFetch("/api/users"),
       authFetch("/api/roles"),
+      authFetch("/api/people"),
     ]);
     if (usersRes.ok) setUsers(await usersRes.json());
     if (rolesRes.ok) setRoles(await rolesRes.json());
+    // Needs manage_people. An admin without it simply sees no People column
+    // rather than a broken page.
+    if (peopleRes.ok) setPeople(await peopleRes.json());
   }, []);
+
+  const personForUser = useCallback(
+    (userId: string) => people.find((p) => p.userId === userId),
+    [people]
+  );
 
   useEffect(() => {
     if (session) fetchData();
@@ -60,6 +83,7 @@ export default function UsersPage() {
       role: "viewer",
       forcePasswordChange: true,
       sendEmail: false,
+      personId: "",
     });
     setShowModal(true);
   };
@@ -74,8 +98,35 @@ export default function UsersPage() {
       role: user.role,
       forcePasswordChange: user.forcePasswordChange,
       sendEmail: false,
+      personId: personForUser(user.id)?.id || "",
     });
     setShowModal(true);
+  };
+
+  // The person record owns the link, so changing it here writes to People:
+  // claim the newly chosen person and release the one this user held before.
+  const syncPersonLink = async (userId: string, personId: string) => {
+    const previous = personForUser(userId);
+    if (previous?.id === personId) return true;
+
+    let ok = true;
+    if (previous) {
+      const res = await authFetch(`/api/people/${previous.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: null }),
+      });
+      ok = ok && res.ok;
+    }
+    if (personId) {
+      const res = await authFetch(`/api/people/${personId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      ok = ok && res.ok;
+    }
+    return ok;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,7 +146,13 @@ export default function UsersPage() {
         body: JSON.stringify(updates),
       });
       if (res.ok) {
-        setToast({ message: "User updated", type: "success" });
+        const linked = await syncPersonLink(editUser.id, form.personId);
+        setToast({
+          message: linked
+            ? "User updated"
+            : "User updated, but the People link could not be saved",
+          type: linked ? "success" : "error",
+        });
         setShowModal(false);
         fetchData();
       } else {
@@ -113,7 +170,16 @@ export default function UsersPage() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        setToast({ message: "User created", type: "success" });
+        const created = await res.json();
+        const linked = form.personId
+          ? await syncPersonLink(created.id, form.personId)
+          : true;
+        setToast({
+          message: linked
+            ? "User created"
+            : "User created, but the People link could not be saved",
+          type: linked ? "success" : "error",
+        });
         setShowModal(false);
         fetchData();
       } else {
@@ -158,6 +224,7 @@ export default function UsersPage() {
               <th className="text-left px-6 py-3 font-medium text-gray-500">Name</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Email</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Role</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">Person</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
               <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
             </tr>
@@ -165,6 +232,7 @@ export default function UsersPage() {
           <tbody>
             {users.map((user) => {
               const roleName = roles.find((r) => r.id === user.role)?.name || user.role;
+              const person = personForUser(user.id);
               return (
                 <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50">
                   <td className="px-6 py-4">
@@ -180,6 +248,18 @@ export default function UsersPage() {
                     <span className="bg-primary/10 text-primary-dark px-2 py-1 rounded text-xs font-medium">
                       {roleName}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {person ? (
+                      <span
+                        className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-xs font-medium"
+                        title={person.name}
+                      >
+                        {person.position}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">-</span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     {user.forcePasswordChange ? (
@@ -207,7 +287,7 @@ export default function UsersPage() {
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
                   No users yet. Click &quot;+ Add User&quot; to create one.
                 </td>
               </tr>
@@ -288,6 +368,40 @@ export default function UsersPage() {
                     <option key={r.id} value={r.id}>{r.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Person
+                </label>
+                <select
+                  value={form.personId}
+                  onChange={(e) => setForm({ ...form, personId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                >
+                  <option value="">Not on the People register</option>
+                  {people.map((p) => {
+                    // A person can only be one user. Flag any already claimed
+                    // by somebody else rather than hiding them, so it is clear
+                    // why a name cannot be picked.
+                    const takenBy =
+                      p.userId && p.userId !== editUser?.id
+                        ? users.find((u) => u.id === p.userId)
+                        : undefined;
+                    return (
+                      <option key={p.id} value={p.id} disabled={!!takenBy}>
+                        {p.position}
+                        {p.name ? ` - ${p.name}` : ""}
+                        {takenBy
+                          ? ` (already ${takenBy.name} ${takenBy.surname})`
+                          : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Links this login to the People register. The same link can be
+                  set from Admin &gt; People.
+                </p>
               </div>
               <div className="flex items-center gap-4">
                 <label className="flex items-center gap-2 text-sm">

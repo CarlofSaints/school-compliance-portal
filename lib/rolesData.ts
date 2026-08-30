@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readJson, writeJson } from "./controlData";
-import { Role, Permission, SessionPayload } from "./roles";
+import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS } from "./roles";
 import { getUserById } from "./userData";
+
+export const SUPER_ADMIN_ROLE_ID = "super-admin";
+
+// Super Admin is defined in code as "every permission" (DEFAULT_ROLES), but a
+// role record is only ever written at seed time and the seed skips a role that
+// already exists. So a permission key added to the code later never reaches the
+// stored array, and a Super Admin silently loses access to the new feature.
+// Resolving it here means the code's definition wins for that one role.
+export function resolveRolePermissions(roleId: string, role?: Role): string[] {
+  const stored = role?.permissions || [];
+  if (roleId === SUPER_ADMIN_ROLE_ID) {
+    return [...new Set([...ALL_PERMISSION_KEYS, ...stored])];
+  }
+  return stored;
+}
 
 const ROLES_PATH = "roles.json";
 const PERMISSIONS_PATH = "permissions.json";
@@ -89,7 +104,7 @@ export async function getSessionFromRequest(
     email: user.email,
     role: user.role,
     roleName: role?.name || user.role,
-    permissions: role?.permissions || [],
+    permissions: resolveRolePermissions(user.role, role),
   };
 }
 

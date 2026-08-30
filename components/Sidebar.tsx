@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { label: "Applications", href: "/spend", permission: "submit_spend" },
+      { label: "Projects", href: "/spend", permission: "submit_spend" },
       { label: "Reports", href: "/spend/reports", permission: "view_all_spend" },
     ],
   },
