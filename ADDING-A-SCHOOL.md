@@ -189,7 +189,16 @@ On the new project → Settings → Environment Variables (Production + Preview)
 | `ANTHROPIC_API_KEY` | an Anthropic key (reuse or create a new one) |
 | `RESEND_API_KEY` | a Resend key (optional — email works only with this) |
 | `NEXT_PUBLIC_SITE_URL` | `https://riverside-compliance.vercel.app` |
+| `CRON_SECRET` | any random string (see the note below) |
 | `BLOB_READ_WRITE_TOKEN` | (auto-added by the Blob store in Step 5) |
+
+> **`CRON_SECRET` is not optional if you want reminders.** `vercel.json` runs
+> `/api/cron/reminders` daily at 05:00 UTC, and that route **refuses to run**
+> without the secret — it logs a run saying "nothing was sent" and returns 500.
+> Vercel sends the value back as the `Authorization: Bearer` header on its own
+> cron calls, so you only have to set it. It does NOT need to match the other
+> schools' — each project's cron only ever checks its own. Production is the
+> only environment that matters (crons don't run on Preview).
 
 ### Step 7 — Redeploy  ⭐
 Deployments → newest → **⋯ → Redeploy**. This is the build that picks up
@@ -203,11 +212,22 @@ https://riverside-compliance.vercel.app/api/seed?secret=<your SEED_SECRET>
 You should get `{"success":true, ...}`. This creates the super-admin
 (`carl@outerjoin.co.za` / `Admin@123`) + roles + permissions in the new store.
 
+> Re-run this same URL on an **existing** school whenever a new permission key
+> ships. Seeding tops `permissions.json` up with keys it doesn't have yet, so
+> they become tickable on the Roles page. It does **not** add them to roles that
+> already exist — Super Admin is covered in code (`resolveRolePermissions` in
+> `lib/rolesData.ts`), but every other role has to be ticked by hand.
+
 ### Step 9 — Verify & hand over
 - Log in at `/login`, change the admin password when prompted.
 - Confirm the crest, colours and name are correct (hard-refresh if the logo
   looks cached).
 - Create the school's real users from Admin → Users.
+- **Set up approvals** — Admin → Tags (create the approver groups, e.g.
+  Principal, FINCOM), assign people to them on Admin → Users, then Admin →
+  Approval Settings to attach those tags to the amount bands. The bands ship
+  with **no** tags on purpose: until you do this, anything above the logged-only
+  band sits in "Applied" rather than auto-approving.
 
 Done. The new school is live and fully isolated from the others.
 
