@@ -69,13 +69,19 @@ export async function PUT(req: NextRequest) {
       }
     );
 
-    await saveApprovalSettings({
+    const saved = {
       tiers: sortTiers(tiers),
       notifyApplicantOnEachApproval:
         body?.notifyApplicantOnEachApproval !== false,
-    });
+    };
 
-    const saved = await getApprovalSettings();
+    await saveApprovalSettings(saved);
+
+    // Returned from what was written, NOT from a read back. A blob overwrite
+    // takes a moment to propagate, so re-reading here handed the page the
+    // pre-save copy: the tick box sprang back and the "no approver set"
+    // warning stayed up on settings that had in fact saved.
+    //
     // Problems are returned rather than refused: a half-configured set of bands
     // is a normal step on the way to a finished one, and the page shows them.
     return NextResponse.json({

@@ -41,24 +41,9 @@ const recentWrites = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 10000; // 10 seconds
 
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
-  const cached = recentWrites.get(blobPath);
-  const cacheUsable = cached !== undefined && Date.now() - cached.ts < CACHE_TTL;
-
   try {
     const blob = await findBlob(blobPath);
     if (blob) {
-      // An overwrite takes a moment to propagate, so the copy we can see may
-      // predate our own write. uploadedAt says which it is:
-      //   newer than our write  -> another instance has written since. Use it,
-      //                            or we would append to a stale list and wipe
-      //                            their record.
-      //   older or equal        -> either this IS our write, in which case the
-      //                            cache holds the same thing, or the read is
-      //                            stale and the cache is fresher. Use cache.
-      if (cacheUsable && new Date(blob.uploadedAt).getTime() <= cached.ts) {
-        return cached.data as T;
-      }
-
       // Append cache-buster to avoid CDN/edge caching
       const url = blob.url + (blob.url.includes("?") ? "&" : "?") + `_t=${Date.now()}`;
       const res = await fetchBlob(url);
@@ -73,7 +58,15 @@ export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   // The blob could not be read at all. If this instance wrote this path moments
   // ago, that write is better evidence than the fallback — returning the
   // fallback here is what turns a slow list() into a wiped file.
-  if (cacheUsable) {
+  //
+  // Note this is the ONLY thing the map is for. Do not be tempted to return it
+  // ahead of a successful blob read to make a save look instant: an overwrite
+  // can take a second or two to propagate, so a route that saves and then reads
+  // back may still see the old copy. Fix that where it happens, by returning
+  // what was just written (see app/api/settings/approval/route.ts), rather than
+  // here — reading this map in preference to the blob is what wiped records.
+  const cached = recentWrites.get(blobPath);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return cached.data as T;
   }
 
