@@ -46,14 +46,30 @@ export default function PoliciesPage() {
     });
     if (res.ok) {
       const result = await res.json();
+      const secured = result.backfilled
+        ? ` ${result.backfilled} existing ${
+            result.backfilled === 1 ? "policy is" : "policies are"
+          } now stored so they can be restored in full if the list ever loses them.`
+        : "";
+      // Only a policy restored from a filename needs its details checked; one
+      // restored from its own stored copy came back complete.
+      const needsCheck = (result.policies || []).filter(
+        (p: { fromMeta: boolean }) => !p.fromMeta
+      );
       setRepairMessage(
         result.recovered === 0
-          ? "Nothing missing — every policy in storage is already listed."
+          ? `Nothing missing — every policy in storage is already listed.${secured}`
           : `Recovered ${result.recovered} ${
               result.recovered === 1 ? "policy" : "policies"
             }: ${result.policies
               .map((p: { name: string }) => p.name)
-              .join(", ")}. Check their names and categories.`
+              .join(", ")}.${
+              needsCheck.length
+                ? ` Check the name and category on ${needsCheck
+                    .map((p: { name: string }) => p.name)
+                    .join(", ")} — rebuilt from the filename.`
+                : ""
+            }${secured}`
       );
       fetchPolicies();
     } else {

@@ -1,4 +1,4 @@
-import { readJson, writeJson, writeFile, readFile, listFiles } from "./controlData";
+import { readJson, writeJson, writeFile, readFile, listFiles, deleteFile } from "./controlData";
 
 export interface PolicyMeta {
   id: string;
@@ -57,7 +57,32 @@ export async function getPolicyById(
   return policies.find((p) => p.id === id);
 }
 
+// Each policy also keeps its own copy of its details, next to its file.
+//
+// policies/index.json is a shared document that every upload reads, appends to
+// and writes back, so a write can be lost to one that overlaps it. This copy is
+// written to a path only this policy uses, so it cannot be. That makes the
+// index recoverable rather than authoritative: if an entry is lost, repair
+// rebuilds it from here with the real name, description and category, instead
+// of guessing from the filename.
+function metaPath(policyId: string): string {
+  return `policies/${policyId}/meta.json`;
+}
+
+export async function savePolicyMeta(policy: PolicyMeta): Promise<void> {
+  return writeJson(metaPath(policy.id), policy);
+}
+
+export async function getPolicyMeta(
+  policyId: string
+): Promise<PolicyMeta | null> {
+  return readJson<PolicyMeta | null>(metaPath(policyId), null);
+}
+
 export async function createPolicy(policy: PolicyMeta): Promise<void> {
+  // Own copy first. If appending to the shared index is the step that gets
+  // lost, everything needed to put it back is already safely stored.
+  await savePolicyMeta(policy);
   const policies = await getPolicies();
   policies.push(policy);
   await savePolicies(policies);
@@ -72,7 +97,24 @@ export async function updatePolicy(
   if (idx === -1) return null;
   policies[idx] = { ...policies[idx], ...updates, updatedAt: new Date().toISOString() };
   await savePolicies(policies);
+  // Keep the own copy in step, or a repair would restore the name this policy
+  // had before it was last renamed.
+  await savePolicyMeta(policies[idx]);
   return policies[idx];
+}
+
+// A deleted policy leaves a tombstone. Its file and versions.json stay in
+// storage, so without one a repair would cheerfully put it back.
+function tombstonePath(policyId: string): string {
+  return `policies/${policyId}/deleted.json`;
+}
+
+export async function isPolicyDeleted(policyId: string): Promise<boolean> {
+  const stone = await readJson<{ deletedAt: string } | null>(
+    tombstonePath(policyId),
+    null
+  );
+  return stone !== null;
 }
 
 export async function deletePolicy(id: string): Promise<boolean> {
@@ -80,6 +122,8 @@ export async function deletePolicy(id: string): Promise<boolean> {
   const filtered = policies.filter((p) => p.id !== id);
   if (filtered.length === policies.length) return false;
   await savePolicies(filtered);
+  await writeJson(tombstonePath(id), { deletedAt: new Date().toISOString() });
+  await deleteFile(metaPath(id));
   return true;
 }
 
