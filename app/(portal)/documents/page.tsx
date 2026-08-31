@@ -51,7 +51,7 @@ export default function DocumentsPage() {
     });
 
     if (res.ok) {
-      const data = await res.json();
+      await res.json();
       setToast({ message: "Document uploaded", type: "success" });
       setShowUpload(false);
       setName("");

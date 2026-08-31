@@ -7,7 +7,7 @@ import FileUpload from "@/components/FileUpload";
 import Toast from "@/components/Toast";
 
 export default function UploadPolicyPage() {
-  const { session, loading } = useAuth("upload_policies");
+  const { loading } = useAuth("upload_policies");
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

@@ -13,16 +13,6 @@ import type { SpendApplication } from "@/lib/spendData";
 import SortableTh from "@/components/SortableTh";
 import { useTableSort } from "@/lib/useTable";
 
-type SortKey =
-  | "projectName"
-  | "owner"
-  | "requested"
-  | "quoteCount"
-  | "selectedSupplier"
-  | "totalSpend"
-  | "spendVsRequestPct"
-  | "progress";
-
 const PROGRESS_PILL: Record<string, string> = {
   "Not Started": "bg-gray-100 text-gray-600",
   "In Progress": "bg-amber-100 text-amber-700",

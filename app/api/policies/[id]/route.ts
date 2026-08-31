@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getPolicyById,
-  updatePolicy,
   deletePolicy,
   getPolicyVersions,
-  downloadPolicyFile,
   getComplianceChecks,
 } from "@/lib/policyData";
 

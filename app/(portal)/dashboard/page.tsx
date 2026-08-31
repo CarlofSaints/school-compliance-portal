@@ -3,6 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import DashboardCard from "@/components/DashboardCard";
 import { branding } from "@/lib/branding";
 import { pendingSpendCount } from "@/lib/spendReport";
@@ -183,9 +184,9 @@ export default function DashboardPage() {
         {checks.length === 0 ? (
           <p className="text-sm text-gray-500">
             No documents have been checked yet. Run a check from the{" "}
-            <a href="/compliance" className="text-primary hover:underline">
+            <Link href="/compliance" className="text-primary hover:underline">
               Compliance Check
-            </a>{" "}
+            </Link>{" "}
             page.
           </p>
         ) : (
@@ -207,12 +208,12 @@ export default function DashboardPage() {
                   <tr key={c.id} className="border-b border-gray-50 last:border-0">
                     <td className="py-3 text-gray-400">{i + 1}</td>
                     <td className="py-3">
-                      <a
+                      <Link
                         href={`/compliance?check=${c.id}`}
                         className="text-primary font-medium hover:underline"
                       >
                         {c.name}
-                      </a>
+                      </Link>
                     </td>
                     <td className="py-3">
                       <span
@@ -275,7 +276,7 @@ export default function DashboardPage() {
         <h2 className="text-lg font-semibold text-dark mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {session?.permissions.includes("upload_policies") && (
-            <a
+            <Link
               href="/policies/upload"
               className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors group"
             >
@@ -285,10 +286,10 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 mt-1">
                 Add a new policy to the repository
               </p>
-            </a>
+            </Link>
           )}
           {session?.permissions.includes("check_compliance") && (
-            <a
+            <Link
               href="/compliance"
               className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors group"
             >
@@ -298,10 +299,10 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 mt-1">
                 Check a policy against guidelines
               </p>
-            </a>
+            </Link>
           )}
           {session?.permissions.includes("submit_spend") && (
-            <a
+            <Link
               href="/spend/new"
               className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors group"
             >
@@ -311,7 +312,7 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 mt-1">
                 Submit a spend request for approval
               </p>
-            </a>
+            </Link>
           )}
         </div>
       </div>

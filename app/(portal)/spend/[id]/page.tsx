@@ -4,7 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { evaluateProgress } from "@/lib/approvalEngine";
 import type { RequiredApprover } from "@/lib/approvalEngine";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import Toast from "@/components/Toast";
 
@@ -80,7 +80,6 @@ interface SpendDetail {
 export default function SpendDetailPage() {
   const { session, loading } = useAuth();
   const params = useParams();
-  const router = useRouter();
   const spendId = params.id as string;
   const [data, setData] = useState<SpendDetail | null>(null);
   const [comments, setComments] = useState("");
@@ -297,7 +296,6 @@ export default function SpendDetailPage() {
   // Whether this person is one of the approvers THIS application asked for.
   // The permission alone is not enough - the list was frozen at submission.
   const myEntries = data.approvals.filter((a) => a.userId === session?.id);
-  const myApproval = myEntries[myEntries.length - 1];
   const isRequired = (data.requiredApprovers || []).some(
     (a) => a.userId === session?.id
   );
