@@ -1,24 +1,74 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { SessionPayload } from "./roles";
 
 const SESSION_KEY = "hvps_session";
 
+// getSession() used to JSON.parse on every call, handing back a NEW object each
+// time. Anything comparing the session by reference - a hook dependency list,
+// or useSyncExternalStore's snapshot - spins forever on that. So cache the
+// parse and return the SAME object until the stored string actually changes.
+let cachedRaw: string | null = null;
+let cachedSession: SessionPayload | null = null;
+
 export function getSession(): SessionPayload | null {
   if (typeof window === "undefined") return null;
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as SessionPayload;
+    raw = localStorage.getItem(SESSION_KEY);
   } catch {
+    // Private mode / storage blocked.
     return null;
   }
+  if (raw === cachedRaw) return cachedSession;
+  cachedRaw = raw;
+  try {
+    cachedSession = raw ? (JSON.parse(raw) as SessionPayload) : null;
+  } catch {
+    cachedSession = null;
+  }
+  return cachedSession;
+}
+
+// Subscribers for useSessionValue(). localStorage fires a "storage" event only
+// in OTHER tabs, so writes in THIS tab have to announce themselves.
+const listeners = new Set<() => void>();
+
+function emitSessionChange(): void {
+  listeners.forEach((l) => l());
+}
+
+function subscribeSession(onChange: () => void): () => void {
+  listeners.add(onChange);
+  const onStorage = (e: StorageEvent) => {
+    // e.key is null when the whole store is cleared.
+    if (e.key === SESSION_KEY || e.key === null) onChange();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+// The session, safe to read DURING render.
+//
+// Reading localStorage straight from a render body means the server renders one
+// thing (no session - there is no localStorage there) and the client renders
+// another, which is a hydration mismatch: React throws the server tree away and
+// re-renders. useSyncExternalStore handles it properly - the server snapshot is
+// null, matching SSR, and the real value arrives right after hydration.
+//
+// Logging out in one tab now also updates the others.
+export function useSessionValue(): SessionPayload | null {
+  return useSyncExternalStore(subscribeSession, getSession, () => null);
 }
 
 export function setSession(payload: SessionPayload): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+  emitSessionChange();
 }
 
 export function updateSession(updates: Partial<SessionPayload>): void {
@@ -30,6 +80,7 @@ export function updateSession(updates: Partial<SessionPayload>): void {
 
 export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY);
+  emitSessionChange();
 }
 
 // Shown instead of the API's raw "Unauthorized", which reads like "you lack
