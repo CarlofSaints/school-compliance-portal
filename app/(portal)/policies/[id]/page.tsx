@@ -52,6 +52,7 @@ export default function PolicyDetailPage() {
   const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [expandedCheck, setExpandedCheck] = useState<string | null>(null);
+  const [removingCheck, setRemovingCheck] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -95,6 +96,35 @@ export default function PolicyDetailPage() {
       setToast({ message: err.error || "Check failed", type: "error" });
     }
     setChecking(false);
+  };
+
+  // Undoes a compliance check. Nothing else in the portal can remove one, so a
+  // check run against the wrong version leaves its score on the policy for
+  // good.
+  const removeCheck = async (checkId: string) => {
+    if (
+      !confirm(
+        "Remove this compliance check? The policy goes back to the score from the check before it."
+      )
+    )
+      return;
+
+    setRemovingCheck(checkId);
+    const res = await authFetch(
+      `/api/policies/${policyId}/check?checkId=${encodeURIComponent(checkId)}`,
+      { method: "DELETE" }
+    );
+    if (res.ok) {
+      setToast({ message: "Compliance check removed", type: "success" });
+      fetchData();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setToast({
+        message: err.error || "That check could not be removed.",
+        type: "error",
+      });
+    }
+    setRemovingCheck(null);
   };
 
   const uploadVersion = async () => {
@@ -264,13 +294,14 @@ export default function PolicyDetailPage() {
                   key={check.id}
                   className="border-b border-gray-50 last:border-0"
                 >
+                  <div className="flex items-center">
                   <button
                     onClick={() =>
                       setExpandedCheck(
                         expandedCheck === check.id ? null : check.id
                       )
                     }
-                    className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50"
+                    className="flex-1 px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50"
                   >
                     <div className="flex items-center gap-4">
                       <ComplianceScore score={check.score} size="sm" />
@@ -300,6 +331,17 @@ export default function PolicyDetailPage() {
                       />
                     </svg>
                   </button>
+                  {session?.permissions.includes("manage_policies") && (
+                    <button
+                      onClick={() => removeCheck(check.id)}
+                      disabled={removingCheck === check.id}
+                      title="Removes this result and puts the score back to the check before it"
+                      className="px-6 py-4 text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      {removingCheck === check.id ? "Removing..." : "Remove"}
+                    </button>
+                  )}
+                  </div>
 
                   {expandedCheck === check.id && (
                     <div className="px-6 pb-4">

@@ -189,6 +189,36 @@ export async function getComplianceChecks(
   );
 }
 
+// Removes one check result and brings the policy's headline score back into
+// step with what is left.
+//
+// The score on the policy is a copy of the most recent check, so it has to be
+// recomputed rather than simply blanked: removing a re-check should fall back
+// to the check before it, not to "Not checked". Without this a check run
+// against the wrong version, or a run made to demonstrate the feature, marks
+// the policy for good.
+export async function deleteComplianceCheck(
+  policyId: string,
+  checkId: string
+): Promise<{ removed: boolean; policy: PolicyMeta | null }> {
+  const checks = await getComplianceChecks(policyId);
+  if (!checks.some((c) => c.id === checkId)) {
+    return { removed: false, policy: null };
+  }
+
+  await deleteFile(`policies/${policyId}/checks/${checkId}.json`);
+
+  // getComplianceChecks sorts newest first, so the head of what remains is the
+  // check the policy should now be showing.
+  const latest = checks.filter((c) => c.id !== checkId)[0];
+  const policy = await updatePolicy(policyId, {
+    lastCheckScore: latest ? latest.score : null,
+    lastCheckDate: latest ? latest.checkedAt : null,
+  });
+
+  return { removed: true, policy };
+}
+
 export async function saveComplianceCheck(
   policyId: string,
   check: ComplianceCheck
