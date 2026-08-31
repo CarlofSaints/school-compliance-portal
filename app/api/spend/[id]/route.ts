@@ -129,8 +129,8 @@ export async function PUT(
         : (applicantUserIdRaw as string) || undefined;
 
     // Handle quote files - check for new uploads
-    let quotePaths = [...app.quotes];
-    let quoteDetails = [...app.quoteDetails];
+    const quotePaths = [...app.quotes];
+    const quoteDetails = [...app.quoteDetails];
 
     for (let i = 1; i <= 4; i++) {
       const quoteFile = formData.get(`quote${i}`) as File | null;

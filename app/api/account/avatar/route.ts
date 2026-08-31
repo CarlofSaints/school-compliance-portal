@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { writeFile, readFile } from "@/lib/controlData";
+import { writeFile } from "@/lib/controlData";
 
 export async function POST(req: NextRequest) {
   const session = await requireLogin(req);
