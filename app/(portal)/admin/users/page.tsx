@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth, authFetch } from "@/lib/useAuth";
+import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { TAG_COLOR_CLASSES } from "@/lib/tagData";
@@ -174,8 +174,7 @@ export default function UsersPage() {
         setShowModal(false);
         fetchData();
       } else {
-        const data = await res.json();
-        setToast({ message: data.error || "Failed", type: "error" });
+        setToast({ message: await apiErrorMessage(res), type: "error" });
       }
     } else {
       if (!form.password) {
@@ -201,8 +200,7 @@ export default function UsersPage() {
         setShowModal(false);
         fetchData();
       } else {
-        const data = await res.json();
-        setToast({ message: data.error || "Failed", type: "error" });
+        setToast({ message: await apiErrorMessage(res), type: "error" });
       }
     }
   };
@@ -419,12 +417,30 @@ export default function UsersPage() {
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                  disabled={roles.length === 0}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none disabled:bg-gray-50 disabled:text-gray-500"
                 >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
+                  {roles.length === 0 ? (
+                    // Reading the role list needs manage_roles, which the
+                    // SGB/Board Admin role deliberately does not have. Show the
+                    // role the user already holds rather than an empty box that
+                    // looks like the record has no role. Saving keeps it: the
+                    // form still carries the original id.
+                    <option value={form.role}>
+                      {editUser?.roleName || form.role || "-"}
+                    </option>
+                  ) : (
+                    roles.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))
+                  )}
                 </select>
+                {roles.length === 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Changing the role needs the Manage Roles &amp; Permissions
+                    permission.
+                  </p>
+                )}
               </div>
 
               <div>
