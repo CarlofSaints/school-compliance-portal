@@ -192,15 +192,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Send confirmation email to applicant (if on behalf of someone)
-    if (isOnBehalf && applicantEmail) {
+    // The applicant's own copy. Sent on EVERY submission - this used to be
+    // gated on isOnBehalf, so anyone applying for themselves (the common case)
+    // got nothing back and had no confirmation their application had landed.
+    // applicantEmail already falls back to the submitter's address above.
+    if (applicantEmail) {
       const approverNames = approval.approvers.map(
         (a) => `${a.name} (${a.tagName})`
       );
       await sendApplicantConfirmationEmail(
         applicantEmail,
         `${applicantName} ${applicantSurname}`,
-        `${session.name} ${session.surname}`,
+        // null = they submitted it themselves, so the mail does not name a
+        // separate submitter.
+        isOnBehalf ? `${session.name} ${session.surname}` : null,
         projectName,
         quotePaths.length,
         approverNames
