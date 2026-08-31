@@ -31,6 +31,7 @@ interface PolicyRecord {
   category: string;
   currentVersion: number;
   lastCheckScore: number | null;
+  lastCheckDate: string | null;
   updatedAt: string;
 }
 
@@ -42,6 +43,7 @@ export default function PoliciesPage() {
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [checkingIds, setCheckingIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
 
   const fetchPolicies = useCallback(async () => {
@@ -131,6 +133,61 @@ export default function PoliciesPage() {
       URL.revokeObjectURL(url);
     } finally {
       setDownloading(null);
+    }
+  };
+
+  // Runs the compliance check on a policy's current version straight from the
+  // grid, so a whole repository can be worked through without opening each
+  // policy in turn.
+  //
+  // The check reads the file and calls the model, so it can take up to two
+  // minutes. Several rows are allowed to run at once, which is why this tracks
+  // a set of ids rather than the single id the instant actions use.
+  const runCheck = async (policy: PolicyRecord) => {
+    setCheckingIds((ids) => new Set(ids).add(policy.id));
+    setNotice(null);
+    try {
+      const res = await authFetch(`/api/policies/${policy.id}/check`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setNotice(
+          `${policy.name}: ${err.error || "the compliance check could not be run."}`
+        );
+        return;
+      }
+      const check = await res.json();
+
+      // Both lists again — the grid renders `filtered`, so a score written to
+      // `policies` alone would not appear until the next search.
+      const patch = (list: PolicyRecord[]) =>
+        list.map((p) =>
+          p.id === policy.id
+            ? {
+                ...p,
+                lastCheckScore: check.score,
+                lastCheckDate: check.checkedAt,
+              }
+            : p
+        );
+      setPolicies(patch);
+      setFiltered(patch);
+
+      const risks = (check.risks || []).length;
+      setNotice(
+        `${policy.name} scored ${check.score}/100 — ${risks} ${
+          risks === 1 ? "risk" : "risks"
+        } found. Open the policy to read them.`
+      );
+    } catch {
+      setNotice(`${policy.name}: the compliance check could not be run.`);
+    } finally {
+      setCheckingIds((ids) => {
+        const next = new Set(ids);
+        next.delete(policy.id);
+        return next;
+      });
     }
   };
 
@@ -295,13 +352,35 @@ export default function PoliciesPage() {
                   v{policy.currentVersion}
                 </td>
                 <td className="px-6 py-4 flex justify-center">
-                  {policy.lastCheckScore !== null ? (
-                    <ComplianceScore score={policy.lastCheckScore} size="sm" />
+                  {checkingIds.has(policy.id) ? (
+                    <span className="text-xs text-gray-400">Checking...</span>
+                  ) : policy.lastCheckScore !== null ? (
+                    <span
+                      title={
+                        policy.lastCheckDate
+                          ? `Last checked ${new Date(
+                              policy.lastCheckDate
+                            ).toLocaleString()}`
+                          : undefined
+                      }
+                    >
+                      <ComplianceScore score={policy.lastCheckScore} size="sm" />
+                    </span>
                   ) : (
                     <span className="text-xs text-gray-400">Not checked</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-right whitespace-nowrap">
+                  {session?.permissions.includes("check_compliance") && (
+                    <button
+                      onClick={() => runCheck(policy)}
+                      disabled={checkingIds.has(policy.id)}
+                      title="Reads the current version and reports how well it meets the guidelines"
+                      className="text-primary hover:text-primary-dark text-xs font-medium mr-4 disabled:opacity-50"
+                    >
+                      {checkingIds.has(policy.id) ? "Checking..." : "Run Check"}
+                    </button>
+                  )}
                   {session?.permissions.includes("download_policies") && (
                     <button
                       onClick={() => downloadPolicy(policy)}
