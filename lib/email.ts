@@ -9,6 +9,18 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const FROM_EMAIL = branding.fromEmail;
 const PRIMARY = branding.colors.primary;
 
+// The school crest, as an ABSOLUTE url - a mail client has no idea what
+// "/logo.png" is relative to. Files under /public are served without a login,
+// so this resolves for a recipient who is not signed in (or has no account).
+// Per-tenant via branding, so Jeppe's mail carries Jeppe's crest.
+//
+// Needs NEXT_PUBLIC_SITE_URL to be set on the Vercel project; without it this
+// falls back to localhost and the image simply will not load, leaving the alt
+// text. Many clients also block remote images until the reader allows them,
+// which is why the school name stays as text in the header rather than being
+// baked into the image.
+const LOGO_URL = `${SITE_URL}${branding.logo}`;
+
 function emailShell(title: string, body: string): string {
   const footerSlogan = branding.slogan
     ? `${branding.fullName} &mdash; "${branding.slogan}"`
@@ -22,7 +34,10 @@ function emailShell(title: string, body: string): string {
 </head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <div style="background:${PRIMARY};padding:20px;text-align:center;border-radius:8px 8px 0 0;">
+    <div style="background:${PRIMARY};padding:24px 20px;text-align:center;border-radius:8px 8px 0 0;">
+      <div style="background:#fff;border-radius:8px;padding:8px;display:inline-block;margin:0 0 12px;">
+        <img src="${LOGO_URL}" alt="${branding.logoAlt}" width="52" style="display:block;width:52px;height:auto;border:0;outline:none;text-decoration:none;">
+      </div>
       <h1 style="color:#fff;margin:0;font-size:24px;">${branding.fullName}</h1>
       <p style="color:${branding.colors.primaryTint};margin:4px 0 0;font-size:14px;">${branding.tagline}</p>
     </div>
@@ -93,20 +108,38 @@ export async function sendPasswordResetEmail(
   return sendEmail(to, `Password Reset - ${branding.shortName} Portal`, emailShell("Password Reset", body));
 }
 
+// The applicant's own copy, sent on every submission.
+//
+// `submitterName` is null when the applicant submitted for themselves, which is
+// the common case - naming them as the submitter of their own application reads
+// like a stranger did it.
 export async function sendApplicantConfirmationEmail(
   to: string,
   applicantName: string,
-  submitterName: string,
+  submitterName: string | null,
   projectName: string,
   quoteCount: number,
   approverNames: string[]
 ): Promise<boolean> {
-  const approverList = approverNames.join(", ");
+  const intro = submitterName
+    ? `${submitterName} has submitted an application for school funds spend on your behalf for: <strong>"${projectName}"</strong>`
+    : `Your application for school funds spend has been received for: <strong>"${projectName}"</strong>`;
+
+  // No approvers means the amount fell in a logged-only band. Saying "sent to:"
+  // with an empty list would read as though the mail had gone nowhere.
+  const routing = approverNames.length
+    ? `<p style="color:#333;">It has been sent for approval to: ${approverNames.join(", ")}.</p>`
+    : `<p style="color:#333;">This amount does not require approval, so the application has been logged and approved automatically.</p>`;
+
+  const quotes = quoteCount
+    ? `<p style="color:#333;">${quoteCount} quote${quoteCount !== 1 ? "s were" : " was"} submitted with it.</p>`
+    : "";
+
   const body = `
     <p style="color:#333;">Dear ${applicantName},</p>
-    <p style="color:#333;">${submitterName} has submitted an application for school funds spend for: <strong>"${projectName}"</strong></p>
-    <p style="color:#333;">${quoteCount} quote${quoteCount !== 1 ? "s were" : " was"} submitted — see copies attached.</p>
-    <p style="color:#333;">A copy of this application has been sent to: ${approverList}.</p>
+    <p style="color:#333;">${intro}</p>
+    ${quotes}
+    ${routing}
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View Application</a>
   `;
   return sendEmail(

@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
-import { getSession, clearSession } from "@/lib/useAuth";
+import { useSessionValue, clearSession } from "@/lib/useAuth";
 import { branding } from "@/lib/branding";
 import { useState } from "react";
 
@@ -112,7 +112,11 @@ const navItems: NavItem[] = [
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const session = getSession();
+  // Read during render via a store subscription, not straight from
+  // localStorage: the server has no localStorage, so a direct read renders an
+  // empty sidebar on the server and a full one on the client - a hydration
+  // mismatch that makes React discard the server tree on every page load.
+  const session = useSessionValue();
   const [collapsed, setCollapsed] = useState(false);
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
 

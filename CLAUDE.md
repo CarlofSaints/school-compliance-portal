@@ -3,6 +3,72 @@
 ## Project Location
 `C:\Users\CarlDosSantos-(OUTER\Projects\hvps-compliance`
 
+## Vercel projects — which is which (read this before touching env vars)
+| Name | What it is |
+| --- | --- |
+| `school-compliance-portal` | the **GitHub repo** — this codebase |
+| `hvps-compliance` | Vercel project, `NEXT_PUBLIC_SCHOOL=hvps` |
+| `jeppe-girls-compliance` | Vercel project, `NEXT_PUBLIC_SCHOOL=jeppe` |
+| `School-compliance` | **marketing site — a DIFFERENT repo** (`CarlofSaints/School-compliance`), not this app |
+
+The near-identical names bite. `school-compliance` in Vercel is the marketing
+site, connected Jun 20 to its own repo; it has no cron and no portal routes.
+Portal env vars go on the two `*-compliance` school projects only.
+
+## Approval workflow + spend grid (2026-08-30, 9 commits, pushed to main → both projects auto-deployed)
+`961162e` → `a80f2ef`. `tsc --noEmit` and `next build` both clean.
+
+**Fund application approval workflow** (`3f8cf9b`, the big one). Amount bands →
+tags → named approvers.
+- `lib/tagData.ts` — a **tag** names a group of individuals (Principal, FINCOM).
+  Deliberately NOT a role: a role is a permission bundle, approval authority
+  belongs to named people. A tag sits on a **User** (logs in) or a **Person**
+  (on the register, has email, may have no login).
+- `lib/approvalSettings.ts` — `ApprovalTier[]`: `minAmount`/`maxAmount`
+  (inclusive/exclusive), `logOnly`, and `requirements: {tagId, mode:"all"|"any"}`.
+  Defaults: 0–5 000 logged only, 5 000–10 000 Principal, 10 000+ FINCOM.
+  **They ship with NO tags attached on purpose** — nothing auto-approves until
+  an admin says who approves it. `tierForAmount` returns null when the bands
+  don't cover an amount, which callers must treat as "needs a human".
+- `lib/approvalEngine.ts` — required approvers are **frozen at submission**, so
+  a committee gaining a member later can't un-complete a finished application.
+  `ApprovalProgress` counts in PEOPLE (reads "2/3"), but `complete` is decided
+  by `groupsApproved === groupsTotal`, not `approved === total`.
+- `lib/approvalResolver.ts` resolves tags → people. Admin pages:
+  `/admin/tags`, `/admin/approval-settings`, `/admin/people`.
+
+**Spend grid overhaul** (`961162e`, `9a21504`, `050c247`, `d84e32a`, `2d03df8`,
+`a80f2ef`). Excel import of an existing project list (`lib/spendImport.ts`,
+`spendImportSheet.ts`, `/spend/import`); custodian is now a portal user picked
+from `/api/users/directory`, not free text; sorting + resizable columns
+(`lib/useTable.ts`, persisted to localStorage) + inline edits + delete
+(`delete_spend`) + per-row reminders (`components/ReminderModal.tsx`,
+`RowActions.tsx`); frozen headers and Project column; approved-spend totals
+fixed; per-project notes stamped with author + time; "Remind approvers now".
+
+**Daily reminder cron — NEW.** `vercel.json` did not exist before this session.
+It now runs `/api/cron/reminders` at `0 5 * * *`. The route **refuses to run**
+without `CRON_SECRET` (logs a run saying nothing was sent, returns 500). Set on
+both projects 2026-08-30. Every run is written to the run log, including runs
+that find nothing to do — a cron that never fired and one that fired and sent
+nothing look identical otherwise.
+
+**Permissions.** New keys: `view_users` (Users page read-only, vs
+`manage_users` to edit), `delete_spend`, `manage_tags`,
+`manage_approval_settings`. Super Admin gets new keys automatically via
+`resolveRolePermissions` (`lib/rolesData.ts`) since seed never rewrites an
+existing role. **Every other role must be ticked by hand** — re-run
+`/api/seed?secret=…` to make new keys tickable, then set them on the Roles page.
+
+### Still open after this session
+- Wire the dashboard "Total Policies" card — still hardcoded `value={0}`
+  (`app/(portal)/dashboard/page.tsx:106`). "Spend Pending" is live.
+- `npx eslint .` is red: 26 errors / 14 warnings, 22 of them
+  `react-hooks/set-state-in-effect` across pages that predate this session.
+  Next 16 doesn't run ESLint during `next build`, so it never blocks a deploy.
+- Per-school setup after deploy: create tags, assign people, attach tags to the
+  approval bands. See ADDING-A-SCHOOL.md Step 9.
+
 ## Spend reporting + multi-source funding (2026-06-21, DEPLOYED to both HVPS + Jeppe)
 Deploy model confirmed: ONE repo `school-compliance-portal` → TWO git-connected Vercel projects (`hvps-compliance`, `jeppe-girls-compliance`), each with own `NEXT_PUBLIC_SCHOOL` + Blob store. **`git push origin main` auto-deploys BOTH** (do NOT `vercel --prod` — only hits one + skips branding). Pushed `22f82f1` then `065ecee`.
 
