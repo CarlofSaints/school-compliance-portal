@@ -414,7 +414,16 @@ export default function UsersPage() {
             <div className="p-6 border-b border-gray-100">
               <h2 className="text-lg font-semibold">{editUser ? "Edit User" : "Create User"}</h2>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* This form creates an account for SOMEBODY ELSE, so the
+                browser's saved logins must not be offered here: Chrome will
+                otherwise fill the email and password with the signed-in
+                person's own saved credentials, and an admin who tabs past
+                them creates the account under the wrong address. */}
+            <form
+              onSubmit={handleSubmit}
+              autoComplete="off"
+              className="p-6 space-y-4"
+            >
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -423,6 +432,7 @@ export default function UsersPage() {
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                     required
+                    autoComplete="off"
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                   />
                 </div>
@@ -433,6 +443,7 @@ export default function UsersPage() {
                     value={form.surname}
                     onChange={(e) => setForm({ ...form, surname: e.target.value })}
                     required
+                    autoComplete="off"
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                   />
                 </div>
@@ -444,6 +455,7 @@ export default function UsersPage() {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   required
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 />
               </div>
@@ -457,6 +469,7 @@ export default function UsersPage() {
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     required={!editUser}
+                    autoComplete="new-password"
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none pr-10"
                   />
                   <button
