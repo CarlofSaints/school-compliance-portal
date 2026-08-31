@@ -115,8 +115,21 @@ export default function PolicyDetailPage() {
       { method: "DELETE" }
     );
     if (res.ok) {
+      // Use the policy the route hands back rather than re-reading it. An
+      // overwrite takes a moment to propagate, so fetching again here can
+      // return the score that has only just been removed and leave it on
+      // screen until the next reload.
+      const { policy } = await res.json();
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              policy: policy ?? d.policy,
+              checks: d.checks.filter((c) => c.id !== checkId),
+            }
+          : d
+      );
       setToast({ message: "Compliance check removed", type: "success" });
-      fetchData();
     } else {
       const err = await res.json().catch(() => ({}));
       setToast({

@@ -4,6 +4,12 @@ import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { TAG_COLOR_CLASSES } from "@/lib/tagData";
+import { POSITIONS } from "@/lib/positions";
+
+// Sentinel for the Person picker meaning "this user is not on the register
+// yet, put them on it now". Every real option is a person id, so this cannot
+// collide with one.
+const NEW_PERSON = "__new__";
 
 interface UserRecord {
   id: string;
@@ -59,6 +65,7 @@ export default function UsersPage() {
     forcePasswordChange: true,
     sendEmail: false,
     personId: "",
+    position: "",
     tagIds: [] as string[],
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -99,6 +106,7 @@ export default function UsersPage() {
       forcePasswordChange: true,
       sendEmail: false,
       personId: "",
+      position: "",
       tagIds: [],
     });
     setShowModal(true);
@@ -115,6 +123,7 @@ export default function UsersPage() {
       forcePasswordChange: user.forcePasswordChange,
       sendEmail: false,
       personId: personForUser(user.id)?.id || "",
+      position: "",
       tagIds: user.tagIds || [],
     });
     setShowModal(true);
@@ -146,8 +155,55 @@ export default function UsersPage() {
     return ok;
   };
 
+  // Puts a user on the People register from here, instead of sending whoever
+  // is creating them off to Admin > People to add the same name a second time.
+  //
+  // The register entry is created already pointing at the user, so there is no
+  // separate link step that could half-succeed. Name and email are taken from
+  // the fields above rather than asked for again.
+  const createPersonFor = async (userId: string): Promise<boolean> => {
+    // The link lives on the person, so a user who already held one has to let
+    // go of it before taking a new one.
+    const previous = personForUser(userId);
+    if (previous) {
+      const res = await authFetch(`/api/people/${previous.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: null }),
+      });
+      if (!res.ok) return false;
+    }
+
+    const res = await authFetch("/api/people", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        position: form.position,
+        name: `${form.name} ${form.surname}`.trim(),
+        email: form.email,
+        userId,
+      }),
+    });
+    return res.ok;
+  };
+
+  const linkPerson = (userId: string) =>
+    form.personId === NEW_PERSON
+      ? createPersonFor(userId)
+      : syncPersonLink(userId, form.personId);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // A register entry with no position cannot be created, and defaulting one
+    // would quietly file somebody as whatever happened to be first in the list.
+    if (form.personId === NEW_PERSON && !form.position) {
+      setToast({
+        message: "Choose the position this person holds on the register.",
+        type: "error",
+      });
+      return;
+    }
     if (editUser) {
       const updates: Record<string, unknown> = {
         name: form.name,
@@ -164,7 +220,7 @@ export default function UsersPage() {
         body: JSON.stringify(updates),
       });
       if (res.ok) {
-        const linked = await syncPersonLink(editUser.id, form.personId);
+        const linked = await linkPerson(editUser.id);
         setToast({
           message: linked
             ? "User updated"
@@ -189,7 +245,7 @@ export default function UsersPage() {
       if (res.ok) {
         const created = await res.json();
         const linked = form.personId
-          ? await syncPersonLink(created.id, form.personId)
+          ? await linkPerson(created.id)
           : true;
         setToast({
           message: linked
@@ -491,6 +547,11 @@ export default function UsersPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 >
                   <option value="">Not on the People register</option>
+                  {session?.permissions.includes("manage_people") && (
+                    <option value={NEW_PERSON}>
+                      Add them to the People register
+                    </option>
+                  )}
                   {people.map((p) => {
                     // A person can only be one user. Flag any already claimed
                     // by somebody else rather than hiding them, so it is clear
@@ -510,9 +571,31 @@ export default function UsersPage() {
                     );
                   })}
                 </select>
+                {form.personId === NEW_PERSON && (
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Position on the register
+                    </label>
+                    <select
+                      value={form.position}
+                      onChange={(e) =>
+                        setForm({ ...form, position: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                    >
+                      <option value="">Choose a position</option>
+                      {POSITIONS.map((pos) => (
+                        <option key={pos} value={pos}>
+                          {pos}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <p className="text-xs text-gray-400 mt-1">
-                  Links this login to the People register. The same link can be
-                  set from Admin &gt; People.
+                  {form.personId === NEW_PERSON
+                    ? "The name and email typed above are used for the register entry, so there is nothing to type twice."
+                    : "Links this login to the People register. The same link can also be set from Admin > People."}
                 </p>
               </div>
               <div className="flex items-center gap-4">
