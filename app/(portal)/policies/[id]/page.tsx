@@ -2,7 +2,8 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 import ComplianceScore from "@/components/ComplianceScore";
 import RiskBadge from "@/components/RiskBadge";
 import FileUpload from "@/components/FileUpload";
@@ -40,19 +41,12 @@ interface PolicyDetail {
   }[];
 }
 
-// Just enough of a policy to fill the switcher.
-interface PolicyListItem {
-  id: string;
-  name: string;
-}
-
 export default function PolicyDetailPage() {
   const { session, loading } = useAuth("download_policies");
   const params = useParams();
-  const router = useRouter();
   const policyId = params.id as string;
   const [data, setData] = useState<PolicyDetail | null>(null);
-  const [policyList, setPolicyList] = useState<PolicyListItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
@@ -61,25 +55,32 @@ export default function PolicyDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const fetchData = useCallback(async () => {
-    const res = await authFetch(`/api/policies/${policyId}`);
-    if (res.ok) setData(await res.json());
+    setLoadError(null);
+    // A policy opened straight after uploading it can briefly answer "not
+    // found" while storage catches up, so a 404 is retried a few times before
+    // it is believed. Anything else is reported at once. What must never
+    // happen is silence: this page used to leave "Loading..." on screen for as
+    // long as the fetch kept failing, with nothing to say why.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await authFetch(`/api/policies/${policyId}`);
+      if (res.ok) {
+        setData(await res.json());
+        return;
+      }
+      if (res.status !== 404) {
+        setLoadError("This policy could not be loaded. Try again.");
+        return;
+      }
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 1500));
+    }
+    setLoadError(
+      "This policy is not in the repository. If you have just uploaded it, open Policies and press \"Rebuild list from storage\"."
+    );
   }, [policyId]);
 
-  // The repository list, so another policy can be opened from here rather than
-  // going back to /policies and clicking in again.
-  const fetchPolicyList = useCallback(async () => {
-    const res = await authFetch("/api/policies");
-    if (!res.ok) return;
-    const all = await res.json();
-    if (Array.isArray(all)) setPolicyList(all);
-  }, []);
-
   useEffect(() => {
-    if (session) {
-      fetchData();
-      fetchPolicyList();
-    }
-  }, [session, fetchData, fetchPolicyList]);
+    if (session) fetchData();
+  }, [session, fetchData]);
 
   const runCheck = async () => {
     setChecking(true);
@@ -117,6 +118,28 @@ export default function PolicyDetailPage() {
     setUploading(false);
   };
 
+  if (loadError) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-gray-700 mb-4">{loadError}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={fetchData}
+            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Try again
+          </button>
+          <Link
+            href="/policies"
+            className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            Back to Policies
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !data) return <div className="p-6">Loading...</div>;
 
   const { policy, versions, checks } = data;
@@ -134,39 +157,24 @@ export default function PolicyDetailPage() {
           </span>
         </div>
         <div className="flex gap-2">
-          {/* Rendered only once the list is in and contains this policy: a
-              select whose value matches no option silently displays the FIRST
-              one, which would name the wrong policy. */}
-          {policyList.some((p) => p.id === policyId) && (
-            <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white">
-              <span className="text-xs text-gray-500 whitespace-nowrap">
-                Load a policy
-              </span>
-              <select
-                value={policyId}
-                aria-label="Load a policy"
-                onChange={(e) => {
-                  if (e.target.value !== policyId) {
-                    router.push(`/policies/${e.target.value}`);
-                  }
-                }}
-                className="text-sm bg-transparent outline-none max-w-[220px] cursor-pointer"
-              >
-                {policyList.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
           {session?.permissions.includes("upload_policies") && (
-            <button
-              onClick={() => setShowUpload(!showUpload)}
-              className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-            >
-              Upload New Version
-            </button>
+            <>
+              {/* A different policy altogether, not a new version of this one.
+                  Loading a run of policies otherwise means going back to the
+                  repository list between every single one. */}
+              <Link
+                href="/policies/upload"
+                className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                + Load a New Policy
+              </Link>
+              <button
+                onClick={() => setShowUpload(!showUpload)}
+                className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Upload New Version
+              </button>
+            </>
           )}
           {session?.permissions.includes("check_compliance") && (
             <button

@@ -53,6 +53,14 @@ export async function savePolicies(policies: PolicyMeta[]): Promise<void> {
 export async function getPolicyById(
   id: string
 ): Promise<PolicyMeta | undefined> {
+  // The policy's own copy first. It is written to a path only this policy uses,
+  // so it is readable the moment the upload finishes, whereas the shared index
+  // takes a moment to propagate. Reading the index here meant a policy you had
+  // just uploaded answered "not found", and the detail page sat on "Loading..."
+  // until it caught up.
+  const meta = await getPolicyMeta(id);
+  if (meta) return meta;
+
   const policies = await getPolicies();
   return policies.find((p) => p.id === id);
 }
