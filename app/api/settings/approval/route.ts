@@ -42,15 +42,28 @@ export async function PUT(req: NextRequest) {
               ? null
               : Number(max),
           logOnly: !!t.logOnly,
+          // A requirement names EITHER a tag or one person on the register.
+          // Only the key it actually uses is stored, so a person requirement
+          // never carries an empty tagId that a reader could mistake for a
+          // removed tag.
           requirements: Array.isArray(t.requirements)
             ? (t.requirements as Record<string, unknown>[])
-                .filter((r) => r && typeof r.tagId === "string" && r.tagId)
-                .map(
-                  (r): ApprovalRequirement => ({
-                    tagId: String(r.tagId),
-                    mode: r.mode === "any" ? "any" : "all",
-                  })
-                )
+                .map((r): ApprovalRequirement | null => {
+                  if (!r) return null;
+                  if (typeof r.personId === "string" && r.personId) {
+                    // One named human: "all of" and "any one of" say the same
+                    // thing, so the mode is not read back from the client.
+                    return { personId: String(r.personId), mode: "all" };
+                  }
+                  if (typeof r.tagId === "string" && r.tagId) {
+                    return {
+                      tagId: String(r.tagId),
+                      mode: r.mode === "any" ? "any" : "all",
+                    };
+                  }
+                  return null;
+                })
+                .filter((r): r is ApprovalRequirement => r !== null)
             : [],
         };
       }

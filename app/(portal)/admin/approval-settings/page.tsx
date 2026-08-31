@@ -12,8 +12,19 @@ interface TagRecord {
   memberCount: number;
 }
 
+interface PersonRecord {
+  id: string;
+  position: string;
+  name: string;
+  email: string;
+  hasLogin: boolean;
+}
+
+// Either a tag (a group) or one named person off the register — never both.
+// See lib/approvalSettings.ts.
 interface Requirement {
-  tagId: string;
+  tagId?: string;
+  personId?: string;
   mode: "all" | "any";
 }
 
@@ -31,6 +42,7 @@ export default function ApprovalSettingsPage() {
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [notifyEach, setNotifyEach] = useState(true);
   const [tags, setTags] = useState<TagRecord[]>([]);
+  const [people, setPeople] = useState<PersonRecord[]>([]);
   const [problems, setProblems] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -40,9 +52,10 @@ export default function ApprovalSettingsPage() {
   } | null>(null);
 
   const load = useCallback(async () => {
-    const [settingsRes, tagsRes] = await Promise.all([
+    const [settingsRes, tagsRes, peopleRes] = await Promise.all([
       authFetch("/api/settings/approval"),
       authFetch("/api/tags"),
+      authFetch("/api/people/directory"),
     ]);
     if (settingsRes.ok) {
       const s = await settingsRes.json();
@@ -51,6 +64,7 @@ export default function ApprovalSettingsPage() {
       setProblems(s.problems || []);
     }
     if (tagsRes.ok) setTags(await tagsRes.json());
+    if (peopleRes.ok) setPeople(await peopleRes.json());
   }, []);
 
   useEffect(() => {
@@ -140,6 +154,25 @@ export default function ApprovalSettingsPage() {
           ? { ...t, requirements: t.requirements.filter((_, i) => i !== index) }
           : t
       )
+    );
+    setDirty(true);
+  };
+
+  // Tick / untick one named person as an approver for this band. A person
+  // requirement carries no tagId at all, so it can never be mistaken for a
+  // tag row.
+  const togglePerson = (tierId: string, personId: string, on: boolean) => {
+    setTiers((prev) =>
+      prev.map((t) => {
+        if (t.id !== tierId) return t;
+        const without = t.requirements.filter((r) => r.personId !== personId);
+        return {
+          ...t,
+          requirements: on
+            ? [...without, { personId, mode: "all" as const }]
+            : without,
+        };
+      })
     );
     setDirty(true);
   };
@@ -299,14 +332,20 @@ export default function ApprovalSettingsPage() {
                   </button>
                 </div>
 
-                {tier.requirements.length === 0 ? (
+                {tier.requirements.length === 0 && (
                   <p className="text-xs text-risk-medium">
                     No approver set. Applications in this band will wait with
                     nobody able to action them.
                   </p>
-                ) : (
+                )}
+
+                {tier.requirements.some((r) => r.tagId) && (
                   <div className="space-y-2">
                     {tier.requirements.map((req, i) => {
+                      // Person requirements render as tick boxes below. The
+                      // index is what update/remove address, so skip in place
+                      // rather than filtering the array and renumbering it.
+                      if (!req.tagId) return null;
                       const tag = tagById(req.tagId);
                       return (
                         <div
@@ -374,6 +413,50 @@ export default function ApprovalSettingsPage() {
                     })}
                   </div>
                 )}
+
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <p className="text-xs text-gray-500 mb-2">
+                    Or name people from the register directly — use this when
+                    the approver is one position-holder rather than a committee
+                  </p>
+                  {people.length === 0 ? (
+                    <p className="text-xs text-gray-400">
+                      Nobody is on the register yet. Add them in Admin &gt;
+                      People.
+                    </p>
+                  ) : (
+                    <div className="grid gap-1.5 sm:grid-cols-2">
+                      {people.map((p) => (
+                        <label
+                          key={p.id}
+                          className="flex items-center gap-2 text-sm text-gray-700"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={tier.requirements.some(
+                              (r) => r.personId === p.id
+                            )}
+                            onChange={(e) =>
+                              togglePerson(tier.id, p.id, e.target.checked)
+                            }
+                            className="accent-primary"
+                          />
+                          <span className="font-medium">{p.position}</span>
+                          <span className="text-gray-500 truncate">
+                            {p.name}
+                          </span>
+                          {/* Only a login can click Approve, so say so here
+                              rather than letting the band look configured. */}
+                          {!p.hasLogin && (
+                            <span className="text-xs text-risk-high whitespace-nowrap">
+                              no login — cannot approve
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

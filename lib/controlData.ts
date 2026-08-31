@@ -23,17 +23,24 @@ async function findBlob(blobPath: string) {
   return result.blobs.find((b) => b.pathname === blobKey(blobPath)) || null;
 }
 
-// In-memory cache of recent writes to avoid stale reads from Vercel Blob
+// Last-resort record of what THIS instance last wrote, per path.
+//
+// It exists for one narrow case: list() can lag a few hundred ms behind a put()
+// for a path that has never existed before, so a read straight after the very
+// first write can find nothing and hand back the fallback — an empty array,
+// which a read-modify-write caller would then save over the top of real data.
+//
+// It is deliberately NOT a read cache. It used to be returned in preference to
+// the blob for 10 seconds, and that silently destroyed data: this Map lives in
+// one serverless instance's memory, so instance A would serve its own snapshot
+// from before instance B's write, append to it, and save — wiping B's record.
+// Uploading nine policies one after another left four, because each upload can
+// land on a different instance. The blob is the truth; only fall back to this
+// when the blob genuinely cannot be read.
 const recentWrites = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 10000; // 10 seconds
 
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
-  // Check if we have a recent write for this path (avoids stale blob reads)
-  const cached = recentWrites.get(blobPath);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    return cached.data as T;
-  }
-
   try {
     const blob = await findBlob(blobPath);
     if (blob) {
@@ -47,6 +54,15 @@ export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   } catch {
     // blob not found
   }
+
+  // The blob could not be read. If this instance wrote this path moments ago,
+  // that write is better evidence than the fallback — returning the fallback
+  // here is what turns a slow list() into a wiped file.
+  const cached = recentWrites.get(blobPath);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.data as T;
+  }
+
   return fallback;
 }
 

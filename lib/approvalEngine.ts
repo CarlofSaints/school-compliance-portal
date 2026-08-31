@@ -171,15 +171,22 @@ export function isRequiredApprover(
   return (app.requiredApprovers || []).some((a) => a.userId === userId);
 }
 
+// Names are passed in rather than looked up so this stays pure and usable on
+// the client. personNames is keyed by person id, tagNames by tag id.
 export function summariseRequirements(
   requirements: ApprovalRequirement[],
-  tagNames: Record<string, string>
+  tagNames: Record<string, string>,
+  personNames: Record<string, string> = {}
 ): string {
   if (requirements.length === 0) return "No approver set";
   return requirements
-    .map(
-      (r) =>
-        `${r.mode === "all" ? "All" : "Any one"} of ${tagNames[r.tagId] || "a removed tag"}`
-    )
+    .map((r) => {
+      // One named person is not a group, so "all of" would read oddly.
+      if (r.personId) return personNames[r.personId] || "a removed person";
+      if (!r.tagId) return "a removed approver";
+      return `${r.mode === "all" ? "All" : "Any one"} of ${
+        tagNames[r.tagId] || "a removed tag"
+      }`;
+    })
     .join(" + ");
 }

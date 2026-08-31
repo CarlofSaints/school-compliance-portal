@@ -20,6 +20,8 @@ export default function PoliciesPage() {
   const { session, loading } = useAuth("download_policies");
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
   const [filtered, setFiltered] = useState<PolicyRecord[]>([]);
+  const [repairing, setRepairing] = useState(false);
+  const [repairMessage, setRepairMessage] = useState<string | null>(null);
 
   const fetchPolicies = useCallback(async () => {
     const res = await authFetch("/api/policies");
@@ -33,6 +35,32 @@ export default function PoliciesPage() {
   useEffect(() => {
     if (session) fetchPolicies();
   }, [session, fetchPolicies]);
+
+  // Puts back any policy whose file is in storage but whose index entry was
+  // lost. Only ever adds, so it is safe to press at any time.
+  const repairIndex = async () => {
+    setRepairing(true);
+    setRepairMessage(null);
+    const res = await authFetch("/api/policies/repair-index", {
+      method: "POST",
+    });
+    if (res.ok) {
+      const result = await res.json();
+      setRepairMessage(
+        result.recovered === 0
+          ? "Nothing missing — every policy in storage is already listed."
+          : `Recovered ${result.recovered} ${
+              result.recovered === 1 ? "policy" : "policies"
+            }: ${result.policies
+              .map((p: { name: string }) => p.name)
+              .join(", ")}. Check their names and categories.`
+      );
+      fetchPolicies();
+    } else {
+      setRepairMessage("Could not rebuild the list. Try again.");
+    }
+    setRepairing(false);
+  };
 
   const handleSearch = useCallback(
     (query: string) => {
@@ -64,15 +92,33 @@ export default function PoliciesPage() {
             School policy repository ({policies.length} policies)
           </p>
         </div>
-        {session?.permissions.includes("upload_policies") && (
-          <Link
-            href="/policies/upload"
-            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-          >
-            + Upload Policy
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {session?.permissions.includes("manage_policies") && (
+            <button
+              onClick={repairIndex}
+              disabled={repairing}
+              title="Finds policies whose file is in storage but which are missing from this list, and puts them back"
+              className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {repairing ? "Checking..." : "Rebuild list from storage"}
+            </button>
+          )}
+          {session?.permissions.includes("upload_policies") && (
+            <Link
+              href="/policies/upload"
+              className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              + Upload Policy
+            </Link>
+          )}
+        </div>
       </div>
+
+      {repairMessage && (
+        <div className="mb-4 rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-700">
+          {repairMessage}
+        </div>
+      )}
 
       <div className="mb-4 max-w-md">
         <PolicySearch onSearch={handleSearch} />

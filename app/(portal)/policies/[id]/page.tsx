@@ -2,7 +2,7 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ComplianceScore from "@/components/ComplianceScore";
 import RiskBadge from "@/components/RiskBadge";
 import FileUpload from "@/components/FileUpload";
@@ -40,11 +40,19 @@ interface PolicyDetail {
   }[];
 }
 
+// Just enough of a policy to fill the switcher.
+interface PolicyListItem {
+  id: string;
+  name: string;
+}
+
 export default function PolicyDetailPage() {
   const { session, loading } = useAuth("download_policies");
   const params = useParams();
+  const router = useRouter();
   const policyId = params.id as string;
   const [data, setData] = useState<PolicyDetail | null>(null);
+  const [policyList, setPolicyList] = useState<PolicyListItem[]>([]);
   const [checking, setChecking] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
@@ -57,9 +65,21 @@ export default function PolicyDetailPage() {
     if (res.ok) setData(await res.json());
   }, [policyId]);
 
+  // The repository list, so another policy can be opened from here rather than
+  // going back to /policies and clicking in again.
+  const fetchPolicyList = useCallback(async () => {
+    const res = await authFetch("/api/policies");
+    if (!res.ok) return;
+    const all = await res.json();
+    if (Array.isArray(all)) setPolicyList(all);
+  }, []);
+
   useEffect(() => {
-    if (session) fetchData();
-  }, [session, fetchData]);
+    if (session) {
+      fetchData();
+      fetchPolicyList();
+    }
+  }, [session, fetchData, fetchPolicyList]);
 
   const runCheck = async () => {
     setChecking(true);
@@ -114,6 +134,32 @@ export default function PolicyDetailPage() {
           </span>
         </div>
         <div className="flex gap-2">
+          {/* Rendered only once the list is in and contains this policy: a
+              select whose value matches no option silently displays the FIRST
+              one, which would name the wrong policy. */}
+          {policyList.some((p) => p.id === policyId) && (
+            <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-white">
+              <span className="text-xs text-gray-500 whitespace-nowrap">
+                Load a policy
+              </span>
+              <select
+                value={policyId}
+                aria-label="Load a policy"
+                onChange={(e) => {
+                  if (e.target.value !== policyId) {
+                    router.push(`/policies/${e.target.value}`);
+                  }
+                }}
+                className="text-sm bg-transparent outline-none max-w-[220px] cursor-pointer"
+              >
+                {policyList.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {session?.permissions.includes("upload_policies") && (
             <button
               onClick={() => setShowUpload(!showUpload)}

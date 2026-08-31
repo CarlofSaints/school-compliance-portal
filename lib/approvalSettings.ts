@@ -1,11 +1,35 @@
 import { readJson, writeJson } from "./controlData";
 
-// One requirement inside a tier: a tag, and how many of its members must say
-// yes. "all" means every person carrying the tag; "any" means one of them is
-// enough (a Principal tag with a deputy on it, say).
+// One requirement inside a tier. Exactly one of tagId / personId identifies
+// who must approve.
+//
+// A TAG names a group, and mode says how many of its members must say yes:
+// "all" means every person carrying the tag, "any" means one of them is enough
+// (a Principal tag with a deputy on it, say).
+//
+// A PERSON names one position-holder straight off the People register. The
+// Principal is one named human, so requiring a one-member tag for them would
+// only duplicate the register. mode is meaningless for a single person and is
+// always stored as "all".
 export interface ApprovalRequirement {
-  tagId: string;
+  tagId?: string;
+  personId?: string;
   mode: "all" | "any";
+}
+
+// Requirements are stored with only the key they use, so a reader must never
+// assume tagId is present. Use these rather than truthiness checks scattered
+// about.
+export function isTagRequirement(
+  r: ApprovalRequirement
+): r is ApprovalRequirement & { tagId: string } {
+  return typeof r.tagId === "string" && r.tagId.length > 0;
+}
+
+export function isPersonRequirement(
+  r: ApprovalRequirement
+): r is ApprovalRequirement & { personId: string } {
+  return typeof r.personId === "string" && r.personId.length > 0;
 }
 
 // A band of amounts and what it takes to approve inside it. Bands are
@@ -152,14 +176,14 @@ export function validateTiers(tiers: ApprovalTier[]): string[] {
     }
     if (!t.logOnly && t.requirements.length === 0) {
       problems.push(
-        `"${t.label}" needs approval but no approver tag is set, so applications will wait with nobody to action them.`
+        `"${t.label}" needs approval but no approver is set, so applications will wait with nobody to action them.`
       );
     }
   }
   const last = sorted[sorted.length - 1];
   if (!last.logOnly && last.requirements.length === 0) {
     problems.push(
-      `"${last.label}" needs approval but no approver tag is set, so applications will wait with nobody to action them.`
+      `"${last.label}" needs approval but no approver is set, so applications will wait with nobody to action them.`
     );
   }
 
