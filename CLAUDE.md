@@ -1,7 +1,16 @@
 # HVP Compliance Project — Current State
 
 ## Project Location
-`C:\Users\CarlDosSantos-(OUTER\Projects\hvps-compliance`
+`C:\Users\CarlDosSantos-(OUTER\Projects\school-compliance-portal`
+
+The folder is named after the **repo**, not after `package.json` (which still
+says `hvps-compliance`). The marketing site sits beside it at
+`...\Projects\School-compliance`.
+
+**Do not use the copies under `OneDrive - eXceler8\Desktop\Stolen PC - CLAUDE
+PROJECTS\Projects\`.** Those are a restore from the stolen machine and are not
+the live clones — this file used to point at one of them. Git repositories
+inside OneDrive also corrupt: OneDrive syncs `.git` mid-operation.
 
 ## Vercel projects — which is which (read this before touching env vars)
 | Name | What it is |
