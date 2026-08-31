@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import PolicySearch from "@/components/PolicySearch";
 import ComplianceScore from "@/components/ComplianceScore";
 import Link from "next/link";
+import { categoryOptions } from "@/lib/policyCategories";
 
 interface PolicyRecord {
   id: string;
@@ -21,7 +22,9 @@ export default function PoliciesPage() {
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
   const [filtered, setFiltered] = useState<PolicyRecord[]>([]);
   const [repairing, setRepairing] = useState(false);
-  const [repairMessage, setRepairMessage] = useState<string | null>(null);
+  const [savingCategory, setSavingCategory] = useState<string | null>(null);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const fetchPolicies = useCallback(async () => {
     const res = await authFetch("/api/policies");
@@ -32,15 +35,60 @@ export default function PoliciesPage() {
     }
   }, []);
 
+  // The school's category list, managed in Admin > Policy Categories.
+  const fetchCategories = useCallback(async () => {
+    const res = await authFetch("/api/settings/policy-categories");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (Array.isArray(data)) setAllCategories(data);
+  }, []);
+
   useEffect(() => {
-    if (session) fetchPolicies();
-  }, [session, fetchPolicies]);
+    if (session) {
+      fetchPolicies();
+      fetchCategories();
+    }
+  }, [session, fetchPolicies, fetchCategories]);
+
+  // Saves a category straight from the grid. The row is updated first so the
+  // dropdown does not snap back while the request is in flight, and put back
+  // if the save fails — a control that keeps the value it could not store is
+  // worse than one that visibly refuses it.
+  const changeCategory = async (policyId: string, category: string) => {
+    const previous = policies.find((p) => p.id === policyId)?.category;
+    if (previous === undefined || previous === category) return;
+
+    // The grid renders `filtered`, so both lists have to move together or the
+    // visible row keeps the old value.
+    const apply = (value: string) => {
+      const patch = (list: PolicyRecord[]) =>
+        list.map((p) => (p.id === policyId ? { ...p, category: value } : p));
+      setPolicies(patch);
+      setFiltered(patch);
+    };
+
+    apply(category);
+    setSavingCategory(policyId);
+    setNotice(null);
+
+    const res = await authFetch(`/api/policies/${policyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category }),
+    });
+
+    if (!res.ok) {
+      apply(previous);
+      setNotice("That category could not be saved. It has been put back.");
+    }
+    setSavingCategory(null);
+  };
 
   // Puts back any policy whose file is in storage but whose index entry was
   // lost. Only ever adds, so it is safe to press at any time.
   const repairIndex = async () => {
     setRepairing(true);
-    setRepairMessage(null);
+    setNotice(null);
     const res = await authFetch("/api/policies/repair-index", {
       method: "POST",
     });
@@ -56,7 +104,7 @@ export default function PoliciesPage() {
       const needsCheck = (result.policies || []).filter(
         (p: { fromMeta: boolean }) => !p.fromMeta
       );
-      setRepairMessage(
+      setNotice(
         result.recovered === 0
           ? `Nothing missing — every policy in storage is already listed.${secured}`
           : `Recovered ${result.recovered} ${
@@ -73,7 +121,7 @@ export default function PoliciesPage() {
       );
       fetchPolicies();
     } else {
-      setRepairMessage("Could not rebuild the list. Try again.");
+      setNotice("Could not rebuild the list. Try again.");
     }
     setRepairing(false);
   };
@@ -130,9 +178,9 @@ export default function PoliciesPage() {
         </div>
       </div>
 
-      {repairMessage && (
+      {notice && (
         <div className="mb-4 rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-700">
-          {repairMessage}
+          {notice}
         </div>
       )}
 
@@ -171,9 +219,27 @@ export default function PoliciesPage() {
                   )}
                 </td>
                 <td className="px-6 py-4">
-                  <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
-                    {policy.category}
-                  </span>
+                  {session?.permissions.includes("manage_policies") ? (
+                    <select
+                      value={policy.category}
+                      disabled={savingCategory === policy.id}
+                      aria-label={`Category for ${policy.name}`}
+                      onChange={(e) =>
+                        changeCategory(policy.id, e.target.value)
+                      }
+                      className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs border border-transparent hover:border-gray-300 focus:border-primary outline-none cursor-pointer disabled:opacity-50"
+                    >
+                      {categoryOptions(policy.category, allCategories).map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs">
+                      {policy.category}
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-center text-gray-600">
                   v{policy.currentVersion}

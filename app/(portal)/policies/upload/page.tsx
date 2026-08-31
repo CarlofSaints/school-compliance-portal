@@ -1,7 +1,8 @@
 "use client";
 
+import { DEFAULT_POLICY_CATEGORIES, REQUIRED_POLICY_CATEGORY } from "@/lib/policyCategories";
 import { useAuth, authFetch } from "@/lib/useAuth";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import FileUpload from "@/components/FileUpload";
 import Toast from "@/components/Toast";
@@ -11,22 +12,30 @@ export default function UploadPolicyPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("General");
+  const [category, setCategory] = useState(REQUIRED_POLICY_CATEGORY);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_POLICY_CATEGORIES);
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  const categories = [
-    "General",
-    "Finance",
-    "Governance",
-    "HR",
-    "Safety",
-    "Admissions",
-    "Discipline",
-    "Curriculum",
-    "Infrastructure",
-  ];
+  // The school's own list, from Admin > Policy Categories. Seeded with the
+  // built-in defaults so the dropdown is never momentarily empty.
+  useEffect(() => {
+    let cancelled = false;
+    authFetch("/api/settings/policy-categories")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && Array.isArray(data) && data.length) {
+          setCategories(data);
+        }
+      })
+      .catch(() => {
+        // Keep the defaults; the upload itself does not depend on this.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
