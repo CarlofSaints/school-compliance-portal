@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const { session, loading } = useAuth("view_dashboard");
   const [checks, setChecks] = useState<CheckSummary[]>([]);
   const [pendingSpend, setPendingSpend] = useState(0);
+  const [totalPolicies, setTotalPolicies] = useState(0);
   const [financialYear, setFinancialYear] = useState<number | null>(null);
 
   useEffect(() => {
@@ -53,10 +54,17 @@ export default function DashboardPage() {
       if (res.ok) setChecks(await res.json());
 
       // Spend awaiting approval, scoped to the current financial year.
-      const [spendRes, settingsRes] = await Promise.all([
+      const [spendRes, settingsRes, policiesRes] = await Promise.all([
         authFetch("/api/spend", { cache: "no-store" }),
         authFetch("/api/settings/spend", { cache: "no-store" }),
+        authFetch("/api/policies", { cache: "no-store" }),
       ]);
+
+      // Same number the Policies page shows in its header, from the same index.
+      if (policiesRes.ok) {
+        const policies = await policiesRes.json();
+        setTotalPolicies(Array.isArray(policies) ? policies.length : 0);
+      }
       if (spendRes.ok && settingsRes.ok) {
         const apps = await spendRes.json();
         const settings = await settingsRes.json();
@@ -104,7 +112,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <DashboardCard
           title="Total Policies"
-          value={0}
+          value={totalPolicies}
           subtitle="Uploaded to repository"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
