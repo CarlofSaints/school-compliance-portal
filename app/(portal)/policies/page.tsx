@@ -7,6 +7,23 @@ import ComplianceScore from "@/components/ComplianceScore";
 import Link from "next/link";
 import { categoryOptions } from "@/lib/policyCategories";
 
+// Reads the name the server gave the file back out of Content-Disposition,
+// preferring the RFC 6266 filename* the download route sends, since that is
+// the one that survives characters HTTP headers cannot carry.
+function filenameFrom(res: Response): string | null {
+  const header = res.headers.get("Content-Disposition") || "";
+  const encoded = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1]);
+    } catch {
+      // Fall through to the plain filename.
+    }
+  }
+  const plain = header.match(/filename="([^"]+)"/i);
+  return plain ? plain[1] : null;
+}
+
 interface PolicyRecord {
   id: string;
   name: string;
@@ -24,6 +41,7 @@ export default function PoliciesPage() {
   const [repairing, setRepairing] = useState(false);
   const [savingCategory, setSavingCategory] = useState<string | null>(null);
   const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const fetchPolicies = useCallback(async () => {
@@ -82,6 +100,38 @@ export default function PoliciesPage() {
       setNotice("That category could not be saved. It has been put back.");
     }
     setSavingCategory(null);
+  };
+
+  // Saves the current version of a policy to the reader's machine.
+  //
+  // Fetched and saved as a blob rather than linked to directly: the session is
+  // carried in an x-user-id header, which a plain <a href download> does not
+  // send, so the browser would get a 401 and report it as "file wasn't
+  // available on site".
+  const downloadPolicy = async (policy: PolicyRecord) => {
+    setDownloading(policy.id);
+    setNotice(null);
+    try {
+      const res = await authFetch(`/api/policies/${policy.id}/download`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setNotice(err.error || "That policy could not be downloaded.");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      // The server names the file too; this is what the browser uses for a
+      // blob URL, so it has to be set here as well.
+      a.download = filenameFrom(res) || policy.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(null);
+    }
   };
 
   // Puts back any policy whose file is in storage but whose index entry was
@@ -251,7 +301,16 @@ export default function PoliciesPage() {
                     <span className="text-xs text-gray-400">Not checked</span>
                   )}
                 </td>
-                <td className="px-6 py-4 text-right">
+                <td className="px-6 py-4 text-right whitespace-nowrap">
+                  {session?.permissions.includes("download_policies") && (
+                    <button
+                      onClick={() => downloadPolicy(policy)}
+                      disabled={downloading === policy.id}
+                      className="text-primary hover:text-primary-dark text-xs font-medium mr-4 disabled:opacity-50"
+                    >
+                      {downloading === policy.id ? "Downloading..." : "Download"}
+                    </button>
+                  )}
                   <Link
                     href={`/policies/${policy.id}`}
                     className="text-primary hover:text-primary-dark text-xs font-medium"
