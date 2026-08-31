@@ -176,9 +176,9 @@ export default function PoliciesPage() {
 
       const risks = (check.risks || []).length;
       setNotice(
-        `${policy.name} scored ${check.score}/100 — ${risks} ${
-          risks === 1 ? "risk" : "risks"
-        } found. Open the policy to read them.`
+        `${policy.name} scored ${check.score} out of 100. ${risks} ${
+          risks === 1 ? "risk was" : "risks were"
+        } found, open the policy to read them.`
       );
     } catch {
       setNotice(`${policy.name}: the compliance check could not be run.`);
@@ -213,7 +213,7 @@ export default function PoliciesPage() {
       );
       setNotice(
         result.recovered === 0
-          ? `Nothing missing — every policy in storage is already listed.${secured}`
+          ? `Nothing missing. Every policy in storage is already listed.${secured}`
           : `Recovered ${result.recovered} ${
               result.recovered === 1 ? "policy" : "policies"
             }: ${result.policies
@@ -222,7 +222,7 @@ export default function PoliciesPage() {
               needsCheck.length
                 ? ` Check the name and category on ${needsCheck
                     .map((p: { name: string }) => p.name)
-                    .join(", ")} — rebuilt from the filename.`
+                    .join(", ")}, rebuilt from the filename.`
                 : ""
             }${secured}`
       );
