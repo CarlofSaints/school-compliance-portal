@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/rolesData";
+import { requireLogin } from "@/lib/rolesData";
 import { getPersonById, updatePerson } from "@/lib/peopleData";
 import { writeFile, readFile, deleteFile, listFiles } from "@/lib/controlData";
 
@@ -20,6 +20,28 @@ const IMAGE_TYPES: Record<string, string> = {
 const MAX_BYTES = 2 * 1024 * 1024;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Who may set or clear a person's photo: an administrator, or that person
+// themselves.
+//
+// Somebody uploading their own photograph from My Account is not an
+// administrative act, and requiring manage_people for it would mean every
+// governor had to ask an admin to put their face on the register. The owner
+// check is on the register's OWN record of who the login belongs to
+// (person.userId), never on anything the request supplies.
+//
+// Note this deliberately does NOT fall back to allowing the upload when the
+// person cannot be read yet. A create races the register (see the comment on
+// POST), so an unknown id is treated as not-yours unless the caller is an
+// admin, and the admin path is the one the create flow uses.
+async function mayEditPhoto(
+  session: { id: string; permissions: string[] },
+  personId: string
+): Promise<boolean> {
+  if (session.permissions.includes("manage_people")) return true;
+  const person = await getPersonById(personId);
+  return !!person && person.userId === session.id;
+}
 
 // The id goes straight into a storage path, so it is checked rather than
 // trusted. Nothing but a uuid is ever a real person id here.
@@ -89,12 +111,18 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requirePermission(req, "manage_people");
+  const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
   if (!validId(id)) {
     return NextResponse.json({ error: "Invalid person id" }, { status: 400 });
+  }
+  if (!(await mayEditPhoto(session, id))) {
+    return NextResponse.json(
+      { error: "You can only change your own photo." },
+      { status: 403 }
+    );
   }
 
   try {
@@ -153,12 +181,18 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requirePermission(req, "manage_people");
+  const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
   if (!validId(id)) {
     return NextResponse.json({ error: "Invalid person id" }, { status: 400 });
+  }
+  if (!(await mayEditPhoto(session, id))) {
+    return NextResponse.json(
+      { error: "You can only change your own photo." },
+      { status: 403 }
+    );
   }
 
   // Every photo file this person has, not only the one the record names, so a
