@@ -43,6 +43,14 @@ function AccountContent() {
     if (res.ok) {
       const data = await res.json();
       setPerson(data.person ?? null);
+      // The fields are filled from the account, not from the session.
+      // useAuth() has no session on the first render, so initialising the
+      // state from it captured empty strings and never refilled them: the form
+      // sat blank, and saving it wrote those blanks over the real name and
+      // email.
+      setName(data.name ?? "");
+      setSurname(data.surname ?? "");
+      setEmail(data.email ?? "");
     }
     setPersonLoaded(true);
   }, []);
@@ -74,6 +82,17 @@ function AccountContent() {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
+
+    // Belt and braces with the server's own guard. Saving a half-loaded form
+    // must never be the way somebody loses their name.
+    if (!name.trim() || !surname.trim() || !email.trim()) {
+      setToast({
+        message: "Name, surname and email cannot be empty.",
+        type: "error",
+      });
+      return;
+    }
+
     setSaving(true);
 
     const res = await authFetch("/api/account", {

@@ -42,8 +42,29 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, surname, email } = body;
-    const updated = await updateUser(session.id, { name, surname, email });
+
+    // Only fields that actually carry a value are applied. A form that posts
+    // an empty name is a form that has not finished loading, not somebody
+    // asking to be nameless, and updateUser merges whatever it is handed
+    // straight onto the record.
+    const updates: { name?: string; surname?: string; email?: string } = {};
+    if (typeof body.name === "string" && body.name.trim()) {
+      updates.name = body.name.trim();
+    }
+    if (typeof body.surname === "string" && body.surname.trim()) {
+      updates.surname = body.surname.trim();
+    }
+    if (typeof body.email === "string" && body.email.trim()) {
+      updates.email = body.email.trim();
+    }
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json(
+        { error: "Nothing to update." },
+        { status: 400 }
+      );
+    }
+
+    const updated = await updateUser(session.id, updates);
     if (!updated) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
