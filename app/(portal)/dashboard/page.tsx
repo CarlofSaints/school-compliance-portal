@@ -210,20 +210,20 @@ export default function DashboardPage() {
               <thead>
                 <tr className="text-left text-gray-400 border-b border-gray-100">
                   <th className="pb-2 font-medium w-10">#</th>
-                  <th className="pb-2 font-medium">Document</th>
-                  <th className="pb-2 font-medium">Policy</th>
-                  <th className="pb-2 font-medium">Score</th>
-                  <th className="pb-2 font-medium">Issues to fix</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Checked by</th>
-                  <th className="pb-2 font-medium">Date</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Document</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Policy</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Score</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Issues to fix</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Status</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Checked by</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Date</th>
                 </tr>
               </thead>
               <tbody>
                 {checks.map((c, i) => (
                   <tr key={c.id} className="border-b border-gray-50 last:border-0">
                     <td className="py-3 text-gray-400">{i + 1}</td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4 align-top">
                       <Link
                         href={`/compliance?check=${c.id}`}
                         className="text-primary font-medium hover:underline"
@@ -231,7 +231,7 @@ export default function DashboardPage() {
                         {c.name}
                       </Link>
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4 align-top">
                       {c.policyId && c.policyName ? (
                         <Link
                           href={`/policies/${c.policyId}`}
@@ -245,7 +245,7 @@ export default function DashboardPage() {
                         <span className="text-gray-400">Not in the register</span>
                       )}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4 align-top">
                       <span
                         className={`font-semibold ${
                           c.score >= 80
@@ -258,7 +258,7 @@ export default function DashboardPage() {
                         {c.score}%
                       </span>
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4 align-top">
                       {c.issueCount === 0 ? (
                         <span className="text-emerald-600">None</span>
                       ) : (
@@ -267,7 +267,7 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4 align-top">
                       {c.issueCount === 0 || !c.statusCounts ? (
                         <span className="text-gray-300">—</span>
                       ) : (
