@@ -3,16 +3,34 @@ import { requirePermission } from "@/lib/rolesData";
 import {
   getPolicyById,
   downloadPolicyFile,
-  saveComplianceCheck,
   updatePolicy,
   getPolicyVersions,
-  deleteComplianceCheck,
 } from "@/lib/policyData";
+import {
+  addComplianceCheck,
+  deleteComplianceCheck,
+  getComplianceChecksForPolicy,
+} from "@/lib/complianceCheckData";
 import { runComplianceCheckOnFile } from "@/lib/complianceEngine";
 import { v4 as uuidv4 } from "uuid";
 
 // Web search + large PDF extraction + Claude API can take time
 export const maxDuration = 120;
+
+// The score on the policy is a copy of its most recent check, so after a check
+// is added or removed it has to be brought back into step with what is now in
+// the store. Recomputed rather than assumed: removing a re-check should fall
+// back to the check before it, not to "Not checked".
+async function refreshPolicyScore(policyId: string) {
+  const remaining = await getComplianceChecksForPolicy(policyId);
+  // getComplianceChecks sorts newest first, so the head is the check the policy
+  // should now be showing.
+  const latest = remaining[0];
+  return updatePolicy(policyId, {
+    lastCheckScore: latest ? latest.score : null,
+    lastCheckDate: latest ? latest.checkedAt : null,
+  });
+}
 
 // Removing a check is an administrative act rather than part of running one,
 // so it is gated on manage_policies, not on check_compliance: the people who
@@ -35,10 +53,12 @@ export async function DELETE(
     return NextResponse.json({ error: "Policy not found" }, { status: 404 });
   }
 
-  const { removed, policy: updated } = await deleteComplianceCheck(id, checkId);
+  const removed = await deleteComplianceCheck(checkId);
   if (!removed) {
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
+
+  const updated = await refreshPolicyScore(id);
 
   // Hand back what was just written rather than reading it in again: an
   // overwrite takes a moment to propagate, and a read-back here would return
@@ -72,11 +92,7 @@ export async function POST(
       );
     }
 
-    const fileBuffer = await downloadPolicyFile(
-      id,
-      latest.version,
-      latest.ext
-    );
+    const fileBuffer = await downloadPolicyFile(id, latest.version, latest.ext);
     if (!fileBuffer) {
       return NextResponse.json(
         { error: "Could not read policy file" },
@@ -91,24 +107,39 @@ export async function POST(
       "policy"
     );
 
-    const checkId = uuidv4();
+    const checkedByName =
+      `${session.name || ""} ${session.surname || ""}`.trim() ||
+      session.name ||
+      session.email;
+
     const check = {
-      id: checkId,
+      id: uuidv4(),
+      name: policy.name,
+      filename: latest.filename,
+      ext: latest.ext,
       policyId: id,
+      policyVersion: latest.version,
       score: result.score,
       summary: result.summary,
       risks: result.risks,
+      sources: result.sources,
+      issueCount: result.risks.length,
       checkedBy: session.id,
+      checkedByName,
       checkedAt: new Date().toISOString(),
     };
 
-    await saveComplianceCheck(id, check);
+    // No file bytes: this document is already in storage under the policy, and
+    // a second copy here would be the same drift this merge is undoing.
+    await addComplianceCheck(check, null);
     await updatePolicy(id, {
       lastCheckScore: result.score,
       lastCheckDate: check.checkedAt,
     });
 
-    return NextResponse.json(check);
+    return NextResponse.json(check, {
+      headers: { "Cache-Control": "no-store" },
+    });
   } catch (err) {
     console.error("Compliance check failed:", err);
     return NextResponse.json(

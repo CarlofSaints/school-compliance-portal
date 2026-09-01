@@ -4,17 +4,20 @@ import {
   getComplianceCheckById,
   downloadComplianceCheckFile,
 } from "@/lib/complianceCheckData";
+import { downloadPolicyFile, getPolicyVersions } from "@/lib/policyData";
+import {
+  contentDisposition,
+  DOWNLOAD_CONTENT_TYPES,
+} from "@/lib/contentDisposition";
 
 export const dynamic = "force-dynamic";
 
-const CONTENT_TYPES: Record<string, string> = {
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  txt: "text/plain",
-  md: "text/markdown",
-};
-
+// Serves the document a check was run against.
+//
+// Where that document lives depends on whether the check is attached to a
+// policy. A loose document was stored with the check itself; a policy's file
+// belongs to the policy and is read from there, so the register stays the one
+// copy of it.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -28,7 +31,28 @@ export async function GET(
     return NextResponse.json({ error: "Check not found" }, { status: 404 });
   }
 
-  const buffer = await downloadComplianceCheckFile(id, check.filename);
+  let buffer: Buffer | null = null;
+  let filename = check.filename;
+  let ext = check.ext;
+
+  if (check.policyId) {
+    const versions = await getPolicyVersions(check.policyId);
+    const version =
+      versions.find((v) => v.version === check.policyVersion) ||
+      versions[versions.length - 1];
+    if (version) {
+      filename = version.filename;
+      ext = version.ext;
+      buffer = await downloadPolicyFile(
+        check.policyId,
+        version.version,
+        version.ext
+      );
+    }
+  } else {
+    buffer = await downloadComplianceCheckFile(id, check.filename);
+  }
+
   if (!buffer) {
     return NextResponse.json(
       { error: "Document file not found" },
@@ -36,11 +60,12 @@ export async function GET(
     );
   }
 
-  const ext = check.ext.toLowerCase().replace(".", "");
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
-      "Content-Type": CONTENT_TYPES[ext] || "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${check.filename}"`,
+      "Content-Type":
+        DOWNLOAD_CONTENT_TYPES[ext.toLowerCase().replace(".", "")] ||
+        "application/octet-stream",
+      "Content-Disposition": contentDisposition(filename),
     },
   });
 }

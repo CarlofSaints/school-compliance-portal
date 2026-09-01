@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         id: existing.id,
         name: existing.name,
         filename: existing.filename,
+        policyId: existing.policyId ?? null,
         duplicate: true,
         checkedAt: existing.checkedAt,
       });
@@ -89,7 +90,10 @@ export async function POST(req: NextRequest) {
       checkId = null;
     }
 
-    return NextResponse.json({ ...result, id: checkId });
+    return NextResponse.json(
+      { ...result, id: checkId, name: docName, filename: file.name, policyId: null },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Compliance check failed:", message, err);

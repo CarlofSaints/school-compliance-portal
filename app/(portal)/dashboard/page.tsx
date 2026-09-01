@@ -19,6 +19,11 @@ interface StatusCounts {
 interface CheckSummary {
   id: string;
   name: string;
+  // null when the document checked is not in the policy register. A policyId
+  // with a null policyName means the policy it belonged to has since been
+  // deleted; the check outlives it.
+  policyId: string | null;
+  policyName: string | null;
   score: number;
   issueCount: number;
   statusCounts?: StatusCounts;
@@ -79,6 +84,8 @@ export default function DashboardPage() {
   }, [session]);
 
   const totalChecks = checks.length;
+  const policyChecks = checks.filter((c) => c.policyId).length;
+  const documentChecks = totalChecks - policyChecks;
   const nonCompliant = checks.filter((c) => c.issueCount > 0).length;
   const statusTotals = checks.reduce(
     (acc, c) => {
@@ -124,7 +131,11 @@ export default function DashboardPage() {
         <DashboardCard
           title="Compliance Checks"
           value={totalChecks}
-          subtitle="Total checks run"
+          subtitle={
+            totalChecks === 0
+              ? "Total checks run"
+              : `${policyChecks} on policies, ${documentChecks} on other documents`
+          }
           color="bg-emerald-500"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -183,9 +194,13 @@ export default function DashboardPage() {
         <h2 className="text-lg font-semibold text-dark mb-4">Compliance Checks</h2>
         {checks.length === 0 ? (
           <p className="text-sm text-gray-500">
-            No documents have been checked yet. Run a check from the{" "}
+            Nothing has been checked yet. Run a check from the{" "}
             <Link href="/compliance" className="text-primary hover:underline">
               Compliance Check
+            </Link>{" "}
+            page, or straight from a row on the{" "}
+            <Link href="/policies" className="text-primary hover:underline">
+              Policies
             </Link>{" "}
             page.
           </p>
@@ -196,6 +211,7 @@ export default function DashboardPage() {
                 <tr className="text-left text-gray-400 border-b border-gray-100">
                   <th className="pb-2 font-medium w-10">#</th>
                   <th className="pb-2 font-medium">Document</th>
+                  <th className="pb-2 font-medium">Policy</th>
                   <th className="pb-2 font-medium">Score</th>
                   <th className="pb-2 font-medium">Issues to fix</th>
                   <th className="pb-2 font-medium">Status</th>
@@ -214,6 +230,20 @@ export default function DashboardPage() {
                       >
                         {c.name}
                       </Link>
+                    </td>
+                    <td className="py-3">
+                      {c.policyId && c.policyName ? (
+                        <Link
+                          href={`/policies/${c.policyId}`}
+                          className="text-gray-700 hover:underline"
+                        >
+                          {c.policyName}
+                        </Link>
+                      ) : c.policyId ? (
+                        <span className="text-gray-400">Policy deleted</span>
+                      ) : (
+                        <span className="text-gray-400">Not in the register</span>
+                      )}
                     </td>
                     <td className="py-3">
                       <span

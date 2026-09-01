@@ -37,6 +37,7 @@ interface PolicyDetail {
       guideline_reference: string;
       suggestion: string;
     }[];
+    checkedByName?: string;
     checkedAt: string;
   }[];
 }
@@ -325,6 +326,9 @@ export default function PolicyDetailPage() {
                         <p className="text-xs text-gray-400">
                           {new Date(check.checkedAt).toLocaleString()} &middot;{" "}
                           {check.risks.length} risks found
+                          {check.checkedByName
+                            ? ` \u00b7 ${check.checkedByName}`
+                            : ""}
                         </p>
                       </div>
                     </div>

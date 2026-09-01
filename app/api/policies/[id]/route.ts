@@ -4,9 +4,9 @@ import {
   getPolicyById,
   deletePolicy,
   getPolicyVersions,
-  getComplianceChecks,
   updatePolicy,
 } from "@/lib/policyData";
+import { getComplianceChecksForPolicy } from "@/lib/complianceCheckData";
 
 export async function GET(
   req: NextRequest,
@@ -22,7 +22,7 @@ export async function GET(
   }
 
   const versions = await getPolicyVersions(id);
-  const checks = await getComplianceChecks(id);
+  const checks = await getComplianceChecksForPolicy(id);
 
   return NextResponse.json({ policy, versions, checks });
 }

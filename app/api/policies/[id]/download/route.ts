@@ -5,24 +5,10 @@ import {
   getPolicyVersions,
   downloadPolicyFile,
 } from "@/lib/policyData";
-
-const CONTENT_TYPES: Record<string, string> = {
-  pdf: "application/pdf",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  doc: "application/msword",
-  txt: "text/plain; charset=utf-8",
-};
-
-// HTTP headers are Latin-1. A filename with an em dash or an accent in it makes
-// Content-Disposition throw outright, which would turn a working download into
-// a 500. So the plain filename is stripped back to ASCII for old clients and
-// the real one is sent as RFC 6266 filename*, which everything current reads.
-function contentDisposition(filename: string): string {
-  const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, "'");
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(
-    filename
-  )}`;
-}
+import {
+  contentDisposition,
+  DOWNLOAD_CONTENT_TYPES,
+} from "@/lib/contentDisposition";
 
 // Serves the file behind a policy. Note this cannot be reached with a plain
 // <a href download>: sessions are carried in an x-user-id header, which a
@@ -70,7 +56,7 @@ export async function GET(
   return new NextResponse(new Uint8Array(file), {
     headers: {
       "Content-Type":
-        CONTENT_TYPES[version.ext.toLowerCase()] || "application/octet-stream",
+        DOWNLOAD_CONTENT_TYPES[version.ext.toLowerCase()] || "application/octet-stream",
       "Content-Disposition": contentDisposition(version.filename),
     },
   });

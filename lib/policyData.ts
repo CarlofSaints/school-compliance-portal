@@ -1,4 +1,4 @@
-import { readJson, writeJson, writeFile, readFile, listFiles, deleteFile } from "./controlData";
+import { readJson, writeJson, writeFile, readFile, deleteFile } from "./controlData";
 
 export interface PolicyMeta {
   id: string;
@@ -20,24 +20,6 @@ export interface PolicyVersion {
   uploadedBy: string;
   uploadedAt: string;
   size: number;
-}
-
-export interface ComplianceCheck {
-  id: string;
-  policyId: string;
-  score: number;
-  summary: string;
-  risks: ComplianceRisk[];
-  checkedBy: string;
-  checkedAt: string;
-}
-
-export interface ComplianceRisk {
-  severity: "low" | "medium" | "high";
-  section: string;
-  description: string;
-  guideline_reference: string;
-  suggestion: string;
 }
 
 const POLICIES_INDEX = "policies/index.json";
@@ -169,59 +151,3 @@ export async function downloadPolicyFile(
   return readFile(`policies/${policyId}/v${version}.${ext}`);
 }
 
-// Compliance checks
-export async function getComplianceChecks(
-  policyId: string
-): Promise<ComplianceCheck[]> {
-  const files = await listFiles(`policies/${policyId}/checks`);
-  const checks: ComplianceCheck[] = [];
-  for (const file of files) {
-    if (file.endsWith(".json")) {
-      const check = await readJson<ComplianceCheck>(
-        `policies/${policyId}/checks/${file}`,
-        null as unknown as ComplianceCheck
-      );
-      if (check) checks.push(check);
-    }
-  }
-  return checks.sort(
-    (a, b) => new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime()
-  );
-}
-
-// Removes one check result and brings the policy's headline score back into
-// step with what is left.
-//
-// The score on the policy is a copy of the most recent check, so it has to be
-// recomputed rather than simply blanked: removing a re-check should fall back
-// to the check before it, not to "Not checked". Without this a check run
-// against the wrong version, or a run made to demonstrate the feature, marks
-// the policy for good.
-export async function deleteComplianceCheck(
-  policyId: string,
-  checkId: string
-): Promise<{ removed: boolean; policy: PolicyMeta | null }> {
-  const checks = await getComplianceChecks(policyId);
-  if (!checks.some((c) => c.id === checkId)) {
-    return { removed: false, policy: null };
-  }
-
-  await deleteFile(`policies/${policyId}/checks/${checkId}.json`);
-
-  // getComplianceChecks sorts newest first, so the head of what remains is the
-  // check the policy should now be showing.
-  const latest = checks.filter((c) => c.id !== checkId)[0];
-  const policy = await updatePolicy(policyId, {
-    lastCheckScore: latest ? latest.score : null,
-    lastCheckDate: latest ? latest.checkedAt : null,
-  });
-
-  return { removed: true, policy };
-}
-
-export async function saveComplianceCheck(
-  policyId: string,
-  check: ComplianceCheck
-): Promise<void> {
-  return writeJson(`policies/${policyId}/checks/${check.id}.json`, check);
-}

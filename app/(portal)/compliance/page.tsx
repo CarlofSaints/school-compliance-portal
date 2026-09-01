@@ -2,6 +2,7 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import FileUpload from "@/components/FileUpload";
 import ComplianceScore from "@/components/ComplianceScore";
 import RiskBadge from "@/components/RiskBadge";
@@ -11,6 +12,15 @@ import { branding } from "@/lib/branding";
 interface PolicyOption {
   id: string;
   name: string;
+}
+
+// The check whose result is on screen. policyId is null while the document is
+// only a document: that is the state the "Add to Policies" control exists for.
+interface LoadedCheck {
+  id: string;
+  name: string;
+  filename: string;
+  policyId: string | null;
 }
 
 type RiskStatus = "not_an_issue" | "needs_addressing" | "in_progress" | "addressed";
@@ -51,7 +61,12 @@ export default function CompliancePage() {
   const [name, setName] = useState("");
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
-  const [loadedCheck, setLoadedCheck] = useState<{ id: string; name: string; filename: string } | null>(null);
+  const [loadedCheck, setLoadedCheck] = useState<LoadedCheck | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [promoteName, setPromoteName] = useState("");
+  const [promoteCategory, setPromoteCategory] = useState("General");
+  const [promoting, setPromoting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const fetchPolicies = useCallback(async () => {
@@ -59,9 +74,25 @@ export default function CompliancePage() {
     if (res.ok) setPolicies(await res.json());
   }, []);
 
+  // Needed only by the "Add to Policies" form, but fetched up front so the
+  // category list is already there when someone opens it.
+  const fetchCategories = useCallback(async () => {
+    const res = await authFetch("/api/settings/policy-categories");
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        setCategories(list);
+        setPromoteCategory((c) => (list.includes(c) ? c : list[0]));
+      }
+    }
+  }, []);
+
   useEffect(() => {
-    if (session) fetchPolicies();
-  }, [session, fetchPolicies]);
+    if (session) {
+      fetchPolicies();
+      fetchCategories();
+    }
+  }, [session, fetchPolicies, fetchCategories]);
 
   // When opened from the dashboard with ?check=<id>, re-load that saved check
   // and show its results exactly as if it had just been run.
@@ -74,7 +105,12 @@ export default function CompliancePage() {
       if (res.ok) {
         const data = await res.json();
         setResult({ score: data.score, summary: data.summary, risks: data.risks, sources: data.sources });
-        setLoadedCheck({ id: data.id, name: data.name, filename: data.filename });
+        setLoadedCheck({
+          id: data.id,
+          name: data.name,
+          filename: data.filename,
+          policyId: data.policyId ?? null,
+        });
         setName(data.name);
       } else {
         setToast({ message: "Could not load saved check.", type: "error" });
@@ -89,6 +125,7 @@ export default function CompliancePage() {
     setName("");
     setSelectedPolicy("");
     setMode("upload");
+    setPromoteOpen(false);
     setToast(null);
     // Drop ?check=<id> so the load-saved-check effect doesn't re-fire.
     if (window.location.search) {
@@ -153,7 +190,18 @@ export default function CompliancePage() {
           { method: "POST" }
         );
         if (res.ok) {
-          setResult(await res.json());
+          const data = await res.json();
+          setResult(data);
+          // A check against a policy is a check like any other. The per-issue
+          // status buttons and the document download used to be missing on
+          // this tab for no better reason than that this branch never set
+          // loadedCheck, because policy checks were kept in a separate store.
+          setLoadedCheck({
+            id: data.id,
+            name: data.name,
+            filename: data.filename,
+            policyId: data.policyId ?? selectedPolicy,
+          });
         } else {
           const err = await res.json();
           setToast({ message: err.error || "Check failed", type: "error" });
@@ -176,6 +224,7 @@ export default function CompliancePage() {
               id: data.id,
               name: data.name || name || (file ? file.name : ""),
               filename: data.filename || (file ? file.name : ""),
+              policyId: data.policyId ?? null,
             });
           }
           if (data.duplicate) {
@@ -197,6 +246,42 @@ export default function CompliancePage() {
     }
 
     setChecking(false);
+  };
+
+  // Adds the document behind this check to the Policies register. The file is
+  // already in storage, so nothing is re-uploaded and the check it has already
+  // been through is carried across rather than paid for again.
+  const addToPolicies = async () => {
+    if (!loadedCheck) return;
+    setPromoting(true);
+    const res = await authFetch(
+      `/api/compliance/checks/${loadedCheck.id}/promote`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: promoteName.trim() || loadedCheck.name,
+          category: promoteCategory,
+        }),
+      }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      setLoadedCheck({ ...loadedCheck, name: data.name, policyId: data.policyId });
+      setPromoteOpen(false);
+      fetchPolicies();
+      setToast({
+        message: `Added to the policy register under ${data.category}. Its compliance score went with it.`,
+        type: "success",
+      });
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setToast({
+        message: err.error || "That document could not be added to the register.",
+        type: "error",
+      });
+    }
+    setPromoting(false);
   };
 
   if (loading) return <div className="p-6">Loading...</div>;
@@ -329,6 +414,92 @@ export default function CompliancePage() {
                   </svg>
                   Download
                 </button>
+              </div>
+            )}
+
+            {loadedCheck && (
+              <div className="mb-4 pb-4 border-b border-gray-100">
+                {loadedCheck.policyId ? (
+                  <p className="text-xs text-gray-500">
+                    In the policy register.{" "}
+                    <Link
+                      href={`/policies/${loadedCheck.policyId}`}
+                      className="text-primary hover:underline"
+                    >
+                      Open the policy
+                    </Link>
+                  </p>
+                ) : session?.permissions.includes("upload_policies") ? (
+                  promoteOpen ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Policy name
+                        </label>
+                        <input
+                          type="text"
+                          value={promoteName}
+                          onChange={(e) => setPromoteName(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Category
+                        </label>
+                        <select
+                          value={promoteCategory}
+                          onChange={(e) => setPromoteCategory(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                        >
+                          {categories.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={addToPolicies}
+                          disabled={promoting}
+                          className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                          {promoting ? "Adding..." : "Add to Policies"}
+                        </button>
+                        <button
+                          onClick={() => setPromoteOpen(false)}
+                          disabled={promoting}
+                          className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-gray-500">
+                        This document is not in the policy register.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setPromoteName(loadedCheck.name);
+                          setPromoteOpen(true);
+                        }}
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add to Policies
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    This document is not in the policy register.
+                  </p>
+                )}
               </div>
             )}
             <div className="text-center mb-6">
