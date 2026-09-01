@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getPersonById, updatePerson, deletePerson } from "@/lib/peopleData";
+import { deleteFile } from "@/lib/controlData";
 
 export async function GET(
   req: NextRequest,
@@ -48,9 +49,18 @@ export async function DELETE(
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
+
+  // Their photo goes with them. Without this the image file stays in storage
+  // for good, reachable by anyone who kept the URL, with no record left in the
+  // register pointing at it to say whose face it is.
+  const person = await getPersonById(id);
+
   const deleted = await deletePerson(id);
   if (!deleted) {
     return NextResponse.json({ error: "Person not found" }, { status: 404 });
   }
+
+  if (person?.profilePic) await deleteFile(person.profilePic);
+
   return NextResponse.json({ success: true });
 }

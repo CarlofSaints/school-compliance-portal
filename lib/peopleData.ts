@@ -17,6 +17,16 @@ export interface Person {
 
 const PEOPLE_PATH = "people.json";
 
+// The URL a browser should use for a person's photo, or null when they have
+// none. The stored blob path ends in photo-<timestamp>.<ext>, and that file
+// name is passed through as ?v=, so the URL changes whenever the photo is
+// replaced and the image can be cached hard without ever going stale.
+export function photoUrlFor(person: Person): string | null {
+  if (!person.profilePic) return null;
+  const version = person.profilePic.split("/").pop() || "";
+  return `/api/people/${person.id}/photo?v=${encodeURIComponent(version)}`;
+}
+
 export async function getPeople(): Promise<Person[]> {
   return readJson<Person[]>(PEOPLE_PATH, []);
 }

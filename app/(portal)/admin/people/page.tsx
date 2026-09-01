@@ -4,6 +4,8 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { POSITIONS, GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
+import PersonPhoto from "@/components/PersonPhoto";
+import PhotoUpload from "@/components/PhotoUpload";
 import { TAG_COLOR_CLASSES } from "@/lib/tagData";
 
 interface TagRecord {
@@ -20,6 +22,7 @@ interface PersonRecord {
   email: string;
   phone: string;
   tagIds?: string[];
+  photoUrl?: string | null;
 }
 
 interface UserOption {
@@ -37,6 +40,11 @@ export default function PeoplePage() {
   const [editPerson, setEditPerson] = useState<PersonRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [tags, setTags] = useState<TagRecord[]>([]);
+  // The photo is handled apart from the text fields: it uploads to its own
+  // route, and only once the person exists and has an id.
+  const [photoFile, setPhotoFile] = useState<Blob | null>(null);
+  const [photoRemoved, setPhotoRemoved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     position: POSITIONS[0],
     userId: "",
@@ -64,11 +72,15 @@ export default function PeoplePage() {
   const openCreate = () => {
     setEditPerson(null);
     setForm({ position: POSITIONS[0], userId: "", name: "", email: "", phone: "", tagIds: [] });
+    setPhotoFile(null);
+    setPhotoRemoved(false);
     setShowModal(true);
   };
 
   const openEdit = (person: PersonRecord) => {
     setEditPerson(person);
+    setPhotoFile(null);
+    setPhotoRemoved(false);
     setForm({
       position: person.position,
       userId: person.userId || "",
@@ -90,8 +102,31 @@ export default function PeoplePage() {
     });
   };
 
+  // Applies whatever the photo control was left in: a newly picked image is
+  // uploaded, a cleared one is deleted, and an untouched one is left alone.
+  // profilePic is deliberately NOT part of the person payload, so saving the
+  // text fields can never blank a photo.
+  const savePhoto = async (personId: string) => {
+    if (photoFile) {
+      const body = new FormData();
+      body.append("photo", photoFile, "photo.jpg");
+      const res = await authFetch(`/api/people/${personId}/photo`, {
+        method: "POST",
+        body,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "The photo could not be saved.");
+      }
+    } else if (photoRemoved) {
+      await authFetch(`/api/people/${personId}/photo`, { method: "DELETE" });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     const payload = {
       position: form.position,
       userId: form.userId || null,
@@ -108,9 +143,23 @@ export default function PeoplePage() {
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        setToast({ message: "Person updated", type: "success" });
-        setShowModal(false);
+        try {
+          await savePhoto(editPerson.id);
+          setToast({ message: "Person updated", type: "success" });
+          setShowModal(false);
+        } catch (err) {
+          // The details saved; say so, rather than reporting a failure that
+          // would have them enter everything again.
+          setToast({
+            message:
+              (err instanceof Error ? err.message : "The photo could not be saved.") +
+              " The other details were saved.",
+            type: "error",
+          });
+        }
         fetchData();
+      } else {
+        setToast({ message: "That person could not be saved.", type: "error" });
       }
     } else {
       const res = await authFetch("/api/people", {
@@ -119,11 +168,29 @@ export default function PeoplePage() {
         body: JSON.stringify(payload),
       });
       if (res.ok) {
-        setToast({ message: "Person added", type: "success" });
-        setShowModal(false);
+        // The photo needs the new id, so it can only go up once the person
+        // exists. A failure here leaves a real person with no picture, which
+        // is recoverable by editing them; it is not worth undoing the create.
+        const created = await res.json().catch(() => null);
+        try {
+          if (created?.id) await savePhoto(created.id);
+          setToast({ message: "Person added", type: "success" });
+          setShowModal(false);
+        } catch (err) {
+          setToast({
+            message:
+              (err instanceof Error ? err.message : "The photo could not be saved.") +
+              " The person was added, so add the photo by editing them.",
+            type: "error",
+          });
+          setShowModal(false);
+        }
         fetchData();
+      } else {
+        setToast({ message: "That person could not be added.", type: "error" });
       }
     }
+    setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -169,12 +236,19 @@ export default function PeoplePage() {
                     key={person.id}
                     className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
                   >
-                    <div>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <PersonPhoto
+                        name={person.name}
+                        photoUrl={person.photoUrl}
+                        size="sm"
+                      />
+                      <div className="min-w-0">
                       <p className="text-sm font-medium">{person.name || "Unassigned"}</p>
                       <p className="text-xs text-gray-400">{person.email}</p>
                       {person.phone && (
                         <p className="text-xs text-gray-400">{person.phone}</p>
                       )}
+                      </div>
                     </div>
                     <div className="flex gap-1">
                       <button
@@ -300,12 +374,21 @@ export default function PeoplePage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 />
               </div>
+              <PhotoUpload
+                name={form.name}
+                currentUrl={editPerson?.photoUrl}
+                file={photoFile}
+                removed={photoRemoved}
+                onPick={setPhotoFile}
+                onRemove={setPhotoRemoved}
+              />
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-primary hover:bg-primary-dark text-white py-2 rounded-lg text-sm font-medium transition-colors"
+                  disabled={saving}
+                  className="flex-1 bg-primary hover:bg-primary-dark text-white py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >
-                  {editPerson ? "Save" : "Add Person"}
+                  {saving ? "Saving..." : editPerson ? "Save" : "Add Person"}
                 </button>
                 <button
                   type="button"

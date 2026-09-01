@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
-import { getPeople, createPerson } from "@/lib/peopleData";
+import { getPeople, createPerson, photoUrlFor } from "@/lib/peopleData";
 import { v4 as uuidv4 } from "uuid";
 
 export async function GET(req: NextRequest) {
@@ -8,7 +8,12 @@ export async function GET(req: NextRequest) {
   if (session instanceof NextResponse) return session;
 
   const people = await getPeople();
-  return NextResponse.json(people);
+  // photoUrl alongside the raw record so the admin list renders thumbnails
+  // from the same URL the directory uses, rather than building its own.
+  return NextResponse.json(
+    people.map((p) => ({ ...p, photoUrl: photoUrlFor(p) })),
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -17,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { position, userId, name, email, phone, profilePic } = body;
+    const { position, userId, name, email, phone, profilePic, tagIds } = body;
     if (!position) {
       return NextResponse.json(
         { error: "Position is required" },
@@ -25,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await createPerson({
+    const person = {
       id: uuidv4(),
       position,
       userId: userId || null,
@@ -33,9 +38,16 @@ export async function POST(req: NextRequest) {
       email: email || "",
       phone: phone || "",
       profilePic: profilePic || "",
-    });
+      // Was dropped here: the form sends tagIds, so a person created with tags
+      // silently arrived with none. Editing them afterwards worked, which is
+      // what made it look like the tags had simply not been ticked.
+      tagIds: Array.isArray(tagIds) ? tagIds : [],
+    };
+    await createPerson(person);
 
-    return NextResponse.json({ success: true }, { status: 201 });
+    // The created record, not just an ack: the caller needs the new id to
+    // attach a photo straight afterwards.
+    return NextResponse.json(person, { status: 201 });
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
