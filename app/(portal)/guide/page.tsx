@@ -139,7 +139,13 @@ export default function GuidePage() {
         // "Save as PDF" button prints the frame.
         <iframe
           title={meta?.title || "Guide"}
-          srcDoc={html}
+          // data-theme="light" is set on the document the guide is dropped
+          // into. The guide is written to follow the reader's system theme,
+          // which is right when it stands on its own, but the portal around it
+          // is light only, and a dark slab in the middle of a light page reads
+          // as broken rather than as a preference. Printing still forces the
+          // light palette on its own.
+          srcDoc={`<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`}
           sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
           className="flex-1 w-full rounded-xl border border-gray-200 bg-white min-h-0"
         />
