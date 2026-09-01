@@ -3,6 +3,9 @@ import { requirePermission } from "@/lib/rolesData";
 import { getPeople, createPerson, photoUrlFor } from "@/lib/peopleData";
 import { v4 as uuidv4 } from "uuid";
 
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function GET(req: NextRequest) {
   const session = await requirePermission(req, "manage_people");
   if (session instanceof NextResponse) return session;
@@ -22,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { position, userId, name, email, phone, profilePic, tagIds } = body;
+    const { id, position, userId, name, email, phone, profilePic, tagIds } = body;
     if (!position) {
       return NextResponse.json(
         { error: "Position is required" },
@@ -30,8 +33,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The caller may name the id. A photo has to be stored under the person's
+    // own path, and people.json takes a moment to propagate, so a create that
+    // uploaded afterwards raced the register and lost. Knowing the id up front
+    // lets the photo go up first and arrive WITH the record.
+    const supplied = typeof id === "string" && UUID.test(id) ? id : null;
+
     const person = {
-      id: uuidv4(),
+      id: supplied || uuidv4(),
       position,
       userId: userId || null,
       name: name || "",

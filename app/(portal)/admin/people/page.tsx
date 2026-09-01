@@ -106,7 +106,7 @@ export default function PeoplePage() {
   // uploaded, a cleared one is deleted, and an untouched one is left alone.
   // profilePic is deliberately NOT part of the person payload, so saving the
   // text fields can never blank a photo.
-  const savePhoto = async (personId: string) => {
+  const savePhoto = async (personId: string): Promise<string | null> => {
     if (photoFile) {
       const body = new FormData();
       body.append("photo", photoFile, "photo.jpg");
@@ -118,9 +118,12 @@ export default function PeoplePage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || "The photo could not be saved.");
       }
+      const saved = await res.json().catch(() => null);
+      return saved?.profilePic ?? null;
     } else if (photoRemoved) {
       await authFetch(`/api/people/${personId}/photo`, { method: "DELETE" });
     }
+    return null;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -162,29 +165,40 @@ export default function PeoplePage() {
         setToast({ message: "That person could not be saved.", type: "error" });
       }
     } else {
+      // The id is made here so the photo can be stored under this person's own
+      // path BEFORE the record exists, and then saved onto it as part of the
+      // same create. Creating first and uploading afterwards raced people.json
+      // and lost: the upload reached an instance that had not yet seen the new
+      // person, and was told there was no such person.
+      const newId = crypto.randomUUID();
+      let profilePic = "";
+      let photoProblem = "";
+      if (photoFile) {
+        try {
+          profilePic = (await savePhoto(newId)) || "";
+        } catch (err) {
+          photoProblem =
+            err instanceof Error ? err.message : "The photo could not be saved.";
+        }
+      }
+
       const res = await authFetch("/api/people", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, id: newId, profilePic }),
       });
       if (res.ok) {
-        // The photo needs the new id, so it can only go up once the person
-        // exists. A failure here leaves a real person with no picture, which
-        // is recoverable by editing them; it is not worth undoing the create.
-        const created = await res.json().catch(() => null);
-        try {
-          if (created?.id) await savePhoto(created.id);
-          setToast({ message: "Person added", type: "success" });
-          setShowModal(false);
-        } catch (err) {
-          setToast({
-            message:
-              (err instanceof Error ? err.message : "The photo could not be saved.") +
-              " The person was added, so add the photo by editing them.",
-            type: "error",
-          });
-          setShowModal(false);
-        }
+        setToast(
+          photoProblem
+            ? {
+                message:
+                  photoProblem +
+                  " The person was added, so add the photo by editing them.",
+                type: "error",
+              }
+            : { message: "Person added", type: "success" }
+        );
+        setShowModal(false);
         fetchData();
       } else {
         setToast({ message: "That person could not be added.", type: "error" });

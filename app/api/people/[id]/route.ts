@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getPersonById, updatePerson, deletePerson } from "@/lib/peopleData";
-import { deleteFile } from "@/lib/controlData";
+import { deleteFile, listFiles } from "@/lib/controlData";
 
 export async function GET(
   req: NextRequest,
@@ -60,6 +60,15 @@ export async function DELETE(
     return NextResponse.json({ error: "Person not found" }, { status: 404 });
   }
 
+  // Every photo file, not only the one the record names: a replacement whose
+  // record update was lost would otherwise leave a face in storage that
+  // nothing points at any more.
+  const files = await listFiles(`people/${id}`);
+  await Promise.all(
+    files
+      .filter((f) => f.startsWith("photo-"))
+      .map((f) => deleteFile(`people/${id}/${f}`))
+  );
   if (person?.profilePic) await deleteFile(person.profilePic);
 
   return NextResponse.json({ success: true });
