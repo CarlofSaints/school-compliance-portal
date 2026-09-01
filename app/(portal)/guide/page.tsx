@@ -25,6 +25,32 @@ export default function GuidePage() {
 
   const canPublish = session?.permissions.includes("manage_policies");
 
+  // The guide is handed to the iframe as a blob URL rather than through srcDoc.
+  //
+  // A srcDoc document has no URL of its own, so its links resolve against the
+  // page hosting it: clicking a chapter in the contents rail navigated the
+  // frame to /guide and loaded the whole portal inside itself. A blob URL is a
+  // real document address, so "#chapter-03" jumps to the chapter, which is the
+  // only way the rail is any use.
+  //
+  // data-theme="light" is forced on the wrapper. The guide follows the reader's
+  // system theme, which is right when it stands alone, but the portal around it
+  // is light only, and a dark slab in a light page reads as broken rather than
+  // as a preference. Printing forces the light palette regardless.
+  const [docUrl, setDocUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!html) {
+      setDocUrl(null);
+      return;
+    }
+    const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`;
+    const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
+    setDocUrl(url);
+    // Revoked when the guide is replaced or the page is left, or every publish
+    // would leak a couple of megabytes for the life of the tab.
+    return () => URL.revokeObjectURL(url);
+  }, [html]);
+
   const load = useCallback(async () => {
     setState("loading");
     const res = await authFetch("/api/handbook", { cache: "no-store" });
@@ -139,13 +165,7 @@ export default function GuidePage() {
         // "Save as PDF" button prints the frame.
         <iframe
           title={meta?.title || "Guide"}
-          // data-theme="light" is set on the document the guide is dropped
-          // into. The guide is written to follow the reader's system theme,
-          // which is right when it stands on its own, but the portal around it
-          // is light only, and a dark slab in the middle of a light page reads
-          // as broken rather than as a preference. Printing still forces the
-          // light palette on its own.
-          srcDoc={`<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`}
+          src={docUrl ?? undefined}
           sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
           className="flex-1 w-full rounded-xl border border-gray-200 bg-white min-h-0"
         />
