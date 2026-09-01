@@ -106,6 +106,42 @@ export async function getPositionUsage(): Promise<Record<string, PositionUsage>>
   return usage;
 }
 
+// Whether a position may be renamed or removed, and if not, why.
+//
+// Lives here rather than in the route so there is exactly one definition of
+// "in use" for both operations, and so it can be tested directly.
+export function blockedBecause(
+  usage: PositionUsage,
+  action: "rename" | "remove"
+): string | null {
+  if (usage.approvals.length > 0) {
+    const projects = [...new Set(usage.approvals.map((a) => a.projectName))];
+    const shown = projects.slice(0, 3).join(", ");
+    const more = projects.length > 3 ? ` and ${projects.length - 3} more` : "";
+    return (
+      `This position is part of the approval record on ${projects.length} ` +
+      `${projects.length === 1 ? "application" : "applications"} (${shown}${more}). ` +
+      `Those records show who authorised school spending, so the position they name cannot be ` +
+      `${action === "rename" ? "renamed" : "removed"}.`
+    );
+  }
+
+  // Somebody holding the position does not block a rename, because the rename
+  // moves them across with it. It does block a removal: there would be nowhere
+  // for them to go.
+  if (action === "remove" && usage.people.length > 0) {
+    const shown = usage.people.slice(0, 4).join(", ");
+    const more = usage.people.length > 4 ? ` and ${usage.people.length - 4} more` : "";
+    return (
+      `${usage.people.length} ${usage.people.length === 1 ? "person holds" : "people hold"} ` +
+      `this position (${shown}${more}). Move them to another position first, or remove them ` +
+      `from the register.`
+    );
+  }
+
+  return null;
+}
+
 export function usageFor(
   usage: Record<string, PositionUsage>,
   name: string
