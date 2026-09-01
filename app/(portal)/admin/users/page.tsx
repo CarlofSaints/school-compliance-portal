@@ -4,7 +4,7 @@ import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { TAG_COLOR_CLASSES } from "@/lib/tagData";
-import { POSITIONS } from "@/lib/positions";
+
 
 // Sentinel for the Person picker meaning "this user is not on the register
 // yet, put them on it now". Every real option is a person id, so this cannot
@@ -71,21 +71,32 @@ export default function UsersPage() {
     tagIds: [] as string[],
   });
   const [showPassword, setShowPassword] = useState(false);
+  // Editable in Admin > People Types, so it is fetched. This dropdown was left
+  // on the built-in constant when the rest moved over, so a position added in
+  // People Types never appeared here and there was no way to put somebody on
+  // it from the user form.
+  const [positions, setPositions] = useState<string[]>([]);
   const canManage = session?.permissions.includes("manage_users") ?? false;
 
   const fetchData = useCallback(async () => {
-    const [usersRes, rolesRes, peopleRes, tagsRes] = await Promise.all([
-      authFetch("/api/users"),
-      authFetch("/api/roles"),
-      authFetch("/api/people"),
-      authFetch("/api/tags"),
-    ]);
+    const [usersRes, rolesRes, peopleRes, tagsRes, positionsRes] =
+      await Promise.all([
+        authFetch("/api/users"),
+        authFetch("/api/roles"),
+        authFetch("/api/people"),
+        authFetch("/api/tags"),
+        authFetch("/api/settings/positions", { cache: "no-store" }),
+      ]);
     if (usersRes.ok) setUsers(await usersRes.json());
     if (rolesRes.ok) setRoles(await rolesRes.json());
     // Needs manage_people. An admin without it simply sees no People column
     // rather than a broken page.
     if (peopleRes.ok) setPeople(await peopleRes.json());
     if (tagsRes.ok) setTags(await tagsRes.json());
+    if (positionsRes.ok) {
+      const list = await positionsRes.json();
+      if (Array.isArray(list)) setPositions(list);
+    }
   }, []);
 
   const personForUser = useCallback(
@@ -640,7 +651,7 @@ export default function UsersPage() {
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                     >
                       <option value="">Choose a position</option>
-                      {POSITIONS.map((pos) => (
+                      {positions.map((pos) => (
                         <option key={pos} value={pos}>
                           {pos}
                         </option>
