@@ -2,7 +2,7 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { POSITIONS, GOVERNANCE_LABEL } from "@/lib/positions";
+import { GOVERNANCE_LABEL } from "@/lib/positions";
 import { TAG_COLOR_CLASSES } from "@/lib/tagData";
 import PersonPhoto from "@/components/PersonPhoto";
 import { branding } from "@/lib/branding";
@@ -31,15 +31,22 @@ export default function PeopleDirectoryPage() {
   const [people, setPeople] = useState<DirectoryPerson[]>([]);
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [query, setQuery] = useState("");
+  // The order the cards read in is the order set in Admin > People Types.
+  const [positions, setPositions] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [peopleRes, tagsRes] = await Promise.all([
+    const [peopleRes, tagsRes, positionsRes] = await Promise.all([
       authFetch("/api/people/directory", { cache: "no-store" }),
       authFetch("/api/tags", { cache: "no-store" }),
+      authFetch("/api/settings/positions", { cache: "no-store" }),
     ]);
     if (peopleRes.ok) setPeople(await peopleRes.json());
     if (tagsRes.ok) setTags(await tagsRes.json());
+    if (positionsRes.ok) {
+      const list = await positionsRes.json();
+      if (Array.isArray(list)) setPositions(list);
+    }
     setLoaded(true);
   }, []);
 
@@ -69,8 +76,8 @@ export default function PeopleDirectoryPage() {
     // A position that has been renamed or removed from the code list still
     // sorts, to the end, rather than dropping somebody off the page entirely.
     const rank = (position: string) => {
-      const i = POSITIONS.indexOf(position);
-      return i === -1 ? POSITIONS.length : i;
+      const i = positions.indexOf(position);
+      return i === -1 ? positions.length : i;
     };
 
     return people
@@ -79,7 +86,7 @@ export default function PeopleDirectoryPage() {
         (a, b) =>
           rank(a.position) - rank(b.position) || a.name.localeCompare(b.name)
       );
-  }, [people, query]);
+  }, [people, query, positions]);
 
   const total = people.length;
   const shownCount = ordered.length;

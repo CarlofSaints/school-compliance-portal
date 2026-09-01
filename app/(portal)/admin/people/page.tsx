@@ -2,7 +2,7 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
-import { POSITIONS, GOVERNANCE_LABEL } from "@/lib/positions";
+import { GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
 import PersonPhoto from "@/components/PersonPhoto";
 import PhotoUpload from "@/components/PhotoUpload";
@@ -40,13 +40,15 @@ export default function PeoplePage() {
   const [editPerson, setEditPerson] = useState<PersonRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [tags, setTags] = useState<TagRecord[]>([]);
+  // Editable in Admin > People Types, so it is fetched rather than imported.
+  const [positions, setPositions] = useState<string[]>([]);
   // The photo is handled apart from the text fields: it uploads to its own
   // route, and only once the person exists and has an id.
   const [photoFile, setPhotoFile] = useState<Blob | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    position: POSITIONS[0],
+    position: "",
     userId: "",
     name: "",
     email: "",
@@ -54,15 +56,35 @@ export default function PeoplePage() {
     tagIds: [] as string[],
   });
 
+  // The configured list, plus any position somebody still holds that has since
+  // been taken off it. Without the second part, removing a position in People
+  // Types would make everyone on it disappear from this page with no way to
+  // reach them.
+  const shownPositions = [
+    ...positions,
+    ...people
+      .map((p) => p.position)
+      .filter(
+        (pos) =>
+          pos && !positions.some((known) => known.toLowerCase() === pos.toLowerCase())
+      )
+      .filter((pos, i, all) => all.indexOf(pos) === i),
+  ];
+
   const fetchData = useCallback(async () => {
-    const [peopleRes, usersRes, tagsRes] = await Promise.all([
+    const [peopleRes, usersRes, tagsRes, positionsRes] = await Promise.all([
       authFetch("/api/people"),
       authFetch("/api/users"),
       authFetch("/api/tags"),
+      authFetch("/api/settings/positions", { cache: "no-store" }),
     ]);
     if (peopleRes.ok) setPeople(await peopleRes.json());
     if (usersRes.ok) setUsers(await usersRes.json());
     if (tagsRes.ok) setTags(await tagsRes.json());
+    if (positionsRes.ok) {
+      const list = await positionsRes.json();
+      if (Array.isArray(list)) setPositions(list);
+    }
   }, []);
 
   useEffect(() => {
@@ -71,7 +93,7 @@ export default function PeoplePage() {
 
   const openCreate = () => {
     setEditPerson(null);
-    setForm({ position: POSITIONS[0], userId: "", name: "", email: "", phone: "", tagIds: [] });
+    setForm({ position: positions[0] || "", userId: "", name: "", email: "", phone: "", tagIds: [] });
     setPhotoFile(null);
     setPhotoRemoved(false);
     setShowModal(true);
@@ -236,14 +258,27 @@ export default function PeoplePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {POSITIONS.map((pos) => {
+        {shownPositions.map((pos) => {
           const positionPeople = people.filter((p) => p.position === pos);
+          const offList = !positions.some(
+            (known) => known.toLowerCase() === pos.toLowerCase()
+          );
           return (
             <div
               key={pos}
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-4"
             >
-              <h3 className="font-medium text-dark text-sm mb-3">{pos}</h3>
+              <h3 className="font-medium text-dark text-sm mb-3">
+                {pos}
+                {offList && (
+                  <span
+                    className="ml-2 text-[11px] font-normal px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
+                    title="This position is not on the People Types list. Add it back, or move these people to one that is."
+                  >
+                    not on the list
+                  </span>
+                )}
+              </h3>
               {positionPeople.length > 0 ? (
                 positionPeople.map((person) => (
                   <div
@@ -299,10 +334,27 @@ export default function PeoplePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
                 <select
                   value={form.position}
+                  required
                   onChange={(e) => setForm({ ...form, position: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 >
-                  {POSITIONS.map((pos) => (
+                  {form.position === "" && (
+                    <option value="" disabled>
+                      Choose a position
+                    </option>
+                  )}
+                  {form.position !== "" &&
+                    !positions.some(
+                      (p) => p.toLowerCase() === form.position.toLowerCase()
+                    ) && (
+                      // Their current position has been taken off the list.
+                      // Offered anyway, so opening the form does not silently
+                      // reassign them to whichever position happens to be first.
+                      <option value={form.position}>
+                        {form.position} (not on the list)
+                      </option>
+                    )}
+                  {positions.map((pos) => (
                     <option key={pos} value={pos}>{pos}</option>
                   ))}
                 </select>
