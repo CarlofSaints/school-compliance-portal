@@ -60,12 +60,29 @@ export async function POST(req: NextRequest) {
       tagIds: Array.isArray(tagIds) ? tagIds : [],
     });
 
+    // The account is already created and stored, so a mail failure must not
+    // be reported as a failed create. It used to sit inside this try block, so
+    // a Resend outage or a bounced address returned 500 "Internal server error"
+    // for an account that existed perfectly well, and whoever was adding the
+    // user would reasonably add them again.
+    let emailed = false;
+    let emailError: string | null = null;
     if (sendEmail) {
-      await sendWelcomeEmail(email, name, password);
+      try {
+        await sendWelcomeEmail(email, name, password);
+        emailed = true;
+      } catch (err) {
+        emailError =
+          err instanceof Error ? err.message : "The welcome email did not send.";
+        console.error("Welcome email failed for", email, err);
+      }
     }
 
     const { password: _, ...safe } = user;
-    return NextResponse.json(safe, { status: 201 });
+    return NextResponse.json(
+      { ...safe, emailed, emailError },
+      { status: 201, headers: { "Cache-Control": "no-store" } }
+    );
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
