@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import PolicySearch from "@/components/PolicySearch";
 import ComplianceScore from "@/components/ComplianceScore";
+import ScoreNote from "@/components/ScoreNote";
 import Link from "next/link";
 import { categoryOptions } from "@/lib/policyCategories";
 
@@ -413,6 +414,10 @@ export default function PoliciesPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-4">
+        <ScoreNote />
       </div>
     </div>
   );

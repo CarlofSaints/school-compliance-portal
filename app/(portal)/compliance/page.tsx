@@ -426,10 +426,16 @@ export default function CompliancePage() {
                 AI is searching for the latest regulations and analyzing the document...
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                This may take a minute — checking uploaded guidelines and searching online for the latest GDE, DoE, SASA, and BELA Act requirements.
+                This may take a minute. It is checking uploaded guidelines and
+                searching online for the latest GDE, DoE, SASA, and BELA Act
+                requirements.
               </p>
             </div>
           )}
+
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <ScoreNote />
+          </div>
         </div>
 
         {result && (
@@ -547,7 +553,6 @@ export default function CompliancePage() {
               )}
             </div>
             <div className="mb-6">
-              <ScoreNote />
               <button
                 type="button"
                 onClick={() => handleCheck(true)}

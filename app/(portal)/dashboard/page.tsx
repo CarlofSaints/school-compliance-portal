@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import DashboardCard from "@/components/DashboardCard";
+import ScoreNote from "@/components/ScoreNote";
 import { branding } from "@/lib/branding";
 import { pendingSpendCount } from "@/lib/spendReport";
 
@@ -300,6 +301,9 @@ export default function DashboardPage() {
             </table>
           </div>
         )}
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <ScoreNote />
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
