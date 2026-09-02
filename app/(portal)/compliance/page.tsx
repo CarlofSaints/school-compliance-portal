@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import FileUpload from "@/components/FileUpload";
 import ComplianceScore from "@/components/ComplianceScore";
+import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
 import { branding } from "@/lib/branding";
@@ -68,6 +69,10 @@ export default function CompliancePage() {
   const [promoteCategory, setPromoteCategory] = useState("General");
   const [promoting, setPromoting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  // True when the result on screen is a saved one rather than a fresh run. It
+  // is what the "Check again" button hangs off: without a way to ask for a new
+  // opinion, reusing the saved result would be a trap rather than a feature.
+  const [wasReused, setWasReused] = useState(false);
 
   const fetchPolicies = useCallback(async () => {
     const res = await authFetch("/api/policies");
@@ -132,11 +137,13 @@ export default function CompliancePage() {
     setResult(null);
     setLoadedCheck(null);
     setPromoteOpen(false);
+    setWasReused(false);
   };
 
   const runNew = () => {
     setResult(null);
     setLoadedCheck(null);
+    setWasReused(false);
     setFile(null);
     setName("");
     setSelectedPolicy("");
@@ -194,20 +201,30 @@ export default function CompliancePage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleCheck = async () => {
+  // force = the user pressed "Check again" and wants a fresh opinion, not the
+  // saved one.
+  const handleCheck = async (force = false) => {
     setChecking(true);
     setResult(null);
     setLoadedCheck(null);
+    setWasReused(false);
 
     try {
       if (mode === "existing" && selectedPolicy) {
         const res = await authFetch(
-          `/api/policies/${selectedPolicy}/check`,
+          `/api/policies/${selectedPolicy}/check${force ? "?force=1" : ""}`,
           { method: "POST" }
         );
         if (res.ok) {
           const data = await res.json();
           setResult(data);
+          setWasReused(Boolean(data.duplicate));
+          if (data.duplicate) {
+            setToast({
+              message: "Showing the saved result for this policy. Use Check again for a fresh one.",
+              type: "success",
+            });
+          }
           // A check against a policy is a check like any other. The per-issue
           // status buttons and the document download used to be missing on
           // this tab for no better reason than that this branch never set
@@ -226,6 +243,7 @@ export default function CompliancePage() {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("name", name || file.name);
+        if (force) formData.append("force", "1");
 
         const res = await authFetch("/api/compliance/check", {
           method: "POST",
@@ -243,9 +261,10 @@ export default function CompliancePage() {
               policyId: data.policyId ?? null,
             });
           }
+          setWasReused(Boolean(data.duplicate));
           if (data.duplicate) {
             setToast({
-              message: "This document was already checked — showing the saved result.",
+              message: "Showing the saved result for this document. Use Check again for a fresh one.",
               type: "success",
             });
           }
@@ -390,7 +409,7 @@ export default function CompliancePage() {
           )}
 
           <button
-            onClick={handleCheck}
+            onClick={() => handleCheck(false)}
             disabled={
               checking ||
               (mode === "upload" && !file) ||
@@ -518,9 +537,29 @@ export default function CompliancePage() {
                 )}
               </div>
             )}
-            <div className="text-center mb-6">
+            <div className="text-center mb-2">
               <p className="text-sm text-gray-500 mb-2">Compliance Score</p>
               <ComplianceScore score={result.score} size="lg" />
+              {wasReused && (
+                <p className="mt-2 text-xs text-gray-500">
+                  Saved result from an earlier check.
+                </p>
+              )}
+            </div>
+            <div className="mb-6">
+              <ScoreNote />
+              <button
+                type="button"
+                onClick={() => handleCheck(true)}
+                disabled={
+                  checking ||
+                  (mode === "upload" && !file) ||
+                  (mode === "existing" && !selectedPolicy)
+                }
+                className="mt-3 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+              >
+                {checking ? "Checking..." : "Check again"}
+              </button>
             </div>
             <p className="text-sm text-gray-600 mb-4">{result.summary}</p>
 

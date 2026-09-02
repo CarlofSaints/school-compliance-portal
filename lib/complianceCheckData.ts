@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import {
   readJson,
   writeJson,
@@ -92,6 +93,25 @@ function checkPath(id: string): string {
   return `compliance/checks/${id}.json`;
 }
 
+// A direct pointer from (file content + the name it was checked under) to the
+// check's id.
+//
+// Duplicate detection used to scan the shared index, and the index is the one
+// thing in this store that is NOT safe to read straight after a write: it can
+// come back stale long enough to miss a record that already exists. That
+// defeated the check exactly when it matters most, two runs of the same
+// document seconds apart. HVPS has a pair 17 seconds apart, identical bytes and
+// identical name, that both ran and scored 72 and 68.
+//
+// One tiny blob per (content, name), written before the index like every own
+// copy here, and read by direct key. No scan and nothing to go stale.
+function hashPointerPath(hash: string, name: string): string {
+  const key = createHash("sha256")
+    .update(`${hash}\u0000${name}`)
+    .digest("hex");
+  return `compliance/by-hash/${key}.json`;
+}
+
 async function readIndex(): Promise<ComplianceCheckRecord[]> {
   return readJson<ComplianceCheckRecord[]>(CHECKS_INDEX, []);
 }
@@ -141,6 +161,16 @@ export async function findComplianceCheckByHash(
   hash: string,
   name: string
 ): Promise<ComplianceCheckRecord | undefined> {
+  const pointer = await readJson<{ id: string } | null>(
+    hashPointerPath(hash, name),
+    null
+  );
+  if (pointer?.id) {
+    const record = await getComplianceCheckById(pointer.id);
+    if (record) return record;
+  }
+
+  // Older checks pre-date the pointer, so the index still has to be consulted.
   const checks = await readIndex();
   return checks.find((c) => c.hash === hash && c.name === name);
 }
@@ -158,12 +188,24 @@ export async function addComplianceCheck(
   }
   // Own copy first, so a lost index append is recoverable rather than fatal.
   await writeJson(checkPath(record.id), record);
+  // Then the pointer, so a repeat of this document is recognised even while the
+  // shared index is still catching up.
+  if (record.hash) {
+    await writeJson(hashPointerPath(record.hash, record.name), { id: record.id });
+  }
   const checks = await readIndex();
   checks.push(record);
   await writeJson(CHECKS_INDEX, checks);
 }
 
 export async function deleteComplianceCheck(id: string): Promise<boolean> {
+  // Read the record before it goes, so its pointer can go with it. A pointer
+  // left behind would hand back a check that no longer exists.
+  const existing = await getComplianceCheckById(id);
+  if (existing?.hash) {
+    await deleteFile(hashPointerPath(existing.hash, existing.name));
+  }
+
   const checks = await readIndex();
   const remaining = checks.filter((c) => c.id !== id);
   const wasIndexed = remaining.length !== checks.length;

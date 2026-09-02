@@ -11,6 +11,7 @@ import {
   addComplianceCheck,
   deleteComplianceCheck,
   getComplianceChecksForPolicy,
+  findComplianceCheckByHash,
 } from "@/lib/complianceCheckData";
 import { runComplianceCheckOnFile } from "@/lib/complianceEngine";
 import { v4 as uuidv4 } from "uuid";
@@ -101,6 +102,23 @@ export async function POST(
       );
     }
 
+    // Same rule as an upload: reuse the saved result for this exact file under
+    // this exact name, unless the user explicitly asked to check it again.
+    // Without this, pressing the button twice on an unchanged policy produced
+    // two different scores (62 and 68 on one policy here) with nothing to say
+    // which was right.
+    const hash = createHash("sha256").update(fileBuffer).digest("hex");
+    const force = req.nextUrl.searchParams.get("force") === "1";
+    if (!force) {
+      const existing = await findComplianceCheckByHash(hash, policy.name);
+      if (existing) {
+        return NextResponse.json(
+          { ...existing, duplicate: true },
+          { headers: { "Cache-Control": "no-store" } }
+        );
+      }
+    }
+
     const result = await runComplianceCheckOnFile(
       fileBuffer,
       latest.ext,
@@ -123,7 +141,7 @@ export async function POST(
       // recognised as the same document as anything else - the two DATA
       // MANAGEMENT POLICY MASTER checks are the same policy, same version,
       // and scored 62 then 68 with nothing to tie them together.
-      hash: createHash("sha256").update(fileBuffer).digest("hex"),
+      hash,
       policyId: id,
       policyVersion: latest.version,
       score: result.score,

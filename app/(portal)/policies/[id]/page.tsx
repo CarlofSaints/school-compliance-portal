@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import ComplianceScore from "@/components/ComplianceScore";
+import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import FileUpload from "@/components/FileUpload";
 import Toast from "@/components/Toast";
@@ -290,6 +291,9 @@ export default function PolicyDetailPage() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4 text-center">
               <p className="text-sm text-gray-500 mb-2">Latest Score</p>
               <ComplianceScore score={policy.lastCheckScore} size="lg" />
+              <div className="text-left">
+                <ScoreNote />
+              </div>
             </div>
           )}
         </div>

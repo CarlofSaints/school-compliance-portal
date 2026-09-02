@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import ComplianceScore from "@/components/ComplianceScore";
+import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
 
@@ -97,6 +98,9 @@ export default function DocumentResultsPage() {
             <p className="text-xs text-gray-400 mt-2">
               {new Date(latestCheck.checkedAt).toLocaleString()}
             </p>
+            <div className="text-left">
+              <ScoreNote />
+            </div>
           </div>
 
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">

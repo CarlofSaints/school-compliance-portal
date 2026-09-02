@@ -33,8 +33,14 @@ export async function POST(req: NextRequest) {
 
     // Duplicate detection: if this exact file was already checked, return the
     // saved result instead of re-running the AI (saves cost + clutter).
+    // "Check again" asks for a fresh opinion on purpose, so it skips the saved
+    // one. Everything else reuses it: an LLM returns a slightly different score
+    // each run, and a governance number that moves on its own reads as broken.
+    const force = formData.get("force") === "1";
     const hash = createHash("sha256").update(buffer).digest("hex");
-    const existing = await findComplianceCheckByHash(hash, docName);
+    const existing = force
+      ? undefined
+      : await findComplianceCheckByHash(hash, docName);
     if (existing) {
       return NextResponse.json({
         score: existing.score,
