@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     // Duplicate detection: if this exact file was already checked, return the
     // saved result instead of re-running the AI (saves cost + clutter).
     const hash = createHash("sha256").update(buffer).digest("hex");
-    const existing = await findComplianceCheckByHash(hash);
+    const existing = await findComplianceCheckByHash(hash, docName);
     if (existing) {
       return NextResponse.json({
         score: existing.score,

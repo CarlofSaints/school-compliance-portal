@@ -118,6 +118,22 @@ export default function CompliancePage() {
     })();
   }, [session]);
 
+  // Choosing a file owns the Document Name and clears the previous document’s
+  // result. Neither used to happen, so the name left over from the last check
+  // was carried into the next one — and DOCUMENT NAME goes into the AI prompt,
+  // so an admissions policy submitted under "2026 LANGUAGE POLICY.pdf" was
+  // marked down for being "fundamentally mislabeled". The stale result sitting
+  // beside the newly chosen file is what made it look like the wrong document
+  // was being checked. Type a custom name AFTER picking the file; picking
+  // another file resets it, because a name must not outlive the file it names.
+  const pickFile = (picked: File) => {
+    setFile(picked);
+    setName(picked.name);
+    setResult(null);
+    setLoadedCheck(null);
+    setPromoteOpen(false);
+  };
+
   const runNew = () => {
     setResult(null);
     setLoadedCheck(null);
@@ -350,7 +366,7 @@ export default function CompliancePage() {
                 />
               </div>
               <FileUpload
-                onChange={setFile}
+                onChange={pickFile}
                 value={file}
                 label="Upload policy to check"
               />

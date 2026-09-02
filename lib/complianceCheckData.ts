@@ -127,14 +127,22 @@ export async function getComplianceCheckById(
   return checks.find((c) => c.id === id);
 }
 
-// Duplicate detection by file content (sha256). Same bytes = duplicate, even
-// if the document was renamed; an edited file produces a different hash and is
-// treated as a new check.
+// Duplicate detection by file content (sha256) AND the name it was checked
+// under. An edited file produces a different hash and is treated as a new check.
+//
+// The name is part of the key because it is part of the QUESTION: the engine
+// puts "DOCUMENT NAME: <name>" in the prompt and the model reasons about it —
+// one admissions policy submitted as "2026 LANGUAGE POLICY.pdf" was marked down
+// to 52 for being "fundamentally mislabeled". Keying on bytes alone made that
+// unrecoverable: correcting the name and running it again returned the saved
+// result under the WRONG name and never re-asked. Same bytes under a different
+// name is a genuinely different question, so it runs again.
 export async function findComplianceCheckByHash(
-  hash: string
+  hash: string,
+  name: string
 ): Promise<ComplianceCheckRecord | undefined> {
   const checks = await readIndex();
-  return checks.find((c) => c.hash === hash);
+  return checks.find((c) => c.hash === hash && c.name === name);
 }
 
 // Saves a check. fileData is the document's bytes, stored alongside the record
