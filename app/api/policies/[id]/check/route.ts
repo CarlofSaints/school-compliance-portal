@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "crypto";
 import { requirePermission } from "@/lib/rolesData";
 import {
   getPolicyById,
@@ -117,6 +118,12 @@ export async function POST(
       name: policy.name,
       filename: latest.filename,
       ext: latest.ext,
+      // The bytes are right here, so record what was actually checked. This
+      // used to be left off, which meant a policy check could never be
+      // recognised as the same document as anything else - the two DATA
+      // MANAGEMENT POLICY MASTER checks are the same policy, same version,
+      // and scored 62 then 68 with nothing to tie them together.
+      hash: createHash("sha256").update(fileBuffer).digest("hex"),
       policyId: id,
       policyVersion: latest.version,
       score: result.score,
