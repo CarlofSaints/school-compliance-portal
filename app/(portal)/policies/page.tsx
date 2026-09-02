@@ -36,6 +36,42 @@ interface PolicyRecord {
   updatedAt: string;
 }
 
+interface DuplicatePolicy {
+  id: string;
+  name: string;
+  category: string;
+  version: number;
+  ext: string;
+  filename: string;
+  bytes: number;
+  lastCheckScore: number | null;
+  lastCheckDate: string | null;
+  createdAt: string;
+}
+
+interface DuplicateGroup {
+  kind: "identical-file" | "identical-content" | "near-identical";
+  confidence: string;
+  similarity?: number;
+  keepId: string;
+  policies: DuplicatePolicy[];
+}
+
+interface DuplicateReport {
+  groups: DuplicateGroup[];
+  scanned: number;
+  textCompared: number;
+  byteOnly: number;
+  unreadable: { id: string; name: string; reason: string }[];
+  note: string | null;
+}
+
+const KIND_LABEL: Record<DuplicateGroup["kind"], string> = {
+  "identical-file": "Identical file",
+  "identical-content": "Identical wording",
+  "near-identical": "Nearly identical",
+};
+
 export default function PoliciesPage() {
   const { session, loading } = useAuth("download_policies");
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
@@ -46,6 +82,9 @@ export default function PoliciesPage() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [checkingIds, setCheckingIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [dupes, setDupes] = useState<DuplicateReport | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchPolicies = useCallback(async () => {
     const res = await authFetch("/api/policies");
@@ -253,6 +292,48 @@ export default function PoliciesPage() {
     [policies]
   );
 
+  // Compares every policy in the register on CONTENT, ignoring the file names,
+  // which is the whole point: the same document filed twice under two names is
+  // the case this is for.
+  const scanForDuplicates = async () => {
+    setScanning(true);
+    setDupes(null);
+    const res = await authFetch("/api/policies/duplicates", { cache: "no-store" });
+    if (res.ok) {
+      setDupes(await res.json());
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setNotice(err.error || "Could not check for duplicates.");
+    }
+    setScanning(false);
+  };
+
+  // Deletes one copy. The register is the thing being tidied, so the check
+  // history that belongs to the copy being kept is untouched.
+  const deleteDuplicate = async (id: string, name: string) => {
+    if (!window.confirm(`Remove "${name}" from the policy register? This cannot be undone.`)) return;
+    setDeletingId(id);
+    const res = await authFetch(`/api/policies/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setDupes((prev) =>
+        prev
+          ? {
+              ...prev,
+              groups: prev.groups
+                .map((g) => ({ ...g, policies: g.policies.filter((x) => x.id !== id) }))
+                .filter((g) => g.policies.length > 1),
+            }
+          : prev
+      );
+      setNotice(`Removed "${name}" from the register.`);
+      fetchPolicies();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      setNotice(err.error || "That policy could not be removed.");
+    }
+    setDeletingId(null);
+  };
+
   if (loading) return <div className="p-6">Loading...</div>;
 
   return (
@@ -273,6 +354,16 @@ export default function PoliciesPage() {
               className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               {repairing ? "Checking..." : "Rebuild list from storage"}
+            </button>
+          )}
+          {session?.permissions.includes("manage_policies") && (
+            <button
+              onClick={scanForDuplicates}
+              disabled={scanning}
+              title="Compares every policy in the register on its contents, ignoring file names, to find the same document filed more than once"
+              className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {scanning ? "Comparing documents..." : "Check for document duplicates"}
             </button>
           )}
           {session?.permissions.includes("upload_policies") && (
@@ -415,6 +506,86 @@ export default function PoliciesPage() {
           </tbody>
         </table>
       </div>
+
+      {dupes && (
+        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-dark">Duplicate documents</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {dupes.groups.length === 0
+                  ? `No duplicates found. ${dupes.scanned} policies compared.`
+                  : `${dupes.groups.length} set${dupes.groups.length === 1 ? "" : "s"} found across ${dupes.scanned} policies.`}
+              </p>
+            </div>
+            <button
+              onClick={() => setDupes(null)}
+              className="shrink-0 text-sm text-gray-500 hover:text-gray-700"
+            >
+              Close
+            </button>
+          </div>
+
+          {/* An empty result must not read as proof when part of the register
+              could not be compared on wording. */}
+          {dupes.note && (
+            <p className="mt-3 text-xs text-gray-500">
+              {dupes.byteOnly} of {dupes.scanned} compared on the file only. {dupes.note}
+            </p>
+          )}
+          {dupes.unreadable.length > 0 && (
+            <p className="mt-2 text-xs text-gray-500">
+              {dupes.unreadable.length} could not be read at all:{" "}
+              {dupes.unreadable.map((u) => u.name).join(", ")}.
+            </p>
+          )}
+
+          {dupes.groups.map((g, i) => (
+            <div key={i} className="mt-5 border border-gray-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
+                <span className="text-sm font-medium text-dark">{KIND_LABEL[g.kind]}</span>
+                <span className="text-xs text-gray-500 ml-2">{g.confidence}</span>
+              </div>
+              <ul className="divide-y divide-gray-100">
+                {g.policies.map((pol) => {
+                  const keep = pol.id === g.keepId;
+                  return (
+                    <li key={pol.id} className="px-4 py-3 flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/policies/${pol.id}`}
+                          className="text-sm font-medium text-primary hover:underline break-words"
+                        >
+                          {pol.name}
+                        </Link>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {pol.category} · {pol.filename} · {(pol.bytes / 1024).toFixed(0)} KB
+                          {pol.lastCheckScore !== null
+                            ? ` · checked, scored ${pol.lastCheckScore}`
+                            : " · never checked"}
+                        </p>
+                      </div>
+                      {keep ? (
+                        <span className="shrink-0 text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {pol.lastCheckScore !== null ? "Keep, it has the check" : "Keep, the original"}
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => deleteDuplicate(pol.id, pol.name)}
+                          disabled={deletingId === pol.id}
+                          className="shrink-0 text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          {deletingId === pol.id ? "Removing..." : "Remove this one"}
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-4">
         <ScoreNote />
