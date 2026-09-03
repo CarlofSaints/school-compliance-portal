@@ -76,6 +76,10 @@ export interface ActionChaseResult {
   // What happened, in the words the run log and the grid both show. A reminder
   // that quietly does nothing is worse than no reminder.
   result: string;
+  // The record as it now stands. Handed back so a caller can show the new state
+  // instead of re-reading it: the blob can serve the previous copy for a moment
+  // after a write, which makes a save that worked look like one that did not.
+  item: ActionItem | null;
 }
 
 // Which of the three chases this is. Said plainly in the mail so the same
@@ -109,11 +113,11 @@ export async function chaseActionItem(
     const result = `nobody to write to (${missing.join(", ") || "no recipients chosen"})`;
     // The date is still stamped. Without it a due action with no addresses is
     // retried on every run forever, and the log fills with the same failure.
-    await updateActionItem(item.id, {
+    const saved = await updateActionItem(item.id, {
       lastRemindedOn: todayIso(now),
       lastReminderResult: result,
     });
-    return { sent: 0, failed: 0, result };
+    return { sent: 0, failed: 0, result, item: saved };
   }
 
   const facts = factsFor(item, now);
@@ -140,12 +144,12 @@ export async function chaseActionItem(
       ? `sent to ${sent} of ${resolved.length}; no address for: ${missing.join(", ")}`
       : `sent to ${sent} of ${resolved.length}`;
 
-  await updateActionItem(item.id, {
+  const saved = await updateActionItem(item.id, {
     lastRemindedOn: todayIso(now),
     lastReminderResult: result,
   });
 
-  return { sent, failed, result };
+  return { sent, failed, result, item: saved };
 }
 
 // Everything the daily run should chase today. Exported so the cron reads as a

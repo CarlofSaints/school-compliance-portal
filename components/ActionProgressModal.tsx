@@ -10,7 +10,7 @@ const STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
 interface Props {
   item: ActionItem;
   onClose: () => void;
-  onSaved: (message: string) => void;
+  onSaved: (message: string, saved: ActionItem) => void;
   onError: (message: string) => void;
 }
 
@@ -56,7 +56,10 @@ export default function ActionProgressModal({
       onError(message);
       return;
     }
-    onSaved(`${item.ref} updated`);
+    // The saved record, not a refetch. A read straight after a write can still
+    // serve the previous copy of the blob, which shows the row unchanged and
+    // makes a save that worked look like one that did not.
+    onSaved(`${item.ref} updated`, await res.json());
   };
 
   return (

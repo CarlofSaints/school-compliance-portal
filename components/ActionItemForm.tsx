@@ -31,7 +31,7 @@ interface Props {
   // null when raising a new action.
   existing: ActionItem | null;
   onCancel: () => void;
-  onSaved: (message: string) => void;
+  onSaved: (message: string, saved: ActionItem) => void;
   onError: (message: string) => void;
 }
 
@@ -162,10 +162,14 @@ export default function ActionItemForm({
     const emailed = saved.notified
       ? `, ${saved.notified} notified by email`
       : "";
+    // The saved record goes back with the message, so the grid can show it
+    // without a refetch. A read straight after a write can still serve the
+    // previous copy of the blob.
     onSaved(
       existing
         ? `${saved.ref} saved${emailed}`
-        : `${saved.ref} raised${emailed}`
+        : `${saved.ref} raised${emailed}`,
+      saved
     );
   };
 

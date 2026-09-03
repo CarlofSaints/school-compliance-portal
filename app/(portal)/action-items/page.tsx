@@ -251,6 +251,22 @@ export default function ActionItemsPage() {
     [filtered, sort]
   );
 
+  // Puts a record the API has just handed back straight into the grid.
+  //
+  // Deliberately NOT a refetch. The store is a blob, and a read moments after a
+  // write can still serve the previous copy: the toast says "updated" and the
+  // row shows the old figure, which reads as a save that did not take. The
+  // response IS the new state, so use it.
+  const applySaved = useCallback((saved: ActionItem) => {
+    setItems((prev) => {
+      const idx = prev.findIndex((i) => i.id === saved.id);
+      if (idx === -1) return [...prev, saved];
+      const next = [...prev];
+      next[idx] = saved;
+      return next;
+    });
+  }, []);
+
   const canUpdate = (item: ActionItem) =>
     canManage || item.assigneeIds.some((id) => myPersonIds.includes(id));
 
@@ -294,7 +310,7 @@ export default function ActionItemsPage() {
         message: `${item.ref}: ${data.result}`,
         type: data.sent > 0 ? "success" : "error",
       });
-      load();
+      if (data.item) applySaved(data.item);
     } else {
       setToast({
         message: await apiErrorMessage(res, "Could not send that reminder"),
@@ -475,11 +491,11 @@ export default function ActionItemsPage() {
             setShowForm(false);
             setEditing(null);
           }}
-          onSaved={(message) => {
+          onSaved={(message, saved) => {
             setShowForm(false);
             setEditing(null);
             setToast({ message, type: "success" });
-            load();
+            applySaved(saved);
           }}
           onError={(message) => setToast({ message, type: "error" })}
         />
@@ -489,10 +505,10 @@ export default function ActionItemsPage() {
         <ActionProgressModal
           item={progressFor}
           onClose={() => setProgressFor(null)}
-          onSaved={(message) => {
+          onSaved={(message, saved) => {
             setProgressFor(null);
             setToast({ message, type: "success" });
-            load();
+            applySaved(saved);
           }}
           onError={(message) => setToast({ message, type: "error" })}
         />
