@@ -8,6 +8,14 @@ import DashboardCard from "@/components/DashboardCard";
 import ScoreNote from "@/components/ScoreNote";
 import { branding } from "@/lib/branding";
 import { pendingSpendCount } from "@/lib/spendReport";
+import {
+  summarise,
+  daysUntilDue,
+  duePhrase,
+  isClosed,
+  isOverdue,
+} from "@/lib/actionItems";
+import type { ActionItem, ActionSummary } from "@/lib/actionItems";
 
 interface StatusCounts {
   not_an_issue: number;
@@ -47,12 +55,24 @@ const STATUS_PILLS: { key: keyof StatusCounts; short: string; pill: string }[] =
   { key: "not_an_issue", short: "not an issue", pill: "bg-gray-100 text-gray-600" },
 ];
 
+const ACTION_TILES: {
+  key: keyof ActionSummary;
+  label: string;
+  text: string;
+}[] = [
+  { key: "open", label: "Open actions", text: "text-dark" },
+  { key: "overdue", label: "Overdue", text: "text-risk-high" },
+  { key: "dueThisWeek", label: "Due in 7 days", text: "text-risk-medium" },
+  { key: "blocked", label: "Blocked", text: "text-risk-high" },
+];
+
 export default function DashboardPage() {
   const { session, loading } = useAuth("view_dashboard");
   const [checks, setChecks] = useState<CheckSummary[]>([]);
   const [pendingSpend, setPendingSpend] = useState(0);
   const [totalPolicies, setTotalPolicies] = useState(0);
   const [financialYear, setFinancialYear] = useState<number | null>(null);
+  const [actions, setActions] = useState<ActionItem[]>([]);
 
   useEffect(() => {
     if (!session) return;
@@ -61,11 +81,15 @@ export default function DashboardPage() {
       if (res.ok) setChecks(await res.json());
 
       // Spend awaiting approval, scoped to the current financial year.
-      const [spendRes, settingsRes, policiesRes] = await Promise.all([
-        authFetch("/api/spend", { cache: "no-store" }),
-        authFetch("/api/settings/spend", { cache: "no-store" }),
-        authFetch("/api/policies", { cache: "no-store" }),
-      ]);
+      const [spendRes, settingsRes, policiesRes, actionsRes] =
+        await Promise.all([
+          authFetch("/api/spend", { cache: "no-store" }),
+          authFetch("/api/settings/spend", { cache: "no-store" }),
+          authFetch("/api/policies", { cache: "no-store" }),
+          authFetch("/api/action-items", { cache: "no-store" }),
+        ]);
+
+      if (actionsRes.ok) setActions(await actionsRes.json());
 
       // Same number the Policies page shows in its header, from the same index.
       if (policiesRes.ok) {
@@ -101,6 +125,15 @@ export default function DashboardPage() {
     },
     { not_an_issue: 0, needs_addressing: 0, in_progress: 0, addressed: 0, unreviewed: 0 } as StatusCounts
   );
+
+  const actionSummary = summarise(actions);
+  // What is closest to biting: open, dated, soonest first. An action with no
+  // ETA cannot be ranked against one that has a date, so it is left off this
+  // list rather than sorted to either end of it.
+  const nextActions = actions
+    .filter((a) => !isClosed(a) && a.dueDate)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 5);
 
   if (loading) return <div className="p-6">Loading...</div>;
 
@@ -170,6 +203,66 @@ export default function DashboardPage() {
             </svg>
           }
         />
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-dark">Action Items</h2>
+          <Link
+            href="/action-items"
+            className="text-primary hover:underline text-sm"
+          >
+            Open the register
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {ACTION_TILES.map((t) => (
+            <div key={t.key} className="border border-gray-100 rounded-lg p-4">
+              <p className={`text-3xl font-bold ${t.text}`}>
+                {actionSummary[t.key]}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">{t.label}</p>
+            </div>
+          ))}
+        </div>
+        {nextActions.length > 0 ? (
+          <ul className="mt-4 divide-y divide-gray-50">
+            {nextActions.map((a) => {
+              const days = daysUntilDue(a);
+              const late = isOverdue(a);
+              return (
+                <li
+                  key={a.id}
+                  className="py-2 flex items-start justify-between gap-4 text-sm"
+                >
+                  <span className="min-w-0">
+                    <span className="text-gray-400 mr-2">{a.ref}</span>
+                    <span className="text-dark">{a.title}</span>
+                    <span className="block text-xs text-gray-400">
+                      {a.assigneeNames.filter(Boolean).join(", ") ||
+                        "Nobody assigned"}
+                    </span>
+                  </span>
+                  <span
+                    className={`text-xs shrink-0 ${
+                      late ? "text-risk-high font-medium" : "text-gray-500"
+                    }`}
+                  >
+                    {a.dueDate ? duePhrase(a.dueDate, days) : "No ETA"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-500 mt-4">
+            Nothing open with a date on it.{" "}
+            <Link href="/action-items" className="text-primary hover:underline">
+              Raise an action
+            </Link>
+            {" "}to have it chased automatically.
+          </p>
+        )}
       </div>
 
       {checks.length > 0 && (

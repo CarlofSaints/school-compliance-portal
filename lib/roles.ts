@@ -31,6 +31,11 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   { key: "view_compliance_results", name: "View Compliance Results", category: "Compliance" },
   { key: "manage_guidelines", name: "Manage Guidelines", category: "Compliance" },
   { key: "check_documents", name: "Check Documents", category: "Documents" },
+  // Viewing the action register needs no key: like the People register, who
+  // agreed to do what is for everybody in the portal, and an assignee can
+  // always update their own progress. This key is the right to raise, edit,
+  // reassign, delete and set reminders on anybody's action.
+  { key: "manage_action_items", name: "Manage Action Items", category: "Action Items" },
   { key: "submit_spend", name: "Submit Spend Applications", category: "Spend" },
   { key: "approve_spend", name: "Approve/Reject Spend", category: "Spend" },
   { key: "view_all_spend", name: "View All Spend Applications", category: "Spend" },

@@ -8,15 +8,23 @@ import {
   recordRun,
 } from "@/lib/reminderData";
 import { resolveRecipients } from "@/lib/reminderRecipients";
+import { getActionItems } from "@/lib/actionItemData";
+import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
 import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Daily reminder sender. Wired up in vercel.json.
 //
+// It carries BOTH schedules - spend applications and the action-item register -
+// on one cron rather than two. They send the same kind of mail on the same
+// cadence, and a second cron is a second thing that can silently stop.
+//
 // Every run is written to the run log, including the runs that find nothing to
 // do - a cron that has never fired and a cron that fires and sends nothing look
-// identical otherwise.
+// identical otherwise. The log is written ONCE, at the end, with both schedules
+// counted in: recordRun reads the file and writes it back, so calling it twice
+// in one request would lose the first entry.
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
 
@@ -131,9 +139,27 @@ export async function GET(req: NextRequest) {
     detail.push(`${app.projectName}: ${result}`);
   }
 
+  // --- Action items ---------------------------------------------------------
+  //
+  // The chase sequence per action is a heads-up before the ETA, a nudge on the
+  // day, then every few days while it stays open. All of that is derived from
+  // the due date and the last send, so nothing here needs a stored schedule to
+  // go stale.
+  const now = new Date();
+  const actions = await getActionItems();
+  const dueActions = actionsDueForChase(actions, now);
+
+  for (const item of dueActions) {
+    const outcome = await chaseActionItem(item, now);
+    sent += outcome.sent;
+    failed += outcome.failed;
+    if (outcome.sent === 0) skipped++;
+    detail.push(`Action ${item.ref} ${item.title}: ${outcome.result}`);
+  }
+
   const run = {
     at: new Date().toISOString(),
-    due: due.length,
+    due: due.length + dueActions.length,
     sent,
     skipped,
     failed,

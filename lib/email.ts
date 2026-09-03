@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { branding } from "@/lib/branding";
+import { duePhrase } from "@/lib/actionItems";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -371,5 +372,119 @@ export async function sendApprovalReminderEmail(
     to,
     `Reminder: ${projectName} is waiting for your approval`,
     emailShell("Approval Reminder", body)
+  );
+}
+
+// --- Action items -----------------------------------------------------------
+
+// Titles, descriptions and notes are typed by people, and an apostrophe or an
+// angle bracket in a title should not be able to break the layout of the mail.
+// The older templates above predate this and interpolate raw; new copy escapes.
+function esc(value: string): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// A progress bar that survives a mail client, so it is a table and not a div.
+function progressBar(percent: number): string {
+  const pct = Math.max(0, Math.min(100, Math.round(percent)));
+  return `
+    <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 0;">
+      <tr>
+        <td style="background:#e5e7eb;border-radius:999px;height:10px;padding:0;">
+          <table role="presentation" cellpadding="0" cellspacing="0" width="${pct}%" style="min-width:1%;">
+            <tr><td style="background:${PRIMARY};border-radius:999px;height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:4px 0 0;color:#666;font-size:12px;">${pct}% complete</p>`;
+}
+
+// The ETA with the countdown beside it. The countdown itself comes from the
+// grid's own helper, so a chase and the screen never disagree about whether
+// something is two days late.
+function dueLine(dueDate: string, daysLeft: number | null): string {
+  if (!dueDate) return "No date set";
+  return `${dueDate} (${duePhrase(dueDate, daysLeft).toLowerCase()})`;
+}
+
+interface ActionEmailFacts {
+  ref: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  daysLeft: number | null;
+  progress: number;
+  statusLabel: string;
+  assignedTo: string;
+  priorityLabel: string;
+}
+
+function actionFactsBlock(facts: ActionEmailFacts): string {
+  const overdue = facts.daysLeft !== null && facts.daysLeft < 0;
+  return `
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>${esc(facts.ref)}:</strong> ${esc(facts.title)}</p>
+      ${facts.description ? `<p style="margin:8px 0 0;color:#555;font-size:14px;">${esc(facts.description)}</p>` : ""}
+      <p style="margin:12px 0 0;color:${overdue ? "#dc2626" : "#333"};"><strong>Due:</strong> ${esc(dueLine(facts.dueDate, facts.daysLeft))}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Assigned to:</strong> ${esc(facts.assignedTo || "Nobody yet")}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Priority:</strong> ${esc(facts.priorityLabel)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${esc(facts.statusLabel)}</p>
+      ${progressBar(facts.progress)}
+    </div>`;
+}
+
+// Sent the moment somebody is put on an action, so the first they hear of it is
+// not a chase three days before it is due.
+export async function sendActionAssignedEmail(
+  to: string,
+  recipientName: string,
+  raisedByName: string,
+  facts: ActionEmailFacts
+): Promise<boolean> {
+  const body = `
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
+    <p style="color:#333;">${esc(raisedByName)} has assigned you an action item.</p>
+    ${actionFactsBlock(facts)}
+    <p style="color:#333;">Please update your progress in the portal as the work moves along. You will get a reminder before it is due.</p>
+    <a href="${SITE_URL}/action-items" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the action</a>
+  `;
+  return sendEmail(
+    to,
+    `Action ${facts.ref}: ${facts.title}`,
+    emailShell("You have a new action item", body)
+  );
+}
+
+// The scheduled chase. `why` states plainly which of the three it is (heads-up,
+// due today, or overdue) so the same mail is never mistaken for a duplicate.
+export async function sendActionReminderEmail(
+  to: string,
+  recipientName: string,
+  role: string,
+  why: string,
+  facts: ActionEmailFacts,
+  note = ""
+): Promise<boolean> {
+  const overdue = facts.daysLeft !== null && facts.daysLeft < 0;
+  const body = `
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
+    <p style="color:#333;">${esc(why)}</p>
+    ${note ? `<p style="color:#333;">${esc(note)}</p>` : ""}
+    ${actionFactsBlock(facts)}
+    <p style="color:#666;font-size:13px;">You are receiving this as: ${esc(role)}</p>
+    <a href="${SITE_URL}/action-items" style="display:inline-block;background:${overdue ? "#dc2626" : PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Update the progress</a>
+  `;
+  const subject = overdue
+    ? `Overdue: ${facts.ref} ${facts.title}`
+    : `Reminder: ${facts.ref} ${facts.title}`;
+  return sendEmail(
+    to,
+    subject,
+    emailShell(overdue ? "An action is overdue" : "Action item reminder", body)
   );
 }
