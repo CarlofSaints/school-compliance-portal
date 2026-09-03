@@ -25,7 +25,7 @@ import {
   todayIso,
   addDays,
 } from "@/lib/actionItems";
-import type { ActionItem } from "@/lib/actionItems";
+import type { ActionItem, ActionStatus } from "@/lib/actionItems";
 
 export interface DirectoryPerson {
   id: string;
@@ -50,14 +50,26 @@ interface ReminderRun {
 // Mirrors ACTION_ADMIN_PERMISSIONS on the server.
 const ADMIN_PERMISSIONS = ["manage_action_items", "manage_people"];
 
-const FILTERS = [
+// Two independent filters rather than one list of chips.
+//
+// Whose it is and how far along it is are different questions, and the useful
+// views are the combinations: my in-progress items, everything blocked,
+// overdue and not started. One exclusive row could not express any of those.
+const VIEW_FILTERS = [
   { key: "open", label: "Open" },
   { key: "mine", label: "Mine" },
   { key: "overdue", label: "Overdue" },
   { key: "week", label: "Due in 7 days" },
-  { key: "blocked", label: "Blocked" },
-  { key: "done", label: "Done" },
   { key: "all", label: "All" },
+];
+
+const STATUS_FILTERS: { key: ActionStatus | "any"; label: string }[] = [
+  { key: "any", label: "Any status" },
+  { key: "not_started", label: STATUS_LABELS.not_started },
+  { key: "in_progress", label: STATUS_LABELS.in_progress },
+  { key: "blocked", label: STATUS_LABELS.blocked },
+  { key: "done", label: STATUS_LABELS.done },
+  { key: "cancelled", label: STATUS_LABELS.cancelled },
 ];
 
 const DEFAULT_WIDTHS: Record<string, number> = {
@@ -115,6 +127,7 @@ export default function ActionItemsPage() {
   const [directory, setDirectory] = useState<DirectoryPerson[]>([]);
   const [runs, setRuns] = useState<ReminderRun[]>([]);
   const [filter, setFilter] = useState("open");
+  const [statusFilter, setStatusFilter] = useState<ActionStatus | "any">("any");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ActionItem | null>(null);
@@ -175,7 +188,11 @@ export default function ActionItemsPage() {
 
   const summary = useMemo(() => summarise(items), [items]);
 
-  const filtered = useMemo(() => {
+  // The view filter on its own. Kept separate so the status chips can be
+  // counted against what you are actually looking at, rather than against the
+  // whole register - a chip reading "In progress 4" when the view holds one is
+  // worse than no count.
+  const viewFiltered = useMemo(() => {
     const today = todayIso();
     const weekOut = addDays(today, 7);
     const needle = search.trim().toLowerCase();
@@ -210,15 +227,37 @@ export default function ActionItemsPage() {
             item.dueDate >= today &&
             item.dueDate <= weekOut
           );
-        case "blocked":
-          return item.status === "blocked";
-        case "done":
-          return item.status === "done";
         default:
           return true;
       }
     });
   }, [items, filter, search, myPersonIds]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { any: viewFiltered.length };
+    for (const item of viewFiltered) {
+      counts[item.status] = (counts[item.status] || 0) + 1;
+    }
+    return counts;
+  }, [viewFiltered]);
+
+  const filtered = useMemo(
+    () =>
+      statusFilter === "any"
+        ? viewFiltered
+        : viewFiltered.filter((i) => i.status === statusFilter),
+    [viewFiltered, statusFilter]
+  );
+
+  // Picking Done or Cancelled while the view is Open would always show nothing,
+  // which reads as a broken filter rather than as two settings fighting. Asking
+  // for a closed status widens the view to match.
+  const chooseStatus = (key: ActionStatus | "any") => {
+    setStatusFilter(key);
+    if (filter === "open" && (key === "done" || key === "cancelled")) {
+      setFilter("all");
+    }
+  };
 
   const sorted = useMemo(
     () =>
@@ -450,8 +489,9 @@ export default function ActionItemsPage() {
         />
       </div>
 
-      <div className="flex gap-2 mb-4 flex-wrap items-center">
-        {FILTERS.map((f) => (
+      <div className="flex gap-2 mb-2 flex-wrap items-center">
+        <span className="text-xs text-gray-400 w-14 shrink-0">Show</span>
+        {VIEW_FILTERS.map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
@@ -477,6 +517,35 @@ export default function ActionItemsPage() {
         >
           Reset columns
         </button>
+      </div>
+
+      <div className="flex gap-2 mb-4 flex-wrap items-center">
+        <span className="text-xs text-gray-400 w-14 shrink-0">Progress</span>
+        {STATUS_FILTERS.map((f) => {
+          const count = statusCounts[f.key] || 0;
+          const active = statusFilter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => chooseStatus(f.key)}
+              // A status with nothing in it stays clickable but reads as empty,
+              // rather than vanishing - a filter row that changes shape as the
+              // data moves is hard to aim at.
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                active
+                  ? "bg-primary text-white"
+                  : count === 0
+                    ? "bg-gray-50 text-gray-300 hover:bg-gray-100"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {f.label}
+              <span className={active ? "ml-1.5 opacity-80" : "ml-1.5 text-gray-400"}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {showForm && (
