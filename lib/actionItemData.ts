@@ -60,6 +60,30 @@ export async function createActionItem(
   return created;
 }
 
+// Creating a batch under ONE read and ONE write.
+//
+// Not a loop over createActionItem. Every create is a read-modify-write of the
+// whole file, so a run of them races itself across serverless instances: an
+// instance reads the store from before its predecessor's write, appends its own
+// row and saves, and the earlier row is gone. That is not theoretical here -
+// nine policies uploaded one after another once landed as four
+// ([[shared-index-read-lag]]). Importing a term's action list row by row would
+// lose some of it, quietly.
+//
+// One read, one write, references assigned in the order given.
+export async function createActionItems(
+  items: Omit<ActionItem, "ref">[]
+): Promise<ActionItem[]> {
+  const store = await readStore();
+  const created = items.map((item, i) =>
+    normalise({ ...item, ref: formatRef(store.nextRef + i) })
+  );
+  store.items.push(...created);
+  store.nextRef += created.length;
+  await writeStore(store);
+  return created;
+}
+
 export async function updateActionItem(
   id: string,
   updates: Partial<Omit<ActionItem, "id" | "ref">>
