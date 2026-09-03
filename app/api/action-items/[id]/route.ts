@@ -6,27 +6,17 @@ import {
   getActionItemById,
   updateActionItem,
   deleteActionItem,
-  parseReminder,
-  ACTION_CATEGORIES,
-  STATUS_LABELS,
 } from "@/lib/actionItemData";
-import type {
-  ActionItem,
-  ActionPriority,
-  ActionStatus,
-} from "@/lib/actionItemData";
-import {
-  ACTION_ADMIN_PERMISSIONS,
-  displayNameFor,
-} from "@/lib/actionItemRecipients";
+import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
+import { parseActionEdit } from "@/lib/actionItemFields";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 
-const VALID_STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
-const VALID_PRIORITIES: ActionPriority[] = ["low", "medium", "high"];
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-// Editing anybody's action. An assignee updating their OWN progress goes to
+// Editing ONE action. An assignee updating their own progress goes to
 // /progress instead, which needs no permission - see that route.
+//
+// ⚠️ Do not loop this to change several actions: each call is a
+// read-modify-write of the whole store, so a later one built on a stale read
+// erases an earlier one. Use POST /api/action-items/bulk.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,76 +32,17 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const updates: Partial<ActionItem> = {};
+    const [people, users] = await Promise.all([getPeople(), getUsers()]);
 
-    // Every field is applied only when the caller actually sent it. A PATCH
-    // that names three fields must not blank the other nine - the edit form
-    // sends the whole record, but the inline grid controls send one field.
-    if (typeof body.title === "string") {
-      const title = body.title.trim();
-      if (!title) {
-        return NextResponse.json(
-          { error: "An action needs a name" },
-          { status: 400 }
-        );
-      }
-      updates.title = title.slice(0, 200);
-    }
-    if (typeof body.description === "string") {
-      updates.description = body.description.trim().slice(0, 4000);
-    }
-    if (typeof body.category === "string" && ACTION_CATEGORIES.includes(body.category)) {
-      updates.category = body.category;
-    }
-    if (VALID_PRIORITIES.includes(body.priority)) {
-      updates.priority = body.priority;
-    }
-    if (VALID_STATUSES.includes(body.status)) {
-      updates.status = body.status;
-    }
-    if (body.progress !== undefined) {
-      updates.progress = Number(body.progress);
-    }
-    if (typeof body.dueDate === "string") {
-      if (body.dueDate && !ISO_DATE.test(body.dueDate)) {
-        return NextResponse.json({ error: "Invalid ETA" }, { status: 400 });
-      }
-      // Moving the ETA re-opens the reminder sequence.
-      //
-      // Pushing a date OUT sorts itself out - the old chase then falls before
-      // the new heads-up date. Pulling one IN is what needs this: the old chase
-      // is already past the new ETA, so nextReminderOn drops through to the
-      // weekly branch and nobody hears that the date has moved closer. Cleared,
-      // it chases on the next run. See scripts/check-action-reminders.ts.
-      if (body.dueDate !== existing.dueDate) {
-        updates.lastRemindedOn = undefined;
-        updates.lastReminderResult = undefined;
-      }
-      updates.dueDate = body.dueDate;
-    }
-    if (typeof body.meetingDate === "string") {
-      updates.meetingDate = ISO_DATE.test(body.meetingDate)
-        ? body.meetingDate
-        : undefined;
-    }
-    if (body.reminder !== undefined) {
-      updates.reminder = parseReminder(body.reminder);
+    // Shared with the bulk route, so the two cannot drift on what a valid edit
+    // is - the sort of split where one validates an ETA and the other stores
+    // rubbish.
+    const parsed = parseActionEdit(body, existing, people, users);
+    if (parsed.error) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    let newlyAssigned: string[] = [];
-    if (Array.isArray(body.assigneeIds)) {
-      const [people, users] = await Promise.all([getPeople(), getUsers()]);
-      const ids = [...new Set<string>((body.assigneeIds as unknown[]).map((v) => String(v)))].filter((pid) =>
-        people.some((p) => p.id === pid)
-      );
-      newlyAssigned = ids.filter((pid) => !existing.assigneeIds.includes(pid));
-      updates.assigneeIds = ids;
-      updates.assigneeNames = ids.map((pid) =>
-        displayNameFor(pid, people, users)
-      );
-    }
-
-    const saved = await updateActionItem(id, updates);
+    const saved = await updateActionItem(id, parsed.updates);
     if (!saved) {
       return NextResponse.json({ error: "Action not found" }, { status: 404 });
     }
@@ -119,8 +50,8 @@ export async function PATCH(
     // Only the people who were not on it before, so an edit does not re-mail
     // everybody who was already carrying the action.
     let notified = 0;
-    if (body.notify !== false && newlyAssigned.length > 0) {
-      notified = await notifyAssignees(saved, newlyAssigned);
+    if (body.notify !== false && parsed.newlyAssigned.length > 0) {
+      notified = await notifyAssignees(saved, parsed.newlyAssigned);
     }
 
     return NextResponse.json({ ...saved, notified });

@@ -100,6 +100,39 @@ export async function updateActionItem(
   return store.items[idx];
 }
 
+// Applying many edits under ONE read and ONE write.
+//
+// Same hazard as createActionItems, and it is not theoretical either: five
+// assignments sent one after another, each returning 200, left only two on the
+// record. Every write reads the whole file, so a later write built on a read
+// from before an earlier one simply erases it. Nothing that changes more than
+// one action may loop over updateActionItem.
+export async function updateActionItems(
+  edits: { id: string; updates: Partial<Omit<ActionItem, "id" | "ref">> }[]
+): Promise<{ saved: ActionItem[]; missing: string[] }> {
+  const store = await readStore();
+  const saved: ActionItem[] = [];
+  const missing: string[] = [];
+  const at = new Date().toISOString();
+
+  for (const edit of edits) {
+    const idx = store.items.findIndex((i) => i.id === edit.id);
+    if (idx === -1) {
+      missing.push(edit.id);
+      continue;
+    }
+    store.items[idx] = normalise({
+      ...store.items[idx],
+      ...edit.updates,
+      updatedAt: at,
+    });
+    saved.push(store.items[idx]);
+  }
+
+  if (saved.length > 0) await writeStore(store);
+  return { saved, missing };
+}
+
 export async function deleteActionItem(id: string): Promise<boolean> {
   const store = await readStore();
   const next = store.items.filter((i) => i.id !== id);
