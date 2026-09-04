@@ -8,7 +8,7 @@ import ComplianceScore from "@/components/ComplianceScore";
 import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 
 interface PolicyOption {
   id: string;
@@ -41,19 +41,25 @@ interface CheckResult {
 }
 
 // Order/labels/colours for the per-issue workflow status controls + summary.
-const STATUS_META: {
+//
+// A function of the short name rather than a constant, because one label names
+// the school, and the school is now resolved per request rather than baked in
+// at build time.
+const statusMeta = (shortName: string): {
   key: RiskStatus;
   label: string;
   active: string;
   text: string;
-}[] = [
+}[] => [
   { key: "needs_addressing", label: "Needs to be addressed", active: "bg-risk-high border-risk-high text-white", text: "text-risk-high" },
   { key: "in_progress", label: "In progress", active: "bg-amber-500 border-amber-500 text-white", text: "text-amber-600" },
   { key: "addressed", label: "Has been addressed in new policy", active: "bg-emerald-500 border-emerald-500 text-white", text: "text-emerald-600" },
-  { key: "not_an_issue", label: `Not an issue for ${branding.shortName}`, active: "bg-gray-500 border-gray-500 text-white", text: "text-gray-600" },
+  { key: "not_an_issue", label: `Not an issue for ${shortName}`, active: "bg-gray-500 border-gray-500 text-white", text: "text-gray-600" },
 ];
 
 export default function CompliancePage() {
+  const branding = useBranding();
+  const STATUS_META = statusMeta(branding.shortName);
   const { session, loading } = useAuth("check_compliance");
   const [mode, setMode] = useState<"upload" | "existing">("upload");
   const [policies, setPolicies] = useState<PolicyOption[]>([]);

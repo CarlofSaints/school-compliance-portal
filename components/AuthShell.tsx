@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 
 // The crest / name / slogan frame shared by the signed-out pages (login,
 // forgot password, reset password). Extracted when the second and third of
@@ -14,6 +14,7 @@ export default function AuthShell({
   title: string;
   children: React.ReactNode;
 }) {
+  const branding = useBranding();
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">

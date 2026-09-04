@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { setSession, getSession } from "@/lib/useAuth";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 
 export default function LoginPage() {
+  const branding = useBranding();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

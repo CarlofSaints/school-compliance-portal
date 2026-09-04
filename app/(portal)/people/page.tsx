@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import PersonPhoto from "@/components/PersonPhoto";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 
 interface DirectoryPerson {
   id: string;
@@ -25,6 +25,7 @@ interface TagRecord {
 }
 
 export default function PeopleDirectoryPage() {
+  const branding = useBranding();
   // Login only. This is the register as everybody sees it; editing it stays on
   // Admin > People behind manage_people.
   const { session, loading } = useAuth();

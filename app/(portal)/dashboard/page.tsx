@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import DashboardCard from "@/components/DashboardCard";
 import ScoreNote from "@/components/ScoreNote";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 import { pendingSpendCount } from "@/lib/spendReport";
 import {
   summarise,
@@ -40,11 +40,15 @@ interface CheckSummary {
   checkedAt: string;
 }
 
-const DASH_STATUS_META: { key: keyof StatusCounts; label: string; text: string }[] = [
+// A function of the short name, not a constant: one label names the school,
+// and that is resolved per request now rather than at build time.
+const dashStatusMeta = (
+  shortName: string
+): { key: keyof StatusCounts; label: string; text: string }[] => [
   { key: "needs_addressing", label: "Needs to be addressed", text: "text-risk-high" },
   { key: "in_progress", label: "In progress", text: "text-amber-600" },
   { key: "addressed", label: "Addressed in new policy", text: "text-emerald-600" },
-  { key: "not_an_issue", label: `Not an issue for ${branding.shortName}`, text: "text-gray-600" },
+  { key: "not_an_issue", label: `Not an issue for ${shortName}`, text: "text-gray-600" },
 ];
 
 // Compact per-row pills for the grid's Status column.
@@ -67,6 +71,8 @@ const ACTION_TILES: {
 ];
 
 export default function DashboardPage() {
+  const branding = useBranding();
+  const DASH_STATUS_META = dashStatusMeta(branding.shortName);
   const { session, loading } = useAuth("view_dashboard");
   const [checks, setChecks] = useState<CheckSummary[]>([]);
   const [pendingSpend, setPendingSpend] = useState(0);

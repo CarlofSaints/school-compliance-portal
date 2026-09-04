@@ -1,5 +1,6 @@
 import { Resend } from "resend";
-import { branding } from "@/lib/branding";
+import { resolveBranding } from "@/lib/brandingData";
+import type { SchoolBranding } from "@/lib/branding";
 import { duePhrase } from "@/lib/actionItems";
 
 const resend = process.env.RESEND_API_KEY
@@ -27,8 +28,16 @@ function resolveSiteUrl(): string {
 }
 
 const SITE_URL = resolveSiteUrl();
-const FROM_EMAIL = branding.fromEmail;
-const PRIMARY = branding.colors.primary;
+// Derived per send. These used to be module constants, which meant every
+// email carried whichever school the deployment was BUILT for, no matter what
+// the school had since set in the portal - and on a shared deployment, no
+// matter which school the email was even for.
+function logoUrl(b: SchoolBranding): string {
+  // Absolute, because a mail client has no idea what a relative path means.
+  // Files under /public and /api/branding/logo are both served without a
+  // login, so this resolves for a recipient with no account.
+  return b.logo.startsWith("http") ? b.logo : `${SITE_URL}${b.logo}`;
+}
 
 // The school crest, as an ABSOLUTE url - a mail client has no idea what
 // "/logo.png" is relative to. Files under /public are served without a login,
@@ -40,9 +49,10 @@ const PRIMARY = branding.colors.primary;
 // text. Many clients also block remote images until the reader allows them,
 // which is why the school name stays as text in the header rather than being
 // baked into the image.
-const LOGO_URL = `${SITE_URL}${branding.logo}`;
-
-function emailShell(title: string, body: string): string {
+function emailShell(b: SchoolBranding, title: string, body: string): string {
+  const PRIMARY = b.colors.primary;
+  const LOGO_URL = logoUrl(b);
+  const branding = b;
   const footerSlogan = branding.slogan
     ? `${branding.fullName} &mdash; "${branding.slogan}"`
     : branding.fullName;
@@ -79,6 +89,9 @@ export async function sendWelcomeEmail(
   name: string,
   password: string
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const body = `
     <p style="color:#333;">Dear ${name},</p>
     <p style="color:#333;">Welcome to the ${branding.shortName} ${branding.tagline}. Your account has been created.</p>
@@ -89,7 +102,7 @@ export async function sendWelcomeEmail(
     <p style="color:#333;">Please log in and change your password immediately.</p>
     <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
   `;
-  return sendEmail(to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell("Welcome!", body));
+  return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body));
 }
 
 // Somebody who has NEVER signed in is not resetting anything, and telling them
@@ -101,6 +114,9 @@ export async function sendCredentialsSetupEmail(
   token: string,
   ttlMinutes: number
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `
     <p style="color:#333;">Dear ${name},</p>
@@ -111,7 +127,7 @@ export async function sendCredentialsSetupEmail(
     <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose your password</a>
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes. If it has expired by the time you get to it, use <strong>Forgot your password?</strong> on the sign-in page and it will send you a fresh one.</p>
   `;
-  return sendEmail(to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell("Set up your account", body));
+  return sendEmail(b.fromEmail, to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell(b, "Set up your account", body));
 }
 
 export async function sendPasswordResetLinkEmail(
@@ -120,6 +136,9 @@ export async function sendPasswordResetLinkEmail(
   token: string,
   ttlMinutes: number
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `
     <p style="color:#333;">Dear ${name},</p>
@@ -129,7 +148,7 @@ export async function sendPasswordResetLinkEmail(
     <p style="color:#666;font-size:13px;">If you did not ask for this, you can ignore this email. Your password has not changed.</p>
     <p style="color:#888;font-size:12px;word-break:break-all;">If the button does not work, paste this into your browser:<br>${url}</p>
   `;
-  return sendEmail(to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell("Reset your password", body));
+  return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body));
 }
 
 export async function sendSpendNotificationEmail(
@@ -139,6 +158,9 @@ export async function sendSpendNotificationEmail(
   amount: number,
   submittedBy: string
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const body = `
     <p style="color:#333;">Dear ${recipientName},</p>
     <p style="color:#333;">A new spend application has been submitted and requires your review.</p>
@@ -149,7 +171,7 @@ export async function sendSpendNotificationEmail(
     </div>
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
   `;
-  return sendEmail(to, `Spend Application: ${projectName}`, emailShell("New Spend Application", body));
+  return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body));
 }
 
 // The applicant's own copy, sent on every submission.
@@ -165,6 +187,9 @@ export async function sendApplicantConfirmationEmail(
   quoteCount: number,
   approverNames: string[]
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const intro = submitterName
     ? `${submitterName} has submitted an application for school funds spend on your behalf for: <strong>"${projectName}"</strong>`
     : `Your application for school funds spend has been received for: <strong>"${projectName}"</strong>`;
@@ -186,14 +211,15 @@ export async function sendApplicantConfirmationEmail(
     ${routing}
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View Application</a>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Spend Application Submitted: ${projectName}`,
-    emailShell("Application Submitted", body)
+    emailShell(b, "Application Submitted", body)
   );
 }
 
 async function sendEmail(
+  from: string,
   to: string,
   subject: string,
   html: string
@@ -204,7 +230,7 @@ async function sendEmail(
     return true;
   }
   try {
-    await resend.emails.send({ from: FROM_EMAIL, to, subject, html });
+    await resend.emails.send({ from, to, subject, html });
     return true;
   } catch (err) {
     console.error("[Email] Failed to send:", err);
@@ -228,6 +254,9 @@ export async function sendSpendReminderEmail(
   note: string,
   role: string
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const noteBlock = note
     ? `<p style="color:#333;">${note}</p>`
     : `<p style="color:#333;">This is a scheduled reminder about the project below.</p>`;
@@ -242,10 +271,10 @@ export async function sendSpendReminderEmail(
     </div>
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the Project</a>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Reminder: ${projectName}`,
-    emailShell("Project Reminder", body)
+    emailShell(b, "Project Reminder", body)
   );
 }
 
@@ -268,6 +297,9 @@ export async function sendApprovalRequestEmail(
   tierLabel: string,
   requiredBy?: string
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/spend/${spendId}`;
   const deadline = requiredBy
     ? `<p style="margin:8px 0 0;color:#333;"><strong>Approval required by:</strong> ${requiredBy}</p>`
@@ -297,10 +329,10 @@ export async function sendApprovalRequestEmail(
     </table>
     <p style="color:#888;font-size:12px;margin-top:16px;">Both buttons open the application in the portal, where your decision is recorded against your name.</p>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Approval needed: ${projectName} (R${amount.toLocaleString()})`,
-    emailShell("Fund Application Approval", body)
+    emailShell(b, "Fund Application Approval", body)
   );
 }
 
@@ -316,6 +348,9 @@ export async function sendApprovalProgressEmail(
   approved: number,
   total: number
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const note = comments
     ? `<p style="margin:8px 0 0;color:#333;"><strong>Their comment:</strong> ${comments}</p>`
     : "";
@@ -330,10 +365,10 @@ export async function sendApprovalProgressEmail(
     </div>
     <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Update on ${projectName}: ${approved} of ${total} approved`,
-    emailShell("Application Update", body)
+    emailShell(b, "Application Update", body)
   );
 }
 
@@ -346,6 +381,9 @@ export async function sendFullyApprovedEmail(
   amount: number,
   approverNames: string[]
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const body = `
     <p style="color:#333;">Dear ${applicantName},</p>
     <p style="color:#333;">Your fund application has been <strong>fully approved</strong>.</p>
@@ -356,10 +394,10 @@ export async function sendFullyApprovedEmail(
     </div>
     <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Approved: ${projectName}`,
-    emailShell("Application Approved", body)
+    emailShell(b, "Application Approved", body)
   );
 }
 
@@ -378,6 +416,9 @@ export async function sendApprovalReminderEmail(
   chasedBy: string,
   stillWaitingOn: string[]
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/spend/${spendId}`;
   const others = stillWaitingOn.filter((n) => n !== approverName);
   const alsoWaiting =
@@ -411,10 +452,10 @@ export async function sendApprovalReminderEmail(
     </table>
     <p style="color:#888;font-size:12px;margin-top:16px;">Both buttons open the application in the portal, where your decision is recorded against your name.</p>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Reminder: ${projectName} is waiting for your approval`,
-    emailShell("Approval Reminder", body)
+    emailShell(b, "Approval Reminder", body)
   );
 }
 
@@ -432,7 +473,7 @@ function esc(value: string): string {
 }
 
 // A progress bar that survives a mail client, so it is a table and not a div.
-function progressBar(percent: number): string {
+function progressBar(percent: number, PRIMARY: string): string {
   const pct = Math.max(0, Math.min(100, Math.round(percent)));
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 0;">
@@ -467,7 +508,7 @@ interface ActionEmailFacts {
   priorityLabel: string;
 }
 
-function actionFactsBlock(facts: ActionEmailFacts): string {
+function actionFactsBlock(facts: ActionEmailFacts, PRIMARY: string): string {
   const overdue = facts.daysLeft !== null && facts.daysLeft < 0;
   return `
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
@@ -477,7 +518,7 @@ function actionFactsBlock(facts: ActionEmailFacts): string {
       <p style="margin:8px 0 0;color:#333;"><strong>Assigned to:</strong> ${esc(facts.assignedTo || "Nobody yet")}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Priority:</strong> ${esc(facts.priorityLabel)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${esc(facts.statusLabel)}</p>
-      ${progressBar(facts.progress)}
+      ${progressBar(facts.progress, PRIMARY)}
     </div>`;
 }
 
@@ -489,17 +530,20 @@ export async function sendActionAssignedEmail(
   raisedByName: string,
   facts: ActionEmailFacts
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">${esc(raisedByName)} has assigned you an action item.</p>
-    ${actionFactsBlock(facts)}
+    ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#333;">Please update your progress in the portal as the work moves along. You will get a reminder before it is due.</p>
     <a href="${SITE_URL}/action-items" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the action</a>
   `;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     `Action ${facts.ref}: ${facts.title}`,
-    emailShell("You have a new action item", body)
+    emailShell(b, "You have a new action item", body)
   );
 }
 
@@ -513,21 +557,24 @@ export async function sendActionReminderEmail(
   facts: ActionEmailFacts,
   note = ""
 ): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
   const overdue = facts.daysLeft !== null && facts.daysLeft < 0;
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">${esc(why)}</p>
     ${note ? `<p style="color:#333;">${esc(note)}</p>` : ""}
-    ${actionFactsBlock(facts)}
+    ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#666;font-size:13px;">You are receiving this as: ${esc(role)}</p>
     <a href="${SITE_URL}/action-items" style="display:inline-block;background:${overdue ? "#dc2626" : PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Update the progress</a>
   `;
   const subject = overdue
     ? `Overdue: ${facts.ref} ${facts.title}`
     : `Reminder: ${facts.ref} ${facts.title}`;
-  return sendEmail(
+  return sendEmail(b.fromEmail, 
     to,
     subject,
-    emailShell(overdue ? "An action is overdue" : "Action item reminder", body)
+    emailShell(b, overdue ? "An action is overdue" : "Action item reminder", body)
   );
 }

@@ -4,9 +4,10 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState } from "react";
 import Toast from "@/components/Toast";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 
 export default function BackupPage() {
+  const branding = useBranding();
   const { session, loading } = useAuth("manage_users");
   const [downloading, setDownloading] = useState(false);
   const [toast, setToast] = useState<{

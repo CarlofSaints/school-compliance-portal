@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSessionValue, clearSession } from "@/lib/useAuth";
-import { branding } from "@/lib/branding";
+import { useBranding } from "@/components/BrandingProvider";
 import { useState } from "react";
 
 interface NavChild {
@@ -141,12 +141,14 @@ const navItems: NavItem[] = [
       { label: "Policy Categories", href: "/admin/policy-categories", permission: "manage_policies" },
       { label: "Approval Settings", href: "/admin/approval-settings", permission: "manage_approval_settings" },
       { label: "Spend Settings", href: "/admin/spend-settings", permission: "manage_spend_settings" },
+      { label: "School Branding", href: "/admin/branding", permission: "manage_users" },
       { label: "Backup Data", href: "/admin/backup", permission: "manage_users" },
     ],
   },
 ];
 
 export default function Sidebar() {
+  const branding = useBranding();
   const pathname = usePathname();
   const router = useRouter();
   // Read during render via a store subscription, not straight from
