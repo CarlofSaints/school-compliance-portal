@@ -44,13 +44,26 @@ async function requestHostname(): Promise<string> {
  * to the single-tenant path, which is what those contexts want anyway.
  */
 export async function currentTenant(): Promise<ResolvedTenant | null> {
-  if (!isMultiTenant()) return null;
   try {
+    // headers() is read FIRST, before the multi-tenant check, and that ordering
+    // is deliberate rather than tidy.
+    //
+    // Reading headers is what tells Next.js a page depends on the request. With
+    // the isMultiTenant() check first, a single-school deployment never touched
+    // headers at all, so /login was PRERENDERED AT BUILD TIME — with whatever
+    // branding existed then, which is none, because a build has no blob access.
+    // A school could upload its crest, save, and see nothing change until the
+    // next deploy.
+    //
+    // It also has to be true for multi-tenancy to work at all: the same HTML
+    // cannot be served to two schools on two hostnames.
     const hostname = await requestHostname();
+    if (!isMultiTenant()) return null;
     if (!hostname) return null;
     return await resolveTenantForHost(hostname);
   } catch {
-    // headers() throws outside a request. Not an error, just not a request.
+    // headers() throws outside a request — a build step, or a script. Not an
+    // error, just not a request.
     return null;
   }
 }
