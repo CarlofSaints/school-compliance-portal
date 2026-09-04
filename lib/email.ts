@@ -6,7 +6,27 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+// Where links in outgoing mail point.
+//
+// NEXT_PUBLIC_SITE_URL is the answer to prefer — it is stable and it is the
+// domain people actually recognise. But it is deliberately NOT required: a new
+// school must be able to come up with nothing configured by hand, and Jeppe ran
+// for weeks without it, which meant every button in every email it sent pointed
+// at http://localhost:3000. Vercel injects the project URL on every deployment,
+// so fall back to that rather than to something that cannot possibly work.
+//
+// VERCEL_URL is per-deployment and changes on every push, so it is the last
+// resort before localhost, not a substitute for setting the real thing.
+function resolveSiteUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL;
+  if (explicit) return explicit.replace(/\/+$/, "");
+  const fromVercel =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+  if (fromVercel) return `https://${fromVercel.replace(/^https?:\/\//, "")}`;
+  return "http://localhost:3000";
+}
+
+const SITE_URL = resolveSiteUrl();
 const FROM_EMAIL = branding.fromEmail;
 const PRIMARY = branding.colors.primary;
 
@@ -72,6 +92,24 @@ export async function sendWelcomeEmail(
   return sendEmail(to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell("Welcome!", body));
 }
 
+export async function sendPasswordResetLinkEmail(
+  to: string,
+  name: string,
+  token: string,
+  ttlMinutes: number
+): Promise<boolean> {
+  const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const body = `
+    <p style="color:#333;">Dear ${name},</p>
+    <p style="color:#333;">Someone asked to reset the password for your ${branding.shortName} ${branding.tagline} account. If that was you, choose a new password using the button below.</p>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose a new password</a>
+    <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes.</p>
+    <p style="color:#666;font-size:13px;">If you did not ask for this, you can ignore this email. Your password has not changed.</p>
+    <p style="color:#888;font-size:12px;word-break:break-all;">If the button does not work, paste this into your browser:<br>${url}</p>
+  `;
+  return sendEmail(to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell("Reset your password", body));
+}
+
 export async function sendSpendNotificationEmail(
   to: string,
   recipientName: string,
@@ -90,23 +128,6 @@ export async function sendSpendNotificationEmail(
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
   `;
   return sendEmail(to, `Spend Application: ${projectName}`, emailShell("New Spend Application", body));
-}
-
-export async function sendPasswordResetEmail(
-  to: string,
-  name: string,
-  newPassword: string
-): Promise<boolean> {
-  const body = `
-    <p style="color:#333;">Dear ${name},</p>
-    <p style="color:#333;">Your password has been reset by an administrator.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>New Password:</strong> ${newPassword}</p>
-    </div>
-    <p style="color:#333;">Please log in and change your password immediately.</p>
-    <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
-  `;
-  return sendEmail(to, `Password Reset - ${branding.shortName} Portal`, emailShell("Password Reset", body));
 }
 
 // The applicant's own copy, sent on every submission.

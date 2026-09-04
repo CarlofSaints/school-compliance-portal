@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState } from "react";
 import Toast from "@/components/Toast";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
+import { branding } from "@/lib/branding";
 
 export default function BackupPage() {
   const { session, loading } = useAuth("manage_users");
@@ -30,7 +31,7 @@ export default function BackupPage() {
       // Extract filename from Content-Disposition or use default
       const disposition = res.headers.get("Content-Disposition");
       const match = disposition?.match(/filename="(.+)"/);
-      a.download = match?.[1] || `hvps-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = match?.[1] || `${branding.key}-backup-${new Date().toISOString().slice(0, 10)}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

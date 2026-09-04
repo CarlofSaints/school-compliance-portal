@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { list } from "@vercel/blob";
 import JSZip from "jszip";
 import { requirePermission } from "@/lib/rolesData";
+import { branding } from "@/lib/branding";
 
-const PREFIX = "hvps/";
+// Tenant-scoped, the same rule lib/controlData.ts writes under. This route is
+// the ONLY other place that talks to @vercel/blob directly, which is how it was
+// missed: a literal "hvps/" here listed nothing at all on Jeppe, so Backup
+// answered "No data found to backup" on every school except HVPS.
+const PREFIX = `${branding.key}/`;
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico"];
 
@@ -75,7 +80,7 @@ export async function GET(req: NextRequest) {
     const zipBuffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
 
     const today = new Date().toISOString().slice(0, 10);
-    const filename = `hvps-backup-${today}.zip`;
+    const filename = `${branding.key}-backup-${today}.zip`;
 
     return new Response(zipBuffer, {
       headers: {

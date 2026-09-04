@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { setSession, getSession } from "@/lib/useAuth";
 import { branding } from "@/lib/branding";
@@ -130,6 +131,12 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
+
+          <p className="text-center text-sm text-gray-500 mt-5">
+            <Link href="/forgot-password" className="text-primary hover:underline">
+              Forgot your password?
+            </Link>
+          </p>
         </div>
 
         {branding.slogan && (
