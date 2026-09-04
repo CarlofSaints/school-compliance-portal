@@ -62,6 +62,62 @@ async function writeControlJson(path: string, data: unknown): Promise<void> {
   });
 }
 
+/** Thrown when a name is already taken. Carries which one, so a signup form can
+ *  point at the field that needs changing rather than saying "failed". */
+export class TenantConflictError extends Error {
+  constructor(
+    readonly what: "key" | "hostname",
+    readonly value: string
+  ) {
+    super(
+      what === "key"
+        ? `The address "${value}" is already taken.`
+        : `The domain "${value}" is already in use by another school.`
+    );
+    this.name = "TenantConflictError";
+  }
+}
+
+// CLAIMS a path, atomically. Returns false if somebody already has it.
+//
+// allowOverwrite defaults to false and the BLOB SERVICE enforces it, so this is
+// a real claim rather than a read-then-write. That distinction is the whole
+// point: two schools signing up for the same address in the same second is
+// exactly when a check-then-write hands both of them the same one, and the
+// loser silently ends up pointing at the winner's data.
+async function claimControlJson(path: string, data: unknown): Promise<boolean> {
+  const token = controlToken();
+  if (!token) throw new Error("CONTROL_BLOB_READ_WRITE_TOKEN is not set");
+  try {
+    await put(path, JSON.stringify(data, null, 2), {
+      access: "private",
+      contentType: "application/json",
+      addRandomSuffix: false,
+      // Deliberately NOT allowOverwrite. The throw IS the lock.
+      token,
+    });
+    return true;
+  } catch {
+    // The SDK throws for an existing pathname. Treat any failure as "not
+    // claimed" — handing back success on an error we did not expect would be
+    // the one outcome that actually loses data.
+    return false;
+  }
+}
+
+async function deleteControlJson(path: string): Promise<void> {
+  const token = controlToken();
+  if (!token) return;
+  try {
+    const page = await list({ prefix: path, limit: 1, token });
+    for (const blob of page.blobs) {
+      if (blob.pathname === path) await del(blob.url, { token });
+    }
+  } catch {
+    // Nothing to remove.
+  }
+}
+
 // Per-instance cache of resolved tenants.
 //
 // This caches CONFIGURATION, not anyone's data — the worst a stale entry can do
@@ -144,22 +200,102 @@ export async function listTenants(): Promise<Tenant[]> {
   return out.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function saveTenant(tenant: Tenant): Promise<void> {
+/**
+ * Creates a NEW school. Fails rather than touching anything that already
+ * exists — this is the path a stranger reaches through self-serve signup, so
+ * "create" must never be able to mean "overwrite".
+ *
+ * The key is claimed first, because it is the school's identity and its data
+ * prefix. Only once it is safely ours do we claim the hostnames; if one of
+ * those is taken, the key is released again so a failed signup leaves nothing
+ * behind for the next person to trip over.
+ */
+export async function createTenant(tenant: Tenant): Promise<void> {
   const problem = checkTenantKey(tenant.key);
-  if (problem) throw new Error(`Tenant key is ${problem}: ${tenant.key}`);
-  await writeControlJson(`tenants/${tenant.key}.json`, tenant);
-  for (const host of tenant.hostnames) {
-    const hostname = normaliseHostname(host);
-    if (hostname) {
-      await writeControlJson(`hosts/${hostname}.json`, { key: tenant.key });
+  if (problem === "invalid") {
+    throw new Error(
+      `"${tenant.key}" is not a usable address. Use 3-32 characters: lowercase letters, numbers and hyphens.`
+    );
+  }
+  if (problem === "reserved") throw new TenantConflictError("key", tenant.key);
+
+  const hostnames = tenant.hostnames
+    .map(normaliseHostname)
+    .filter((h) => h.length > 0);
+  if (hostnames.length === 0) {
+    throw new Error("A school needs at least one hostname.");
+  }
+
+  const keyPath = `tenants/${tenant.key}.json`;
+  if (!(await claimControlJson(keyPath, { ...tenant, hostnames }))) {
+    throw new TenantConflictError("key", tenant.key);
+  }
+
+  const claimed: string[] = [];
+  try {
+    for (const hostname of hostnames) {
+      if (!(await claimControlJson(`hosts/${hostname}.json`, { key: tenant.key }))) {
+        throw new TenantConflictError("hostname", hostname);
+      }
+      claimed.push(hostname);
       forgetCachedTenant(hostname);
     }
+  } catch (err) {
+    // Unwind, so a half-made school does not sit there holding a name.
+    for (const hostname of claimed) {
+      await deleteControlJson(`hosts/${hostname}.json`);
+      forgetCachedTenant(hostname);
+    }
+    await deleteControlJson(keyPath);
+    throw err;
   }
 }
 
+/**
+ * Updates a school that already exists. Refuses to CREATE one, so a typo in a
+ * key cannot quietly bring a second school into being, and refuses to take a
+ * hostname that belongs to somebody else.
+ */
+export async function updateTenant(tenant: Tenant): Promise<void> {
+  const problem = checkTenantKey(tenant.key);
+  if (problem) throw new Error(`Tenant key is ${problem}: ${tenant.key}`);
+
+  const existing = await getTenantByKey(tenant.key);
+  if (!existing) {
+    throw new Error(
+      `No school with the address "${tenant.key}". Use createTenant to make one.`
+    );
+  }
+
+  const hostnames = tenant.hostnames
+    .map(normaliseHostname)
+    .filter((h) => h.length > 0);
+
+  // Every new hostname has to be free, checked BEFORE anything is written —
+  // a hostname pointing at the wrong school shows one school's data to another.
+  for (const hostname of hostnames) {
+    if (existing.hostnames.includes(hostname)) continue;
+    if (!(await claimControlJson(`hosts/${hostname}.json`, { key: tenant.key }))) {
+      throw new TenantConflictError("hostname", hostname);
+    }
+    forgetCachedTenant(hostname);
+  }
+
+  await writeControlJson(`tenants/${tenant.key}.json`, { ...tenant, hostnames });
+
+  // Release anything it used to answer on, so a hostname it has given up
+  // becomes available again instead of being stuck forever.
+  for (const old of existing.hostnames) {
+    if (hostnames.includes(old)) continue;
+    await deleteControlJson(`hosts/${old}.json`);
+    forgetCachedTenant(old);
+  }
+  for (const hostname of hostnames) forgetCachedTenant(hostname);
+}
+
 /** True when nobody has claimed this hostname yet, or the claim is this
- *  tenant's own. Checked BEFORE a signup writes anything, because a hostname
- *  pointing at the wrong school is how data would be shown to strangers. */
+ *  tenant's own. For telling somebody in a FORM that a name is taken — it is
+ *  advisory only. The claim in createTenant is what actually decides. */
 export async function isHostnameAvailable(
   host: string,
   forKey?: string
@@ -168,6 +304,13 @@ export async function isHostnameAvailable(
   if (!hostname) return false;
   const existing = await getTenantKeyForHost(hostname);
   return existing === null || existing === forKey;
+}
+
+/** Advisory, same as isHostnameAvailable — good enough to grey out a Continue
+ *  button, never good enough to decide a create. */
+export async function isTenantKeyAvailable(key: string): Promise<boolean> {
+  if (checkTenantKey(key)) return false;
+  return (await getTenantByKey(key)) === null;
 }
 
 export async function releaseHostname(host: string): Promise<void> {
