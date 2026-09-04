@@ -11,6 +11,10 @@ import { useBranding } from "@/components/BrandingProvider";
 export default function BrandingPage() {
   const { session, loading } = useAuth("manage_users");
   const branding = useBranding();
+  // The From header the server actually builds, so this preview cannot drift
+  // from what really goes out. Everything inside the angle brackets.
+  const sendingAddress =
+    /<([^>]+)>/.exec(branding.fromEmail)?.[1] ?? branding.fromEmail;
 
   const [value, setValue] = useState<BrandingValue>({
     logoDataUrl: null,
@@ -20,6 +24,7 @@ export default function BrandingPage() {
   });
   const [fullName, setFullName] = useState(branding.fullName);
   const [shortName, setShortName] = useState(branding.shortName);
+  const [replyTo, setReplyTo] = useState("");
   const [hadLogo, setHadLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -32,6 +37,7 @@ export default function BrandingPage() {
       const stored = res.ok ? await res.json() : {};
       setFullName(stored.fullName || branding.fullName);
       setShortName(stored.shortName || branding.shortName);
+      setReplyTo(stored.replyTo || "");
       setValue({
         // The existing crest is shown by URL, not as a data URL. Only a NEWLY
         // chosen file produces a data URL, which is how the save route tells
@@ -63,6 +69,7 @@ export default function BrandingPage() {
           shortName,
           primary: value.primary,
           accent: value.accent,
+          replyTo,
           // Only send the image when it is a newly chosen file. Re-sending the
           // existing one on every save would rewrite the crest and bump its
           // version for nothing, busting every cached copy.
@@ -151,6 +158,48 @@ export default function BrandingPage() {
               onChange={setValue}
               schoolName={shortName || fullName}
             />
+
+            <div className="pt-6 border-t border-gray-100">
+              <h2 className="text-sm font-semibold text-dark mb-1">Email</h2>
+              <p className="text-xs text-gray-500 mb-4">
+                How reminders, approvals and sign-in emails appear to whoever
+                receives them.
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Emails are sent from
+                </label>
+                <div className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 font-mono break-all">
+                  {(fullName || "Your school") + " <" + (sendingAddress || "noreply@…") + ">"}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Your school&apos;s name is the part people see. The address itself
+                  is fixed, because a sending domain has to be verified with our
+                  email provider before anything it sends will be delivered.
+                  If each school typed its own, its email would quietly land in
+                  spam.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Replies go to
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Nobody reads a no-reply mailbox. Put a real address here and a
+                  reply to any of these emails reaches a person. Leave it blank
+                  and replies go nowhere.
+                </p>
+                <input
+                  type="email"
+                  value={replyTo}
+                  onChange={(e) => setReplyTo(e.target.value)}
+                  placeholder="sgb@yourschool.co.za"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                />
+              </div>
+            </div>
 
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
               <button

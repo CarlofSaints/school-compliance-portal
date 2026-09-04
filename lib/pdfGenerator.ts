@@ -2,9 +2,18 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { branding, hexToRgb } from "@/lib/branding";
+import { hexToRgb, type SchoolBranding } from "@/lib/branding";
 
-const PRIMARY_RGB = hexToRgb(branding.colors.primary);
+// The school is passed IN rather than imported.
+//
+// This runs in the browser, so it cannot call useBranding() (not a component)
+// and it must not import the build-time constant either: that is fixed at
+// deploy, so a school that changed its crest or colours in the portal would
+// still get the old ones on every PDF, and on a shared deployment every school
+// would get whichever one the build was made for.
+//
+// The caller has the resolved school already - useBranding() in the component
+// that triggers the download - so it just hands it over.
 
 interface QuoteDetail {
   supplierName: string;
@@ -48,9 +57,9 @@ const STATUS_DISPLAY: Record<string, string> = {
   completed: "COMPLETED",
 };
 
-async function loadLogoBase64(): Promise<string | null> {
+async function loadLogoBase64(logoUrl: string): Promise<string | null> {
   try {
-    const response = await fetch(branding.logo);
+    const response = await fetch(logoUrl);
     const blob = await response.blob();
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -63,12 +72,13 @@ async function loadLogoBase64(): Promise<string | null> {
   }
 }
 
-export async function generateSpendPDF(app: SpendApp) {
+export async function generateSpendPDF(app: SpendApp, branding: SchoolBranding) {
+  const PRIMARY_RGB = hexToRgb(branding.colors.primary);
   const doc = new jsPDF();
   let y = 15;
 
   // Logo
-  const logo = await loadLogoBase64();
+  const logo = await loadLogoBase64(branding.logo);
   if (logo) {
     doc.addImage(logo, "PNG", 14, y, 20, 24);
     y += 5;

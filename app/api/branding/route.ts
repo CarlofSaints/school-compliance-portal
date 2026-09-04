@@ -7,6 +7,7 @@ import {
   removeLogo,
 } from "@/lib/brandingData";
 import { checkColours, normaliseHex } from "@/lib/brandingColors";
+import { isPlausibleEmail } from "@/lib/emailIdentity";
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const ACCEPTED: Record<string, true> = {
@@ -31,8 +32,26 @@ export async function PUT(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { fullName, shortName, primary, accent, logoDataUrl, removeExistingLogo } =
-      body ?? {};
+    const {
+      fullName,
+      shortName,
+      primary,
+      accent,
+      replyTo,
+      logoDataUrl,
+      removeExistingLogo,
+    } = body ?? {};
+
+    // Blank is fine and means "no Reply-To header". Anything non-blank has to
+    // look like an address: a bad one can get the whole message rejected, and
+    // the check also refuses the newlines that would let somebody inject a
+    // header of their own.
+    if (replyTo && !isPlausibleEmail(replyTo)) {
+      return NextResponse.json(
+        { error: "The reply-to address does not look like an email address." },
+        { status: 400 }
+      );
+    }
 
     // Refuse a colour that is not a colour, rather than storing it and letting
     // the CSS variable silently break every page.
@@ -95,6 +114,7 @@ export async function PUT(req: NextRequest) {
       ...(shortName !== undefined ? { shortName: String(shortName).trim() } : {}),
       ...(primary ? { primary: normaliseHex(primary)! } : {}),
       ...(accent ? { accent: normaliseHex(accent)! } : {}),
+      ...(replyTo !== undefined ? { replyTo: String(replyTo).trim() } : {}),
     });
 
     // Hand back what was saved. A re-read moments after a write can still serve

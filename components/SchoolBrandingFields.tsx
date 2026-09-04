@@ -63,7 +63,7 @@ export default function SchoolBrandingFields({
     }
     if (file.size > MAX_LOGO_BYTES) {
       setFileError(
-        `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please use one under 2MB — a crest is only ever shown small.`
+        `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please use one under 2MB, since a crest is only ever shown small.`
       );
       return;
     }

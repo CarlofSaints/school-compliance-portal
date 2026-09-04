@@ -1,6 +1,7 @@
 import { readJson, writeJson, readFile, writeFile, deleteFile } from "./controlData";
 import { branding as codeBranding, type SchoolBranding } from "./branding";
 import { derivePalette, normaliseHex } from "./brandingColors";
+import { buildFromAddress, buildReplyTo } from "./emailIdentity";
 
 // ---------------------------------------------------------------------------
 // Branding a school can change ITSELF, stored in that school's own blob store.
@@ -24,6 +25,9 @@ export interface StoredBranding {
   shortName?: string;
   primary?: string;
   accent?: string;
+  /** Where a REPLY goes. Nobody reads noreply@, so without this a reply to a
+   *  reminder is silently discarded. Needs no DNS, unlike the From address. */
+  replyTo?: string;
   /** Set once a crest has been uploaded. The bytes live at LOGO_PATH; this
    *  records the type and a version so a changed crest busts caches. */
   logo?: {
@@ -106,9 +110,16 @@ export function applyStoredBranding(
   const chose = stored.primary != null || stored.accent != null;
   const palette = chose ? derivePalette(primary, accent) : null;
 
+  const fullName = stored.fullName?.trim() || base.fullName;
+
   return {
     ...base,
-    fullName: stored.fullName?.trim() || base.fullName,
+    // A school never types its own From address: the domain has to be verified
+    // with the email provider, so the ADDRESS is fixed and only the NAME in
+    // front of it changes. See lib/emailIdentity.ts.
+    fromEmail: buildFromAddress(fullName, base.fromEmail),
+    replyTo: buildReplyTo(stored.replyTo),
+    fullName,
     shortName: stored.shortName?.trim() || base.shortName,
     logo: stored.logo
       ? `/api/branding/logo?v=${stored.logo.version}`

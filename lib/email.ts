@@ -102,7 +102,7 @@ export async function sendWelcomeEmail(
     <p style="color:#333;">Please log in and change your password immediately.</p>
     <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
   `;
-  return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body));
+  return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body), b.replyTo);
 }
 
 // Somebody who has NEVER signed in is not resetting anything, and telling them
@@ -127,7 +127,7 @@ export async function sendCredentialsSetupEmail(
     <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose your password</a>
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes. If it has expired by the time you get to it, use <strong>Forgot your password?</strong> on the sign-in page and it will send you a fresh one.</p>
   `;
-  return sendEmail(b.fromEmail, to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell(b, "Set up your account", body));
+  return sendEmail(b.fromEmail, to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell(b, "Set up your account", body), b.replyTo);
 }
 
 export async function sendPasswordResetLinkEmail(
@@ -148,7 +148,7 @@ export async function sendPasswordResetLinkEmail(
     <p style="color:#666;font-size:13px;">If you did not ask for this, you can ignore this email. Your password has not changed.</p>
     <p style="color:#888;font-size:12px;word-break:break-all;">If the button does not work, paste this into your browser:<br>${url}</p>
   `;
-  return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body));
+  return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body), b.replyTo);
 }
 
 export async function sendSpendNotificationEmail(
@@ -171,7 +171,7 @@ export async function sendSpendNotificationEmail(
     </div>
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
   `;
-  return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body));
+  return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body), b.replyTo);
 }
 
 // The applicant's own copy, sent on every submission.
@@ -215,14 +215,15 @@ export async function sendApplicantConfirmationEmail(
     to,
     `Spend Application Submitted: ${projectName}`,
     emailShell(b, "Application Submitted", body)
-  );
+  , b.replyTo);
 }
 
 async function sendEmail(
   from: string,
   to: string,
   subject: string,
-  html: string
+  html: string,
+  replyTo?: string
 ): Promise<boolean> {
   if (!resend) {
     console.log(`[Email] Would send to ${to}: ${subject}`);
@@ -230,7 +231,11 @@ async function sendEmail(
     return true;
   }
   try {
-    await resend.emails.send({ from, to, subject, html });
+    // replyTo is left OFF when the school has not set one, rather than sent
+    // empty: an invalid Reply-To can get the whole message rejected, and a
+    // missing one just means a reply goes to the (unread) From address, which
+    // is no worse than before.
+    await resend.emails.send({ from, to, subject, html, ...(replyTo ? { replyTo } : {}) });
     return true;
   } catch (err) {
     console.error("[Email] Failed to send:", err);
@@ -275,7 +280,7 @@ export async function sendSpendReminderEmail(
     to,
     `Reminder: ${projectName}`,
     emailShell(b, "Project Reminder", body)
-  );
+  , b.replyTo);
 }
 
 // --- Fund application approval workflow ------------------------------------
@@ -333,7 +338,7 @@ export async function sendApprovalRequestEmail(
     to,
     `Approval needed: ${projectName} (R${amount.toLocaleString()})`,
     emailShell(b, "Fund Application Approval", body)
-  );
+  , b.replyTo);
 }
 
 // Sent to the applicant each time one approver decides.
@@ -369,7 +374,7 @@ export async function sendApprovalProgressEmail(
     to,
     `Update on ${projectName}: ${approved} of ${total} approved`,
     emailShell(b, "Application Update", body)
-  );
+  , b.replyTo);
 }
 
 // Sent to the applicant once the last approver is in.
@@ -398,7 +403,7 @@ export async function sendFullyApprovedEmail(
     to,
     `Approved: ${projectName}`,
     emailShell(b, "Application Approved", body)
-  );
+  , b.replyTo);
 }
 
 // A nudge sent by hand from the grid, as opposed to the scheduled cron. Says
@@ -456,7 +461,7 @@ export async function sendApprovalReminderEmail(
     to,
     `Reminder: ${projectName} is waiting for your approval`,
     emailShell(b, "Approval Reminder", body)
-  );
+  , b.replyTo);
 }
 
 // --- Action items -----------------------------------------------------------
@@ -544,7 +549,7 @@ export async function sendActionAssignedEmail(
     to,
     `Action ${facts.ref}: ${facts.title}`,
     emailShell(b, "You have a new action item", body)
-  );
+  , b.replyTo);
 }
 
 // The scheduled chase. `why` states plainly which of the three it is (heads-up,
@@ -576,5 +581,5 @@ export async function sendActionReminderEmail(
     to,
     subject,
     emailShell(b, overdue ? "An action is overdue" : "Action item reminder", body)
-  );
+  , b.replyTo);
 }

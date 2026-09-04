@@ -41,8 +41,12 @@ export interface SchoolBranding {
   /** Logo path under /public. */
   logo: string;
   logoAlt: string;
-  /** Resend "From" address — the domain must be verified in Resend. */
+  /** Resend "From" address — the domain must be verified in Resend. Which is
+   *  exactly why a school does NOT get to choose it; see lib/emailIdentity.ts. */
   fromEmail: string;
+  /** Where replies go. Set by the school, needs no DNS. Absent means the
+   *  Reply-To header is left off entirely. */
+  replyTo?: string;
   colors: {
     /** Brand primary — buttons, headings, email header. White text sits on
      *  this, so it must be dark enough for white to read (cyan, black, navy…). */
