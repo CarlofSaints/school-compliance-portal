@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getUserById } from "@/lib/userData";
-import { sendPasswordResetLinkEmail, isEmailConfigured } from "@/lib/email";
+import {
+  sendCredentialsSetupEmail,
+  sendPasswordResetLinkEmail,
+  isEmailConfigured,
+} from "@/lib/email";
 import { createResetToken, RESET_TTL_MS } from "@/lib/passwordReset";
 
 // Sends the user a link to SET their own password.
@@ -35,19 +39,29 @@ export async function POST(
 
   try {
     const token = createResetToken(user);
-    const sent = await sendPasswordResetLinkEmail(
-      user.email,
-      user.name,
-      token,
-      Math.round(RESET_TTL_MS / 60000)
-    );
+    const minutes = Math.round(RESET_TTL_MS / 60000);
+
+    // forcePasswordChange still standing means they have never completed a
+    // first sign-in, so this is a set-up mail, not a reset. Telling somebody
+    // their password is being reset when they were never given one reads as a
+    // mistake and gets ignored.
+    const firstTime = user.forcePasswordChange;
+    const sent = firstTime
+      ? await sendCredentialsSetupEmail(user.email, user.name, token, minutes)
+      : await sendPasswordResetLinkEmail(user.email, user.name, token, minutes);
+
     if (!sent) {
       return NextResponse.json(
         { error: "Failed to send email" },
         { status: 502 }
       );
     }
-    return NextResponse.json({ success: true, sentTo: user.email });
+    return NextResponse.json({
+      success: true,
+      sentTo: user.email,
+      kind: firstTime ? "setup" : "reset",
+      expiresInMinutes: minutes,
+    });
   } catch (err) {
     console.error("[users/notify] Failed:", err);
     return NextResponse.json({ error: "Failed to send email" }, { status: 500 });

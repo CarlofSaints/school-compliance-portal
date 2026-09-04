@@ -92,6 +92,28 @@ export async function sendWelcomeEmail(
   return sendEmail(to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell("Welcome!", body));
 }
 
+// Somebody who has NEVER signed in is not resetting anything, and telling them
+// their password is being reset when they were never given one just reads as a
+// mistake. Same link, same token, different words.
+export async function sendCredentialsSetupEmail(
+  to: string,
+  name: string,
+  token: string,
+  ttlMinutes: number
+): Promise<boolean> {
+  const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const body = `
+    <p style="color:#333;">Dear ${name},</p>
+    <p style="color:#333;">An account has been created for you on the ${branding.shortName} ${branding.tagline}. To get in, choose your own password using the button below.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>You sign in with:</strong> ${to}</p>
+    </div>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose your password</a>
+    <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes. If it has expired by the time you get to it, use <strong>Forgot your password?</strong> on the sign-in page and it will send you a fresh one.</p>
+  `;
+  return sendEmail(to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell("Set up your account", body));
+}
+
 export async function sendPasswordResetLinkEmail(
   to: string,
   name: string,

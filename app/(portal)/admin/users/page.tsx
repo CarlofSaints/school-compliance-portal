@@ -57,6 +57,9 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<UserRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [repairing, setRepairing] = useState(false);
+  // Id of the row whose login email is currently being sent, so only that
+  // row shows a spinner rather than the whole table going busy.
+  const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -283,6 +286,38 @@ export default function UsersPage() {
     }
   };
 
+  // Sends the person a link to choose their own password.
+  //
+  // Deliberately NOT "resend their credentials": passwords are stored hashed,
+  // so the one they were originally given cannot be read back and re-sent. The
+  // old version of this route pretended otherwise and mailed people a password
+  // it never actually set, which is why nobody could get in.
+  const resendLoginEmail = async (user: UserRecord) => {
+    setSendingTo(user.id);
+    setNotice(null);
+    try {
+      const res = await authFetch(`/api/users/${user.id}/notify`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setToast({
+          message: data.error || "Could not send the email.",
+          type: "error",
+        });
+        return;
+      }
+      setToast({
+        message: `Sent to ${data.sentTo || user.email}. The link expires in ${data.expiresInMinutes ?? 60} minutes.`,
+        type: "success",
+      });
+    } catch {
+      setToast({ message: "Could not send the email.", type: "error" });
+    } finally {
+      setSendingTo(null);
+    }
+  };
+
   // Puts back any account that is in storage but has fallen out of the list.
   // Only ever adds, so it is safe to press at any time.
   const rebuildFromStorage = async () => {
@@ -422,7 +457,7 @@ export default function UsersPage() {
                   </td>
                   <td className="px-6 py-4">
                     {user.forcePasswordChange ? (
-                      <span className="text-risk-medium text-xs">Pending PW Change</span>
+                      <span className="text-risk-medium text-xs">Never signed in</span>
                     ) : (
                       <span className="text-emerald-600 text-xs">Active</span>
                     )}
@@ -430,6 +465,20 @@ export default function UsersPage() {
                   <td className="px-6 py-4 text-right">
                     {canManage ? (
                       <>
+                        {/* Only for people who have never signed in. Once
+                            somebody has their own password the honest way
+                            back in is Forgot your password? on the sign-in
+                            page, which needs no admin at all. */}
+                        {user.forcePasswordChange && (
+                          <button
+                            onClick={() => resendLoginEmail(user)}
+                            disabled={sendingTo === user.id}
+                            title={`Email ${user.email} a link to choose their own password`}
+                            className="text-primary hover:text-primary-dark mr-3 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {sendingTo === user.id ? "Sending..." : "Resend login email"}
+                          </button>
+                        )}
                         <button
                           onClick={() => openEdit(user)}
                           className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
