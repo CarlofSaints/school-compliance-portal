@@ -1,8 +1,8 @@
 // Pure reporting calculations for the Spend / funding module.
 // No server-only imports — safe to use from client components.
 
-import { getFundingAllocations } from "./spendData";
-import type { SpendApplication } from "./spendData";
+import { getFundingAllocations } from "./spend";
+import type { SpendApplication } from "./spend";
 
 export interface SourceBreakdown {
   source: string;

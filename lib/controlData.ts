@@ -1,19 +1,32 @@
 import { put, del, list, get } from "@vercel/blob";
-import { branding } from "@/lib/branding";
+import { tenantScope } from "@/lib/tenantContext";
 
-// Tenant-scoped blob path prefix. Each school has its own Blob store, so this
-// is mainly for tidiness — HVPS stays "hvps/" (key unchanged), Jeppe → "jeppe/".
-const PREFIX = `${branding.key}/`;
-
-function blobKey(path: string): string {
-  return PREFIX + path;
+// 🔴 EVERY blob call in this file is scoped PER REQUEST, and this is the only
+// module (besides the backup route) allowed to touch @vercel/blob directly.
+//
+// The scope carries two things and both matter:
+//   prefix — the path every key sits under
+//   token  — WHICH STORE, because each school has its own
+//
+// The token is the real isolation. A prefix bug inside one store would be bad;
+// two schools sharing a store would make that bug a data leak. They do not
+// share one. The prefix is belt to the token's braces.
+//
+// On a single-school deployment (HVPS and Jeppe today) the scope resolves to
+// that deployment's own school and an undefined token, which means "use
+// BLOB_READ_WRITE_TOKEN" — precisely the old behaviour.
+async function scope() {
+  return tenantScope();
 }
+
 
 // Still needed by deleteFile, which needs a blob's URL rather than its bytes.
 // Nothing should READ through this — see readBlobBody below for why.
 async function findBlob(blobPath: string) {
-  const result = await list({ prefix: blobKey(blobPath), limit: 1 });
-  return result.blobs.find((b) => b.pathname === blobKey(blobPath)) || null;
+  const { prefix, token } = await scope();
+  const key = prefix + blobPath;
+  const result = await list({ prefix: key, limit: 1, token });
+  return result.blobs.find((b) => b.pathname === key) || null;
 }
 
 // Reads a blob's bytes CONSISTENTLY — the freshly written copy, every time.
@@ -36,10 +49,12 @@ async function findBlob(blobPath: string) {
 //
 // get() also needs no separate index lookup, so it is one round trip, not two.
 async function readBlobBody(blobPath: string): Promise<Response | null> {
-  const result = await get(blobKey(blobPath), {
+  const { prefix, token } = await scope();
+  const result = await get(prefix + blobPath, {
     access: "private",
     // The whole point. Straight from origin storage, never the CDN copy.
     useCache: false,
+    token,
   });
   if (!result) return null;
   return new Response(result.stream);
@@ -91,11 +106,13 @@ export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
 }
 
 export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
-  await put(blobKey(blobPath), JSON.stringify(data, null, 2), {
+  const { prefix, token } = await scope();
+  await put(prefix + blobPath, JSON.stringify(data, null, 2), {
     access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
     allowOverwrite: true,
+    token,
   });
   // Cache the write so immediate re-reads get fresh data
   recentWrites.set(blobPath, { data, ts: Date.now() });
@@ -118,18 +135,21 @@ export async function writeFile(
   blobPath: string,
   data: Buffer | Uint8Array
 ): Promise<void> {
-  await put(blobKey(blobPath), Buffer.from(data), {
+  const { prefix, token } = await scope();
+  await put(prefix + blobPath, Buffer.from(data), {
     access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
+    token,
   });
 }
 
 export async function deleteFile(blobPath: string): Promise<void> {
   try {
+    const { token } = await scope();
     const blob = await findBlob(blobPath);
     if (blob) {
-      await del(blob.url);
+      await del(blob.url, { token });
     }
   } catch {
     // ignore
@@ -138,10 +158,13 @@ export async function deleteFile(blobPath: string): Promise<void> {
 
 export async function listFiles(dirPath: string): Promise<string[]> {
   try {
-    const result = await list({ prefix: blobKey(dirPath + "/") });
+    const { prefix: tenantPrefix, token } = await scope();
+    // Resolved ONCE. The old version rebuilt the prefix inside the map, so
+    // every row paid for it; now it is also an await, which cannot go there.
+    const prefix = tenantPrefix + dirPath + "/";
+    const result = await list({ prefix, token });
     return result.blobs.map((b) => {
       const full = b.pathname;
-      const prefix = blobKey(dirPath + "/");
       const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
       return relative.split("/")[0];
     }).filter((name) => name.length > 0);

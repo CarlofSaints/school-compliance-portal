@@ -6,7 +6,7 @@ import { GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
 import PersonPhoto from "@/components/PersonPhoto";
 import PhotoUpload from "@/components/PhotoUpload";
-import { TAG_COLOR_CLASSES } from "@/lib/tagData";
+import { TAG_COLOR_CLASSES } from "@/lib/tags";
 
 interface TagRecord {
   id: string;

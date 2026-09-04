@@ -3,7 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
-import { TAG_COLOR_CLASSES } from "@/lib/tagData";
+import { TAG_COLOR_CLASSES } from "@/lib/tags";
 
 interface TagRecord {
   id: string;

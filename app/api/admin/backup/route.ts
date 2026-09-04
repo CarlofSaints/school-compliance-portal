@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { list } from "@vercel/blob";
 import JSZip from "jszip";
 import { requirePermission } from "@/lib/rolesData";
-import { branding } from "@/lib/branding";
+import { tenantScope } from "@/lib/tenantContext";
 
-// Tenant-scoped, the same rule lib/controlData.ts writes under. This route is
-// the ONLY other place that talks to @vercel/blob directly, which is how it was
-// missed: a literal "hvps/" here listed nothing at all on Jeppe, so Backup
-// answered "No data found to backup" on every school except HVPS.
-const PREFIX = `${branding.key}/`;
+// Tenant-scoped exactly as lib/controlData.ts is. This route is the ONLY other
+// place that talks to @vercel/blob directly, which is how it was missed: a
+// literal "hvps/" here listed nothing at all on Jeppe, so Backup answered
+// "No data found to backup" on every school except HVPS.
+//
+// It must also carry the TOKEN, not just the prefix — on a multi-tenant
+// deployment the prefix alone would point at the right path in the wrong
+// store, and hand one school a zip of somebody else's records.
 
 const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico"];
 
@@ -22,6 +25,8 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
+    const { prefix: PREFIX, token } = await tenantScope();
+
     // Enumerate all blobs with pagination
     const allBlobs: { pathname: string; url: string }[] = [];
     let cursor: string | undefined;
@@ -31,6 +36,7 @@ export async function GET(req: NextRequest) {
         prefix: PREFIX,
         limit: 1000,
         cursor,
+        token,
       });
       for (const blob of result.blobs) {
         allBlobs.push({ pathname: blob.pathname, url: blob.url });
@@ -49,7 +55,7 @@ export async function GET(req: NextRequest) {
       try {
         const res = await fetch(blob.url, {
           headers: {
-            Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
+            Authorization: `Bearer ${token || process.env.BLOB_READ_WRITE_TOKEN}`,
           },
           cache: "no-store",
         });
@@ -80,7 +86,7 @@ export async function GET(req: NextRequest) {
     const zipBuffer = Buffer.from(await zip.generateAsync({ type: "uint8array" }));
 
     const today = new Date().toISOString().slice(0, 10);
-    const filename = `${branding.key}-backup-${today}.zip`;
+    const filename = `${PREFIX.replace(/\/$/, "")}-backup-${today}.zip`;
 
     return new Response(zipBuffer, {
       headers: {

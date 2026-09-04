@@ -3,7 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
-import { TAG_COLOR_CLASSES } from "@/lib/tagData";
+import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import PersonPhoto from "@/components/PersonPhoto";
 import { branding } from "@/lib/branding";
 

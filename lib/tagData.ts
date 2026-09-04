@@ -1,43 +1,13 @@
 import { readJson, writeJson } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
+import type { Tag } from "./tags";
 
-// A tag names a group of individuals — FINCOM, Principal, Grounds Committee.
-//
-// Deliberately separate from roles: a role is a shared bundle of permissions
-// several people hold, whereas approval authority belongs to named individuals.
-// Tagging is how "the FINCOM must approve this" is expressed without inventing
-// a role that also grants access to unrelated parts of the portal.
-//
-// A tag can sit on a User (someone who logs in) or on a Person (someone on the
-// school's register who may have no login but does have an email).
-export interface Tag {
-  id: string;
-  name: string;
-  description: string;
-  color: string;
-  createdAt: string;
-}
-
-export const TAG_COLORS = [
-  "slate",
-  "blue",
-  "emerald",
-  "amber",
-  "purple",
-  "rose",
-] as const;
-
-// Tailwind classes per colour. Written out in full because Tailwind only keeps
-// class names it can see in the source - a template string would be purged.
-export const TAG_COLOR_CLASSES: Record<string, string> = {
-  slate: "bg-slate-100 text-slate-700",
-  blue: "bg-blue-100 text-blue-700",
-  emerald: "bg-emerald-100 text-emerald-700",
-  amber: "bg-amber-100 text-amber-700",
-  purple: "bg-purple-100 text-purple-700",
-  rose: "bg-rose-100 text-rose-700",
-};
+// The types and colour constants live in lib/tags.ts so a client component can
+// import them without pulling this module - and therefore the whole storage
+// layer - into the browser bundle. Re-exported here so every existing
+// server-side `from "@/lib/tagData"` keeps working.
+export * from "./tags";
 
 const TAGS_PATH = "tags.json";
 
