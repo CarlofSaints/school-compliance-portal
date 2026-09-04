@@ -1,4 +1,4 @@
-import { put, del, list } from "@vercel/blob";
+import { put, del, list, get } from "@vercel/blob";
 import { branding } from "@/lib/branding";
 
 // Tenant-scoped blob path prefix. Each school has its own Blob store, so this
@@ -9,18 +9,40 @@ function blobKey(path: string): string {
   return PREFIX + path;
 }
 
-async function fetchBlob(url: string): Promise<Response> {
-  return fetch(url, {
-    headers: {
-      Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`,
-    },
-    cache: "no-store",
-  });
-}
-
+// Still needed by deleteFile, which needs a blob's URL rather than its bytes.
+// Nothing should READ through this — see readBlobBody below for why.
 async function findBlob(blobPath: string) {
   const result = await list({ prefix: blobKey(blobPath), limit: 1 });
   return result.blobs.find((b) => b.pathname === blobKey(blobPath)) || null;
+}
+
+// Reads a blob's bytes CONSISTENTLY — the freshly written copy, every time.
+//
+// This replaced list() + fetch(blob.url). That pair looks like a read but it is
+// really two: list() hands back a URL from an index that lags a write, and the
+// CDN then serves that URL from cache. Appending a ?_t= cache-buster did not
+// help, because the stale URL is stale before the query string is even
+// considered. Measured against the live store, eight writes each followed
+// immediately by a read: list() + fetch() returned the wrong version FIVE
+// times, and got stuck re-serving the same old copy over and over. The same
+// call through get({ useCache: false }) was correct eight times out of eight.
+//
+// That one behaviour is behind a whole run of bugs in this project: an account
+// that could not log in for the first minute of its life, a reset link that
+// could be used twice, a saved record that read back as its old self, and —
+// worst — read-modify-write callers that read a stale list, appended to it, and
+// saved it back over newer records. Anything that reads to then write MUST come
+// through here.
+//
+// get() also needs no separate index lookup, so it is one round trip, not two.
+async function readBlobBody(blobPath: string): Promise<Response | null> {
+  const result = await get(blobKey(blobPath), {
+    access: "private",
+    // The whole point. Straight from origin storage, never the CDN copy.
+    useCache: false,
+  });
+  if (!result) return null;
+  return new Response(result.stream);
 }
 
 // Last-resort record of what THIS instance last wrote, per path.
@@ -42,14 +64,9 @@ const CACHE_TTL = 10000; // 10 seconds
 
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   try {
-    const blob = await findBlob(blobPath);
-    if (blob) {
-      // Append cache-buster to avoid CDN/edge caching
-      const url = blob.url + (blob.url.includes("?") ? "&" : "?") + `_t=${Date.now()}`;
-      const res = await fetchBlob(url);
-      if (res.ok) {
-        return (await res.json()) as T;
-      }
+    const res = await readBlobBody(blobPath);
+    if (res) {
+      return (await res.json()) as T;
     }
   } catch {
     // blob not found
@@ -86,13 +103,10 @@ export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {
   try {
-    const blob = await findBlob(blobPath);
-    if (blob) {
-      const res = await fetchBlob(blob.url);
-      if (res.ok) {
-        const arrayBuffer = await res.arrayBuffer();
-        return Buffer.from(arrayBuffer);
-      }
+    const res = await readBlobBody(blobPath);
+    if (res) {
+      const arrayBuffer = await res.arrayBuffer();
+      return Buffer.from(arrayBuffer);
     }
   } catch {
     // blob not found

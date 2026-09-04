@@ -81,8 +81,34 @@ export async function getUserById(id: string): Promise<User | undefined> {
 export async function getUserByEmail(
   email: string
 ): Promise<User | undefined> {
+  // Trim as well as lowercase. An address is a join key, and one pasted into a
+  // form with a trailing space would otherwise miss an account sitting right
+  // there. Normalised on BOTH sides, because the stored copy can carry the
+  // stray space just as easily as the typed one.
+  const wanted = email.trim().toLowerCase();
   const users = await getUsers();
-  return users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  const fromIndex = users.find((u) => u.email.trim().toLowerCase() === wanted);
+
+  // The index says WHICH account. The account's own copy says what is true
+  // about it. getUserById reads that own copy first, so going back through it
+  // means a login is checked against the current password rather than whatever
+  // version of the shared list came back — the difference between a password
+  // change that takes effect now and one that takes effect in a minute.
+  if (fromIndex) return (await getUserById(fromIndex.id)) ?? fromIndex;
+
+  // Not in the index at all. That is recoverable, because every account also
+  // keeps its own copy: scan those rather than telling somebody who really does
+  // have an account that their email is not recognised. Only reached when the
+  // login would otherwise fail outright, so the cost lands on nobody normal.
+  for (const id of await listFiles("users")) {
+    const record = await getUserRecord(id);
+    if (!record?.email) continue;
+    if (record.email.trim().toLowerCase() !== wanted) continue;
+    if (await isUserDeleted(id)) continue;
+    console.warn("[getUserByEmail] Recovered from own copy, not in index:", id);
+    return record;
+  }
+  return undefined;
 }
 
 export async function createUser(
