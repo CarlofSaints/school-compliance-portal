@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
+import SchoolCrest from "@/components/SchoolCrest";
 import { setSession, getSession } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
 
@@ -54,14 +54,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <Image
-            src={branding.logo}
-            alt={branding.logoAlt}
-            width={100}
-            height={120}
-            className="mx-auto mb-4"
-            priority
-          />
+          <SchoolCrest width={100} height={120} className="mx-auto mb-4" priority />
           <h1 className="text-2xl font-bold text-dark">
             {branding.fullName}
           </h1>

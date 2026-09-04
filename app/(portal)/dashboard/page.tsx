@@ -2,11 +2,11 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import DashboardCard from "@/components/DashboardCard";
 import ScoreNote from "@/components/ScoreNote";
 import { useBranding } from "@/components/BrandingProvider";
+import SchoolCrest from "@/components/SchoolCrest";
 import { pendingSpendCount } from "@/lib/spendReport";
 import {
   summarise,
@@ -154,7 +154,7 @@ export default function DashboardPage() {
           {branding.fullName} {branding.tagline}
         </p>
         </div>
-        <Image src={branding.logo} alt={branding.fullName} width={60} height={72} />
+        <SchoolCrest width={60} height={72} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

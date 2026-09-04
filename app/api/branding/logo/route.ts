@@ -32,6 +32,19 @@ export async function GET() {
       // would keep showing the old crest more or less forever.
       "Cache-Control": "public, max-age=31536000, immutable",
       "Content-Length": String(bytes.length),
+
+      // 🔴 An SVG is a document, not a picture. It can carry <script>, and this
+      // one was uploaded by somebody else and is served from OUR origin — so a
+      // link straight to it would run their script with our origin's access.
+      //
+      // `sandbox` drops it into an opaque origin with scripts disabled, which
+      // is the standard mitigation and costs a static crest nothing. Applied to
+      // every type, not just SVG, because the cost is zero and remembering to
+      // special-case it is how it gets missed.
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      // Stops a browser deciding a mislabelled file is really HTML.
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

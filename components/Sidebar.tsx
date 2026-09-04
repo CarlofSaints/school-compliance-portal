@@ -1,9 +1,9 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import Image from "next/image";
 import { useSessionValue, clearSession } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
+import SchoolCrest from "@/components/SchoolCrest";
 import { useState } from "react";
 
 interface NavChild {
@@ -196,14 +196,14 @@ export default function Sidebar() {
         <div className="flex items-center justify-between">
           {!collapsed ? (
             <div className="flex items-center gap-3">
-              <Image src={branding.logo} alt={branding.shortName} width={36} height={43} />
+              <SchoolCrest width={36} height={43} />
               <div>
                 <h1 className="text-lg font-bold text-accent">{branding.shortName}</h1>
                 <p className="text-xs text-gray-400">{branding.portalSubtitle}</p>
               </div>
             </div>
           ) : (
-            <Image src={branding.logo} alt={branding.shortName} width={28} height={33} />
+            <SchoolCrest width={28} height={33} />
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
