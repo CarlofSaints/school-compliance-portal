@@ -155,11 +155,20 @@ export async function tenantScope(): Promise<TenantScope> {
  * the generic branding and an empty store, which would look like a school whose
  * data had vanished.
  */
+/** The hostname Carl's own portal answers on. Exempt from the stray-host
+ *  page, because the platform belongs to no school and the registry will
+ *  never know it. */
+export function platformHostname(): string {
+  return (process.env.PLATFORM_HOSTNAME || "").trim().toLowerCase();
+}
+
 export async function unknownHostname(): Promise<string | null> {
   if (!isMultiTenant()) return null;
   try {
     const hostname = await requestHostname();
     if (!hostname) return null;
+    // Carl's own portal, on every path including the sign-in it bounces to.
+    if (hostname === platformHostname()) return null;
     if (await resolveTenantForHost(hostname)) return null;
     return hostname;
   } catch {

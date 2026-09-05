@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import PlatformSignedOut from "@/components/PlatformSignedOut";
 import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
 import { platformOverview, type SchoolSummary } from "@/lib/platformStats";
@@ -19,9 +19,12 @@ function fmt(n: number | null): string {
 
 export default async function PlatformPage() {
   const admin = await requirePlatformAdmin();
-  // The gate hands back a 404 response for an API route; a page cannot return
-  // one, so anyone not allowed is simply sent away. Same outcome, no signal.
-  if (admin instanceof NextResponse) redirect("/login");
+  // The gate returns a 404 response for an API route; a page cannot return one,
+  // so this renders a bare "not available" instead. Deliberately NOT a redirect:
+  // that would land on a SCHOOL sign-in page, which has nothing to do with the
+  // platform and, on a hostname belonging to no school, would show "no school at
+  // this address".
+  if (admin instanceof NextResponse) return <PlatformSignedOut />;
 
   const { schools, totals } = await platformOverview();
 

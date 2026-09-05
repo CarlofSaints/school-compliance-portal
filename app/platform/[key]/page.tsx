@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
+import PlatformSignedOut from "@/components/PlatformSignedOut";
 import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
 import { getTenantByKey } from "@/lib/tenantRegistry";
@@ -22,7 +23,9 @@ export default async function PlatformSchoolPage({
   searchParams: Promise<{ month?: string }>;
 }) {
   const admin = await requirePlatformAdmin();
-  if (admin instanceof NextResponse) redirect("/login");
+  // Rendered, not redirected: a redirect would land on a SCHOOL sign-in page,
+  // which has nothing to do with the platform.
+  if (admin instanceof NextResponse) return <PlatformSignedOut />;
 
   const { key } = await params;
   const { month } = await searchParams;
