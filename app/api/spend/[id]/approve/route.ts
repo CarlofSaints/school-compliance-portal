@@ -13,6 +13,8 @@ import {
   sendApprovalProgressEmail,
   sendFullyApprovedEmail,
 } from "@/lib/email";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFrom } from "@/lib/activityActor";
 
 const DECISION_LABELS: Record<string, string> = {
   approved: "approved",
@@ -80,6 +82,22 @@ export async function POST(
         status: "approved",
         approvals,
         approvedAmount: app.approvedAmount ?? app.estimatedAmount,
+      });
+
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "spend.approved.override",
+        entity: "spend",
+        entityId: app.id,
+        summary: `Manually approved "${app.projectName}" for R${(
+          app.approvedAmount ?? app.estimatedAmount
+        ).toLocaleString()}, bypassing the normal approvers`,
+        detail: {
+          reason: note,
+          amount: app.approvedAmount ?? app.estimatedAmount,
+          bypassedApprovers: app.requiredApprovers,
+          previousStatus: app.status,
+        },
       });
 
       await notifyApplicant(app, session, "approved", note, true);
@@ -166,6 +184,27 @@ export async function POST(
     }
 
     await updateSpendApplication(id, updates);
+
+    // Logged AFTER the write succeeds, so the trail never claims something
+    // happened that did not. recordActivity never throws, so a logging
+    // failure cannot undo a decision that has already been saved.
+    await recordActivity({
+      ...actorFrom(req, session),
+      action: `spend.${decision}`,
+      entity: "spend",
+      entityId: app.id,
+      summary: `${DECISION_LABELS[decision] || decision} "${app.projectName}" (R${(
+        app.approvedAmount ?? app.estimatedAmount
+      ).toLocaleString()})`,
+      detail: {
+        decision,
+        comments: note || undefined,
+        amount: app.approvedAmount ?? app.estimatedAmount,
+        statusBefore: app.status,
+        statusAfter: status,
+        preferredQuoteIndex,
+      },
+    });
 
     await notifyApplicant(app, session, decision, note, false, approvals);
 
