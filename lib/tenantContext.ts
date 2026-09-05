@@ -1,7 +1,13 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { headers } from "next/headers";
 import { branding } from "@/lib/branding";
 import { normaliseHostname, type ResolvedTenant } from "@/lib/tenant";
-import { isMultiTenant, resolveTenantForHost } from "@/lib/tenantRegistry";
+import {
+  isMultiTenant,
+  resolveTenantForHost,
+  getTenantByKey,
+} from "@/lib/tenantRegistry";
+import { open } from "@/lib/secretBox";
 
 // ---------------------------------------------------------------------------
 // Which school is THIS request for?
@@ -76,7 +82,53 @@ export async function currentTenant(): Promise<ResolvedTenant | null> {
  * SDK directly. lib/controlData.ts and app/api/admin/backup/route.ts are the
  * only two modules allowed to, and both go through here.
  */
+// An explicit scope, set for the duration of one call, that overrides the one
+// the request would otherwise imply.
+//
+// This exists for exactly one caller: the platform admin portal, where Carl
+// looks at a school OTHER than the one the hostname names. Everything else must
+// go on resolving from the request, so AsyncLocalStorage is used rather than a
+// parameter: it cannot leak past the callback, it cannot be left switched on,
+// and it needs no change to any of the 133 data call sites.
+//
+// 🔴 Anything running inside runAsTenant reads and WRITES another school's
+// store. It must only ever be reachable behind the platform admin check.
+const override = new AsyncLocalStorage<TenantScope>();
+
+/**
+ * Runs `fn` against a named school's store.
+ *
+ * Throws if the tenant is unknown or has no stored credential, rather than
+ * silently falling back to the current request's school. A quiet fallback here
+ * would mean an admin who asked for school A being shown school B, which is the
+ * single worst thing this codebase could do.
+ */
+export async function runAsTenant<T>(
+  key: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const tenant = await getTenantByKey(key);
+  if (!tenant) throw new Error(`No school with the address "${key}".`);
+  if (!tenant.blobTokenSealed) {
+    throw new Error(`School "${key}" has no stored credential.`);
+  }
+  return override.run(
+    {
+      prefix: `${tenant.key}/`,
+      token: open(tenant.blobTokenSealed),
+      key: tenant.key,
+      fromRegistry: true,
+    },
+    fn
+  );
+}
+
 export async function tenantScope(): Promise<TenantScope> {
+  // An explicit scope always wins. Checked FIRST so a platform admin reading
+  // school A over school B's hostname cannot be handed B's data.
+  const forced = override.getStore();
+  if (forced) return forced;
+
   const tenant = await currentTenant();
   if (tenant) {
     return {
