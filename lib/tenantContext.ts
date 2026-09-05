@@ -74,14 +74,6 @@ export async function currentTenant(): Promise<ResolvedTenant | null> {
   }
 }
 
-/**
- * The scope every blob call runs under.
- *
- * 🔴 This is THE isolation choke point. One school's data never reaching
- * another rests entirely on this function and on nothing else calling the blob
- * SDK directly. lib/controlData.ts and app/api/admin/backup/route.ts are the
- * only two modules allowed to, and both go through here.
- */
 // An explicit scope, set for the duration of one call, that overrides the one
 // the request would otherwise imply.
 //
@@ -123,6 +115,14 @@ export async function runAsTenant<T>(
   );
 }
 
+/**
+ * The scope every blob call runs under.
+ *
+ * 🔴 This is THE isolation choke point. One school's data never reaching
+ * another rests entirely on this function and on nothing else calling the blob
+ * SDK directly. lib/controlData.ts and app/api/admin/backup/route.ts are the
+ * only two modules allowed to, and both go through here.
+ */
 export async function tenantScope(): Promise<TenantScope> {
   // An explicit scope always wins. Checked FIRST so a platform admin reading
   // school A over school B's hostname cannot be handed B's data.
@@ -155,6 +155,18 @@ export async function tenantScope(): Promise<TenantScope> {
  * the generic branding and an empty store, which would look like a school whose
  * data had vanished.
  */
+export async function unknownHostname(): Promise<string | null> {
+  if (!isMultiTenant()) return null;
+  try {
+    const hostname = await requestHostname();
+    if (!hostname) return null;
+    if (await resolveTenantForHost(hostname)) return null;
+    return hostname;
+  } catch {
+    return null;
+  }
+}
+
 export async function isUnknownHost(): Promise<boolean> {
   if (!isMultiTenant()) return false;
   try {

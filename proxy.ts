@@ -19,10 +19,27 @@ import { isClerkEnabled } from "@/lib/clerkConfig";
 // Swapping the two over is a separate, deliberate step.
 // ---------------------------------------------------------------------------
 
-const withClerk = isClerkEnabled() ? clerkMiddleware() : null;
+// The pathname, published as a header so a server layout can read it.
+function withPathname(req: NextRequest): Headers {
+  const h = new Headers(req.headers);
+  h.set("x-pathname", req.nextUrl.pathname);
+  return h;
+}
+// The handler form, so Clerk establishes the session AND the pathname
+// header is set on the way through. Both branches must set it: the Clerk
+// branch is the multi-tenant app, which is the only place the header is
+// actually needed.
+const withClerk = isClerkEnabled()
+  ? clerkMiddleware((_auth, req) =>
+      NextResponse.next({ request: { headers: withPathname(req) } })
+    )
+  : null;
+
 
 export default function proxy(req: NextRequest, event: never) {
-  if (!withClerk) return NextResponse.next();
+  if (!withClerk) {
+    return NextResponse.next({ request: { headers: withPathname(req) } });
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (withClerk as any)(req, event);
 }
