@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
@@ -40,6 +41,7 @@ const STATUS_TONE: Record<MinutesStatus, string> = {
 
 export default function MinutesPage() {
   const { session, loading } = useAuth();
+  const router = useRouter();
   const canManage =
     !!session &&
     (session.permissions.includes("manage_minutes") ||
@@ -103,8 +105,16 @@ export default function MinutesPage() {
         <AddMinutes
           templates={templates}
           onClose={() => setAdding(false)}
-          onSaved={(msg) => {
+          onSaved={(msg, record, writing) => {
             setAdding(false);
+            // Writing them here means the next thing you want is the cursor in
+            // the document, not a row in a list you then have to find and click.
+            if (writing && record?.id) {
+              router.push(`/minutes/${record.id}`);
+              return;
+            }
+            // An UPLOAD is different: the minutes are already written, so
+            // there is nothing to type and the list is where you want to be.
             setToast({ message: msg, type: "success" });
             load();
           }}
@@ -210,7 +220,7 @@ function AddMinutes({
 }: {
   templates: { id: string; name: string; body?: MeetingBody; sections: unknown[] }[];
   onClose: () => void;
-  onSaved: (msg: string) => void;
+  onSaved: (msg: string, record: { id: string } | null, writing: boolean) => void;
   onError: (msg: string) => void;
 }) {
   const now = new Date();
@@ -246,7 +256,7 @@ function AddMinutes({
       const res = await authFetch("/api/minutes", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return onError(data.error || "Could not save those minutes.");
-      onSaved(`Added "${title.trim()}".`);
+      onSaved(`Added "${title.trim()}".`, data, mode === "write");
     } catch {
       onError("Could not save those minutes.");
     } finally {
@@ -379,7 +389,13 @@ function AddMinutes({
           disabled={saving}
           className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save minutes"}
+          {saving
+            ? mode === "write"
+              ? "Opening..."
+              : "Saving..."
+            : mode === "write"
+              ? "Start writing"
+              : "Save minutes"}
         </button>
         <button
           onClick={onClose}
