@@ -83,3 +83,27 @@ export const DEFAULT_SUPPLIER_CONNECTIONS = [
   "Relative of Parent",
   `Relative of ${GOVERNANCE_MEMBER_LABEL}`,
 ];
+
+/**
+ * Which governance position signs in which capacity.
+ *
+ * 🔴 By INDEX, not by matching words in the name. The public and private lists
+ * above are a deliberate 1:1 mapping, so index 2 is the chair of the governing
+ * body whichever list a school is on. A rule like `name.includes("Chair")`
+ * would match "Treasurer / Chair of Finance Committee" as the chair of the
+ * board, and would break the first time a school renamed a position or a list
+ * gained an Afrikaans equivalent.
+ */
+const PRINCIPAL = 0;
+const CHAIR = 2;
+const VICE_CHAIR = 3;
+
+export function signatoryRoleForPosition(
+  position: string | undefined
+): "sgb_chair" | "principal" | "deputy_chair" | "other" {
+  const i = POSITIONS.indexOf((position || "").trim());
+  if (i === PRINCIPAL) return "principal";
+  if (i === CHAIR) return "sgb_chair";
+  if (i === VICE_CHAIR) return "deputy_chair";
+  return "other";
+}

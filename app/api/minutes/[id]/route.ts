@@ -7,6 +7,7 @@ import {
   MinutesLockedError,
 } from "@/lib/minutesData";
 import { checkPeriod, isLocked } from "@/lib/minutes";
+import { documentHash, shortHash } from "@/lib/minutesSigning";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -24,7 +25,16 @@ export async function GET(
   if (!record) {
     return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
   }
-  return NextResponse.json(record);
+  // The hash of the document AS IT STANDS NOW, so the page can tell a
+  // signature that still covers what is on screen from one that was applied
+  // to a version since edited. Computed here rather than in the browser:
+  // the two must agree, and one implementation cannot disagree with itself.
+  const hash = documentHash(record);
+  return NextResponse.json({
+    ...record,
+    documentHash: hash,
+    documentRef: shortHash(hash),
+  });
 }
 
 export async function PATCH(

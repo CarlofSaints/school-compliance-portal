@@ -252,6 +252,79 @@ export async function sendMinutesReadyToSignEmail(
   );
 }
 
+// The code somebody types to sign. Sent to them, never shown on the page: what
+// makes an ordinary electronic signature stand up is that the signer did
+// something deliberate that only they could do, and clicking a button while
+// logged in is not that.
+export async function sendMinutesSigningCodeEmail(
+  to: string,
+  recipientName: string,
+  minutesId: string,
+  minutesTitle: string,
+  periodLabel: string,
+  code: string
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
+  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const body = `
+    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
+      <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
+    </div>
+    <p style="color:#333;">Read them through, then sign with this code:</p>
+    <p style="font-family:monospace;font-size:30px;letter-spacing:6px;font-weight:bold;color:${PRIMARY};margin:8px 0 20px;">${esc(code)}</p>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Read and sign</a>
+    <p style="color:#666;font-size:13px;margin-top:20px;">The code is yours alone. Do not pass it on: whoever uses it signs in your name.</p>
+    <p style="color:#666;font-size:13px;">Once everyone has signed, the minutes are locked and cannot be changed. If something is still wrong, ask the secretary to pull them back rather than signing.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    `Your signing code: ${minutesTitle}`,
+    emailShell(b, "Ready to sign", body),
+    b.replyTo
+  );
+}
+
+// Everybody has signed. This goes to the distribution list for the body, so
+// the whole SGB or FINCOM gets the final record.
+export async function sendMinutesSignedEmail(
+  to: string,
+  recipientName: string,
+  minutesId: string,
+  minutesTitle: string,
+  periodLabel: string,
+  signedBy: string[],
+  documentRef: string
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
+  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const body = `
+    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">The minutes below have been signed and are now the final record.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
+      <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
+      <p style="margin:10px 0 0;color:#555;font-size:14px;">Signed by ${esc(signedBy.join(", "))}</p>
+    </div>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Read the signed minutes</a>
+    <p style="color:#666;font-size:13px;margin-top:20px;">Document reference ${esc(documentRef)}. This identifies the exact wording that was signed, so a later copy can be checked against it.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    `Signed: ${minutesTitle}`,
+    emailShell(b, "Signed minutes", body),
+    b.replyTo
+  );
+}
+
 export async function sendSpendNotificationEmail(
   to: string,
   recipientName: string,

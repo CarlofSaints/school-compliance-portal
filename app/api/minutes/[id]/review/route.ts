@@ -5,20 +5,14 @@ import {
   canReview,
   isReviewer,
   reviewProgress,
-  formatPeriod,
   type MinutesReview,
 } from "@/lib/minutes";
-import { resolveAudience } from "@/lib/minutesRecipients";
 import { getUserByEmail } from "@/lib/userData";
-import {
-  sendMinutesChangesRequestedEmail,
-  sendMinutesReadyToSignEmail,
-} from "@/lib/email";
+import { openSigning, SigningSetupError } from "@/lib/minutesSigningFlow";
+import { sendMinutesChangesRequestedEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
-const SEND_GAP_MS = 600;
-const pause = () => new Promise((r) => setTimeout(r, SEND_GAP_MS));
 
 /**
  * A reviewer approves the draft, or sends it back with comments.
@@ -97,7 +91,8 @@ export async function POST(
 
   const updated = await updateMinutes(id, { reviews, status });
 
-  const periodLabel = formatPeriod(record.period);
+  /** Set when the round finished but signing could not be opened. */
+  let signingProblem: string | undefined;
 
   if (decision === "changes_requested") {
     // Straight back to whoever wrote them. createdBy is an address, so the
@@ -112,11 +107,19 @@ export async function POST(
       comments
     );
   } else if (progress.complete) {
-    // Everyone has checked it. Out to whoever signs.
-    const audience = await resolveAudience("signing");
-    for (const person of [...audience.to, ...audience.cc]) {
-      await sendMinutesReadyToSignEmail(person.email, person.name, id, record.title, periodLabel);
-      await pause();
+    // Everyone has checked it, so signing opens by itself: each signatory
+    // gets their own code. Shared with the route the secretary uses to open
+    // signing directly, so the two paths cannot drift into producing
+    // differently-shaped records.
+    try {
+      await openSigning(id);
+    } catch (e) {
+      // 🔴 The approval STANDS. Nobody is set up to sign yet is the school's
+      // configuration problem, not a reason to throw away a round of review
+      // that everybody completed, so the reviewer is told and the minutes
+      // stay approved rather than reverting to in_review.
+      if (!(e instanceof SigningSetupError)) throw e;
+      signingProblem = e.message;
     }
   }
 
@@ -132,5 +135,5 @@ export async function POST(
     detail: { draftNumber: record.draftNumber, decision, comments: comments || undefined },
   });
 
-  return NextResponse.json({ record: updated, progress });
+  return NextResponse.json({ record: updated, progress, signingProblem });
 }

@@ -166,6 +166,17 @@ export interface Signatory {
   documentHash?: string;
   /** Recorded for the audit trail, never shown to other signatories. */
   ip?: string;
+  /**
+   * SHA-256 of the code emailed to this person, salted with the minutes id.
+   *
+   * 🔴 The plain code is never stored. Anyone who could read this store
+   * could otherwise sign as every signatory, which would make the signature
+   * worth nothing at exactly the moment it mattered.
+   */
+  codeHash?: string;
+  /** When their code was sent, so a resend is visible and the secretary can
+   *  see who has been chased. */
+  codeSentAt?: string;
 }
 
 /** Signing is sequential in the sense that everyone must sign before the
@@ -469,4 +480,85 @@ export function canSendForReview(status: MinutesStatus): boolean {
 
 export function canReview(status: MinutesStatus): boolean {
   return status === "in_review";
+}
+
+// ---------------------------------------------------------------------------
+// Signing.
+//
+// Carl: "let's just have it anyway and then add an option to download the final
+// draft to MS Word so those who prefer a wet ink signature can sign and then
+// upload."
+//
+// Under the ECT Act an ordinary electronic signature is data attached to a
+// document, applied with the intention of signing. Two things make that stand
+// up rather than being a claim: the signer did something deliberate (typed a
+// code sent to them, not merely clicked while logged in), and we recorded WHAT
+// THEY SIGNED. The second one is canonicalMinutes below.
+// ---------------------------------------------------------------------------
+
+/** Characters a person can read off an email and type without ambiguity.
+ *  No O/0, no I/1/L. Same reasoning as lib/platformCodes.ts. */
+export const SIGNING_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+/** Codes are compared after this, so a pasted space, a lowercase letter or the
+ *  hyphen somebody adds out of habit does not read as the wrong code. */
+export function normaliseSigningCode(input: string): string {
+  return String(input || "").replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+/**
+ * 🔴 EXACTLY what a signature covers, as one deterministic string.
+ *
+ * Hashing the .docx would be useless: a zip carries timestamps, so building the
+ * same minutes twice gives two different hashes and every signature would look
+ * broken. Hashing the stored JSON would be almost as bad, because a field added
+ * next year, or a key written in a different order by a different code path,
+ * would break every signature already collected.
+ *
+ * So this names the fields deliberately and in a fixed order. It covers what a
+ * reader would call the minutes: the title, the period, and every section with
+ * its wording, its numbering and who was responsible. It does NOT cover the
+ * signatures themselves, or the record would change its own hash as each person
+ * signed and nobody after the first could be verified.
+ */
+export function canonicalMinutes(m: {
+  title: string;
+  body: MeetingBody;
+  period: MeetingPeriod;
+  sections: MinutesSection[];
+}): string {
+  const numbers = sectionNumbers(m.sections);
+  const sections = [...m.sections]
+    .sort((a, b) => a.order - b.order)
+    .map((s) =>
+      [
+        numbers.get(s.id) ?? "",
+        s.title.trim(),
+        (s.body || "").replace(/\r\n/g, "\n").trim(),
+        (s.responsible || "").trim(),
+      ].join("\u001f")
+    );
+  return [
+    m.title.trim(),
+    m.body,
+    formatPeriod(m.period),
+    ...sections,
+  ].join("\u001e");
+}
+
+/** Whether the document has changed since somebody signed it. A signature whose
+ *  hash no longer matches is not merely stale, it is evidence that a signed
+ *  record was edited, so it is shown rather than quietly recalculated. */
+export function signatureMatchesDocument(
+  signatory: Signatory,
+  currentHash: string
+): boolean {
+  return !!signatory.documentHash && signatory.documentHash === currentHash;
+}
+
+/** Signing is open, but nothing has been signed yet, so it can still be pulled
+ *  back for changes. Once one person has signed, pulling it back means throwing
+ *  their signature away, which the UI has to say out loud. */
+export function canOpenSigning(status: MinutesStatus): boolean {
+  return status === "draft" || status === "changes_requested" || status === "in_review";
 }

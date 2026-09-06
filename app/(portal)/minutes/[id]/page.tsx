@@ -9,6 +9,7 @@ import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import DownloadLink from "@/components/DownloadLink";
 import MinutesReviewPanel from "@/components/MinutesReviewPanel";
+import MinutesSigningPanel from "@/components/MinutesSigningPanel";
 import {
   formatPeriod,
   isLocked,
@@ -32,6 +33,10 @@ interface MinutesDetail {
   sections: MinutesSection[];
   original?: { filename: string; size: number; uploadedAt: string };
   signatories: Signatory[];
+  /** The document as it stands now, computed server side so the page and the
+   *  signature cannot disagree about what was signed. */
+  documentHash?: string;
+  documentRef?: string;
   reviewers?: MinutesReviewer[];
   reviews: MinutesReview[];
   draftNumber: number;
@@ -234,6 +239,18 @@ export default function MinutesDetailPage() {
         sections={record.sections}
         editable={editable}
         onChange={(sections) => patch({ sections })}
+      />
+
+      <MinutesSigningPanel
+        id={record.id}
+        status={record.status}
+        signatories={record.signatories}
+        currentHash={record.documentHash}
+        currentRef={record.documentRef}
+        canManage={canManage}
+        myEmail={session.email}
+        onChanged={load}
+        onToast={(message, type) => setToast({ message, type })}
       />
 
       <MinutesReviewPanel
