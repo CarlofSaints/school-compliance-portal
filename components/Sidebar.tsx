@@ -61,6 +61,19 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    // No permission, same reasoning as Action Items: minutes are what the
+    // governing body agreed, and a member who cannot read them cannot do
+    // their job. Creating and editing is gated on the page behind
+    // manage_minutes.
+    label: "Meeting Minutes",
+    href: "/minutes",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
     // No permission: the guide explains the portal to whoever is using it.
     label: "Guide",
     href: "/guide",
