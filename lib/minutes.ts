@@ -168,3 +168,100 @@ export function signingProgress(signatories: Signatory[]): {
     waitingOn: signatories.filter((s) => !s.signedAt).map((s) => s.name),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Minutes TEMPLATES: the reusable shape of a meeting.
+//
+// ⚠️ Not the Word letterhead (LetterheadTemplate in lib/minutesData.ts), which
+// is a .docx carrying the crest and footer. This is the section structure a
+// secretary picks from when starting a new set of minutes.
+//
+// Pure, and here rather than in lib/minutesTemplates.ts, because the admin
+// screen is a client component: importing them from the storage module pulled
+// controlData into the browser bundle and broke the build.
+// ---------------------------------------------------------------------------
+
+export interface TemplateSection {
+  id: string;
+  title: string;
+  /**
+   * Content pre-filled into every set of minutes made from this template, and
+   * editable per meeting afterwards.
+   *
+   * This is the point of the whole feature: the attendee list barely changes,
+   * so it lives here and gets tweaked rather than retyped. Same for "Previous
+   * minutes sign off".
+   */
+  staticContent?: string;
+  /**
+   * People associated with this section, from the People register rather than
+   * the user list, so a Treasurer with no login can still own Finance report.
+   * Advisory: it tells the secretary who to chase, it does not gate anything.
+   */
+  personIds?: string[];
+  order: number;
+}
+
+export interface MinutesTemplate {
+  id: string;
+  name: string;
+  /** Which meeting this suits. Optional: a school may keep one general one. */
+  body?: MeetingBody;
+  description?: string;
+  sections: TemplateSection[];
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
+/**
+ * Turns a template into the sections a new set of minutes starts with.
+ *
+ * The static content becomes the section's body, which is exactly the ask: the
+ * attendees are already there and the secretary edits them for this meeting
+ * rather than typing them out again.
+ *
+ * People links are NOT copied. They belong to the template as a standing note
+ * about who owns a section; a set of minutes records what was said, not who was
+ * meant to say it.
+ */
+export function sectionsFromTemplate(template: MinutesTemplate): MinutesSection[] {
+  return [...template.sections]
+    .sort((a, b) => a.order - b.order)
+    .map((s, i) => ({
+      id: crypto.randomUUID(),
+      title: s.title,
+      body: s.staticContent || "",
+      order: i + 1,
+    }));
+}
+
+/**
+ * What a school gets before it has built any template of its own.
+ *
+ * Offered as a starting point in the admin screen rather than silently applied,
+ * so a school sees a real template it can edit instead of wondering where the
+ * sections came from.
+ */
+export const STARTER_TEMPLATE: Omit<TemplateSection, "id" | "order">[] = [
+  {
+    title: "Attendance and apologies",
+    staticContent:
+      "Present:\n\nApologies:\n\nIn attendance (non-members):",
+  },
+  {
+    title: "Previous minutes sign off",
+    staticContent:
+      "The minutes of the previous meeting were tabled.\n\nProposed by:\nSeconded by:\nAccepted as a true reflection: yes / no",
+  },
+  { title: "Matters arising from the previous meeting" },
+  { title: "Principal's report" },
+  { title: "Finance report" },
+  { title: "Grounds and maintenance" },
+  { title: "Fundraising" },
+  { title: "General" },
+  {
+    title: "Date of next meeting",
+    staticContent: "Date:\nTime:\nVenue:",
+  },
+];

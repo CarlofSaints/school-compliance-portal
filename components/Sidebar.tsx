@@ -154,6 +154,7 @@ const navItems: NavItem[] = [
       { label: "Policy Categories", href: "/admin/policy-categories", permission: "manage_policies" },
       { label: "Approval Settings", href: "/admin/approval-settings", permission: "manage_approval_settings" },
       { label: "Spend Settings", href: "/admin/spend-settings", permission: "manage_spend_settings" },
+      { label: "Minutes Admin", href: "/admin/minutes", permission: "manage_users" },
       { label: "School Branding", href: "/admin/branding", permission: "manage_users" },
       { label: "Activity Log", href: "/activity", permission: "manage_users" },
       { label: "Backup Data", href: "/admin/backup", permission: "manage_users" },

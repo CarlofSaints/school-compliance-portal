@@ -190,17 +190,20 @@ export async function readOriginalFile(id: string): Promise<Buffer | null> {
 }
 
 // ---------------------------------------------------------------------------
-// The Word template carrying the school's logo and footer.
+// The Word LETTERHEAD: the file carrying the school's logo and footer.
 //
-// One per school, not one per set of minutes: Carl asked for "a place to load a
-// Word template that already contains those things", and a school has one
+// ⚠️ Not to be confused with a MINUTES TEMPLATE (lib/minutesTemplates.ts),
+// which is the reusable set of SECTIONS a secretary picks when starting a new
+// set of minutes. Two different things that were briefly given one name.
+//
+// One letterhead per school, not one per set of minutes: a school has one
 // letterhead, not one per meeting.
 // ---------------------------------------------------------------------------
 
 const TEMPLATE_PATH = "minutes-template/template.docx";
 const TEMPLATE_META = "minutes-template/meta.json";
 
-export interface MinutesTemplate {
+export interface LetterheadTemplate {
   filename: string;
   contentType: string;
   size: number;
@@ -208,18 +211,18 @@ export interface MinutesTemplate {
   uploadedBy: string;
 }
 
-export async function getTemplateMeta(): Promise<MinutesTemplate | null> {
-  return readJson<MinutesTemplate | null>(TEMPLATE_META, null);
+export async function getLetterheadMeta(): Promise<LetterheadTemplate | null> {
+  return readJson<LetterheadTemplate | null>(TEMPLATE_META, null);
 }
 
-export async function saveTemplate(
+export async function saveLetterhead(
   bytes: Buffer,
   filename: string,
   contentType: string,
   uploadedBy: string
-): Promise<MinutesTemplate> {
+): Promise<LetterheadTemplate> {
   await writeFile(TEMPLATE_PATH, bytes);
-  const meta: MinutesTemplate = {
+  const meta: LetterheadTemplate = {
     filename,
     contentType,
     size: bytes.length,
@@ -230,7 +233,7 @@ export async function saveTemplate(
   return meta;
 }
 
-export async function readTemplate(): Promise<Buffer | null> {
+export async function readLetterhead(): Promise<Buffer | null> {
   return readFile(TEMPLATE_PATH);
 }
 

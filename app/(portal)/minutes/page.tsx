@@ -48,13 +48,18 @@ export default function MinutesPage() {
   const [rows, setRows] = useState<MinutesRow[]>([]);
   const [busy, setBusy] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; body?: MeetingBody; sections: unknown[] }[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const res = await authFetch("/api/minutes");
+      const [res, t] = await Promise.all([
+        authFetch("/api/minutes"),
+        authFetch("/api/minutes-templates"),
+      ]);
       if (res.ok) setRows(await res.json());
+      if (t.ok) setTemplates(await t.json());
     } finally {
       setBusy(false);
     }
@@ -96,6 +101,7 @@ export default function MinutesPage() {
 
       {adding && (
         <AddMinutes
+          templates={templates}
           onClose={() => setAdding(false)}
           onSaved={(msg) => {
             setAdding(false);
@@ -203,10 +209,12 @@ export default function MinutesPage() {
 }
 
 function AddMinutes({
+  templates,
   onClose,
   onSaved,
   onError,
 }: {
+  templates: { id: string; name: string; body?: MeetingBody; sections: unknown[] }[];
   onClose: () => void;
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
@@ -220,6 +228,7 @@ function AddMinutes({
     month: now.getMonth() + 1,
   });
   const [mode, setMode] = useState<"upload" | "write">("upload");
+  const [templateId, setTemplateId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -235,7 +244,10 @@ function AddMinutes({
       fd.set("body", body);
       fd.set("period", JSON.stringify(period));
       if (mode === "upload" && file) fd.set("file", file);
-      if (mode === "write") fd.set("startBlank", "1");
+      if (mode === "write") {
+        fd.set("startBlank", "1");
+        if (templateId) fd.set("templateId", templateId);
+      }
 
       const res = await authFetch("/api/minutes", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
@@ -323,10 +335,36 @@ function AddMinutes({
             </p>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">
-            Starts with the usual sections (Principal&apos;s report, Finance
-            report and so on). You can add, rename and remove them as you go.
-          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Start from a template
+            </label>
+            <p className="text-xs text-gray-500 mb-2">
+              The template&apos;s sections and any standing wording are copied in,
+              then you edit them for this meeting. Changing a template later
+              never changes minutes already written.
+            </p>
+            <select
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+            >
+              <option value="">No template, start empty</option>
+              {templates
+                .filter((t) => !t.body || t.body === body)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.sections.length} sections)
+                  </option>
+                ))}
+            </select>
+            {templates.length === 0 && (
+              <p className="text-xs text-gray-400 mt-2">
+                No templates yet. An admin can build one under Admin, Minutes
+                admin, so this list is not empty next time.
+              </p>
+            )}
+          </div>
         )}
       </div>
 

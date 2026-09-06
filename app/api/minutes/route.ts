@@ -6,7 +6,8 @@ import {
   saveOriginalFile,
   type MinutesRecord,
 } from "@/lib/minutesData";
-import { checkPeriod, DEFAULT_SECTIONS, type MeetingPeriod } from "@/lib/minutes";
+import { checkPeriod, type MeetingPeriod } from "@/lib/minutes";
+import { getTemplate, sectionsFromTemplate } from "@/lib/minutesTemplates";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { v4 as uuidv4 } from "uuid";
@@ -68,22 +69,34 @@ export async function POST(req: NextRequest) {
     // in its own right, not only as a step towards signing.
     const file = form.get("file");
     const startBlank = String(form.get("startBlank") || "") === "1";
+    const templateId = String(form.get("templateId") || "").trim();
+
+    // 🔴 A template is COPIED, never referenced. If minutes rendered live from
+    // a template, editing that template next year would silently rewrite what
+    // a meeting in 2026 appears to have discussed, and a SIGNED record would
+    // change under its own signatures.
+    let sections: Awaited<ReturnType<typeof createMinutes>>["sections"] = [];
+    if (templateId) {
+      const template = await getTemplate(templateId);
+      if (!template) {
+        return NextResponse.json(
+          { error: "That template no longer exists. Choose another." },
+          { status: 400 }
+        );
+      }
+      sections = sectionsFromTemplate(template);
+    } else if (startBlank) {
+      // No template chosen and nothing uploaded: one empty section, so the
+      // secretary has somewhere to type rather than a page with no controls.
+      sections = [{ id: uuidv4(), title: "Notes", body: "", order: 1 }];
+    }
 
     const record = await createMinutes({
       id: uuidv4(),
       title,
       body,
       period,
-      // A blank set starts with the default sections so the secretary is not
-      // faced with an empty page. Every one is editable and deletable.
-      sections: startBlank
-        ? DEFAULT_SECTIONS.map((t, i) => ({
-            id: uuidv4(),
-            title: t,
-            body: "",
-            order: i + 1,
-          }))
-        : [],
+      sections,
       createdBy: session.email,
     });
 
@@ -122,6 +135,8 @@ export async function POST(req: NextRequest) {
         body,
         period: JSON.stringify(period),
         uploaded: saved.original?.filename,
+        fromTemplate: templateId || undefined,
+        sections: saved.sections.length,
       },
     });
 
