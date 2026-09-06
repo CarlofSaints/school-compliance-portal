@@ -1,5 +1,7 @@
 import {
   Document,
+  patchDocument,
+  PatchType,
   Packer,
   Paragraph,
   TextRun,
@@ -184,15 +186,29 @@ export async function buildMinutesDocx(
    * signature image could not be read. A missing one falls back to the
    * wording, which still records that they signed.
    */
-  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map()
+  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map(),
+  /**
+   * The school's own letterhead .docx, if it has uploaded one.
+   *
+   * When present the content is PATCHED INTO IT at its {{content}} marker,
+   * which keeps everything the school put there: its crest, its wording, its
+   * fonts, its governing-body table, and any header or footer it defines. We
+   * do not rebuild their letterhead, we fill it in.
+   */
+  letterhead: Buffer | null = null
 ): Promise<Buffer> {
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
   // office holders.
   const children: (Paragraph | Table)[] = [];
 
+  // 🔴 Skipped entirely when a letterhead is in use. Their file already has
+  // the crest and the school's name on it, and printing ours underneath
+  // theirs is the one outcome nobody wants from uploading a letterhead.
+  const ownHeader = !letterhead;
+
   // Crest, embedded. Sized by height so a wide or tall crest both sit sensibly.
-  if (crest) {
+  if (crest && ownHeader) {
     try {
       children.push(
         new Paragraph({
@@ -213,7 +229,7 @@ export async function buildMinutesDocx(
     }
   }
 
-  children.push(
+  if (ownHeader) children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 120, after: 0 },
@@ -253,6 +269,12 @@ export async function buildMinutesDocx(
     })
   );
 
+  // Everything from here is the CONTENT: the numbered table and the
+  // signatures. Kept apart from the header above because a school's own
+  // letterhead already carries its crest and name, and this is the part that
+  // gets patched into it.
+  const body: (Paragraph | Table)[] = [];
+
   const sections = [...record.sections].sort((a, b) => a.order - b.order);
   // The SAME helper the editor uses, so what a school sees while writing is
   // what the document says. Sections before the chosen start point carry no
@@ -260,7 +282,7 @@ export async function buildMinutesDocx(
   const numbers = sectionNumbers(record.sections);
 
   if (sections.length === 0) {
-    children.push(
+    body.push(
       new Paragraph({
         children: [
           new TextRun({
@@ -280,7 +302,7 @@ export async function buildMinutesDocx(
     // column 1, the content in column 2 and the person responsible in column
     // 3". This is the shape a school already recognises, so the document does
     // not have to be reformatted before it goes to the DoE.
-    children.push(
+    body.push(
       new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
         columnWidths: [700, 7300, 2000],
@@ -300,7 +322,7 @@ export async function buildMinutesDocx(
   }
   // Signatures. Present whether or not anybody has signed in the app, because
   // this file exists precisely so it can be signed by hand.
-  children.push(
+  body.push(
     spacer(400),
     new Paragraph({
       heading: HeadingLevel.HEADING_2,
@@ -324,7 +346,7 @@ export async function buildMinutesDocx(
           try {
             const h = 44;
             const w = Math.max(40, Math.min(260, Math.round((mark.width / mark.height) * h)));
-            children.push(
+            body.push(
               new Paragraph({
                 spacing: { before: 240, after: 0 },
                 children: [
@@ -343,7 +365,7 @@ export async function buildMinutesDocx(
           }
         }
 
-        children.push(
+        body.push(
           new Paragraph({
             spacing: { before: mark ? 0 : 240, after: 240 },
             children: [
@@ -382,14 +404,51 @@ export async function buildMinutesDocx(
           })
         );
       } else {
-        children.push(...signatureBlock(s.name, SIGNATORY_ROLE_LABELS[s.role]));
+        body.push(...signatureBlock(s.name, SIGNATORY_ROLE_LABELS[s.role]));
       }
     }
   } else {
     // No signatories set yet, so give the two the DoE requires by default.
-    children.push(
+    body.push(
       ...signatureBlock("________________________", "SGB Chair"),
       ...signatureBlock("________________________", "Principal")
+    );
+  }
+
+  if (letterhead) {
+    // patchDocument rewrites the placeholders and leaves every other part of
+    // their file untouched, which is why this works at all: we never parse or
+    // rebuild their layout.
+    //
+    // Only `content` is required. The optional ones let a school put the
+    // meeting details wherever its own layout wants them, and a letterhead
+    // that does not use them simply keeps its own wording.
+    const text = (value: string) => ({
+      type: PatchType.PARAGRAPH,
+      children: [new TextRun(value)],
+    });
+    return Buffer.from(
+      await patchDocument({
+        outputType: "nodebuffer",
+        data: letterhead,
+        patches: {
+          content: { type: PatchType.DOCUMENT, children: body },
+          title: text(record.title),
+          period: text(formatPeriod(record.period)),
+          meeting: text(MEETING_BODY_LABELS[record.body]),
+          school: text(branding.fullName),
+          draft: text(
+            record.draftNumber > 0 && !record.signedAt
+              ? `DRAFT ${record.draftNumber}`
+              : // Blanked rather than left as the raw {{draft}} marker: a signed
+                // set of minutes must not go out with template syntax on it.
+                ""
+          ),
+        },
+        // A placeholder the letterhead does not contain is not an error. Most
+        // will only use {{content}}.
+        keepOriginalStyles: true,
+      })
     );
   }
 
@@ -419,7 +478,7 @@ export async function buildMinutesDocx(
             ],
           }),
         },
-        children,
+        children: [...children, ...body],
       },
     ],
   });

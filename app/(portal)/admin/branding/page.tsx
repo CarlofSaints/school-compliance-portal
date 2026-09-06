@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import LetterheadUpload from "@/components/LetterheadUpload";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import SchoolBrandingFields, {
@@ -220,6 +221,8 @@ export default function BrandingPage() {
           </>
         )}
       </div>
+
+      <LetterheadUpload onToast={(message, type) => setToast({ message, type })} />
     </div>
   );
 }

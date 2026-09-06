@@ -207,53 +207,13 @@ export async function readOriginalFile(id: string): Promise<Buffer | null> {
   return readFile(`${DIR}/${id}/original${extensionOf(record.original.filename)}`);
 }
 
-// ---------------------------------------------------------------------------
-// The Word LETTERHEAD: the file carrying the school's logo and footer.
+// ⚠️ The Word LETTERHEAD moved to lib/letterhead.ts.
 //
-// ⚠️ Not to be confused with a MINUTES TEMPLATE (lib/minutesTemplates.ts),
-// which is the reusable set of SECTIONS a secretary picks when starting a new
-// set of minutes. Two different things that were briefly given one name.
-//
-// One letterhead per school, not one per set of minutes: a school has one
-// letterhead, not one per meeting.
-// ---------------------------------------------------------------------------
-
-const TEMPLATE_PATH = "minutes-template/template.docx";
-const TEMPLATE_META = "minutes-template/meta.json";
-
-export interface LetterheadTemplate {
-  filename: string;
-  contentType: string;
-  size: number;
-  uploadedAt: string;
-  uploadedBy: string;
-}
-
-export async function getLetterheadMeta(): Promise<LetterheadTemplate | null> {
-  return readJson<LetterheadTemplate | null>(TEMPLATE_META, null);
-}
-
-export async function saveLetterhead(
-  bytes: Buffer,
-  filename: string,
-  contentType: string,
-  uploadedBy: string
-): Promise<LetterheadTemplate> {
-  await writeFile(TEMPLATE_PATH, bytes);
-  const meta: LetterheadTemplate = {
-    filename,
-    contentType,
-    size: bytes.length,
-    uploadedAt: new Date().toISOString(),
-    uploadedBy,
-  };
-  await writeJson(TEMPLATE_META, meta);
-  return meta;
-}
-
-export async function readLetterhead(): Promise<Buffer | null> {
-  return readFile(TEMPLATE_PATH);
-}
+// It used to live here, stored under minutes-template/, with no route and no
+// screen: a half-built feature that read as if it worked. Carl asked for it in
+// Admin > Branding "so we can use it for other things if needed", which is
+// also where it belongs: a school has ONE letterhead, and the next document
+// type we generate should not ask for it a second time.
 
 // ⚠️ Signing lives in lib/minutesSigning.ts, not here.
 //

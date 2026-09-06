@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMinutes, readSignatureImage } from "@/lib/minutesData";
+import { readLetterheadFile } from "@/lib/letterheadData";
 import { buildMinutesDocx } from "@/lib/minutesDocx";
 import { resolveBranding, readLogo } from "@/lib/brandingData";
 import { contentDisposition } from "@/lib/contentDisposition";
@@ -59,7 +60,18 @@ export async function GET(
       marks.filter((m): m is NonNullable<typeof m> => m !== null)
     );
 
-    const bytes = await buildMinutesDocx(record, branding, crest, signatures);
+    // The school’s own letterhead, if it uploaded one. Tolerant of failure:
+    // a letterhead that cannot be read must fall back to the generated layout,
+    // not refuse to produce the minutes at all.
+    const letterhead = await readLetterheadFile().catch(() => null);
+
+    const bytes = await buildMinutesDocx(
+      record,
+      branding,
+      crest,
+      signatures,
+      letterhead
+    );
 
     await recordActivity({
       ...actorFrom(req, session),
