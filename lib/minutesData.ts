@@ -3,6 +3,8 @@ import { readJson, writeJson, readFile, writeFile, deleteFile, listFiles } from 
 import type {
   MeetingBody,
   MeetingPeriod,
+  MinutesReview,
+  MinutesReviewer,
   MinutesSection,
   MinutesStatus,
   Signatory,
@@ -48,15 +50,18 @@ export interface MinutesRecord {
 
   signatories: Signatory[];
 
-  /** Comments from a reviewer who declined. Kept as a list, because a second
-   *  round of review must not erase what the first round asked for. */
-  reviews: {
-    at: string;
-    byName: string;
-    byEmail?: string;
-    decision: "approved" | "changes_requested";
-    comments?: string;
-  }[];
+  /**
+   * Who was asked to check the current draft. Frozen when it is sent, the way
+   * approvalEngine freezes required approvers at submission: somebody added
+   * to the distribution tag tomorrow must not un-complete a round of review
+   * that finished today.
+   */
+  reviewers?: MinutesReviewer[];
+
+  /** Every response, all rounds. Kept as a list, because a second round of
+   *  review must not erase what the first round asked for; each carries the
+   *  draft it answered so old approvals cannot count for a new draft. */
+  reviews: MinutesReview[];
 
   /** Bumped every time it goes out for checking. "Draft 1", "Draft 2". */
   draftNumber: number;

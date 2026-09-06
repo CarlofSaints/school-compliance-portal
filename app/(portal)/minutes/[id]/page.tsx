@@ -8,6 +8,7 @@ import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import DownloadLink from "@/components/DownloadLink";
+import MinutesReviewPanel from "@/components/MinutesReviewPanel";
 import {
   formatPeriod,
   isLocked,
@@ -15,6 +16,8 @@ import {
   MINUTES_STATUS_LABELS,
   type MeetingBody,
   type MeetingPeriod,
+  type MinutesReview,
+  type MinutesReviewer,
   type MinutesSection,
   type MinutesStatus,
   type Signatory,
@@ -29,7 +32,8 @@ interface MinutesDetail {
   sections: MinutesSection[];
   original?: { filename: string; size: number; uploadedAt: string };
   signatories: Signatory[];
-  reviews: { at: string; byName: string; decision: string; comments?: string }[];
+  reviewers?: MinutesReviewer[];
+  reviews: MinutesReview[];
   draftNumber: number;
   createdAt: string;
   createdBy: string;
@@ -232,6 +236,18 @@ export default function MinutesDetailPage() {
         onChange={(sections) => patch({ sections })}
       />
 
+      <MinutesReviewPanel
+        id={record.id}
+        status={record.status}
+        draftNumber={record.draftNumber}
+        reviewers={record.reviewers}
+        reviews={record.reviews}
+        canManage={canManage}
+        myEmail={session.email}
+        onChanged={load}
+        onToast={(message, type) => setToast({ message, type })}
+      />
+
       {record.reviews.length > 0 && (
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h2 className="text-sm font-semibold text-dark mb-3">Review history</h2>
@@ -240,9 +256,12 @@ export default function MinutesDetailPage() {
               <li key={i} className="text-sm border-l-2 border-gray-200 pl-3">
                 <span className="text-dark font-medium">{r.byName}</span>{" "}
                 <span className="text-gray-500">
-                  {r.decision === "approved" ? "approved" : "asked for changes"} on{" "}
-                  {new Date(r.at).toLocaleDateString("en-ZA")}
+                  {r.decision === "approved" ? "approved" : "asked for changes to"} draft{" "}
+                  {r.draftNumber} on {new Date(r.at).toLocaleDateString("en-ZA")}
                 </span>
+                {r.draftNumber < record.draftNumber && (
+                  <span className="ml-2 text-xs text-gray-400">(an earlier draft)</span>
+                )}
                 {r.comments && <p className="text-gray-600 mt-1">{r.comments}</p>}
               </li>
             ))}

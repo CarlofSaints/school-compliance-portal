@@ -151,6 +151,107 @@ export async function sendPasswordResetLinkEmail(
   return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body), b.replyTo);
 }
 
+// The draft, out for checking. Carl: it "explains that this is draft 1, asks
+// them to check it and then a link in the email directs them to the doc, so
+// they can approve or decline with comments".
+export async function sendMinutesForReviewEmail(
+  to: string,
+  recipientName: string,
+  minutesId: string,
+  minutesTitle: string,
+  periodLabel: string,
+  draftNumber: number,
+  fromName: string
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
+  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const body = `
+    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">${esc(fromName)} has sent you <strong>draft ${draftNumber}</strong> of the minutes below to check.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
+      <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
+    </div>
+    <p style="color:#333;">Please read it and either approve it, or send it back with a note saying what needs changing.</p>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Read and respond</a>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    `Please check: ${minutesTitle}`,
+    emailShell(b, "Minutes to check", body),
+    b.replyTo
+  );
+}
+
+// Back to the secretary when somebody asks for changes. Carl: "Secretary then
+// gets an email to notifying them that there are issues with the minutes that
+// need rectifying".
+export async function sendMinutesChangesRequestedEmail(
+  to: string,
+  secretaryName: string,
+  minutesId: string,
+  minutesTitle: string,
+  reviewerName: string,
+  comments: string
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
+  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const body = `
+    <p style="color:#333;">Dear ${secretaryName},</p>
+    <p style="color:#333;"><strong>${esc(reviewerName)}</strong> has asked for changes to <strong>${esc(minutesTitle)}</strong> before it goes out for signing.</p>
+    ${
+      comments
+        ? `<div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 16px;margin:16px 0;"><p style="margin:0;color:#78350f;white-space:pre-wrap;">${esc(comments)}</p></div>`
+        : `<p style="color:#666;font-size:14px;">No note was left, so it is worth asking them what needs changing.</p>`
+    }
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the minutes</a>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    `Changes requested: ${minutesTitle}`,
+    emailShell(b, "Changes requested", body),
+    b.replyTo
+  );
+}
+
+// Everyone has approved and it is ready to sign.
+export async function sendMinutesReadyToSignEmail(
+  to: string,
+  recipientName: string,
+  minutesId: string,
+  minutesTitle: string,
+  periodLabel: string
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const branding = b;
+  const PRIMARY = b.colors.primary;
+  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const body = `
+    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
+      <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
+    </div>
+    <p style="color:#333;">Open it, read it through, and sign it off.</p>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Read and sign</a>
+    <p style="color:#666;font-size:13px;margin-top:16px;">Once everyone has signed, the minutes are locked and cannot be changed. If something is still wrong, send it back rather than signing.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    `Ready to sign: ${minutesTitle}`,
+    emailShell(b, "Ready to sign", body),
+    b.replyTo
+  );
+}
+
 export async function sendSpendNotificationEmail(
   to: string,
   recipientName: string,

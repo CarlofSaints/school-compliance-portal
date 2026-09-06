@@ -361,3 +361,112 @@ export function sectionNumbers<T extends { id: string; order: number; numberingS
 export function numberedTitle(title: string, number: number | null): string {
   return number === null ? title : `${number}. ${title}`;
 }
+
+// ---------------------------------------------------------------------------
+// The review round trip: draft out for checking, back with comments, out again.
+//
+// Carl: the email "explains that this is draft 1, asks them to check it and
+// then a link in the email directs them to the doc, so they can approve or
+// decline with comments. Secretary then gets an email notifying them that there
+// are issues with the minutes that need rectifying."
+// ---------------------------------------------------------------------------
+
+/** Somebody asked to check a draft. Frozen onto the record when it is sent, the
+ *  same way approvalEngine freezes required approvers at submission: a person
+ *  added to the distribution tag afterwards must not un-complete a round of
+ *  review that had already finished. */
+export interface MinutesReviewer {
+  /** People-register id where there is one. A reviewer need not have a login. */
+  personId?: string;
+  name: string;
+  email: string;
+}
+
+export interface MinutesReview {
+  at: string;
+  byName: string;
+  byEmail?: string;
+  decision: "approved" | "changes_requested";
+  comments?: string;
+  /**
+   * 🔴 Which draft this was a response to.
+   *
+   * Without it, approving draft 1 would still count once the secretary has
+   * rewritten it as draft 2, and minutes nobody has read would walk into
+   * signing wearing last week's approvals. Reviews are never deleted, so the
+   * history of what each round asked for survives; they are FILTERED by draft.
+   */
+  draftNumber: number;
+}
+
+/** A review only counts for the draft it was written against. */
+export function reviewsForDraft(
+  reviews: MinutesReview[],
+  draftNumber: number
+): MinutesReview[] {
+  return reviews.filter((r) => r.draftNumber === draftNumber);
+}
+
+/** Email is the join key between a frozen reviewer and a review, so it has to
+ *  be normalised on both sides. One pasted trailing space otherwise reads as a
+ *  different person and the round never completes. */
+function emailKey(v: string | undefined): string {
+  return (v || "").trim().toLowerCase();
+}
+
+export function reviewProgress(
+  reviewers: MinutesReviewer[],
+  reviews: MinutesReview[],
+  draftNumber: number
+): {
+  approved: number;
+  total: number;
+  /** Every named reviewer has approved THIS draft. */
+  complete: boolean;
+  waitingOn: string[];
+  /** Anyone who asked for changes on this draft. One is enough to send it back:
+   *  there is no point collecting the rest of the approvals for a document that
+   *  is already being rewritten. */
+  objections: MinutesReview[];
+} {
+  const forThis = reviewsForDraft(reviews, draftNumber);
+  // Last word wins: a reviewer who asked for changes and then approved the same
+  // draft after a chat is counted as approving.
+  const latest = new Map<string, MinutesReview>();
+  for (const r of forThis) {
+    const k = emailKey(r.byEmail);
+    if (!k) continue;
+    const prev = latest.get(k);
+    if (!prev || r.at >= prev.at) latest.set(k, r);
+  }
+  const approvedKeys = new Set(
+    [...latest.values()].filter((r) => r.decision === "approved").map((r) => emailKey(r.byEmail))
+  );
+  const approved = reviewers.filter((p) => approvedKeys.has(emailKey(p.email))).length;
+  return {
+    approved,
+    total: reviewers.length,
+    complete: reviewers.length > 0 && approved === reviewers.length,
+    waitingOn: reviewers.filter((p) => !approvedKeys.has(emailKey(p.email))).map((p) => p.name),
+    objections: [...latest.values()].filter((r) => r.decision === "changes_requested"),
+  };
+}
+
+/** Whether this person was actually asked. Anyone else opening the link can
+ *  read the draft but has nothing to respond to, which is deliberate: an
+ *  approval from somebody who was never asked is not a check. */
+export function isReviewer(reviewers: MinutesReviewer[], email: string | undefined): boolean {
+  const k = emailKey(email);
+  return !!k && reviewers.some((p) => emailKey(p.email) === k);
+}
+
+/** Sending out for checking is allowed from draft, and again after changes were
+ *  requested. Not from awaiting_signatures: pull it back first, so it is
+ *  obvious that the signatures collected so far no longer apply. */
+export function canSendForReview(status: MinutesStatus): boolean {
+  return status === "draft" || status === "changes_requested";
+}
+
+export function canReview(status: MinutesStatus): boolean {
+  return status === "in_review";
+}
