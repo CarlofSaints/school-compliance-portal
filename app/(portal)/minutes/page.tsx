@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
+import DownloadLink from "@/components/DownloadLink";
 import {
   formatPeriod,
   periodSortKey,
@@ -158,20 +159,24 @@ export default function MinutesPage() {
                     {canManage && m.status === "draft" ? "Open and edit" : "Open"}
                   </Link>
                   {m.original && (
-                    <a
+                    <DownloadLink
                       href={`/api/minutes/${m.id}/file`}
-                      className="text-gray-500 hover:text-dark text-xs mr-3"
+                      filename={m.original.filename}
                       title={m.original.filename}
+                      className="text-gray-500 hover:text-dark text-xs mr-3"
+                      onError={(message) => setToast({ message, type: "error" })}
                     >
                       File
-                    </a>
+                    </DownloadLink>
                   )}
-                  <a
+                  <DownloadLink
                     href={`/api/minutes/${m.id}/docx`}
+                    filename={`${m.title}.docx`}
                     className="text-gray-500 hover:text-dark text-xs"
+                    onError={(message) => setToast({ message, type: "error" })}
                   >
                     Word
-                  </a>
+                  </DownloadLink>
                 </td>
               </tr>
             ))}

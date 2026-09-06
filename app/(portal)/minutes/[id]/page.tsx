@@ -7,6 +7,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
+import DownloadLink from "@/components/DownloadLink";
 import {
   formatPeriod,
   isLocked,
@@ -143,12 +144,14 @@ export default function MinutesDetailPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <a
+          <DownloadLink
             href={`/api/minutes/${record.id}/docx`}
+            filename={`${record.title}.docx`}
             className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
+            onError={(message) => setToast({ message, type: "error" })}
           >
             Download as Word
-          </a>
+          </DownloadLink>
           {editable && (
             <button
               onClick={save}
@@ -178,12 +181,14 @@ export default function MinutesDetailPage() {
       {record.original && (
         <div className="mb-6 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm">
           <span className="text-gray-500">Uploaded file: </span>
-          <a
+          <DownloadLink
             href={`/api/minutes/${record.id}/file`}
+            filename={record.original.filename}
             className="text-primary hover:underline font-medium"
+            onError={(message) => setToast({ message, type: "error" })}
           >
             {record.original.filename}
-          </a>
+          </DownloadLink>
           <span className="text-gray-400">
             {" "}
             ({(record.original.size / 1024).toFixed(0)}KB)

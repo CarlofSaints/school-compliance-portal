@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import type { ActivityEntry, ActivityEntity } from "@/lib/activityLog";
+import DownloadLink from "@/components/DownloadLink";
+import Toast from "@/components/Toast";
 
 // The school's own audit trail. Carl sees the same thing per school from the
 // admin portal, deliberately: a school that can be shown its own record trusts
@@ -73,6 +75,8 @@ export default function ActivityPage() {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(true);
   const [open, setOpen] = useState<string | null>(null);
+  // A failed export must say so. Silent is what makes a dead button hard to report.
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const load = useCallback(async () => {
     if (!session) return;
@@ -114,6 +118,10 @@ export default function ActivityPage() {
 
   return (
     <div className="p-6">
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-dark">Activity log</h1>
@@ -122,12 +130,14 @@ export default function ActivityPage() {
             record for audits.
           </p>
         </div>
-        <a
+        <DownloadLink
           href={`/api/activity?format=csv&month=${month}`}
+          filename={`activity-${month}.csv`}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          onError={(message) => setToast({ message, type: "error" })}
         >
           Export this month
-        </a>
+        </DownloadLink>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-wrap gap-3">
