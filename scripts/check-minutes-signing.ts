@@ -20,6 +20,8 @@ import {
   type Signatory,
 } from "../lib/minutes";
 import {
+  decodeSignature,
+  SignatureError,
   mintSigningCode,
   hashSigningCode,
   signingCodeMatches,
@@ -27,6 +29,42 @@ import {
 } from "../lib/minutesSigning";
 import { signatoryRoleForPosition } from "../lib/positions";
 import { PUBLIC_POSITIONS } from "../lib/positions";
+
+import zlib from "zlib";
+
+/** A real PNG, built by hand, so the decoder is tested against actual bytes
+ *  rather than against a string that merely looks like an image. */
+function signaturePng(w: number, h: number): Buffer {
+  const crcTable = [...Array(256)].map((_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    let crc = 0xffffffff;
+    for (const b of td) crc = crcTable[(crc ^ b) & 0xff] ^ (crc >>> 8);
+    const cb = Buffer.alloc(4);
+    cb.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
+    return Buffer.concat([len, td, cb]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const rows = [...Array(h)].map(() =>
+    Buffer.concat([Buffer.from([0]), Buffer.concat([...Array(w)].map(() => Buffer.from([26, 26, 46])))])
+  );
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 let pass = 0;
 let fail = 0;
@@ -264,6 +302,47 @@ console.log("\nWhen signing may be opened");
   check("not when already out for signing", canOpenSigning("awaiting_signatures"), false);
   check("not once signed", canOpenSigning("signed"), false);
   check("not once archived", canOpenSigning("archived"), false);
+}
+
+
+console.log("\n\u{1F534} What arrives from the browser is not trusted");
+{
+  // A canvas data URL is attacker-controlled text on a route any logged-in
+  // signatory can call, so the decoder is the one place that decides what
+  // counts as a signature image.
+  const real = signaturePng(8, 4).toString("base64");
+  const ok = decodeSignature(`data:image/png;base64,${real}`);
+  // Dimensions come from the PNG's own IHDR chunk, not from anything the
+  // caller claimed about it.
+  check("a real PNG decodes, with its own dimensions", [ok.width, ok.height], [8, 4]);
+  checkThat("and the bytes survive", ok.png.length > 0);
+
+  const rejects = (label: string, input: string) => {
+    let threw = false;
+    try {
+      decodeSignature(input);
+    } catch (e) {
+      threw = e instanceof SignatureError;
+    }
+    check(label, threw, true);
+  };
+
+  rejects("empty input", "");
+  rejects("a bare string", "not a data url");
+  rejects("empty base64", "data:image/png;base64,");
+  rejects("a javascript url", "javascript:alert(1)");
+  // 🔴 A JPEG relabelled as a PNG. The prefix is written by the caller, so
+  // trusting it would store anything at all under a .png name and serve it
+  // straight back with an image content type.
+  rejects(
+    "a lie about the type",
+    "data:image/png;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]).toString("base64")
+  );
+  // An SVG can carry script, which is why the decoder takes PNG only.
+  rejects("an SVG", "data:image/svg+xml;base64," + Buffer.from("<svg/>").toString("base64"));
+  rejects("a jpeg data url", "data:image/jpeg;base64," + real);
+  // Capped, so nobody pushes a photo album through the signing route.
+  rejects("something far too large", "data:image/png;base64," + "A".repeat(600 * 1024));
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

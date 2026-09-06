@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getMinutes, updateMinutes } from "@/lib/minutesData";
+import { getMinutes, updateMinutes, saveSignatureImage } from "@/lib/minutesData";
 import { signingProgress, formatPeriod } from "@/lib/minutes";
-import { signingCodeMatches, documentHash, shortHash } from "@/lib/minutesSigning";
+import {
+  signingCodeMatches,
+  documentHash,
+  shortHash,
+  decodeSignature,
+  SignatureError,
+} from "@/lib/minutesSigning";
 import { resolveAudience, audienceForBody } from "@/lib/minutesRecipients";
 import { sendMinutesSignedEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
@@ -66,6 +72,19 @@ export async function POST(
 
   const body = await req.json().catch(() => ({}));
   const code = typeof body.code === "string" ? body.code : "";
+
+  // Decoded FIRST, before the code is checked and spent. A mark that cannot
+  // be read must not consume the one-time code and leave somebody holding a
+  // dead code and an unsigned document.
+  let mark;
+  try {
+    mark = decodeSignature(typeof body.signature === "string" ? body.signature : "");
+  } catch (e) {
+    if (e instanceof SignatureError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    throw e;
+  }
   if (!signingCodeMatches(code, id, signatory.codeHash)) {
     // Logged, because repeated wrong codes against a governance record are
     // worth seeing in the audit trail even when each one is an honest typo.
@@ -90,12 +109,22 @@ export async function POST(
   // the minutes can be checked against what was actually agreed.
   const hash = documentHash(record);
 
+  // Stored BEFORE the record says they signed. The other order leaves a
+  // record claiming a signature with no image behind it, which renders as an
+  // empty signature block and reads like a forgery rather than a failed save.
+  await saveSignatureImage(id, signatory.email, mark.png);
+
   const signatories = [...record.signatories];
   signatories[index] = {
     ...signatory,
     signedAt: new Date().toISOString(),
     documentHash: hash,
     ip: clientIp(req),
+    signature: {
+      kind: body.kind === "typed" ? "typed" : "drawn",
+      width: mark.width,
+      height: mark.height,
+    },
     // The code is spent. Keeping the hash would let the same code sign again if
     // the minutes were ever reopened.
     codeHash: undefined,

@@ -312,3 +312,37 @@ export async function readSignedCopy(id: string): Promise<Buffer | null> {
   if (!record?.signedCopy) return null;
   return readFile(`${DIR}/${id}/signed${extensionOf(record.signedCopy.filename)}`);
 }
+
+// ---------------------------------------------------------------------------
+// The signature MARK: the drawn or typed squiggle, as a PNG.
+//
+// One blob per signatory, under the minutes it belongs to. Kept out of
+// record.json deliberately: a base64 image inside the record would be read and
+// rewritten on every unrelated save, and a set of minutes with five signatures
+// would carry a few hundred KB of image through every edit.
+// ---------------------------------------------------------------------------
+
+const signaturePath = (id: string, personKey: string) =>
+  `${DIR}/${id}/signatures/${personKey}.png`;
+
+/** Keyed on the signatory's EMAIL, normalised, not their personId: somebody can
+ *  be on the signing list without a People-register entry, and personId is ""
+ *  for them. Two such signatories would otherwise overwrite each other. */
+export function signatureKey(email: string): string {
+  return email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
+}
+
+export async function saveSignatureImage(
+  id: string,
+  email: string,
+  png: Buffer
+): Promise<void> {
+  await writeFile(signaturePath(id, signatureKey(email)), png);
+}
+
+export async function readSignatureImage(
+  id: string,
+  email: string
+): Promise<Buffer | null> {
+  return readFile(signaturePath(id, signatureKey(email)));
+}

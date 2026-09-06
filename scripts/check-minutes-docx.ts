@@ -52,6 +52,7 @@ const record: MinutesRecord = {
     {
       personId: "p1", name: "Dee Schoultz", email: "d@x.test", role: "sgb_chair",
       signedAt: "2026-05-10T09:00:00.000Z", documentHash: "a".repeat(64),
+      signature: { kind: "drawn", width: 600, height: 200 },
     },
     { personId: "p2", name: "Rob Hutcheon", email: "r@x.test", role: "principal" },
   ],
@@ -103,7 +104,11 @@ function check(label: string, ok: boolean, extra = "") {
 (async () => {
   const out = process.argv[2] || "minutes-check.docx";
   const crest = png(16, 16);
-  const buf = await buildMinutesDocx(record, branding, crest);
+  // A signature for the one who signed, none for the one who has not.
+  const marks = new Map([
+    ["d@x.test", { png: png(60, 20), width: 600, height: 200 }],
+  ]);
+  const buf = await buildMinutesDocx(record, branding, crest, marks);
   writeFileSync(out, buf);
   console.log(`\nwrote ${out}, ${buf.length} bytes\n`);
 
@@ -148,6 +153,43 @@ function check(label: string, ok: boolean, extra = "") {
   const rowCount = (xml.match(/<w:tr>/g) || []).length;
   check("a header row plus one per section", rowCount >= 5, `${rowCount} rows`);
 
+  console.log("\n🔴 The signature MARK is in the document");
+  // Carl expected signing to work "as though they might on Adobe or SignNow",
+  // which means the mark a person drew has to reach the Word file. Two images
+  // in word/media is the proof: the crest and one signature.
+  {
+    const imgs = zip
+      .getEntries()
+      .filter((e) => e.entryName.startsWith("word/media/") && !e.isDirectory);
+    check("the crest AND a signature are embedded", imgs.length >= 2, `${imgs.length} images`);
+
+    // 🔴 The shape is what matters, not the absolute size. A 600x200 signature
+    // squeezed towards a square stops looking like the mark the person made,
+    // so the drawn ratio has to survive into the document. Asserted as a ratio
+    // rather than as fixed EMU numbers, which would only be testing that I can
+    // do the unit conversion twice.
+    const extents = [...xml.matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"/g)].map((m) => ({
+      cx: Number(m[1]),
+      cy: Number(m[2]),
+    }));
+    const threeToOne = extents.find((e) => Math.abs(e.cx / e.cy - 3) < 0.02);
+    check("the signature keeps its 3:1 shape", !!threeToOne, `${extents.length} sized images`);
+    // The crest is separately sized, so finding 3:1 cannot be an accident of
+    // there being only one image.
+    check("and the crest is not the one being measured", extents.length >= 2);
+  }
+
+  console.log("\nA missing mark must not lose the signature or the document");
+  {
+    // 🔴 Nobody's signature image is guaranteed readable years later. The
+    // wording that says they signed has to survive without it.
+    const noMarks = await buildMinutesDocx(record, branding, crest, new Map());
+    const bare = new AdmZip(noMarks).readAsText("word/document.xml");
+    check("it still builds", noMarks.length > 5000);
+    check("Dee is still recorded as having signed", bare.includes("Signed electronically"), "");
+    check("and still named", bare.includes("Dee Schoultz"));
+  }
+
   console.log("\n🔴 The crest is EMBEDDED, not linked");
   // isDirectory, because a zip carries a 0-byte entry for the folder itself and
   // counting it as an image reports a false failure.
@@ -163,7 +205,7 @@ function check(label: string, ok: boolean, extra = "") {
   check("no external image link in the rels", !zip.readAsText("word/_rels/document.xml.rels").includes("TargetMode=\"External\""));
 
   console.log("\nA missing crest must not lose the document");
-  const noCrest = await buildMinutesDocx(record, branding, null);
+  const noCrest = await buildMinutesDocx(record, branding, null, marks);
   check("still builds without a crest", noCrest.length > 5000);
   check("and still has the minutes in it", new AdmZip(noCrest).readAsText("word/document.xml").includes("Finance report"));
 

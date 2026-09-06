@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { authFetch } from "@/lib/useAuth";
 import DownloadLink from "@/components/DownloadLink";
 import {
@@ -59,7 +60,6 @@ export default function MinutesSigningPanel({
   onToast,
 }: Props) {
   const [busy, setBusy] = useState(false);
-  const [code, setCode] = useState("");
 
   const me = myEmail.trim().toLowerCase();
   const mine = signatories.find((s) => s.email.trim().toLowerCase() === me);
@@ -97,17 +97,6 @@ export default function MinutesSigningPanel({
     onToast(parts.join(" "), data.failed?.length || data.withoutEmail?.length ? "error" : "success");
   }
 
-  async function sign() {
-    const data = await post("sign", { code });
-    if (!data) return;
-    setCode("");
-    onToast(
-      data.progress?.complete
-        ? "Signed. Everyone has now signed, so the minutes are final and have gone out."
-        : `Signed. Still waiting on ${data.progress?.waitingOn?.join(", ") || "the others"}.`,
-      "success"
-    );
-  }
 
   async function uploadSigned(file: File) {
     setBusy(true);
@@ -237,27 +226,23 @@ export default function MinutesSigningPanel({
           {open && mine && !mine.signedAt && (
             <div className="rounded-lg border border-gray-200 p-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Your signing code
+                Your signature
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                From the email sent to {mine.email}. Signing means you agree these minutes are a
-                correct record. They cannot be changed afterwards.
+                Open the minutes, read them through, then sign with the code emailed to{" "}
+                {mine.email}.
               </p>
               <div className="flex flex-wrap gap-2">
-                <input
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  placeholder="AB2CD3"
-                  maxLength={12}
-                  className="px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition font-mono tracking-widest uppercase w-40"
-                />
-                <button
-                  onClick={sign}
-                  disabled={busy || !code.trim()}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
+                {/* 🔴 Signing happens on the DOCUMENT, not here. Carl expected
+                    "the document to open in browser and then the user can sign as
+                    though they might on Adobe or SignNow". A code box on a summary
+                    panel asks somebody to sign a heading. */}
+                <Link
+                  href={`/minutes/${id}/sign`}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors"
                 >
-                  {busy ? "Signing..." : "Sign these minutes"}
-                </button>
+                  Read and sign
+                </Link>
                 <button
                   onClick={() =>
                     post("open-signing", { resendMine: true }, "A new code is on its way to you.")
@@ -266,8 +251,7 @@ export default function MinutesSigningPanel({
                   className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
                 >
                   Send my code again
-                </button>
-              </div>
+                </button>              </div>
             </div>
           )}
 

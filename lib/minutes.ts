@@ -177,6 +177,25 @@ export interface Signatory {
   /** When their code was sent, so a resend is visible and the secretary can
    *  see who has been chased. */
   codeSentAt?: string;
+  /**
+   * The mark they made, drawn or typed, stored as a PNG beside the record.
+   *
+   * Carl expected "the document to open in browser and then the user can sign
+   * as though they might on Adobe or SignNow". The one-time code proves it was
+   * them; this is the visible signature a reader of the minutes expects to
+   * see, and it is what goes into the Word file.
+   *
+   * ⚠️ NOT part of canonicalMinutes. A signature is not part of what was
+   * signed, or each person signing would change the hash under everybody
+   * before them.
+   */
+  signature?: {
+    kind: "drawn" | "typed";
+    /** Pixel width and height, so the Word export keeps the aspect ratio
+     *  instead of stretching a wide signature into a square. */
+    width: number;
+    height: number;
+  };
 }
 
 /** Signing is sequential in the sense that everyone must sign before the

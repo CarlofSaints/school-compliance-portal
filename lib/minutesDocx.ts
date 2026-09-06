@@ -176,7 +176,15 @@ function sectionRow(
 export async function buildMinutesDocx(
   record: MinutesRecord,
   branding: SchoolBranding,
-  crest: Buffer | null
+  crest: Buffer | null,
+  /**
+   * The mark each signatory drew or typed, by lowercased email.
+   *
+   * Optional and tolerant of gaps: a download must not fail because one
+   * signature image could not be read. A missing one falls back to the
+   * wording, which still records that they signed.
+   */
+  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map()
 ): Promise<Buffer> {
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
@@ -306,9 +314,38 @@ export async function buildMinutesDocx(
       if (s.signedAt) {
         // Already signed in the app. Recorded as fact, not as a line to sign
         // again, or the same person could end up signing twice by two routes.
+
+        // The mark they actually made, above their name, which is what a
+        // reader of minutes expects to see. Scaled to a fixed height with the
+        // width following the image's own ratio: a wide signature squeezed
+        // into a square box does not look like anybody's signature.
+        const mark = signatures.get(s.email.trim().toLowerCase());
+        if (mark) {
+          try {
+            const h = 44;
+            const w = Math.max(40, Math.min(260, Math.round((mark.width / mark.height) * h)));
+            children.push(
+              new Paragraph({
+                spacing: { before: 240, after: 0 },
+                children: [
+                  new ImageRun({
+                    type: "png",
+                    data: mark.png,
+                    transformation: { width: w, height: h },
+                  }),
+                ],
+              })
+            );
+          } catch {
+            // A mark that cannot be embedded must not lose the document. The
+            // wording below still records that this person signed.
+            console.warn("[minutes docx] Could not embed a signature.");
+          }
+        }
+
         children.push(
           new Paragraph({
-            spacing: { before: 240, after: 240 },
+            spacing: { before: mark ? 0 : 240, after: 240 },
             children: [
               new TextRun({ text: s.name, bold: true, size: 20 }),
               new TextRun({

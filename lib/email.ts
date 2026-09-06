@@ -267,7 +267,9 @@ export async function sendMinutesSigningCodeEmail(
   const b = await resolveBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/minutes/${minutesId}`;
+  // Straight to the document with the signature pad on it, not the summary
+  // page: the link in a "please sign" email should open the thing to sign.
+  const url = `${SITE_URL}/minutes/${minutesId}/sign`;
   const body = `
     <p style="color:#333;">Dear ${recipientName},</p>
     <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>

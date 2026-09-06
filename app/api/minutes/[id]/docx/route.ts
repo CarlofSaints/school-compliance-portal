@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getMinutes } from "@/lib/minutesData";
+import { getMinutes, readSignatureImage } from "@/lib/minutesData";
 import { buildMinutesDocx } from "@/lib/minutesDocx";
 import { resolveBranding, readLogo } from "@/lib/brandingData";
 import { contentDisposition } from "@/lib/contentDisposition";
@@ -40,7 +40,26 @@ export async function GET(
     // No People lookup: the responsible name was frozen into each section
     // when the template was copied, so the document shows who was
     // responsible AT THAT MEETING rather than whoever holds the post today.
-    const bytes = await buildMinutesDocx(record, branding, crest);
+    // Each signatory's mark. Read in parallel and tolerant of gaps: a
+    // download must not fail because one signature image is unreadable, and a
+    // signature that cannot be drawn still has its wording in the document.
+    const marks = await Promise.all(
+      record.signatories
+        .filter((s) => s.signedAt)
+        .map(async (s) => {
+          const png = await readSignatureImage(record.id, s.email).catch(() => null);
+          if (!png || !s.signature) return null;
+          return [
+            s.email.trim().toLowerCase(),
+            { png, width: s.signature.width, height: s.signature.height },
+          ] as const;
+        })
+    );
+    const signatures = new Map(
+      marks.filter((m): m is NonNullable<typeof m> => m !== null)
+    );
+
+    const bytes = await buildMinutesDocx(record, branding, crest, signatures);
 
     await recordActivity({
       ...actorFrom(req, session),
