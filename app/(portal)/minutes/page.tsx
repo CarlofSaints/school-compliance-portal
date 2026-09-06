@@ -114,6 +114,7 @@ export default function MinutesPage() {
               <th className="text-left px-4 py-3 font-medium text-gray-500 w-44">Period</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500 w-44">Status</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500 w-40">Added</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 w-48">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -122,7 +123,7 @@ export default function MinutesPage() {
                 <td className="px-4 py-3">
                   <Link
                     href={`/minutes/${m.id}`}
-                    className="text-dark font-medium hover:text-primary"
+                    className="text-primary font-medium hover:underline"
                   >
                     {m.title}
                   </Link>
@@ -149,11 +150,34 @@ export default function MinutesPage() {
                   })}
                   <div className="text-gray-400">{m.createdBy}</div>
                 </td>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <Link
+                    href={`/minutes/${m.id}`}
+                    className="text-primary hover:text-primary-dark text-xs font-medium mr-3"
+                  >
+                    {canManage && m.status === "draft" ? "Open and edit" : "Open"}
+                  </Link>
+                  {m.original && (
+                    <a
+                      href={`/api/minutes/${m.id}/file`}
+                      className="text-gray-500 hover:text-dark text-xs mr-3"
+                      title={m.original.filename}
+                    >
+                      File
+                    </a>
+                  )}
+                  <a
+                    href={`/api/minutes/${m.id}/docx`}
+                    className="text-gray-500 hover:text-dark text-xs"
+                  >
+                    Word
+                  </a>
+                </td>
               </tr>
             ))}
             {sorted.length === 0 && !busy && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
                   No minutes yet.
                   {canManage && " Add your first set with the button above."}
                 </td>
@@ -161,7 +185,7 @@ export default function MinutesPage() {
             )}
             {busy && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
+                <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
                   Loading...
                 </td>
               </tr>

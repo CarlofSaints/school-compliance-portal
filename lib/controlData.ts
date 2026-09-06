@@ -156,18 +156,44 @@ export async function deleteFile(blobPath: string): Promise<void> {
   }
 }
 
+/**
+ * The immediate child names under a path, each returned ONCE.
+ *
+ * 🔴 It returns the first path segment of every blob, so a record made of
+ * several blobs yields its own name once per blob. That is not theoretical:
+ * a set of minutes writes minutes/<id>/record.json AND
+ * minutes/<id>/original.docx, so uploading one produced TWO identical rows in
+ * the list. Carl hit it on his first real upload.
+ *
+ * It would also have repeated a month once per entry in the activity log's
+ * month picker, and processed a user twice in repairUserIndex.
+ *
+ * Paginated too. list() returns at most 1000 blobs, and the audit trail writes
+ * one blob PER ENTRY, so a busy month would silently have stopped at 1000 and
+ * an audit that quietly omits records is worse than no audit.
+ */
 export async function listFiles(dirPath: string): Promise<string[]> {
   try {
     const { prefix: tenantPrefix, token } = await scope();
     // Resolved ONCE. The old version rebuilt the prefix inside the map, so
     // every row paid for it; now it is also an await, which cannot go there.
     const prefix = tenantPrefix + dirPath + "/";
-    const result = await list({ prefix, token });
-    return result.blobs.map((b) => {
-      const full = b.pathname;
-      const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
-      return relative.split("/")[0];
-    }).filter((name) => name.length > 0);
+
+    // A Set, because the same child appears once per blob beneath it.
+    const names = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const result = await list({ prefix, limit: 1000, cursor, token });
+      for (const b of result.blobs) {
+        const full = b.pathname;
+        const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
+        const name = relative.split("/")[0];
+        if (name) names.add(name);
+      }
+      cursor = result.hasMore ? result.cursor : undefined;
+    } while (cursor);
+
+    return [...names];
   } catch {
     return [];
   }
