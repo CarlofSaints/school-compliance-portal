@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import TemplateEditor from "@/components/TemplateEditor";
+import MinutesRecipientSettings from "@/components/MinutesRecipientSettings";
 import {
   MEETING_BODY_LABELS,
   STARTER_TEMPLATE,
@@ -30,6 +31,7 @@ export default function MinutesAdminPage() {
   const [templates, setTemplates] = useState<MinutesTemplate[]>([]);
   const [people, setPeople] = useState<PersonRow[]>([]);
   const [editing, setEditing] = useState<MinutesTemplate | null>(null);
+  const [tab, setTab] = useState<"templates" | "recipients">("templates");
   const [busy, setBusy] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -116,7 +118,7 @@ export default function MinutesAdminPage() {
             them, and any wording that stays the same from meeting to meeting.
           </p>
         </div>
-        {!editing && (
+        {!editing && tab === "templates" && (
           <button
             onClick={() => setEditing(blank())}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
@@ -125,6 +127,34 @@ export default function MinutesAdminPage() {
           </button>
         )}
       </div>
+
+      {!editing && (
+        <div className="flex gap-2 mb-5">
+          {([
+            ["templates", "Templates"],
+            ["recipients", "Who receives minutes"],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+                tab === k
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!editing && tab === "recipients" && (
+        <MinutesRecipientSettings
+          onSaved={(message) => setToast({ message, type: "success" })}
+          onError={(message) => setToast({ message, type: "error" })}
+        />
+      )}
 
       {editing ? (
         <TemplateEditor
@@ -135,7 +165,7 @@ export default function MinutesAdminPage() {
           onCancel={() => setEditing(null)}
           onDelete={editing.id ? () => remove(editing) : undefined}
         />
-      ) : (
+      ) : tab === "templates" ? (
         <>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <table className="w-full text-sm">
@@ -209,7 +239,7 @@ export default function MinutesAdminPage() {
             </div>
           )}
         </>
-      )}
+      ) : null}
     </div>
   );
 }
