@@ -9,9 +9,20 @@ import {
   Footer,
   PageNumber,
   BorderStyle,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  ShadingType,
 } from "docx";
 import type { SchoolBranding } from "./branding";
-import { formatPeriod, MEETING_BODY_LABELS, SIGNATORY_ROLE_LABELS } from "./minutes";
+import { readableTextOn } from "./brandingColors";
+import {
+  formatPeriod,
+  MEETING_BODY_LABELS,
+  SIGNATORY_ROLE_LABELS,
+  sectionNumbers,
+} from "./minutes";
 import type { MinutesRecord } from "./minutesData";
 
 // ---------------------------------------------------------------------------
@@ -61,12 +72,116 @@ function signatureBlock(name: string, role: string): Paragraph[] {
   ];
 }
 
+/** Header row, tinted with the school's own colour so the document looks like
+ *  the school's rather than the software's. */
+function headerRow(branding: SchoolBranding): TableRow {
+  const cell = (text: string, width: number) =>
+    new TableCell({
+      width: { size: width, type: WidthType.DXA },
+      shading: {
+        type: ShadingType.CLEAR,
+        fill: branding.colors.primary.replace("#", ""),
+      },
+      children: [
+        new Paragraph({
+          spacing: { before: 60, after: 60 },
+          children: [
+            new TextRun({
+              text,
+              bold: true,
+              size: 18,
+              // White or near-black, whichever actually reads on the school's
+              // colour. A yellow-branded school would otherwise get white on
+              // yellow, which is invisible on paper.
+              color: readableTextOn(branding.colors.primary).replace("#", ""),
+            }),
+          ],
+        }),
+      ],
+    });
+
+  return new TableRow({
+    tableHeader: true, // repeats the header when the table breaks across pages
+    children: [cell("No.", 700), cell("Item", 7300), cell("Responsible", 2000)],
+  });
+}
+
+/** One section as a row: number, heading plus body, responsible person. */
+function sectionRow(
+  number: number | null,
+  title: string,
+  body: string,
+  responsible: string
+): TableRow {
+  // Each line its own paragraph. A single run containing newlines renders as
+  // one unbroken block in Word.
+  const lines = (body || "").split(/\r?\n/);
+  const bodyParagraphs = lines.every((l) => !l.trim())
+    ? [
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Nothing recorded.", italics: true, color: "999999", size: 18 }),
+          ],
+        }),
+      ]
+    : lines.map(
+        (line) =>
+          new Paragraph({
+            spacing: { after: 60 },
+            children: [new TextRun({ text: line, size: 20 })],
+          })
+      );
+
+  const pad = { top: 80, bottom: 80, left: 100, right: 100 };
+  return new TableRow({
+    children: [
+      new TableCell({
+        margins: pad,
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({ text: number === null ? "" : String(number), bold: true, size: 20 }),
+            ],
+          }),
+        ],
+      }),
+      new TableCell({
+        margins: pad,
+        children: [
+          new Paragraph({
+            spacing: { after: 80 },
+            children: [new TextRun({ text: title, bold: true, size: 20 })],
+          }),
+          ...bodyParagraphs,
+        ],
+      }),
+      new TableCell({
+        margins: pad,
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: responsible,
+                size: 18,
+                color: "444444",
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
 export async function buildMinutesDocx(
   record: MinutesRecord,
   branding: SchoolBranding,
   crest: Buffer | null
 ): Promise<Buffer> {
-  const children: Paragraph[] = [];
+  // No people lookup: the responsible name was resolved and FROZEN when the
+  // template was copied, so this renders the record rather than today's
+  // office holders.
+  const children: (Paragraph | Table)[] = [];
 
   // Crest, embedded. Sized by height so a wide or tall crest both sit sensibly.
   if (crest) {
@@ -131,54 +246,50 @@ export async function buildMinutesDocx(
   );
 
   const sections = [...record.sections].sort((a, b) => a.order - b.order);
+  // The SAME helper the editor uses, so what a school sees while writing is
+  // what the document says. Sections before the chosen start point carry no
+  // number: the attendee list is not agenda item 1.
+  const numbers = sectionNumbers(record.sections);
+
   if (sections.length === 0) {
     children.push(
       new Paragraph({
         children: [
           new TextRun({
-            text:
-              record.original?.filename
-                ? `These minutes were uploaded as ${record.original.filename}.`
-                : "No sections have been written yet.",
+            text: record.original?.filename
+              ? `These minutes were uploaded as ${record.original.filename}.`
+              : "No sections have been written yet.",
             italics: true,
             color: "666666",
           }),
         ],
       })
     );
-  }
-
-  for (const s of sections) {
+  } else {
+    // 🔴 A three column table: number, content, person responsible.
+    //
+    // Carl: "the minutes typically live in a table in Word with the number in
+    // column 1, the content in column 2 and the person responsible in column
+    // 3". This is the shape a school already recognises, so the document does
+    // not have to be reformatted before it goes to the DoE.
     children.push(
-      new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 280, after: 100 },
-        children: [new TextRun({ text: s.title, bold: true, size: 22 })],
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        columnWidths: [700, 7300, 2000],
+        rows: [
+          headerRow(branding),
+          ...sections.map((s) =>
+            sectionRow(
+              numbers.get(s.id) ?? null,
+              s.title,
+              s.body,
+              s.responsible || ""
+            )
+          ),
+        ],
       })
     );
-    // Each line becomes its own paragraph. A single run with newlines in it
-    // renders as one unbroken block in Word.
-    const lines = (s.body || "").split(/\r?\n/);
-    if (lines.every((l) => !l.trim())) {
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Nothing recorded.", italics: true, color: "999999" }),
-          ],
-        })
-      );
-    } else {
-      for (const line of lines) {
-        children.push(
-          new Paragraph({
-            spacing: { after: 80 },
-            children: [new TextRun({ text: line, size: 20 })],
-          })
-        );
-      }
-    }
   }
-
   // Signatures. Present whether or not anybody has signed in the app, because
   // this file exists precisely so it can be signed by hand.
   children.push(

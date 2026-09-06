@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { MinutesSection } from "@/lib/minutes";
+import { sectionNumbers, type MinutesSection } from "@/lib/minutes";
 
 // The minute-taking surface: sections a school defines for itself.
 //
@@ -28,6 +28,8 @@ export default function MinutesSectionEditor({
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const ordered = [...sections].sort((a, b) => a.order - b.order);
+  // Same helper as the template editor and the Word export.
+  const numbers = sectionNumbers(sections);
 
   // Order is rewritten from array position on every change, so it is always
   // 1..n with no gaps. It is part of the signing hash, so it cannot be allowed
@@ -72,6 +74,9 @@ export default function MinutesSectionEditor({
           className="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
         >
           <div className="flex items-start gap-3 mb-3">
+            <span className="mt-2.5 w-8 shrink-0 text-sm font-medium text-gray-400 tabular-nums">
+              {numbers.get(s.id) == null ? "" : `${numbers.get(s.id)}.`}
+            </span>
             {editable ? (
               <input
                 value={s.title}

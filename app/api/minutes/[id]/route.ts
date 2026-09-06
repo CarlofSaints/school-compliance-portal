@@ -78,10 +78,23 @@ export async function PATCH(
       // keep the order field consistent while dragging things about. Order is
       // part of the signing hash, so it has to be unambiguous.
       updates.sections = body.sections.map(
-        (s: { id?: string; title?: string; body?: string }, i: number) => ({
+        (
+          s: {
+            id?: string;
+            title?: string;
+            body?: string;
+            numberingStartsHere?: boolean;
+            personIds?: string[];
+          },
+          i: number
+        ) => ({
           id: String(s.id || crypto.randomUUID()),
           title: String(s.title || "").trim(),
           body: String(s.body || ""),
+          // Named explicitly: this rebuilds each section field by field, so a
+          // property left out here is discarded on every save.
+          numberingStartsHere: s.numberingStartsHere || undefined,
+          personIds: s.personIds?.length ? s.personIds : undefined,
           order: i + 1,
         })
       );

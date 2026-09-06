@@ -44,8 +44,9 @@ const record: MinutesRecord = {
   draftNumber: 2,
   sections: [
     { id: "a", title: "Attendance and apologies", body: "Present: Dee Schoultz, Rob Hutcheon.\nApologies: Kevin James.", order: 1 },
-    { id: "b", title: "Finance report", body: "Budget reviewed.\nR52,000 approved for sound and lighting.", order: 2 },
-    { id: "c", title: "Grounds and maintenance", body: "", order: 3 },
+    { id: "b", title: "Previous minutes", body: "Accepted.", order: 2, numberingStartsHere: true },
+    { id: "c2", title: "Finance report", body: "Budget reviewed.\nR52,000 approved for sound and lighting.", order: 3, responsible: "Kevin James" },
+    { id: "d", title: "Grounds and maintenance", body: "", order: 4, responsible: "Graham Cuerden" },
   ],
   signatories: [
     {
@@ -133,6 +134,19 @@ function check(label: string, ok: boolean, extra = "") {
   // An empty section must still appear, or a reader cannot tell the difference
   // between "not discussed" and "we forgot to include it".
   check('an empty section still says "Nothing recorded"', xml.includes("Nothing recorded"));
+
+  console.log("\n🔴 It is a TABLE: number, item, responsible");
+  check("the body is a table", xml.includes("<w:tbl>"));
+  check("header column No.", xml.includes(">No.<"));
+  check("header column Item", xml.includes(">Item<"));
+  check("header column Responsible", xml.includes(">Responsible<"));
+  check("the header repeats across pages", xml.includes("tblHeader"));
+  check("the responsible person is named", xml.includes("Kevin James"));
+  check("and the second one", xml.includes("Graham Cuerden"));
+  // The number lives in column 1, so it must NOT also be glued to the heading.
+  check("the heading is not prefixed with its number", !xml.includes("2. Finance report"));
+  const rowCount = (xml.match(/<w:tr>/g) || []).length;
+  check("a header row plus one per section", rowCount >= 5, `${rowCount} rows`);
 
   console.log("\n🔴 The crest is EMBEDDED, not linked");
   // isDirectory, because a zip carries a 0-byte entry for the folder itself and

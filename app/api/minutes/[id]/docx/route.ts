@@ -37,6 +37,9 @@ export async function GET(
     // needs for a meeting tonight.
     const crest = await readLogo().catch(() => null);
 
+    // No People lookup: the responsible name was frozen into each section
+    // when the template was copied, so the document shows who was
+    // responsible AT THAT MEETING rather than whoever holds the post today.
     const bytes = await buildMinutesDocx(record, branding, crest);
 
     await recordActivity({

@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { POSITIONS } from "@/lib/positions";
 import {
   MEETING_BODY_LABELS,
+  sectionNumbers,
   type MeetingBody,
   type MinutesTemplate,
   type TemplateSection,
@@ -48,7 +50,9 @@ export default function TemplateEditor({
 }) {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // Computed from the same helper the Word export uses, so the numbers on
+  // screen are the numbers in the document.
+  const numbers = sectionNumbers(template.sections);
 
   const sections = [...template.sections].sort((a, b) => a.order - b.order);
 
@@ -58,6 +62,17 @@ export default function TemplateEditor({
 
   const update = (id: string, patch: Partial<TemplateSection>) =>
     commit(sections.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+
+  // Only ONE section may start the count, so setting it clears the others.
+  // Clicking the current one again clears it, which falls back to numbering
+  // everything from the top.
+  const startNumberingAt = (id: string) =>
+    commit(
+      sections.map((s) => ({
+        ...s,
+        numberingStartsHere: s.id === id ? !s.numberingStartsHere : false,
+      }))
+    );
 
   const move = (id: string, dir: -1 | 1) => {
     const i = sections.findIndex((s) => s.id === id);
@@ -129,12 +144,17 @@ export default function TemplateEditor({
       </div>
 
       <div className="space-y-3">
-        {sections.map((s, i) => (
+        {sections.map((s, i) => {
+          const number = numbers.get(s.id) ?? null;
+          return (
           <div
             key={s.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4"
           >
             <div className="flex items-start gap-3">
+              <span className="mt-2.5 w-8 shrink-0 text-sm font-medium text-gray-400 tabular-nums">
+                {number === null ? "—" : `${number}.`}
+              </span>
               <input
                 value={s.title}
                 onChange={(e) => update(s.id, { title: e.target.value })}
@@ -170,87 +190,91 @@ export default function TemplateEditor({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setExpanded(expanded === s.id ? null : s.id)}
-              className="mt-2 text-xs text-gray-500 hover:text-primary"
-            >
-              {expanded === s.id ? "Hide" : "Standing wording and people"}
-              {(s.staticContent || s.personIds?.length) && expanded !== s.id && (
-                <span className="ml-2 text-primary">
-                  {s.staticContent ? "has wording" : ""}
-                  {s.staticContent && s.personIds?.length ? ", " : ""}
-                  {s.personIds?.length ? `${s.personIds.length} linked` : ""}
+            {/* Numbering. A radio in behaviour but rendered as a checkbox,
+                because only one section can start the count and clicking the
+                current one again clears it back to numbering everything. */}
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!s.numberingStartsHere}
+                onChange={() => startNumberingAt(s.id)}
+                className="rounded border-gray-300"
+              />
+              Start numbering from here
+              {s.numberingStartsHere && (
+                <span className="text-gray-400">
+                  (everything above this is left unnumbered)
                 </span>
               )}
-            </button>
+            </label>
 
-            {expanded === s.id && (
-              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Wording that carries over
-                  </label>
-                  <p className="text-xs text-gray-500 mb-2">
-                    Copied into every set of minutes made from this template, and
-                    editable for each meeting. Good for the attendee list or a
-                    previous minutes sign off, which barely change.
-                  </p>
-                  <textarea
-                    value={s.staticContent ?? ""}
-                    onChange={(e) => update(s.id, { staticContent: e.target.value })}
-                    rows={4}
-                    placeholder={"Present:\n\nApologies:"}
-                    className={`${inputClass} text-sm`}
-                  />
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Wording that carries over{" "}
+                <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Copied into every set of minutes made from this template, and
+                editable for each meeting. Good for the attendee list or a
+                previous minutes sign off, which barely change.
+              </p>
+              <textarea
+                value={s.staticContent ?? ""}
+                onChange={(e) => update(s.id, { staticContent: e.target.value })}
+                rows={4}
+                placeholder={"Present:\n\nApologies:"}
+                className={`${inputClass} text-sm`}
+              />
+            </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Who owns this section{" "}
-                    <span className="font-normal text-gray-400">(optional)</span>
-                  </label>
-                  <p className="text-xs text-gray-500 mb-2">
-                    A note about who normally reports on it, so the secretary
-                    knows who to chase. It does not restrict anything.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {people.map((p) => {
-                      const on = s.personIds?.includes(p.id);
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() =>
-                            update(s.id, {
-                              personIds: on
-                                ? (s.personIds || []).filter((x) => x !== p.id)
-                                : [...(s.personIds || []), p.id],
-                            })
-                          }
-                          className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                            on
-                              ? "bg-primary text-white border-primary"
-                              : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-                          }`}
-                        >
-                          {p.name} {p.surname ?? ""}
-                          {p.position ? ` · ${p.position}` : ""}
-                        </button>
-                      );
-                    })}
-                    {people.length === 0 && (
-                      <span className="text-xs text-gray-400">
-                        Nobody on the People register yet.
-                      </span>
-                    )}
-                  </div>
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Who reports on this{" "}
+                <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Choose the POSITION, not the person. When the chair changes, the
+                template keeps working and each new set of minutes picks up
+                whoever holds the post at the time.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {POSITIONS.map((position) => {
+                  const on = s.positions?.includes(position);
+                  // Who currently holds it, shown underneath, so an admin can
+                  // see the effect without leaving the page.
+                  const holder = people.find((p) => p.position === position);
+                  return (
+                    <button
+                      key={position}
+                      type="button"
+                      onClick={() =>
+                        update(s.id, {
+                          positions: on
+                            ? (s.positions || []).filter((x) => x !== position)
+                            : [...(s.positions || []), position],
+                        })
+                      }
+                      title={holder ? `Currently ${holder.name}` : "Nobody holds this yet"}
+                      className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                        on
+                          ? "bg-primary text-white border-primary"
+                          : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {position}
+                      {holder && (
+                        <span className={on ? "opacity-70" : "text-gray-400"}>
+                          {" "}· {holder.name}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
-        ))}
-
+          );
+        })}
         <button
           type="button"
           onClick={() =>

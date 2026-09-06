@@ -112,6 +112,23 @@ export interface MinutesSection {
   /** What was minuted. Plain text; the Word template supplies the styling. */
   body: string;
   order: number;
+  /** 🔴 Numbering starts AT this section. Everything before it is unnumbered.
+   *  Carl: the attendees are not a numbered item, so numbering usually starts
+   *  at the second or third section. At most one section carries this. */
+  numberingStartsHere?: boolean;
+  /**
+   * Column 3 of the Word table: who is responsible, as TEXT.
+   *
+   * 🔴 Frozen, not a live link. Seeded when the template is copied by
+   * resolving its positions to whoever holds them THEN. If it pointed at a
+   * position instead, last year's minutes would rename their own
+   * participants every time a school elected a new chair, and a signed
+   * record would change after it was signed.
+   *
+   * Free text, because a secretary writes "Kevin and Rob" or "Finance
+   * subcommittee" as readily as one name.
+   */
+  responsible?: string;
 }
 
 /** The default set a new school starts with, so the first meeting is not a
@@ -194,12 +211,21 @@ export interface TemplateSection {
    */
   staticContent?: string;
   /**
-   * People associated with this section, from the People register rather than
-   * the user list, so a Treasurer with no login can still own Finance report.
-   * Advisory: it tells the secretary who to chase, it does not gate anything.
+   * 🔴 POSITIONS, not people. "SGB Treasurer", not "Kevin James".
+   *
+   * Carl: "if we tag SGB Chair, then when the chair is gone and there is a
+   * new chair, the template lives on and does not need editing." A template
+   * outlives the people in it, so naming a person would mean editing every
+   * template after every election.
+   *
+   * Resolved to whoever holds the position at the moment a set of minutes is
+   * started, and frozen there.
    */
-  personIds?: string[];
+  positions?: string[];
   order: number;
+  /** 🔴 Numbering starts AT this section; everything before it is unnumbered.
+   *  Carried into the minutes when the template is copied. */
+  numberingStartsHere?: boolean;
 }
 
 export interface MinutesTemplate {
@@ -221,11 +247,29 @@ export interface MinutesTemplate {
  * attendees are already there and the secretary edits them for this meeting
  * rather than typing them out again.
  *
- * People links are NOT copied. They belong to the template as a standing note
- * about who owns a section; a set of minutes records what was said, not who was
- * meant to say it.
+ * Positions ARE copied, resolved to names. The template says "SGB Treasurer";
+ * the minutes say "Kevin James", frozen, because that is who was responsible at
+ * that meeting and it must still say so after the next election.
  */
-export function sectionsFromTemplate(template: MinutesTemplate): MinutesSection[] {
+/** Turns a template's positions into the text for column 3. Unknown positions
+ *  are kept as the position name itself, which is more useful than a blank:
+ *  "SGB Treasurer" tells a reader who was responsible even when the seat is
+ *  vacant. */
+export function resolvePositions(
+  positions: string[] | undefined,
+  holders: Map<string, string>
+): string | undefined {
+  if (!positions?.length) return undefined;
+  const names = positions.map((p) => holders.get(p) || p);
+  return names.join(", ");
+}
+
+export function sectionsFromTemplate(
+  template: MinutesTemplate,
+  /** position -> the name of whoever holds it now. Absent leaves column 3
+   *  blank, which the secretary can simply type into. */
+  holders: Map<string, string> = new Map()
+): MinutesSection[] {
   return [...template.sections]
     .sort((a, b) => a.order - b.order)
     .map((s, i) => ({
@@ -233,6 +277,12 @@ export function sectionsFromTemplate(template: MinutesTemplate): MinutesSection[
       title: s.title,
       body: s.staticContent || "",
       order: i + 1,
+      // Carried across, or numbering set in the template would be silently
+      // lost the moment a secretary started a meeting from it.
+      numberingStartsHere: s.numberingStartsHere,
+      // The template names a POSITION; the minutes record the NAME of whoever
+      // held it at this meeting. Resolved here, once, and frozen.
+      responsible: resolvePositions(s.positions, holders),
     }));
 }
 
@@ -265,3 +315,49 @@ export const STARTER_TEMPLATE: Omit<TemplateSection, "id" | "order">[] = [
     staticContent: "Date:\nTime:\nVenue:",
   },
 ];
+
+/**
+ * The number shown against each section, or null for the unnumbered ones.
+ *
+ * Carl: "each section should be numbered so that when it renders in word, each
+ * section is numbered sequentially... the user must be able to select the
+ * section to start the numbering - the first section I add might be the
+ * attendees etc. but that is not a numbered section."
+ *
+ * So numbering runs 1..n from whichever section is flagged, and everything
+ * before it has no number at all.
+ *
+ * With NO section flagged, everything is numbered from 1. That is the sensible
+ * default rather than numbering nothing: a school that never touches this still
+ * gets numbered minutes, which is what the DoE expects to read.
+ *
+ * If more than one section is flagged the FIRST wins, because a second start
+ * point would restart the count halfway down and produce two number 1s.
+ */
+export function sectionNumbers<T extends { id: string; order: number; numberingStartsHere?: boolean }>(
+  sections: T[]
+): Map<string, number | null> {
+  const ordered = [...sections].sort((a, b) => a.order - b.order);
+  const startIndex = ordered.findIndex((s) => s.numberingStartsHere);
+  // -1 means nobody flagged it, so start at the top.
+  const from = startIndex === -1 ? 0 : startIndex;
+
+  const out = new Map<string, number | null>();
+  let n = 0;
+  ordered.forEach((s, i) => {
+    if (i < from) {
+      out.set(s.id, null);
+    } else {
+      n += 1;
+      out.set(s.id, n);
+    }
+  });
+  return out;
+}
+
+/** The heading as it should read, e.g. "3. Finance report" or just
+ *  "Attendance and apologies". One helper so the editor, the Word export and
+ *  anything else cannot disagree about what a section is called. */
+export function numberedTitle(title: string, number: number | null): string {
+  return number === null ? title : `${number}. ${title}`;
+}

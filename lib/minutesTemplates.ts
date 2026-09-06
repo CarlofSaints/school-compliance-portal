@@ -55,7 +55,10 @@ function normaliseSections(
     id: s.id || crypto.randomUUID(),
     title: String(s.title || "").trim(),
     staticContent: s.staticContent?.trim() || undefined,
-    personIds: s.personIds?.length ? s.personIds : undefined,
+    positions: s.positions?.length ? s.positions : undefined,
+    // Named explicitly. This function rebuilds a section field by field, so a
+    // property it does not mention is silently discarded on every save.
+    numberingStartsHere: s.numberingStartsHere || undefined,
     order: i + 1,
   }));
 }

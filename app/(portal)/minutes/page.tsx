@@ -164,24 +164,18 @@ export default function MinutesPage() {
                   >
                     {canManage && m.status === "draft" ? "Open and edit" : "Open"}
                   </Link>
-                  {m.original && (
-                    <DownloadLink
-                      href={`/api/minutes/${m.id}/file`}
-                      filename={m.original.filename}
-                      title={m.original.filename}
-                      className="text-gray-500 hover:text-dark text-xs mr-3"
-                      onError={(message) => setToast({ message, type: "error" })}
-                    >
-                      File
-                    </DownloadLink>
-                  )}
                   <DownloadLink
-                    href={`/api/minutes/${m.id}/docx`}
-                    filename={`${m.title}.docx`}
+                    href={
+                      m.original
+                        ? `/api/minutes/${m.id}/file`
+                        : `/api/minutes/${m.id}/docx`
+                    }
+                    filename={m.original ? m.original.filename : `${m.title}.docx`}
+                    title={m.original ? m.original.filename : "Word document"}
                     className="text-gray-500 hover:text-dark text-xs"
                     onError={(message) => setToast({ message, type: "error" })}
                   >
-                    Word
+                    Download
                   </DownloadLink>
                 </td>
               </tr>
