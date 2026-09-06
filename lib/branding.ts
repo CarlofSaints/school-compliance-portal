@@ -78,7 +78,7 @@ const SCHOOLS: Record<string, SchoolBranding> = {
     slogan: "",
     logo: "/logo.png", // placeholder; real tenants override
     logoAlt: "Compliance Portal",
-    fromEmail: "Compliance Portal <noreply@outerjoin.co.za>",
+    fromEmail: "Compliance Portal <noreply@schoolcompliance.co.za>",
     colors: {
       primary: "#475569", // neutral slate — clearly not a school's CI
       primaryDark: "#334155",
@@ -99,7 +99,7 @@ const SCHOOLS: Record<string, SchoolBranding> = {
     sloganSuffix: "STRIVE",
     logo: "/logo.png",
     logoAlt: "Hurlyvale Primary School Crest",
-    fromEmail: "HVPS Compliance <noreply@outerjoin.co.za>",
+    fromEmail: "HVPS Compliance <noreply@schoolcompliance.co.za>",
     colors: {
       primary: "#00BCD4",
       primaryDark: "#00838F",
@@ -122,7 +122,7 @@ const SCHOOLS: Record<string, SchoolBranding> = {
     slogan: "Forti Nihil Difficilius", // motto from the crest
     logo: "/logo-jeppe.png",
     logoAlt: "Jeppe Girls High Crest",
-    fromEmail: "Jeppe Girls Compliance <noreply@outerjoin.co.za>",
+    fromEmail: "Jeppe Girls Compliance <noreply@schoolcompliance.co.za>",
     colors: {
       primary: "#000000", // black — white text reads on it everywhere
       primaryDark: "#333333", // hover state

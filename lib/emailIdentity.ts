@@ -57,10 +57,14 @@ export function isPlausibleEmail(value: string): boolean {
 /**
  * The From header for a school.
  *
- * `EMAIL_SENDING_DOMAIN` is what turns this on. Without it, the school's
- * built-in fromEmail is used unchanged — which is HVPS and Jeppe today, both
- * sending from a hand-written address, and neither should change underneath
- * them just because this file now exists.
+ * `EMAIL_SENDING_DOMAIN` overrides the domain per deployment. Without it, the
+ * school's built-in fromEmail is used unchanged, which is now
+ * noreply@schoolcompliance.co.za for every school: the product has its own
+ * domain, verified with Resend, so there is nothing left to configure.
+ *
+ * ⚠️ That domain has NO MX record on the apex, so noreply@ is send-only and a
+ * reply to it goes nowhere at all. Reply-To is the field that matters, and each
+ * school sets a real address for it under Admin > Branding.
  */
 export function buildFromAddress(
   displayName: string,
