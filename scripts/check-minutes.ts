@@ -17,7 +17,13 @@ import {
   type MinutesStatus,
   type Signatory,
 } from "../lib/minutes";
-import { hashDocument, canonicalContent, type MinutesRecord } from "../lib/minutesData";
+import { type MinutesRecord } from "../lib/minutesData";
+// 🔴 The LIVE implementation, the one the sign route actually uses. There
+// used to be a second pair here (hashDocument/canonicalContent in minutesData)
+// that nothing but this file called. Two answers to "what was signed" is how a
+// signature becomes unverifiable: the pair that is checked drifts from the pair
+// that runs, and nobody notices until somebody disputes a record.
+import { documentHash } from "../lib/minutesSigning";
 
 let pass = 0;
 let fail = 0;
@@ -144,34 +150,36 @@ console.log("\n🔴 The hash. This is what makes a signature mean anything.");
     updatedAt: "2026-09-01T00:00:00.000Z",
   };
 
-  const h = hashDocument(canonicalContent(base));
+  const h = documentHash((base));
   check("a hash is 64 hex characters", /^[0-9a-f]{64}$/.test(h), true);
-  check("the same content hashes the same", hashDocument(canonicalContent(base)), h);
+  check("the same content hashes the same", documentHash((base)), h);
 
   const edited = { ...base, sections: [
     { ...base.sections[0], body: "Budget REJECTED." }, base.sections[1],
   ] };
-  checkThat("changing a section changes the hash", hashDocument(canonicalContent(edited)) !== h);
+  checkThat("changing a section changes the hash", documentHash((edited)) !== h);
 
   // Reordering changes what the meeting appears to have discussed, so it must
   // change the hash too.
   const reordered = { ...base, sections: [
     { ...base.sections[0], order: 2 }, { ...base.sections[1], order: 1 },
   ] };
-  checkThat("reordering sections changes the hash", hashDocument(canonicalContent(reordered)) !== h);
+  checkThat("reordering sections changes the hash", documentHash((reordered)) !== h);
 
   const retitled = { ...base, title: "FINCOM meeting" };
-  checkThat("changing the title changes the hash", hashDocument(canonicalContent(retitled)) !== h);
+  checkThat("changing the title changes the hash", documentHash((retitled)) !== h);
 
   const reperiod = { ...base, period: { kind: "month", year: 2026, month: 6 } as MeetingPeriod };
-  checkThat("changing the period changes the hash", hashDocument(canonicalContent(reperiod)) !== h);
+  checkThat("changing the period changes the hash", documentHash((reperiod)) !== h);
 
   // Things that are NOT the content must not change it, or a signature would
   // break for reasons nobody can explain.
   const touched = { ...base, updatedAt: "2026-12-25T00:00:00.000Z" };
-  check("touching updatedAt does not change the hash", hashDocument(canonicalContent(touched)), h);
+  check("touching updatedAt does not change the hash", documentHash((touched)), h);
 
-  checkThat("a Buffer hashes too", /^[0-9a-f]{64}$/.test(hashDocument(Buffer.from("a docx"))));
+  // Deliberately no "hashes raw bytes" case any more. Hashing the .docx was
+  // never viable: a zip carries timestamps, so the same minutes produce two
+  // different hashes and every signature would look broken.
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

@@ -255,37 +255,14 @@ export async function readLetterhead(): Promise<Buffer | null> {
   return readFile(TEMPLATE_PATH);
 }
 
-/**
- * SHA-256 of whatever is being signed.
- *
- * 🔴 The single most important line in the signing flow. An ordinary
- * electronic signature under ECTA has to be reliable "in the circumstances",
- * and what makes ours reliable is being able to prove the document has not
- * changed since it was signed. Stored per signatory, so a document altered
- * between two signatures is detectable rather than merely unlikely.
- */
-export function hashDocument(bytes: Buffer | string): string {
-  return crypto.createHash("sha256").update(bytes).digest("hex");
-}
-
-/** The bytes a signature is taken over when the minutes were typed in the app
- *  rather than uploaded. Deterministic: same content, same hash, every time.
- *  Section ORDER is part of it, because reordering sections changes what the
- *  meeting appears to have discussed. */
-export function canonicalContent(record: MinutesRecord): string {
-  const sections = [...record.sections]
-    .sort((a, b) => a.order - b.order)
-    .map((s) => `## ${s.title}\n${s.body}`)
-    .join("\n\n");
-  return [
-    `title: ${record.title}`,
-    `body: ${record.body}`,
-    `period: ${JSON.stringify(record.period)}`,
-    `draft: ${record.draftNumber}`,
-    "",
-    sections,
-  ].join("\n");
-}
+// ⚠️ Signing lives in lib/minutesSigning.ts, not here.
+//
+// 🔴 There used to be a second hashDocument/canonicalContent pair in this
+// file. Nothing but a check script called it, while the sign route used the
+// pair in minutesSigning. Two answers to "what was signed" is how a signature
+// becomes unverifiable: the one under test drifts from the one that runs, and
+// nobody finds out until a record is disputed. Deleted rather than kept as a
+// convenience import.
 
 // ---------------------------------------------------------------------------
 // The WET INK copy.
