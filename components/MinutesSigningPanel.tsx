@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/useAuth";
+import DownloadLink from "@/components/DownloadLink";
 import {
   canOpenSigning,
   signatureMatchesDocument,
@@ -22,6 +23,8 @@ interface Props {
   id: string;
   status: MinutesStatus;
   signatories: Signatory[];
+  /** A scan of a page signed by hand, where the school went that route. */
+  signedCopy?: { filename: string; uploadedAt: string };
   /** The document as it stands now: the full hash to compare each signature
    *  against, and the short form a person can read. Both come from the server,
    *  so the page and the signature cannot disagree about what was signed. */
@@ -47,6 +50,7 @@ export default function MinutesSigningPanel({
   id,
   status,
   signatories,
+  signedCopy,
   currentHash,
   currentRef,
   canManage,
@@ -105,6 +109,29 @@ export default function MinutesSigningPanel({
     );
   }
 
+  async function uploadSigned(file: File) {
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      // No Content-Type header: the browser has to set the multipart boundary,
+      // and naming the type by hand leaves it off and the body unparseable.
+      const res = await authFetch(`/api/minutes/${id}/signed-copy`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        onToast(data.error || "Could not upload that file.", "error");
+        return;
+      }
+      onToast("Signed copy uploaded. These minutes are now closed.", "success");
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!open && status !== "signed" && !canOpenSigning(status)) return null;
 
   return (
@@ -129,12 +156,48 @@ export default function MinutesSigningPanel({
         </>
       )}
 
+      {/* Carl: "those who prefer a wet ink signature can sign and then upload."
+          Offered wherever the minutes are not yet closed, including alongside
+          the code route: a school that signs on paper should not have to walk
+          through a digital signing round it is not going to use. */}
+      {canManage && status !== "signed" && (
+        <div className={canOpenSigning(status) ? "mt-5 pt-5 border-t border-gray-100" : ""}>
+          <p className="text-sm text-gray-500 mb-2">
+            Signed on paper instead? Download the Word file above, sign it, then upload the
+            signed page here. That closes the minutes the same way.
+          </p>
+          <label className="inline-block">
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,image/*"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                // Cleared straight away, so choosing the same file twice after
+                // a failed upload still fires a change event.
+                e.target.value = "";
+                if (f) uploadSigned(f);
+              }}
+              className="hidden"
+            />
+            <span className="inline-block cursor-pointer px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">
+              {busy ? "Uploading..." : "Upload a signed copy"}
+            </span>
+          </label>
+        </div>
+      )}
+
       {(open || status === "signed") && (
         <>
-          <p className="text-sm text-gray-500 mb-4">
-            {progress.signed} of {progress.total} signed
-            {progress.waitingOn.length > 0 && `, waiting on ${progress.waitingOn.join(", ")}`}.
-          </p>
+          {/* Suppressed where nobody signed in the app: a school that signed on
+              paper would otherwise be told "0 of 0 signed" about minutes it has
+              a signed page for, which reads as a failure. */}
+          {signatories.length > 0 && (
+            <p className="text-sm text-gray-500 mb-4">
+              {progress.signed} of {progress.total} signed
+              {progress.waitingOn.length > 0 && `, waiting on ${progress.waitingOn.join(", ")}`}.
+            </p>
+          )}
 
           <ul className="space-y-2 mb-4">
             {signatories.map((s) => {
@@ -166,7 +229,7 @@ export default function MinutesSigningPanel({
                 </li>
               );
             })}
-            {signatories.length === 0 && (
+            {signatories.length === 0 && !signedCopy && (
               <li className="text-sm text-gray-400">Nobody has been asked to sign yet.</li>
             )}
           </ul>
@@ -211,6 +274,21 @@ export default function MinutesSigningPanel({
           {open && !mine && (
             <p className="text-xs text-gray-400">
               You are not on the signing list for these minutes.
+            </p>
+          )}
+
+          {signedCopy && (
+            <p className="mt-4 text-sm">
+              <span className="text-gray-500">Signed on paper: </span>
+              <DownloadLink
+                href={`/api/minutes/${id}/signed-copy`}
+                filename={signedCopy.filename}
+                className="text-primary hover:underline font-medium"
+                onError={(message) => onToast(message, "error")}
+              >
+                {signedCopy.filename}
+              </DownloadLink>
+              <span className="text-gray-400"> uploaded {when(signedCopy.uploadedAt)}</span>
             </p>
           )}
 

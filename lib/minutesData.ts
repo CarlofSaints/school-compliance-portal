@@ -50,6 +50,19 @@ export interface MinutesRecord {
 
   signatories: Signatory[];
 
+  /** A scan of a page somebody signed by hand. Alongside `original`, not
+   *  instead of it: a set of minutes can have both the Word file it was
+   *  written from and a photograph of the signed page. */
+  signedCopy?: {
+    filename: string;
+    contentType: string;
+    size: number;
+    uploadedAt: string;
+    uploadedBy: string;
+    /** What the minutes said when the paper copy was signed. */
+    documentHash: string;
+  };
+
   /**
    * Who was asked to check the current draft. Frozen when it is sent, the way
    * approvalEngine freezes required approvers at submission: somebody added
@@ -272,4 +285,53 @@ export function canonicalContent(record: MinutesRecord): string {
     "",
     sections,
   ].join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// The WET INK copy.
+//
+// Carl: "add an option to download the final draft to MS Word so those who
+// prefer a wet ink signature can sign and then upload."
+//
+// A scan of a page somebody actually signed. It closes the minutes exactly as
+// the code-based route does, and it is stored alongside rather than replacing
+// the original upload: a set of minutes can have a Word file it was written
+// from AND a scan of the signed page.
+// ---------------------------------------------------------------------------
+
+export async function saveSignedCopy(
+  id: string,
+  bytes: Buffer,
+  filename: string,
+  contentType: string,
+  uploadedBy: string,
+  /** What the minutes said when the paper copy was signed. A wet ink signature
+   *  is bound to a version exactly as an electronic one is, or "signed" would
+   *  mean less on paper than it does in the app. */
+  documentHash: string
+): Promise<MinutesRecord | null> {
+  const existing = await getMinutes(id);
+  if (!existing) return null;
+  if (isLocked(existing.status)) throw new MinutesLockedError(id);
+
+  await writeFile(`${DIR}/${id}/signed${extensionOf(filename)}`, bytes);
+  const now = new Date().toISOString();
+  return updateMinutes(id, {
+    signedCopy: {
+      filename,
+      contentType,
+      size: bytes.length,
+      uploadedAt: now,
+      uploadedBy,
+      documentHash,
+    },
+    status: "signed",
+    signedAt: now,
+  });
+}
+
+export async function readSignedCopy(id: string): Promise<Buffer | null> {
+  const record = await getMinutes(id);
+  if (!record?.signedCopy) return null;
+  return readFile(`${DIR}/${id}/signed${extensionOf(record.signedCopy.filename)}`);
 }

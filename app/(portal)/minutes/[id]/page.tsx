@@ -35,6 +35,7 @@ interface MinutesDetail {
   signatories: Signatory[];
   /** The document as it stands now, computed server side so the page and the
    *  signature cannot disagree about what was signed. */
+  signedCopy?: { filename: string; uploadedAt: string };
   documentHash?: string;
   documentRef?: string;
   reviewers?: MinutesReviewer[];
@@ -245,6 +246,7 @@ export default function MinutesDetailPage() {
         id={record.id}
         status={record.status}
         signatories={record.signatories}
+        signedCopy={record.signedCopy}
         currentHash={record.documentHash}
         currentRef={record.documentRef}
         canManage={canManage}
