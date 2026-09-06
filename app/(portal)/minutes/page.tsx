@@ -285,19 +285,30 @@ function AddMinutes({
       <PeriodPicker value={period} onChange={setPeriod} />
 
       <div>
-        <div className="flex gap-2 mb-3">
+        {/* items-stretch so the two buttons stay the same height even though
+            only one carries a second line. */}
+        <div className="flex items-stretch gap-2 mb-3">
           {(["upload", "write"] as const).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
-              className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-xs border transition-colors text-left ${
                 mode === m
                   ? "bg-primary text-white border-primary"
                   : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
             >
               {m === "upload" ? "Upload a file" : "Write them here"}
+              {m === "write" && (
+                <span
+                  className={`block text-[11px] ${
+                    mode === m ? "text-white/75" : "text-gray-400"
+                  }`}
+                >
+                  Pick from a template
+                </span>
+              )}
             </button>
           ))}
         </div>
