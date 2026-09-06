@@ -6,6 +6,7 @@ import { unknownHostname } from "@/lib/tenantContext";
 import NoSchoolHere from "@/components/NoSchoolHere";
 import { readableTextOn } from "@/lib/brandingColors";
 import { BrandingProvider } from "@/components/BrandingProvider";
+import MaybeClerkProvider from "@/components/MaybeClerkProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -64,9 +65,11 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} h-full`} style={themeVars}>
       <body className="min-h-full font-sans antialiased">
-        <BrandingProvider value={branding}>
-          {strayHost ? <NoSchoolHere hostname={strayHost} /> : children}
-        </BrandingProvider>
+        <MaybeClerkProvider>
+          <BrandingProvider value={branding}>
+            {strayHost ? <NoSchoolHere hostname={strayHost} /> : children}
+          </BrandingProvider>
+        </MaybeClerkProvider>
       </body>
     </html>
   );
