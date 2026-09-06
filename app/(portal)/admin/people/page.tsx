@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, authFetch } from "@/lib/useAuth";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
 import PersonPhoto from "@/components/PersonPhoto";
@@ -40,6 +40,7 @@ export default function PeoplePage() {
   const [editPerson, setEditPerson] = useState<PersonRecord | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [tags, setTags] = useState<TagRecord[]>([]);
+  const tagsById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
   // Editable in Admin > People Types, so it is fetched rather than imported.
   const [positions, setPositions] = useState<string[]>([]);
   // The photo is handled apart from the text fields: it uploads to its own
@@ -257,6 +258,50 @@ export default function PeoplePage() {
         </button>
       </div>
 
+      {/* How many people carry each tag, and how many carry none. Chips on the
+          cards below answer "is this person tagged"; this answers the question
+          that actually blocks things, which is "has anybody been tagged for
+          this yet". A tag with nobody on it silently sends approvals and
+          minutes to an empty list. */}
+      {tags.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {tags.map((t) => {
+              const count = people.filter((p) => p.name && p.tagIds?.includes(t.id)).length;
+              return (
+                <span
+                  key={t.id}
+                  className={`text-[11px] px-2 py-0.5 rounded-full ${
+                    count === 0
+                      ? "bg-amber-100 text-amber-800"
+                      : TAG_COLOR_CLASSES[t.color] || TAG_COLOR_CLASSES.slate
+                  }`}
+                  title={
+                    count === 0
+                      ? "Nobody on the People register carries this tag, so anything sent to it reaches nobody."
+                      : undefined
+                  }
+                >
+                  {t.name} {count === 0 ? "· nobody" : `· ${count}`}
+                </span>
+              );
+            })}
+            {(() => {
+              const untagged = people.filter((p) => p.name && !p.tagIds?.length).length;
+              return untagged > 0 ? (
+                <span className="text-[11px] text-gray-400 italic">
+                  {untagged} {untagged === 1 ? "person has" : "people have"} no tags
+                </span>
+              ) : null;
+            })()}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">
+            A tag can also sit on a user who has a login. These counts are the People register
+            only.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {shownPositions.map((pos) => {
           const positionPeople = people.filter((p) => p.position === pos);
@@ -296,6 +341,44 @@ export default function PeoplePage() {
                       <p className="text-xs text-gray-400">{person.email}</p>
                       {person.phone && (
                         <p className="text-xs text-gray-400">{person.phone}</p>
+                      )}
+                      {/* Carl: "once i tag someone, i cannot see what i have or
+                          have not tagged unless i go to the main People page."
+                          This is the page tags are SET on, so it is the page
+                          that has to show them. */}
+                      {person.name && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {person.tagIds?.length ? (
+                            person.tagIds.map((id) => {
+                              const tag = tagsById.get(id);
+                              // A tag deleted after it was applied. Shown as
+                              // missing rather than skipped: a person who looks
+                              // untagged when they still carry a dead id is how
+                              // somebody ends up off a distribution list with
+                              // no explanation.
+                              return (
+                                <span
+                                  key={id}
+                                  className={`text-[11px] px-2 py-0.5 rounded-full ${
+                                    tag
+                                      ? TAG_COLOR_CLASSES[tag.color] || TAG_COLOR_CLASSES.slate
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                  title={tag ? undefined : "This tag no longer exists"}
+                                >
+                                  {tag ? tag.name : "deleted tag"}
+                                </span>
+                              );
+                            })
+                          ) : (
+                            // 🔴 The whole point of surfacing them here. An
+                            // untagged person is invisible if only tags are
+                            // drawn, and untagged is exactly what needs finding:
+                            // nothing reaches them and nothing asks them to
+                            // approve.
+                            <span className="text-[11px] text-gray-400 italic">No tags</span>
+                          )}
+                        </div>
                       )}
                       </div>
                     </div>
