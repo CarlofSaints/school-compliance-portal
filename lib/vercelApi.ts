@@ -62,6 +62,25 @@ async function call<T>(
   return { status: res.status, body };
 }
 
+/**
+ * Vercel's own explanation of a failure, for the message we throw.
+ *
+ * 🔴 Without this every failure read "HTTP 403" and nothing else, which is the
+ * one thing that cannot be acted on: a 403 from this API means either the token
+ * is not recognised at all, or it is recognised and not allowed to touch this
+ * team. Those have completely different fixes and Vercel names which it is.
+ *
+ * ⚠️ Only ever the error object. The response to a successful call carries
+ * store credentials, and a well meant "log the body on failure" is how those
+ * end up in a log aggregator.
+ */
+function why(body: unknown): string {
+  const err = (body as { error?: { code?: string; message?: string } } | null)?.error;
+  if (!err) return "";
+  const parts = [err.code, err.message].filter(Boolean);
+  return parts.length ? ` ${parts.join(": ")}` : "";
+}
+
 export interface CreatedStore {
   storeId: string;
   /** The read/write token. Seal it before it is stored anywhere. */
@@ -94,7 +113,7 @@ export async function createBlobStore(name: string): Promise<CreatedStore> {
   );
   const storeId = created.body?.store?.id;
   if (!storeId) {
-    throw new Error(`Could not create a store (HTTP ${created.status}).`);
+    throw new Error(`Could not create a store (HTTP ${created.status}).${why(created.body)}`);
   }
 
   let envVarId: string | undefined;
@@ -109,7 +128,7 @@ export async function createBlobStore(name: string): Promise<CreatedStore> {
       }),
     });
     if (conn.status >= 300) {
-      throw new Error(`Could not attach the store (HTTP ${conn.status}).`);
+      throw new Error(`Could not attach the store (HTTP ${conn.status}).${why(conn.body)}`);
     }
 
     const listed = await call<{ envs?: { id: string; key: string }[] }>(
