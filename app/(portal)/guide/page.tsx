@@ -19,6 +19,10 @@ export default function GuidePage() {
   const [state, setState] = useState<"loading" | "ready" | "empty" | "error">(
     "loading"
   );
+  // True when the school has published nothing and is reading the standard
+  // guide. It still RENDERS - every school needs a guide - but it says whose
+  // document it is, so nobody mistakes ours for one their school wrote.
+  const [standard, setStandard] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,6 +59,8 @@ export default function GuidePage() {
     setState("loading");
     const res = await authFetch("/api/handbook", { cache: "no-store" });
     if (res.status === 404) {
+      // No longer reached: the API serves the standard guide instead. Kept so a
+      // future change that can 404 does not fall through to a blank screen.
       setHtml(null);
       setMeta(null);
       setState("empty");
@@ -67,6 +73,7 @@ export default function GuidePage() {
     const data = await res.json();
     setHtml(data.html);
     setMeta(data.meta);
+    setStandard(!!data.standard);
     setState("ready");
   }, []);
 
@@ -108,7 +115,9 @@ export default function GuidePage() {
           <p className="text-gray-500 text-sm">
             {meta
               ? `Published ${new Date(meta.uploadedAt).toLocaleDateString()} by ${meta.uploadedByName}`
-              : "How to use the portal"}
+              : standard
+                ? "The standard guide. Publish your own to replace it."
+                : "How to use the portal"}
           </p>
         </div>
         {canPublish && (

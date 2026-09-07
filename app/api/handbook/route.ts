@@ -5,6 +5,8 @@ import {
   getHandbookMeta,
   saveHandbook,
 } from "@/lib/handbookData";
+import { buildDefaultGuide } from "@/lib/defaultGuide";
+import { resolveBranding } from "@/lib/brandingData";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +37,28 @@ export async function GET(req: NextRequest) {
   }
 
   const html = await getHandbookHtml();
+
+  // 🔴 A school that has published nothing gets the STANDARD guide rather than
+  // an empty page. Carl: "every school needs a guide."
+  //
+  // Built per request from that school's own branding, so it carries their
+  // name and colours. It is text only: the guide HVPS published embeds 19
+  // screenshots of a real school's register, project names and CAPEX figures,
+  // and shipping that as everybody's default would leak one school's records
+  // into every other one.
   if (!html) {
+    const branding = await resolveBranding();
     return NextResponse.json(
-      { error: "No guide has been published yet." },
-      { status: 404 }
+      {
+        html: buildDefaultGuide(branding),
+        // A null meta is what tells the page this is the standard guide and
+        // not something the school published, so it can say so and offer to
+        // replace it. Inventing an author and a date here would present our
+        // document as theirs.
+        meta: null,
+        standard: true,
+      },
+      { headers: { "Cache-Control": "no-store" } }
     );
   }
 
