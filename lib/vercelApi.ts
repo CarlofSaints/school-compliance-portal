@@ -104,6 +104,31 @@ export interface CreatedStore {
 export async function createBlobStore(name: string): Promise<CreatedStore> {
   const { projectId } = config();
 
+  // 🔴 SNAPSHOT FIRST. The token is identified by being NEW, never by its name.
+  //
+  // This used to find it with `key.endsWith("BLOB_READ_WRITE_TOKEN")` and take
+  // the last match. CONTROL_BLOB_READ_WRITE_TOKEN ends with that string, so on
+  // the provisioning project it matched the CONTROL STORE's credential, and the
+  // very first real school:
+  //
+  //   - was handed the control store's token as its own, putting that school's
+  //     data into the control store and giving its scope the keys to every
+  //     other school's credentials
+  //   - then DELETED CONTROL_BLOB_READ_WRITE_TOKEN in the cleanup below
+  //
+  // The deletion did not bite until the next deploy, because process.env in the
+  // running instance still held the old value. Then the registry became
+  // unreadable, isMultiTenant() went false, and the whole app quietly fell back
+  // to single-tenant mode serving an empty store.
+  //
+  // A name-based match cannot be made safe by tightening the string, because
+  // Vercel chooses the name and prefixes it for later stores. Identity by
+  // "which one appeared" is the only thing that holds.
+  const before = new Set(
+    ((await call<{ envs?: { id: string }[] }>(`/v10/projects/${projectId}/env`))
+      .body?.envs || []).map((e) => e.id)
+  );
+
   const created = await call<{ store?: { id?: string } }>(
     "/v1/storage/stores/blob",
     {
@@ -134,14 +159,22 @@ export async function createBlobStore(name: string): Promise<CreatedStore> {
     const listed = await call<{ envs?: { id: string; key: string }[] }>(
       `/v10/projects/${projectId}/env`
     );
-    // The variable is BLOB_READ_WRITE_TOKEN for the first store attached and
-    // gains a prefix for later ones, so match on the suffix rather than the
-    // whole name, and take the newest.
-    const rows = (listed.body?.envs || []).filter((e) =>
-      e.key.endsWith("BLOB_READ_WRITE_TOKEN")
+    // Whatever appeared that was not there a moment ago. Vercel names the
+    // variable BLOB_READ_WRITE_TOKEN for the first store attached and prefixes
+    // it for later ones, so the name is not something we can rely on - but a
+    // variable that did not exist before this connection did is unambiguous.
+    const appeared = (listed.body?.envs || []).filter(
+      (e) => !before.has(e.id) && e.key.endsWith("BLOB_READ_WRITE_TOKEN")
     );
-    const row = rows[rows.length - 1];
-    if (!row) throw new Error("Vercel did not produce a token for the store.");
+    if (appeared.length !== 1) {
+      // Zero means the connection minted nothing. More than one means something
+      // else is writing to this project at the same moment, and guessing which
+      // is ours is how the wrong one gets deleted. Refuse either way.
+      throw new Error(
+        `Expected exactly one new blob token on the project, found ${appeared.length}.`
+      );
+    }
+    const row = appeared[0];
     envVarId = row.id;
 
     // Listing gives the ENCRYPTED value; fetching one by id gives the real one.
@@ -165,7 +198,12 @@ export async function createBlobStore(name: string): Promise<CreatedStore> {
     // The variable must go whether this succeeded or not. Left behind, the next
     // school's provisioning would read a stale one, and the provisioning
     // project would accumulate one variable per school.
-    if (envVarId) {
+    //
+    // 🔴 envVarId can only ever be one this function watched APPEAR. That is
+    // the whole safety property: the previous version identified it by name,
+    // matched CONTROL_BLOB_READ_WRITE_TOKEN, and deleted the credential the
+    // entire platform depends on. Never widen this to a name lookup.
+    if (envVarId && !before.has(envVarId)) {
       await call(`/v9/projects/${config().projectId}/env/${envVarId}`, {
         method: "DELETE",
       }).catch(() => {});

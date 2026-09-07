@@ -32,7 +32,27 @@ function controlToken(): string | undefined {
  *  deployment with no control store is a single-school deployment (HVPS and
  *  Jeppe today) and must keep working exactly as it did. */
 export function isMultiTenant(): boolean {
-  return !!controlToken() && isSealingAvailable();
+  const multi = !!controlToken() && isSealingAvailable();
+
+  // 🔴 Say it out loud when a deployment that is CLEARLY the platform loses its
+  // control credential.
+  //
+  // When CONTROL_BLOB_READ_WRITE_TOKEN was deleted by a bug in provisioning,
+  // this quietly returned false and the whole app fell back to serving one
+  // generic school out of whatever BLOB_READ_WRITE_TOKEN happened to be set to.
+  // Every school disappeared from the registry, every hostname stopped
+  // resolving, and nothing anywhere said why. The fallback is right for the two
+  // single-school deployments and wrong here, and the difference is knowable:
+  // a deployment carrying a tenant secret and a provisioning token was built to
+  // be multi-tenant.
+  if (!multi && process.env.TENANT_SECRET && process.env.VERCEL_API_TOKEN) {
+    console.error(
+      "[tenant] This deployment looks like the platform (TENANT_SECRET and " +
+        "VERCEL_API_TOKEN are set) but has no usable control store, so every " +
+        "school is invisible. Check CONTROL_BLOB_READ_WRITE_TOKEN."
+    );
+  }
+  return multi;
 }
 
 async function readControlJson<T>(path: string): Promise<T | null> {
