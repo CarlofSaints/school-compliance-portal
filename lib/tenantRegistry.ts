@@ -93,11 +93,25 @@ async function readControlJson<T>(path: string): Promise<T | null> {
       // hostname, and a log line per request would bury the thing it is
       // trying to make visible.
       warnedAboutControlStore = true;
+
+      // 🔴 403 and everything else mean different things, and the difference is
+      // the whole fix. A 403 is a REAL token for a DIFFERENT store, which is
+      // easy to end up with once a project has more than one blob store
+      // connected. Anything else is usually a value that is not a token at
+      // all: the dashboard's masked asterisks, or - the one that actually
+      // happened - "Copy Snippet", which copies the whole line including
+      // BLOB_READ_WRITE_TOKEN= and the quotes.
+      const hint = /\b403\b|forbidden/i.test(message)
+        ? "That is a valid token for a DIFFERENT store. This project has more " +
+          "than one blob store connected, so reconnect the control store with " +
+          'the env var prefix "CONTROL" and let Vercel write the token itself.'
+        : 'That does not look like a token at all. Beware "Copy Snippet", ' +
+          "which copies the variable name and quotes as well as the value, and " +
+          'the masked asterisks shown before "Show secret".';
+
       console.error(
         `[tenant] The control store refused a read of "${path}": ${message}. ` +
-          "Every school will look as though it does not exist until this is " +
-          "fixed. Check that CONTROL_BLOB_READ_WRITE_TOKEN holds the real " +
-          'token and not the masked value the dashboard shows before "Show secret".'
+          `Every school will look as though it does not exist until this is fixed. ${hint}`
       );
     }
     return null;
