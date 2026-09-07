@@ -260,19 +260,27 @@ export async function provisionSchool(
     // Seed the school's own store. Written with ITS token, so this is the first
     // thing that ever touches the new store, and it proves the token works
     // before anybody is told the school is ready.
-    if (chosen.primary || chosen.accent) {
-      await put(
-        `${req.key}/branding.json`,
-        JSON.stringify({ fullName: req.name.trim(), ...chosen }, null, 2),
-        {
-          access: "private",
-          contentType: "application/json",
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          token: store.token,
-        }
-      );
-    }
+    //
+    // 🔴 ALWAYS written, even when no colours were chosen. It used to be
+    // written only if the school picked a colour, and resolveBranding reads the
+    // name from THIS file rather than from the tenant record - so a school that
+    // took the default palette was called "Portal" everywhere: in its own
+    // sidebar, in its page titles, and in the subject line of the very first
+    // email it sent, which read "Set up your Portal Compliance Portal account".
+    //
+    // The colours are still only included when actually chosen, so a school on
+    // the defaults keeps the built-in palette rather than having one derived.
+    await put(
+      `${req.key}/branding.json`,
+      JSON.stringify({ fullName: req.name.trim(), ...chosen }, null, 2),
+      {
+        access: "private",
+        contentType: "application/json",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        token: store.token,
+      }
+    );
 
     // 🔴 Seed the school's own store, INSIDE its own scope.
     //
