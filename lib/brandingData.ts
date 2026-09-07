@@ -120,7 +120,20 @@ export function applyStoredBranding(
     fromEmail: buildFromAddress(fullName, base.fromEmail),
     replyTo: buildReplyTo(stored.replyTo),
     fullName,
-    shortName: stored.shortName?.trim() || base.shortName,
+    // 🔴 Falls back to the school's OWN name before the code default.
+    //
+    // The browser tab is built from shortName, and a school that has told us
+    // what it is called but not what to abbreviate it to was getting the
+    // built-in "Portal": a freshly provisioned St Bothians sat there with
+    // "Portal Compliance Portal" in the tab. Its own name, in full, is longer
+    // than ideal but it is never WRONG, and a school can set a shorter one
+    // under Admin, School Branding.
+    //
+    // Only reached when the school stored a fullName, so HVPS and Jeppe, whose
+    // names come from code and were tuned by hand, are untouched.
+    shortName:
+      stored.shortName?.trim() ||
+      (stored.fullName?.trim() ? fullName : base.shortName),
     logo: stored.logo
       ? `/api/branding/logo?v=${stored.logo.version}`
       : base.logo,
