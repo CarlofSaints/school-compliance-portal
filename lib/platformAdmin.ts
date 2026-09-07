@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, clerkClient } from "@clerk/nextjs/server";
 import { isClerkEnabled } from "@/lib/clerkConfig";
 
 // ---------------------------------------------------------------------------
@@ -64,20 +64,38 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminResult> {
     const { userId, sessionClaims } = await auth();
     if (!userId) return notFound;
 
-    // Clerk puts the primary email in the session claims. Read defensively:
-    // the shape is Clerk's, not ours, and a missing claim must refuse rather
-    // than throw a 500 that tells somebody the route is real.
+    // 🔴 The email is fetched from Clerk, NOT read off the session claims.
+    //
+    // This used to read `sessionClaims.email`, on the belief that Clerk puts
+    // the primary email there. It does not: the default session token carries
+    // sub, sid, iat and exp, and nothing about the person. So the email was
+    // always empty and the gate refused EVERYONE, including the one address on
+    // the allow list. It failed closed, which is the right direction to fail,
+    // but it was not doing the job it looked like it was doing.
+    //
+    // Fetching is also the more defensible of the two: a session token is
+    // minted at sign-in and keeps saying whatever it said then, so an email
+    // removed from an account would still open this door until the session
+    // expired. See [[session-cookie-freezes-the-role]].
     const claims = sessionClaims as Record<string, unknown> | null;
-    const email = String(
-      claims?.email ||
-        (claims?.primary_email_address as string | undefined) ||
-        ""
-    )
-      .trim()
-      .toLowerCase();
+    let email = String(claims?.email || "").trim().toLowerCase();
+
+    if (!email) {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      const primary = user.emailAddresses.find(
+        (e) => e.id === user.primaryEmailAddressId
+      );
+      // 🔴 The PRIMARY address, and only if VERIFIED. Matching any address on
+      // the account would let somebody add an unverified address they do not
+      // control and walk in.
+      if (primary?.verification?.status === "verified") {
+        email = primary.emailAddress.trim().toLowerCase();
+      }
+    }
 
     if (!email || !allowed.includes(email)) {
-      console.warn("[platform] Refused:", email || "(no email on session)");
+      console.warn("[platform] Refused:", email || "(no verified primary email)");
       return notFound;
     }
     return { userId, email };
