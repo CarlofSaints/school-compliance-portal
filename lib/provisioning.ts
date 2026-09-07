@@ -7,6 +7,7 @@ import {
 } from "./vercelApi";
 import {
   createTenant,
+  deleteTenant,
   TenantConflictError,
   isTenantKeyAvailable,
 } from "./tenantRegistry";
@@ -14,6 +15,10 @@ import { checkTenantKey, normaliseHostname, type Tenant } from "./tenant";
 import { seal } from "./secretBox";
 import { normaliseHex } from "./brandingColors";
 import { isPlausibleEmail } from "./emailIdentity";
+import { runAsTenant } from "./tenantContext";
+import { seedSchool } from "./schoolSeed";
+import { createResetToken, RESET_TTL_MS } from "./passwordReset";
+import { sendCredentialsSetupEmail } from "./email";
 
 // ---------------------------------------------------------------------------
 // Creating a school, start to finish, with nobody watching.
@@ -214,6 +219,10 @@ export async function provisionSchool(
 
   const hostname = normaliseHostname(req.hostname);
   let storeId: string | undefined;
+  // Tracked so the unwind knows whether the NAME was claimed as well as the
+  // store. Deleting the store while leaving the registry pointing at it is the
+  // worst of the three outcomes: the school looks real and can never work.
+  let claimedTenant = false;
 
   try {
     const store = await createBlobStore(`school-${req.key}`);
@@ -246,6 +255,7 @@ export async function provisionSchool(
     // the seconds since it was checked, which is exactly the race an open
     // signup form invites.
     await createTenant(tenant);
+    claimedTenant = true;
 
     // Seed the school's own store. Written with ITS token, so this is the first
     // thing that ever touches the new store, and it proves the token works
@@ -264,11 +274,63 @@ export async function provisionSchool(
       );
     }
 
+    // 🔴 Seed the school's own store, INSIDE its own scope.
+    //
+    // Without this a school exists that nobody can log into: provisioning used
+    // to create the store, the tenant record and the branding, and stop. The
+    // admin email was only ever used for rate limiting.
+    //
+    // runAsTenant reads the credential back out of the registry rather than
+    // reusing `store.token` from this closure. That is deliberate: it makes
+    // this the first read of the sealed token, so a sealing or unsealing fault
+    // fails HERE, while there is still an unwind path, rather than the first
+    // time somebody tries to sign in.
+    const seeded = await runAsTenant(req.key, () =>
+      seedSchool({ adminEmail: email, adminName: req.adminName })
+    );
+
     await recordSignup(email, req.key);
+
+    // The welcome email is sent AFTER the school is recorded as created, and a
+    // failure to send does not fail the provisioning.
+    //
+    // 🔴 The school is real at this point. Unwinding a working school because
+    // an email did not go out would destroy the thing that succeeded to
+    // apologise for the thing that did not. Carl can resend the link from
+    // Admin, Users; he cannot un-delete a store.
+    if (seeded.admin) {
+      try {
+        const token = createResetToken(seeded.admin);
+        await runAsTenant(req.key, () =>
+          sendCredentialsSetupEmail(
+            seeded.admin!.email,
+            seeded.admin!.name,
+            token,
+            Math.round(RESET_TTL_MS / 60000)
+          )
+        );
+      } catch (mailErr) {
+        // Said out loud in the logs. A new school whose administrator never got
+        // their link looks identical to one that was never created, and this is
+        // the only place that distinction is visible.
+        console.error(
+          `[provisioning] School ${req.key} was created but the welcome email failed:`,
+          mailErr
+        );
+      }
+    }
+
     return { ok: true, tenant };
   } catch (err) {
-    // The store is ours and nothing references it, so remove it. Left behind it
-    // is invisible, unusable, and one closer to the ceiling.
+    // Unwind the NAME before the store, and only when this call is what
+    // claimed it. A TenantConflictError means somebody else holds that name,
+    // and releasing it here would delete a school that is not ours to touch.
+    if (claimedTenant && !(err instanceof TenantConflictError)) {
+      await deleteTenant(req.key).catch(() => {});
+    }
+
+    // The store is ours and nothing references it any more, so remove it. Left
+    // behind it is invisible, unusable, and one closer to the ceiling.
     if (storeId) await deleteBlobStore(storeId).catch(() => {});
 
     if (err instanceof TenantConflictError) {

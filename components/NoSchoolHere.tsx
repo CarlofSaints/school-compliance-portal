@@ -25,12 +25,24 @@ export default function NoSchoolHere({ hostname }: { hostname?: string }) {
           Check the address with whoever set up your school&apos;s portal. If you
           are looking to set one up, you can start below.
         </p>
+        {/* 🔴 /start on THIS host, not the marketing site. Somebody who typed
+            their school's address before it existed is one click from creating
+            it, and the address they typed is the one they wanted. Sending them
+            away to a homepage makes them find their way back. */}
         <a
-          href="https://schoolcompliance.co.za"
+          href="/start"
           className="inline-block mt-8 bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg font-medium transition-colors"
         >
-          Go to School Compliance
+          Set a school up
         </a>
+        <p className="mt-4 text-sm">
+          <a
+            href="https://schoolcompliance.co.za"
+            className="text-gray-500 hover:underline"
+          >
+            Or read about School Compliance first
+          </a>
+        </p>
       </div>
     </div>
   );

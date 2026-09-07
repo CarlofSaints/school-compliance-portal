@@ -313,6 +313,29 @@ export async function isTenantKeyAvailable(key: string): Promise<boolean> {
   return (await getTenantByKey(key)) === null;
 }
 
+/**
+ * Removes a school from the registry: its key document and every hostname
+ * pointing at it.
+ *
+ * 🔴 ONLY for a provisioning that failed part way, before anybody could have
+ * used the school. A real school is suspended through its `status` and never
+ * deleted, because its data is the school's and not ours - the same rule
+ * destroyPartialSchool follows for the blob store.
+ *
+ * Hostnames go FIRST. A key document with no hostnames is an orphan nobody can
+ * reach; a hostname pointing at a key document that no longer exists is a
+ * hostname that resolves to a school and then fails, which is worse and harder
+ * to diagnose.
+ */
+export async function deleteTenant(key: string): Promise<void> {
+  const tenant = await getTenantByKey(key);
+  if (!tenant) return;
+  for (const hostname of tenant.hostnames) {
+    await releaseHostname(hostname);
+  }
+  await deleteControlJson(`tenants/${key}.json`);
+}
+
 export async function releaseHostname(host: string): Promise<void> {
   const token = controlToken();
   const hostname = normaliseHostname(host);

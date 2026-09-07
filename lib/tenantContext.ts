@@ -162,6 +162,20 @@ export function platformHostname(): string {
   return (process.env.PLATFORM_HOSTNAME || "").trim().toLowerCase();
 }
 
+/**
+ * Paths that work on a hostname no school owns yet.
+ *
+ * 🔴 Just the signup flow. This is the ONE thing that has to work before a
+ * school exists, and gating it behind "no school at this address" would mean
+ * the only page that can create a school is unreachable until one does.
+ *
+ * ⚠️ Path exemption alone was not enough for /platform, because signed out it
+ * redirected to /login and /login on that host is still stray. It is safe here
+ * because /start is public and redirects nowhere: it renders, takes a form, and
+ * sends the person to their new school's own address.
+ */
+const PUBLIC_ON_ANY_HOST = ["/start"];
+
 export async function unknownHostname(): Promise<string | null> {
   if (!isMultiTenant()) return null;
   try {
@@ -169,6 +183,12 @@ export async function unknownHostname(): Promise<string | null> {
     if (!hostname) return null;
     // Carl's own portal, on every path including the sign-in it bounces to.
     if (hostname === platformHostname()) return null;
+
+    const path = (await headers()).get("x-pathname") || "";
+    if (PUBLIC_ON_ANY_HOST.some((p) => path === p || path.startsWith(p + "/"))) {
+      return null;
+    }
+
     if (await resolveTenantForHost(hostname)) return null;
     return hostname;
   } catch {
