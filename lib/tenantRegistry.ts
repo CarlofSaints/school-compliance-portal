@@ -55,6 +55,23 @@ export function isMultiTenant(): boolean {
   return multi;
 }
 
+/**
+ * 🔴 "This document is not here" and "I cannot talk to the store at all" are
+ * completely different answers and this used to give both as null.
+ *
+ * A bad CONTROL_BLOB_READ_WRITE_TOKEN therefore looked exactly like an empty
+ * platform: every school vanished from /platform, every hostname answered "no
+ * school at this address", and not one line anywhere said the credential was
+ * refused. It took five rounds of narrowing to find that the value pasted into
+ * the variable was the row of asterisks Vercel's dashboard shows before you
+ * press "Show secret".
+ *
+ * A missing document is still null, because that is genuinely normal. A
+ * refused or unreachable store is shouted about, once, with the path that
+ * failed.
+ */
+let warnedAboutControlStore = false;
+
 async function readControlJson<T>(path: string): Promise<T | null> {
   const token = controlToken();
   if (!token) return null;
@@ -65,7 +82,24 @@ async function readControlJson<T>(path: string): Promise<T | null> {
     const r = await get(path, { access: "private", useCache: false, token });
     if (!r) return null;
     return JSON.parse(await new Response(r.stream).text()) as T;
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+
+    // The SDK throws BlobNotFoundError for a document that is simply not
+    // there, which is an ordinary answer and not worth a word.
+    const missing = /not ?found/i.test(message);
+    if (!missing && !warnedAboutControlStore) {
+      // Once per instance. This runs on every request that resolves a
+      // hostname, and a log line per request would bury the thing it is
+      // trying to make visible.
+      warnedAboutControlStore = true;
+      console.error(
+        `[tenant] The control store refused a read of "${path}": ${message}. ` +
+          "Every school will look as though it does not exist until this is " +
+          "fixed. Check that CONTROL_BLOB_READ_WRITE_TOKEN holds the real " +
+          'token and not the masked value the dashboard shows before "Show secret".'
+      );
+    }
     return null;
   }
 }
