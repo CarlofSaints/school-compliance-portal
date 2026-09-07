@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
   if (problem === "invalid") {
     return NextResponse.json({
       available: false,
+      suffix: hostnameFor(""),
       reason:
         "Use 3 to 32 lowercase letters, numbers and hyphens, not starting or ending with a hyphen.",
     });
@@ -59,6 +60,10 @@ export async function GET(req: NextRequest) {
     {
       available: free,
       hostname: hostnameFor(key),
+      // 🔴 Reported, never assumed by the form. The signup page prints the
+      // domain next to the box so nobody types a street address into it, and
+      // a hardcoded copy there would start lying the day this changes.
+      suffix: hostnameFor(""),
       reason: free ? undefined : "That address is not available.",
     },
     { headers: { "Cache-Control": "no-store" } }

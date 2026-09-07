@@ -43,6 +43,9 @@ export default function StartForm() {
   const [adminEmail, setAdminEmail] = useState("");
 
   const [avail, setAvail] = useState<Availability>({ state: "idle" });
+  // Reported by the API rather than hardcoded, so the domain printed beside the
+  // box cannot start lying the day SCHOOL_HOSTNAME_SUFFIX changes.
+  const [suffix, setSuffix] = useState(".schoolcompliance.co.za");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<{ url: string; email: string } | null>(null);
@@ -63,6 +66,11 @@ export default function StartForm() {
       try {
         const res = await fetch(`/api/schools?key=${encodeURIComponent(effectiveKey)}`);
         const data = await res.json();
+        // The server sends it already leading with a dot (it is hostnameFor("")),
+        // so normalise to exactly one rather than assuming either way.
+        if (data.suffix) {
+          setSuffix("." + String(data.suffix).replace(/^\.+/, ""));
+        }
         // A slower earlier request must not overwrite a newer answer.
         if (mine !== seq.current) return;
         setAvail(
@@ -170,22 +178,44 @@ export default function StartForm() {
           />
         </div>
 
+        {/* 🔴 This field asked for "Your address" and the first person to see
+            it typed a street address. So did Chrome, which autofilled it from
+            the saved postal address: the word "address", next to a name and an
+            email, reads as where you live in every other form on the internet.
+
+            Two fixes, because either alone would still be guessable wrong:
+            the domain is shown ATTACHED to the input so the shape is visible
+            before anybody types, and the field is named "subdomain" rather
+            than "key" or anything containing "address", which is what the
+            browser's heuristic keys off. */}
         <div>
-          <label className={label} htmlFor="key">
-            Your address
+          <label className={label} htmlFor="subdomain">
+            Choose your web address
           </label>
-          <input
-            id="key"
-            value={effectiveKey}
-            onChange={(e) => {
-              setKeyTouched(true);
-              setKey(e.target.value.toLowerCase());
-            }}
-            placeholder="hurlyvale-primary"
-            className={field}
-            autoComplete="off"
-            spellCheck={false}
-          />
+          <div className="flex items-stretch">
+            <input
+              id="subdomain"
+              name="subdomain"
+              value={effectiveKey}
+              onChange={(e) => {
+                setKeyTouched(true);
+                setKey(e.target.value.toLowerCase());
+              }}
+              placeholder="st-bothians"
+              className={`${field} rounded-r-none border-r-0 min-w-0`}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              // Keeps password managers out of it too. They guess as
+              // enthusiastically as the browser does.
+              data-1p-ignore
+              data-lpignore="true"
+            />
+            <span className="shrink-0 inline-flex items-center rounded-r-lg border border-l-0 border-gray-200 bg-gray-50 px-3 text-sm text-gray-500">
+              {suffix}
+            </span>
+          </div>
           <p className="mt-1 text-xs min-h-[1.25rem]">
             {avail.state === "checking" && (
               <span className="text-gray-400">Checking...</span>
@@ -200,8 +230,8 @@ export default function StartForm() {
             )}
             {avail.state === "idle" && (
               <span className="text-gray-400">
-                Lowercase letters, numbers and hyphens. This becomes your web
-                address and cannot be changed later.
+                This is the web address your staff will type to reach the
+                portal. It cannot be changed later.
               </span>
             )}
           </p>
