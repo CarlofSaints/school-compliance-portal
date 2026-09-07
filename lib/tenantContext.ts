@@ -155,11 +155,32 @@ export async function tenantScope(): Promise<TenantScope> {
  * the generic branding and an empty store, which would look like a school whose
  * data had vanished.
  */
-/** The hostname Carl's own portal answers on. Exempt from the stray-host
- *  page, because the platform belongs to no school and the registry will
- *  never know it. */
-export function platformHostname(): string {
-  return (process.env.PLATFORM_HOSTNAME || "").trim().toLowerCase();
+/**
+ * The hostnames the platform portal answers on. Exempt from the stray-host
+ * page, because the platform belongs to no school and the registry will never
+ * know it.
+ *
+ * ⚠️ A LIST, comma separated. The deployment's own `*.vercel.app` address is
+ * the one Vercel puts in front of you in its dashboard, so it is the one you
+ * actually click - and being told "no school at this address" at your own
+ * front door is a confusing way to find out you were meant to type a different
+ * hostname.
+ *
+ * 🔴 This widens which ADDRESSES reach the platform, and nothing else. The gate
+ * is Clerk plus PLATFORM_ADMIN_EMAILS and it fails closed on all three of no
+ * Clerk, not signed in, and email not on the list. Reaching the page is not
+ * the same as getting past it.
+ */
+export function platformHostnames(): string[] {
+  return (process.env.PLATFORM_HOSTNAME || "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isPlatformHostname(hostname: string): boolean {
+  const clean = hostname.trim().toLowerCase();
+  return !!clean && platformHostnames().includes(clean);
 }
 
 /**
@@ -182,7 +203,7 @@ export async function unknownHostname(): Promise<string | null> {
     const hostname = await requestHostname();
     if (!hostname) return null;
     // Carl's own portal, on every path including the sign-in it bounces to.
-    if (hostname === platformHostname()) return null;
+    if (isPlatformHostname(hostname)) return null;
 
     const path = (await headers()).get("x-pathname") || "";
     if (PUBLIC_ON_ANY_HOST.some((p) => path === p || path.startsWith(p + "/"))) {
