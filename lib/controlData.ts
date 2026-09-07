@@ -77,6 +77,25 @@ async function readBlobBody(blobPath: string): Promise<Response | null> {
 const recentWrites = new Map<string, { data: unknown; ts: number }>();
 const CACHE_TTL = 10000; // 10 seconds
 
+/**
+ * 🔴 The cache key MUST carry the tenant prefix.
+ *
+ * It used to be the bare blobPath, and that is a cross-tenant data leak in the
+ * one module the whole isolation model rests on. Seeding the demo school
+ * cached "people.json"; the next school read "people.json", genuinely had no
+ * such file, fell through to the cache, and was served the DEMO SCHOOL'S NINE
+ * GOVERNORS as its own governance register. Caught because a school I had
+ * never touched reported nine people on /platform.
+ *
+ * Every school writes to the same handful of relative paths - people.json,
+ * users.json, tags.json - so an unprefixed key does not merely risk a
+ * collision, it guarantees one the moment two schools are active in the same
+ * serverless instance.
+ */
+function cacheKey(prefix: string, blobPath: string): string {
+  return prefix + blobPath;
+}
+
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   try {
     const res = await readBlobBody(blobPath);
@@ -97,7 +116,9 @@ export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   // back may still see the old copy. Fix that where it happens, by returning
   // what was just written (see app/api/settings/approval/route.ts), rather than
   // here — reading this map in preference to the blob is what wiped records.
-  const cached = recentWrites.get(blobPath);
+  // Scoped, so this can only ever hand back something THIS school wrote.
+  const { prefix } = await scope();
+  const cached = recentWrites.get(cacheKey(prefix, blobPath));
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return cached.data as T;
   }
@@ -114,8 +135,9 @@ export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
     allowOverwrite: true,
     token,
   });
-  // Cache the write so immediate re-reads get fresh data
-  recentWrites.set(blobPath, { data, ts: Date.now() });
+  // Cache the write so immediate re-reads get fresh data. Keyed WITH the
+  // prefix: every school writes to the same relative paths.
+  recentWrites.set(cacheKey(prefix, blobPath), { data, ts: Date.now() });
 }
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {
