@@ -25,6 +25,7 @@ import {
   SIGNATORY_ROLE_LABELS,
   sectionNumbers,
 } from "./minutes";
+import { POSITIONS } from "./positions";
 import type { MinutesRecord } from "./minutesData";
 
 // ---------------------------------------------------------------------------
@@ -175,6 +176,103 @@ function sectionRow(
   });
 }
 
+/**
+ * The governing body as a two-column table, for a letterhead's {{governors}}.
+ *
+ * 🔴 Position order comes from lib/positions, NOT from the register's own
+ * order. A governing body table reads Principal, Chair, Deputy - the order the
+ * positions are defined in - and sorting it by whoever was captured first
+ * would produce a different table every time somebody was added.
+ *
+ * A vacant seat is drawn as the position with "Vacant" beside it, never
+ * skipped: an empty Treasurer line is information a reader of the minutes
+ * wants, and a table that silently omits it looks complete when it is not.
+ */
+export function governorsTable(
+  positions: readonly string[],
+  holders: Map<string, string[]>,
+  /** The school's primary colour, WITH its leading "#". Stripped for docx,
+   *  which wants bare hex - doing that at the call site once cost the header
+   *  its readable text, because readableTextOn needs the "#" to parse. */
+  accent: string
+): Table {
+  const fill = accent.replace("#", "");
+  // 🔴 Derived, not hardcoded white. A yellow-brand school gets near-black
+  // header text and a navy one gets white - the same rule the portal's own
+  // buttons follow, and the reason Jeppe's yellow does not come out unreadable.
+  const headerText = readableTextOn(accent).replace("#", "");
+
+  const pad = { top: 60, bottom: 60, left: 100, right: 100 };
+  const rows: TableRow[] = [
+    new TableRow({
+      tableHeader: true,
+      children: ["Position", "Name"].map(
+        (label) =>
+          new TableCell({
+            margins: pad,
+            shading: { type: ShadingType.CLEAR, fill },
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: label,
+                    bold: true,
+                    size: 18,
+                    color: headerText,
+                  }),
+                ],
+              }),
+            ],
+          })
+      ),
+    }),
+  ];
+
+  for (const position of positions) {
+    const names = holders.get(position) ?? [];
+    rows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            margins: pad,
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: position, size: 18 })],
+              }),
+            ],
+          }),
+          new TableCell({
+            margins: pad,
+            children: [
+              new Paragraph({
+                children: [
+                  names.length > 0
+                    ? // Two people can hold one position - two co-opted
+                      // members, a joint deputy - so this is a list, not a
+                      // find(). Taking the first would silently drop somebody
+                      // off the school's own letterhead.
+                      new TextRun({ text: names.join(", "), size: 18 })
+                    : new TextRun({
+                        text: "Vacant",
+                        size: 18,
+                        italics: true,
+                        color: "999999",
+                      }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      })
+    );
+  }
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows,
+  });
+}
+
 export async function buildMinutesDocx(
   record: MinutesRecord,
   branding: SchoolBranding,
@@ -195,7 +293,19 @@ export async function buildMinutesDocx(
    * fonts, its governing-body table, and any header or footer it defines. We
    * do not rebuild their letterhead, we fill it in.
    */
-  letterhead: Buffer | null = null
+  letterhead: Buffer | null = null,
+  /**
+   * Position -> who holds it now, for a letterhead using {{governors}}.
+   *
+   * ⚠️ Resolved AT BUILD TIME, so re-downloading last year's minutes shows
+   * this year's governing body. Right for letterhead, which describes the
+   * school as it stands - and stated plainly on the admin screen, so a school
+   * that needs the historical list keeps typing its own table instead.
+   *
+   * Empty by default: a letterhead with no {{governors}} marker keeps whatever
+   * table the school typed, which is every existing letterhead.
+   */
+  governorsByPosition: Map<string, string[]> = new Map()
 ): Promise<Buffer> {
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
@@ -444,6 +554,12 @@ export async function buildMinutesDocx(
                 // set of minutes must not go out with template syntax on it.
                 ""
           ),
+          governors: {
+            type: PatchType.DOCUMENT,
+            children: [
+              governorsTable(POSITIONS, governorsByPosition, branding.colors.primary),
+            ],
+          },
         },
         // A placeholder the letterhead does not contain is not an error. Most
         // will only use {{content}}.

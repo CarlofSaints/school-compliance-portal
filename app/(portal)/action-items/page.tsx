@@ -2,6 +2,7 @@
 
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import SortableTh from "@/components/SortableTh";
 import RowActions from "@/components/RowActions";
 import Toast from "@/components/Toast";
@@ -163,6 +164,23 @@ export default function ActionItemsPage() {
   useEffect(() => {
     if (session) load();
   }, [session, load]);
+
+  // Arriving from "A-014" on the minutes page.
+  //
+  // Read off window.location rather than useSearchParams, which would push the
+  // whole page into a Suspense boundary for one optional string - and in an
+  // EFFECT rather than a useState initialiser, because the server renders with
+  // no window and a differing initial state is a hydration mismatch.
+  //
+  // 🔴 The filter has to move to "all" as well. The default view is Open, so
+  // linking to an action that has since been done would land on an empty grid
+  // and read as a broken link.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (!ref) return;
+    setSearch(ref);
+    setFilter("all");
+  }, []);
 
   useEffect(() => {
     if (!session || !canManage) return;
@@ -661,6 +679,25 @@ export default function ActionItemsPage() {
                       {item.meetingDate && (
                         <p className="text-xs text-gray-400 mt-1">
                           Raised at the meeting of {item.meetingDate}
+                        </p>
+                      )}
+                      {/* Where it came from, linking back to the minute that
+                          agreed it. This is what makes the register readable
+                          a year later: "who decided this?" has an answer that
+                          is one click away rather than a search of the
+                          minutes. */}
+                      {item.fromMinutes && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          From{" "}
+                          <Link
+                            href={`/minutes/${item.fromMinutes.minutesId}`}
+                            className="text-primary hover:underline"
+                          >
+                            {item.fromMinutes.minutesTitle}
+                          </Link>{" "}
+                          ({item.fromMinutes.minutesPeriod})
+                          {item.fromMinutes.sectionTitle &&
+                            `, ${item.fromMinutes.sectionTitle}`}
                         </p>
                       )}
                     </td>

@@ -10,6 +10,8 @@ import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import DownloadLink from "@/components/DownloadLink";
 import MinutesReviewPanel from "@/components/MinutesReviewPanel";
 import MinutesSigningPanel from "@/components/MinutesSigningPanel";
+import MinutesDistributePanel from "@/components/MinutesDistributePanel";
+import MinutesActionsPanel from "@/components/MinutesActionsPanel";
 import {
   formatPeriod,
   isLocked,
@@ -17,6 +19,7 @@ import {
   MINUTES_STATUS_LABELS,
   type MeetingBody,
   type MeetingPeriod,
+  type MinutesDistributionNote,
   type MinutesReview,
   type MinutesReviewer,
   type MinutesSection,
@@ -41,6 +44,7 @@ interface MinutesDetail {
   reviewers?: MinutesReviewer[];
   reviews: MinutesReview[];
   draftNumber: number;
+  distributions?: MinutesDistributionNote[];
   createdAt: string;
   createdBy: string;
   signedAt?: string;
@@ -54,6 +58,15 @@ export default function MinutesDetailPage() {
     !!session &&
     (session.permissions.includes("manage_minutes") ||
       session.permissions.includes("manage_users"));
+  // 🔴 A DIFFERENT permission from managing minutes, and gated ANY-of the same
+  // way the register's own API is. Raising an action writes to the action
+  // register, not to the minutes, so it has to be gated on what it actually
+  // writes to - a secretary who may edit minutes is not automatically somebody
+  // who may add to the register, and vice versa.
+  const canRaiseActions =
+    !!session &&
+    (session.permissions.includes("manage_action_items") ||
+      session.permissions.includes("manage_people"));
 
   const [record, setRecord] = useState<MinutesDetail | null>(null);
   const [busy, setBusy] = useState(true);
@@ -251,6 +264,25 @@ export default function MinutesDetailPage() {
         currentRef={record.documentRef}
         canManage={canManage}
         myEmail={session.email}
+        onChanged={load}
+        onToast={(message, type) => setToast({ message, type })}
+      />
+
+      {/* 🔴 Above signing, and NOT gated on the minutes being editable.
+          Actions come out of a meeting that has been held, and a signed set of
+          minutes is the most authoritative statement of what was agreed - so
+          raising one from signed minutes is the normal case, not an edge one. */}
+      <MinutesActionsPanel
+        id={record.id}
+        sections={record.sections}
+        canRaise={canRaiseActions}
+        onToast={(message, type) => setToast({ message, type })}
+      />
+
+      <MinutesDistributePanel
+        id={record.id}
+        distributions={record.distributions}
+        canManage={canManage}
         onChanged={load}
         onToast={(message, type) => setToast({ message, type })}
       />

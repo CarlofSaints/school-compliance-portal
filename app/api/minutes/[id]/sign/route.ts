@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMinutes, updateMinutes, saveSignatureImage } from "@/lib/minutesData";
-import { signingProgress, formatPeriod } from "@/lib/minutes";
+import { signingProgress } from "@/lib/minutes";
 import {
   signingCodeMatches,
   documentHash,
-  shortHash,
   decodeSignature,
   SignatureError,
 } from "@/lib/minutesSigning";
-import { resolveAudience, audienceForBody } from "@/lib/minutesRecipients";
-import { sendMinutesSignedEmail } from "@/lib/email";
+import { distributeSignedMinutes } from "@/lib/minutesDistribution";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom, clientIp } from "@/lib/activityActor";
-
-const SEND_GAP_MS = 600;
-const pause = () => new Promise((r) => setTimeout(r, SEND_GAP_MS));
 
 /**
  * Signs the minutes.
@@ -147,33 +142,42 @@ export async function POST(
   });
 
   // Everybody has signed, so the whole governing body gets the final record.
-  if (progress.complete) {
-    const audience = await resolveAudience(audienceForBody(record.body));
-    const signedBy = signatories.map((s) => s.name);
-    for (const person of [...audience.to, ...audience.cc]) {
-      await sendMinutesSignedEmail(
-        person.email,
-        person.name,
-        id,
-        record.title,
-        formatPeriod(record.period),
-        signedBy,
-        shortHash(hash)
-      );
-      await pause();
+  //
+  // Through the shared helper, which is what the button on the minutes page
+  // calls too. Two copies of "who receives the signed minutes" would drift,
+  // and the copy that drifted would be the one nobody noticed.
+  if (progress.complete && updated) {
+    try {
+      // `updated` is what updateMinutes just SAVED, passed straight through.
+      // Re-reading the record here would race the write above.
+      const result = await distributeSignedMinutes(updated);
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "minutes.distributed",
+        entity: "minutes",
+        entityId: id,
+        summary: `Sent the signed "${record.title}" to ${result.sent} people`,
+        detail: {
+          to: result.to,
+          cc: result.cc,
+          failed: result.failed,
+          withoutEmail: result.withoutEmail,
+          trigger: "final signature",
+        },
+      });
+    } catch (err) {
+      // 🔴 A distribution that cannot go out must NOT undo the signature. The
+      // failure is recorded and left for the button on the minutes page, which
+      // is exactly the situation that button is there for.
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "minutes.distribution_failed",
+        entity: "minutes",
+        entityId: id,
+        summary: `Could not send the signed "${record.title}" to the governing body`,
+        detail: { reason: err instanceof Error ? err.message : String(err) },
+      });
     }
-    await recordActivity({
-      ...actorFrom(req, session),
-      action: "minutes.distributed",
-      entity: "minutes",
-      entityId: id,
-      summary: `Sent the signed "${record.title}" to ${audience.to.length + audience.cc.length} people`,
-      detail: {
-        to: audience.to.map((r) => r.email),
-        cc: audience.cc.map((r) => r.email),
-        withoutEmail: audience.withoutEmail,
-      },
-    });
   }
 
   return NextResponse.json({ record: updated, progress });

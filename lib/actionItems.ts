@@ -134,6 +134,31 @@ export interface ActionUpdate {
   status: ActionStatus;
 }
 
+/**
+ * The minute an action came out of.
+ *
+ * This is the point of the whole register, said in the module header: "until
+ * now they lived in the minutes, which nobody re-reads". Raising an action
+ * FROM a minute is what stops the two drifting into separate lists of the same
+ * decisions.
+ *
+ * 🔴 The titles are DENORMALISED, deliberately. Minutes are signed and locked,
+ * so their title cannot change - but they can be deleted while still a draft,
+ * and an action whose origin renders as a blank line is worse than one that
+ * still says which meeting agreed it. The link is checked when it is drawn, so
+ * a dead one becomes plain text rather than a 404.
+ */
+export interface FromMinutes {
+  minutesId: string;
+  minutesTitle: string;
+  /** The meeting it was, for a reader who does not recognise the title. */
+  minutesPeriod: string;
+  /** Which section, where the action came from one rather than the whole
+   *  document. Optional: "the meeting agreed X" is a real case too. */
+  sectionId?: string;
+  sectionTitle?: string;
+}
+
 export interface ActionItem {
   id: string;
   // Human reference ("A-014") for the minutes. Never reused - see nextRef.
@@ -162,6 +187,8 @@ export interface ActionItem {
   lastReminderResult?: string;
   // Where the action came from - the meeting that agreed it.
   meetingDate?: string;
+  // The minute it was raised from, where it was. See FromMinutes.
+  fromMinutes?: FromMinutes;
   raisedById: string;
   raisedByName: string;
   createdAt: string;

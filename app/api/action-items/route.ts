@@ -19,6 +19,9 @@ import {
   displayNameFor,
 } from "@/lib/actionItemRecipients";
 import { notifyAssignees } from "@/lib/actionItemNotify";
+import type { FromMinutes } from "@/lib/actionItems";
+import { getMinutes } from "@/lib/minutesData";
+import { formatPeriod } from "@/lib/minutes";
 import { v4 as uuidv4 } from "uuid";
 
 const VALID_STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
@@ -95,6 +98,33 @@ export async function POST(req: NextRequest) {
       ? String(body.category)
       : "Other";
 
+    // 🔴 The origin is resolved from the MINUTES, never trusted from the
+    // caller. A client-supplied title would let an action claim it came out of
+    // a meeting that never agreed it - and an action item's authority is
+    // entirely "the SGB minuted this".
+    let fromMinutes: FromMinutes | undefined;
+    const minutesId = String(body?.fromMinutesId ?? "").trim();
+    if (minutesId) {
+      const record = await getMinutes(minutesId);
+      if (!record) {
+        return NextResponse.json(
+          { error: "Those minutes could not be found" },
+          { status: 400 }
+        );
+      }
+      const sectionId = String(body?.fromSectionId ?? "").trim();
+      const section = record.sections.find((s) => s.id === sectionId);
+      fromMinutes = {
+        minutesId: record.id,
+        minutesTitle: record.title,
+        minutesPeriod: formatPeriod(record.period),
+        // A section id that no longer matches is dropped rather than stored
+        // pointing at nothing: the action still came from those minutes.
+        sectionId: section?.id,
+        sectionTitle: section?.title,
+      };
+    }
+
     const now = new Date().toISOString();
     const draft: Omit<ActionItem, "ref"> = {
       id: uuidv4(),
@@ -112,6 +142,7 @@ export async function POST(req: NextRequest) {
       meetingDate: ISO_DATE.test(String(body?.meetingDate ?? ""))
         ? String(body.meetingDate)
         : undefined,
+      fromMinutes,
       raisedById: session.id,
       raisedByName: `${session.name} ${session.surname}`.trim(),
       createdAt: now,

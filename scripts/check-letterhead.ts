@@ -214,6 +214,69 @@ async function fixture(): Promise<Buffer> {
     check("and says nothing about a draft", !xml.includes("DRAFT"));
   }
 
+  console.log("\nThe governing body table, for a letterhead that asks for one");
+  {
+    // A letterhead that uses {{governors}} instead of typing the table out.
+    const withGovernors = await Packer.toBuffer(
+      new Document({
+        sections: [
+          {
+            children: [
+              new Paragraph({ children: [new TextRun("GOVERNING BODY")] }),
+              new Paragraph({ children: [new TextRun("{{governors}}")] }),
+              new Paragraph({ children: [new TextRun("{{content}}")] }),
+            ],
+          },
+        ],
+      })
+    );
+
+    const holders = new Map<string, string[]>([
+      ["Principal", ["Rob Hutcheon"]],
+      // 🔴 Two people in one seat. Taking the first would quietly drop
+      // somebody off the school's own letterhead.
+      ["Co-opted SGB", ["Ann Weber", "Sipho Dlamini"]],
+    ]);
+    const out = await buildMinutesDocx(
+      record,
+      branding,
+      null,
+      new Map(),
+      withGovernors,
+      holders
+    );
+    const xml = new AdmZip(out).readAsText("word/document.xml");
+
+    check("the holder is named", xml.includes("Rob Hutcheon"));
+    check("both holders of a shared seat are named", xml.includes("Ann Weber, Sipho Dlamini"));
+    check("a position nobody holds is shown as Vacant", xml.includes("Vacant"));
+    // Order is the position list's, not the register's - or the table would
+    // come out differently every time somebody was added.
+    check(
+      "Principal comes before Co-opted SGB",
+      xml.indexOf("Principal") < xml.indexOf("Co-opted SGB")
+    );
+    check("no marker syntax left behind", !xml.includes("{{governors}}"));
+    check("and the minutes still went in", xml.includes("Finance report"));
+  }
+
+  console.log("\nA letterhead with no {{governors}} keeps its own typed table");
+  {
+    // Every letterhead that exists today is this case. The patch must be a
+    // no-op rather than an error, or shipping this would break them all.
+    const out = await buildMinutesDocx(
+      record,
+      branding,
+      null,
+      new Map(),
+      letterhead,
+      new Map([["Principal", ["Rob Hutcheon"]]])
+    );
+    const xml = new AdmZip(out).readAsText("word/document.xml");
+    check("the typed table survives", xml.includes("Mrs Lester, Mr Scott"));
+    check("and no generated one appears", !xml.includes("Rob Hutcheon"));
+  }
+
   console.log("\nWithout a letterhead nothing changes");
   {
     const out = await buildMinutesDocx(record, branding, png(16, 16), new Map(), null);

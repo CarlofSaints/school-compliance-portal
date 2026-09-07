@@ -7,6 +7,7 @@ import type {
   MinutesReviewer,
   MinutesSection,
   MinutesStatus,
+  MinutesDistributionNote,
   Signatory,
 } from "./minutes";
 import { isLocked } from "./minutes";
@@ -78,6 +79,18 @@ export interface MinutesRecord {
 
   /** Bumped every time it goes out for checking. "Draft 1", "Draft 2". */
   draftNumber: number;
+
+  /**
+   * Every time the signed minutes went out to the governing body.
+   *
+   * 🔴 A LIST, not a single `distributedAt`. Distribution genuinely happens
+   * more than once - a resend after an outage, a second send once somebody was
+   * added to the tag - and a single field would quietly overwrite the first
+   * send, which is the one that proves the school circulated its minutes on
+   * time. Kept on the record rather than only in the activity log, because the
+   * page has to be able to say "already sent" without reading the log.
+   */
+  distributions?: MinutesDistributionNote[];
 
   createdAt: string;
   createdBy: string;
@@ -157,6 +170,34 @@ export async function updateMinutes(
   await writeJson(recordPath(id), next);
   // Returned so the caller can render what was SAVED. A read straight after a
   // write can still serve the previous copy.
+  return next;
+}
+
+/**
+ * Appends a delivery note after the signed minutes went out.
+ *
+ * 🔴 Deliberately NOT through `updateMinutes`, which refuses to write a locked
+ * record - and distribution only ever happens to a locked record, so going
+ * through it would throw every time. Safe because this touches nothing the
+ * signatures cover: `canonicalMinutes` is the wording, the period and the
+ * sections, and a note saying who was emailed is none of those.
+ *
+ * 🔴 Takes the RECORD, not an id, and never re-reads. The final signature
+ * writes the record and then distributes in the same request, and an overwrite
+ * takes a moment to propagate - so a re-read here can hand back the copy from
+ * before the signature landed, which this would then save over the top of,
+ * wiping the signature it was celebrating. The caller already holds the copy it
+ * just wrote; it passes that in.
+ */
+export async function recordDistribution(
+  base: MinutesRecord,
+  note: MinutesDistributionNote
+): Promise<MinutesRecord> {
+  const next: MinutesRecord = {
+    ...base,
+    distributions: [...(base.distributions ?? []), note],
+  };
+  await writeJson(recordPath(base.id), next);
   return next;
 }
 

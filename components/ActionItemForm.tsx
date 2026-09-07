@@ -30,6 +30,22 @@ interface Props {
   directory: DirectoryPerson[];
   // null when raising a new action.
   existing: ActionItem | null;
+  /**
+   * Starting values for a NEW action. Ignored when editing, or an edit would
+   * overwrite what somebody has already written.
+   *
+   * Used when raising an action from a minute: the section heading becomes the
+   * name and the minuted text the description, so the common case is a couple
+   * of edits rather than retyping what the meeting just agreed.
+   */
+  seed?: { title?: string; description?: string; meetingDate?: string };
+  /**
+   * The minute this is being raised from. Only the IDS travel - the server
+   * resolves the titles off the minutes themselves, because an action's
+   * authority is "the SGB minuted this" and the browser must not be the one
+   * asserting that.
+   */
+  fromMinutes?: { minutesId: string; sectionId?: string };
   onCancel: () => void;
   onSaved: (message: string, saved: ActionItem) => void;
   onError: (message: string) => void;
@@ -50,12 +66,16 @@ const fieldClass =
 export default function ActionItemForm({
   directory,
   existing,
+  seed,
+  fromMinutes,
   onCancel,
   onSaved,
   onError,
 }: Props) {
-  const [title, setTitle] = useState(existing?.title || "");
-  const [description, setDescription] = useState(existing?.description || "");
+  const [title, setTitle] = useState(existing?.title || seed?.title || "");
+  const [description, setDescription] = useState(
+    existing?.description || seed?.description || ""
+  );
   const [assigneeIds, setAssigneeIds] = useState<string[]>(
     existing?.assigneeIds || []
   );
@@ -69,7 +89,9 @@ export default function ActionItemForm({
     existing?.dueDate ||
       new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
   );
-  const [meetingDate, setMeetingDate] = useState(existing?.meetingDate || "");
+  const [meetingDate, setMeetingDate] = useState(
+    existing?.meetingDate || seed?.meetingDate || ""
+  );
   const [status, setStatus] = useState<ActionStatus>(
     existing?.status || "not_started"
   );
@@ -130,6 +152,14 @@ export default function ActionItemForm({
       status,
       progress: Number(progress),
       notify,
+      // Only on a NEW action. An edit must not be able to re-point an existing
+      // action at different minutes: where it came from is part of the record.
+      ...(existing || !fromMinutes
+        ? {}
+        : {
+            fromMinutesId: fromMinutes.minutesId,
+            fromSectionId: fromMinutes.sectionId,
+          }),
       reminder: {
         enabled: remindOn,
         daysBefore: Number(daysBefore),

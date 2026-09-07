@@ -45,3 +45,7 @@ next-env.d.ts
 
 .vercel
 .mockblob/
+
+# Output of the scripts/check-*.ts suite
+*-check.docx
+letterhead-real.docx

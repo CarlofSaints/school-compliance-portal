@@ -2,7 +2,8 @@ import { readJson, writeJson } from "./controlData";
 import { getTags } from "./tagData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
-import type { MeetingBody } from "./minutes";
+import type { MinutesAudience } from "./minutes";
+import { AUDIENCE_LABELS } from "./minutes";
 
 // ---------------------------------------------------------------------------
 // Who gets which minutes email.
@@ -22,30 +23,12 @@ import type { MeetingBody } from "./minutes";
 // tag, not a role).
 // ---------------------------------------------------------------------------
 
-/** The moments an email goes out, each with a To list and a Cc list. */
-export type MinutesAudience =
-  | "draft" // out for checking: Principal + Chair, cc deputy
-  | "signing" // the signing copy
-  | "signed" // once everyone has signed
-  | "sgb" // distributing signed SGB minutes to the whole body
-  | "fincom"; // the same for FINCOM
-
-export const AUDIENCE_LABELS: Record<MinutesAudience, string> = {
-  draft: "Draft, out for checking",
-  signing: "Ready to sign",
-  signed: "Signed and final",
-  sgb: "All SGB minutes",
-  fincom: "All FINCOM minutes",
-};
-
-export const AUDIENCE_HELP: Record<MinutesAudience, string> = {
-  draft:
-    "Who checks a draft. Usually the Principal and the SGB Chair, with the deputy copied in.",
-  signing: "Who is asked to sign once the draft has been approved.",
-  signed: "Who is told when a set of minutes has been fully signed.",
-  sgb: "Everyone who should receive signed SGB minutes.",
-  fincom: "Everyone who should receive signed FINCOM minutes.",
-};
+// The audiences, their labels and which one a meeting body maps to are PURE,
+// so they live in lib/minutes and are re-exported here where they are used -
+// the same split as tags / tagData. It lets both the admin screen (a client
+// component) and the check script reach them without pulling the blob SDK in.
+export type { MinutesAudience } from "./minutes";
+export { AUDIENCE_LABELS, AUDIENCE_HELP } from "./minutes";
 
 export interface MinutesRecipientSettings {
   /** audience -> the tag whose holders are the To list. */
@@ -154,10 +137,17 @@ export async function resolveAudience(
   };
 }
 
-/** The distribution audience for a body, used by "send to the whole SGB". */
-export function audienceForBody(body: MeetingBody): MinutesAudience {
-  return body === "fincom" ? "fincom" : "sgb";
-}
+/**
+ * The distribution audience for a body, used by "send to the whole SGB".
+ *
+ * 🔴 "Other" falls back to the SGB list rather than to nothing. A school
+ * minuting a disciplinary panel still has to be able to circulate it, and
+ * minutes that reach nobody with no error to explain why is the worse failure.
+ *
+ * Lives in lib/minutes (pure) so the check script can reach it without
+ * importing the storage layer; re-exported here where it is used.
+ */
+export { audienceForBody } from "./minutes";
 
 /** Which audiences have nothing configured, so the admin screen can say what is
  *  not set up rather than letting a secretary discover it mid-workflow. */

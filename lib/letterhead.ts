@@ -34,5 +34,15 @@ export const PLACEHOLDERS: { name: string; what: string }[] = [
   { name: "meeting", what: "SGB or FINCOM." },
   { name: "school", what: "The school's full name." },
   { name: "draft", what: 'e.g. DRAFT 2. Empty once signed.' },
+  {
+    name: "governors",
+    // ⚠️ Says "as it stands today" on purpose. It is drawn from the People
+    // register at the moment the file is built, so re-downloading last year's
+    // minutes shows this year's governing body. That is the right behaviour for
+    // LETTERHEAD - stationery describes the school now - but a school that
+    // needs the historical list on old minutes should keep typing it by hand.
+    // Saying so here is what lets somebody choose knowingly.
+    what: "A table of governing body positions and who holds them, as it stands today. Leave it out and your own typed table is kept.",
+  },
 ];
 

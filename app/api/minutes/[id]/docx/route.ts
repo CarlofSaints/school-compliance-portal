@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMinutes, readSignatureImage } from "@/lib/minutesData";
 import { readLetterheadFile } from "@/lib/letterheadData";
+import { getPeople } from "@/lib/peopleData";
 import { buildMinutesDocx } from "@/lib/minutesDocx";
 import { resolveBranding, readLogo } from "@/lib/brandingData";
 import { contentDisposition } from "@/lib/contentDisposition";
@@ -65,12 +66,32 @@ export async function GET(
     // not refuse to produce the minutes at all.
     const letterhead = await readLetterheadFile().catch(() => null);
 
+    // Who holds each governing body position now, for a letterhead using
+    // {{governors}}. Built even when the letterhead has no such marker - it is
+    // one read the page already makes elsewhere, and patchDocument simply
+    // ignores a patch whose placeholder is not in the file.
+    //
+    // 🔴 Grouped, not a lookup of one name per position. Two people genuinely
+    // do share a seat (co-opted members, a joint deputy), and keeping only the
+    // first would drop somebody off the school's own letterhead.
+    const governorsByPosition = new Map<string, string[]>();
+    for (const person of await getPeople()) {
+      const position = (person.position || "").trim();
+      const name = (person.name || "").trim();
+      if (!position || !name) continue;
+      governorsByPosition.set(position, [
+        ...(governorsByPosition.get(position) ?? []),
+        name,
+      ]);
+    }
+
     const bytes = await buildMinutesDocx(
       record,
       branding,
       crest,
       signatures,
-      letterhead
+      letterhead,
+      governorsByPosition
     );
 
     await recordActivity({

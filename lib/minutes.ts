@@ -143,6 +143,92 @@ export const DEFAULT_SECTIONS = [
   "General",
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Who gets which minutes email.
+//
+// PURE: the audiences, their labels, and which one a meeting maps to. The
+// resolution of a tag into actual addresses lives in lib/minutesRecipients,
+// which is storage-backed and re-exports all of this.
+// ---------------------------------------------------------------------------
+
+/** The moments an email goes out, each with a To list and a Cc list. */
+export type MinutesAudience =
+  | "draft" // out for checking: Principal + Chair, cc deputy
+  | "signing" // the signing copy
+  | "signed" // once everyone has signed
+  | "sgb" // distributing signed SGB minutes to the whole body
+  | "fincom"; // the same for FINCOM
+
+export const AUDIENCE_LABELS: Record<MinutesAudience, string> = {
+  draft: "Draft, out for checking",
+  signing: "Ready to sign",
+  signed: "Signed and final",
+  sgb: "All SGB minutes",
+  fincom: "All FINCOM minutes",
+};
+
+export const AUDIENCE_HELP: Record<MinutesAudience, string> = {
+  draft:
+    "Who checks a draft. Usually the Principal and the SGB Chair, with the deputy copied in.",
+  signing: "Who is asked to sign once the draft has been approved.",
+  signed: "Who is told when a set of minutes has been fully signed.",
+  sgb: "Everyone who should receive signed SGB minutes.",
+  fincom: "Everyone who should receive signed FINCOM minutes.",
+};
+
+/**
+ * The distribution audience for a meeting body.
+ *
+ * 🔴 "Other" falls back to the SGB list rather than to nothing. A school
+ * minuting a disciplinary panel still has to be able to circulate it, and
+ * minutes that quietly reach nobody is the worse failure of the two.
+ */
+export function audienceForBody(body: MeetingBody): MinutesAudience {
+  return body === "fincom" ? "fincom" : "sgb";
+}
+
+/**
+ * May these minutes go out to the governing body as final?
+ *
+ * 🔴 "Signed" is NOT the only closed state. A school that signs on paper
+ * uploads the scan, which closes the minutes without ever setting the status
+ * to signed - and those are exactly the minutes most at risk of never being
+ * circulated, because nothing automatic ever fires for them.
+ *
+ * One definition, used by the storage helper, the API route and the panel.
+ * Three copies of "is it finished" would eventually disagree, and the one that
+ * drifted would either send a draft out as final or refuse to send a signed
+ * record at all.
+ */
+export function canDistribute(
+  status: MinutesStatus,
+  hasSignedCopy: boolean
+): boolean {
+  return status === "signed" || hasSignedCopy;
+}
+
+/**
+ * One send of the signed minutes to the whole governing body.
+ *
+ * Here rather than in minutesData because the panel that shows it is a client
+ * component, and importing the storage module into one pulls @vercel/blob into
+ * the browser bundle - the same split as actionItems / actionItemData.
+ */
+export interface MinutesDistributionNote {
+  at: string;
+  /** Who pressed the button, or "" where the last signature triggered it. */
+  by: string;
+  /** How it was triggered, so a secretary can tell an automatic send from one
+   *  somebody made by hand. */
+  trigger: "final signature" | "sent by hand";
+  /** Addresses that actually accepted, and the size of the list it was aimed
+   *  at. The two differ when an address bounces, and that difference is the
+   *  whole point of recording this. */
+  sent: number;
+  recipients: number;
+  failed: string[];
+}
+
 export type SignatoryRole = "sgb_chair" | "principal" | "deputy_chair" | "other";
 
 export const SIGNATORY_ROLE_LABELS: Record<SignatoryRole, string> = {
