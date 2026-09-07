@@ -1,6 +1,7 @@
 "use client";
 
 import { useBranding } from "@/components/BrandingProvider";
+import DefaultCrest from "@/components/DefaultCrest";
 
 // ---------------------------------------------------------------------------
 // The school's crest, wherever it appears.
@@ -35,6 +36,15 @@ export default function SchoolCrest({
   priority?: boolean;
 }) {
   const branding = useBranding();
+
+  // 🔴 No crest is a real state, and it must not fall through to a file. The
+  // fallback used to be /logo.png, which is Hurlyvale's crest, so a school that
+  // had not uploaded one wore another school's badge. An empty src would be
+  // worse still: browsers draw a broken-image icon on the sign-in page.
+  if (!branding.logo) {
+    return <DefaultCrest width={width} height={height} className={className} />;
+  }
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img

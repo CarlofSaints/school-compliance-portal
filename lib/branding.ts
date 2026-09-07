@@ -76,7 +76,12 @@ const SCHOOLS: Record<string, SchoolBranding> = {
     portalSubtitle: "Compliance Portal",
     tagline: "Compliance Portal",
     slogan: "",
-    logo: "/logo.png", // placeholder; real tenants override
+    // 🔴 EMPTY, not "/logo.png". That file is Hurlyvale's actual crest, and
+    // this fallback is what every school on the shared deployment gets until
+    // it uploads its own - so St Bothians came up wearing another school's
+    // badge, on its sign-in page AND in the header of every email it sent.
+    // Empty means "no crest yet"; the neutral product mark is drawn instead.
+    logo: "",
     logoAlt: "Compliance Portal",
     fromEmail: "Compliance Portal <noreply@schoolcompliance.co.za>",
     colors: {

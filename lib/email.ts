@@ -33,6 +33,10 @@ const SITE_URL = resolveSiteUrl();
 // the school had since set in the portal - and on a shared deployment, no
 // matter which school the email was even for.
 function logoUrl(b: SchoolBranding): string {
+  // A school with no crest yet gets NO url, and the header block is left out
+  // rather than pointed at a default. `${SITE_URL}` with an empty logo would
+  // otherwise resolve to the site root and render as a broken image.
+  if (!b.logo) return "";
   // Absolute, because a mail client has no idea what a relative path means.
   // Files under /public and /api/branding/logo are both served without a
   // login, so this resolves for a recipient with no account.
@@ -66,9 +70,22 @@ function emailShell(b: SchoolBranding, title: string, body: string): string {
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:20px;">
     <div style="background:${PRIMARY};padding:24px 20px;text-align:center;border-radius:8px 8px 0 0;">
-      <div style="background:#fff;border-radius:8px;padding:8px;display:inline-block;margin:0 0 12px;">
+      ${
+        // 🔴 The crest block is omitted entirely when a school has none, and
+        // never falls back to a file. The fallback used to be /logo.png, which
+        // is Hurlyvale's actual crest, so every email a new school sent went
+        // out under another school's badge - to that school's own governors.
+        //
+        // Nothing is drawn in its place: an inline SVG is the one thing mail
+        // clients are worst at, and the school's NAME is already directly
+        // underneath. A header with no crest reads as plain; a header with a
+        // broken image reads as a forgery.
+        LOGO_URL
+          ? `<div style="background:#fff;border-radius:8px;padding:8px;display:inline-block;margin:0 0 12px;">
         <img src="${LOGO_URL}" alt="${branding.logoAlt}" width="52" style="display:block;width:52px;height:auto;border:0;outline:none;text-decoration:none;">
-      </div>
+      </div>`
+          : ""
+      }
       <h1 style="color:#fff;margin:0;font-size:24px;">${branding.fullName}</h1>
       <p style="color:${branding.colors.primaryTint};margin:4px 0 0;font-size:14px;">${branding.tagline}</p>
     </div>
