@@ -11,6 +11,8 @@ import {
   codeProblemFor,
   CODE_PROBLEM_MESSAGE,
   type PlatformCode,
+  valueOfCode,
+  discountKindProblem,
 } from "../lib/platformCodes";
 
 let pass = 0;
@@ -37,6 +39,7 @@ function code(over: Partial<PlatformCode> = {}): PlatformCode {
     kind: "promo",
     appliesTo: "new_school",
     percentOff: { monthly: 25, annual: 25 },
+    amountOff: null,
     billingCycles: 1,
     label: "Launch offer",
     expiresOn: null,
@@ -145,11 +148,113 @@ console.log("\nPer-plan percentages, since a referral differs by plan");
     billingCycles: null,
     referrerSchoolKey: "jeppegirls",
   });
-  check("annual", referral.percentOff.annual, 15);
-  check("monthly", referral.percentOff.monthly, 10);
+  check("annual", referral.percentOff?.annual, 15);
+  check("monthly", referral.percentOff?.monthly, 10);
   check("ongoing is null cycles", referral.billingCycles, null);
   check("one month off is 1 cycle", code().billingCycles, 1);
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
+
+// ---------------------------------------------------------------------------
+// What a code is WORTH. Added 8 Sep 2026 with the code builder UI.
+//
+// 🔴 A PayFast subscription has two amounts and only two: now, and every time
+// after. These checks pin which one a discount lands on, because getting it
+// wrong means either giving a school a permanent discount Carl meant to be
+// once off, or charging full price to a school he promised a deal to.
+// ---------------------------------------------------------------------------
+{
+  console.log("\n--- what a code is worth ---");
+
+  const firstOnly = (over: Partial<PlatformCode> = {}) =>
+    code({ billingCycles: 1, ...over });
+  const forever = (over: Partial<PlatformCode> = {}) =>
+    code({ billingCycles: null, ...over });
+
+  // 25% off R1,750 = R437.50 off, so R1,312.50 now.
+  const a = valueOfCode(firstOnly(), "monthly", "1750.00");
+  check("percentage off the first payment", a.firstAmount, "1312.50");
+  check("and the renewal is back to list", a.recurringAmount, "1750.00");
+  check("description says which", a.description, "25% off, the first payment");
+
+  const b = valueOfCode(forever(), "monthly", "1750.00");
+  check("forever discounts the first payment too", b.firstAmount, "1312.50");
+  check("and every one after it", b.recurringAmount, "1312.50");
+  check("description says which", b.description, "25% off, every payment");
+
+  const randOff = firstOnly({
+    percentOff: null,
+    amountOff: { monthly: 250, annual: 2000 },
+  });
+  check(
+    "a rand amount comes off the monthly price",
+    valueOfCode(randOff, "monthly", "1750.00").firstAmount,
+    "1500.00"
+  );
+  check(
+    "and a different one off the annual price",
+    valueOfCode(randOff, "annual", "15000.00").firstAmount,
+    "13000.00"
+  );
+
+  // 🔴 R2,000 off a R1,750 plan is free, not a R250 credit the school keeps.
+  const tooBig = firstOnly({
+    percentOff: null,
+    amountOff: { monthly: 2000, annual: 2000 },
+  });
+  check(
+    "a rand amount bigger than the price makes it free, not negative",
+    valueOfCode(tooBig, "monthly", "1750.00").firstAmount,
+    "0.00"
+  );
+
+  const hundred = firstOnly({ percentOff: { monthly: 100, annual: 100 } });
+  check(
+    "100% off is free",
+    valueOfCode(hundred, "monthly", "1750.00").firstAmount,
+    "0.00"
+  );
+  check(
+    "but only the first payment, so the renewal still bills",
+    valueOfCode(hundred, "monthly", "1750.00").recurringAmount,
+    "1750.00"
+  );
+
+  // Rounding: 15% of R15,000 is R2,250 exactly, but 33% of R1,750 is R577.50.
+  const odd = firstOnly({ percentOff: { monthly: 33, annual: 33 } });
+  check(
+    "an awkward percentage still lands on whole cents",
+    valueOfCode(odd, "monthly", "1750.00").firstAmount,
+    "1172.50"
+  );
+
+  console.log("\n--- a code has to take exactly one KIND of discount ---");
+  check(
+    "both kinds is refused",
+    discountKindProblem({
+      percentOff: { monthly: 10, annual: 10 },
+      amountOff: { monthly: 100, annual: 100 },
+    }) !== null,
+    true
+  );
+  check(
+    "neither is refused",
+    discountKindProblem({ percentOff: null, amountOff: null }) !== null,
+    true
+  );
+  check(
+    "a percentage alone is fine",
+    discountKindProblem({ percentOff: { monthly: 10, annual: 10 }, amountOff: null }),
+    null
+  );
+  check(
+    "a rand amount alone is fine",
+    discountKindProblem({ percentOff: null, amountOff: { monthly: 100, annual: 0 } }),
+    null
+  );
+}
+
+console.log(`
+${pass} passed, ${fail} failed
+`);
 process.exit(fail === 0 ? 0 : 1);
