@@ -71,9 +71,15 @@ const SCHOOLS: Record<string, SchoolBranding> = {
   generic: {
     key: "generic",
     schoolType: "public",
-    shortName: "Portal",
+    // 🔴 These two get concatenated as `${shortName} ${portalSubtitle}` for the
+    // browser title and three email subjects, so "Portal" + "Compliance Portal"
+    // read as "Portal Compliance Portal". Harmless on a real school, which has
+    // its own entry, but the generic fallback IS what an unknown host sees, and
+    // /start on an unknown host is the page every prospective school is about
+    // to be sent to. Split so the concatenation reads properly.
+    shortName: "School Compliance",
     fullName: "School Compliance Portal",
-    portalSubtitle: "Compliance Portal",
+    portalSubtitle: "Portal",
     tagline: "Compliance Portal",
     slogan: "",
     // 🔴 EMPTY, not "/logo.png". That file is Hurlyvale's actual crest, and

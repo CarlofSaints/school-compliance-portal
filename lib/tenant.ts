@@ -76,6 +76,31 @@ const RESERVED_KEYS = new Set([
   "public",
   "static",
   "_next",
+
+  // 🔴 Names we USE, or are about to. `signup` is the address the marketing
+  // site sends every prospective school to; a school that took it as its own
+  // key would own the signup funnel and quietly break it for everybody else.
+  // The rest are the ordinary ones a company needs later, reserved now
+  // because taking a subdomain back off a live school is not a thing you can
+  // do politely.
+  "signup",
+  "start",
+  "new",
+  "news",
+  "mail",
+  "email",
+  "portal",
+  "login",
+  "register",
+  "watch",
+  "help",
+  "support",
+  "status",
+  "blog",
+  "docs",
+  "test",
+  "staging",
+  "dev",
 ]);
 
 export function isReservedTenantKey(key: string): boolean {
