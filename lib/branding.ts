@@ -71,15 +71,22 @@ const SCHOOLS: Record<string, SchoolBranding> = {
   generic: {
     key: "generic",
     schoolType: "public",
-    // 🔴 These two get concatenated as `${shortName} ${portalSubtitle}` for the
-    // browser title and three email subjects, so "Portal" + "Compliance Portal"
-    // read as "Portal Compliance Portal". Harmless on a real school, which has
-    // its own entry, but the generic fallback IS what an unknown host sees, and
-    // /start on an unknown host is the page every prospective school is about
-    // to be sent to. Split so the concatenation reads properly.
-    shortName: "School Compliance",
+    // 🔴 shortName and portalSubtitle are CONCATENATED as
+    // `${shortName} ${portalSubtitle}` for the browser title and three email
+    // subjects, and this used to be "Portal" + "Compliance Portal" = "Portal
+    // Compliance Portal". brandingData.ts already fixes that for a school that
+    // has stored a name; what was left was a host with NO stored branding at
+    // all, which is exactly /start, the page every prospective school is now
+    // sent to.
+    //
+    // ⚠️ Fixed on shortName, NOT on portalSubtitle. Every self-serve school
+    // inherits portalSubtitle from here and only overrides shortName, so
+    // shortening it to "Portal" renamed Demo Primary School's tab from
+    // "... Compliance Portal" to "... Portal". Change this pair only after
+    // checking BOTH an unknown host and a provisioned school.
+    shortName: "School",
     fullName: "School Compliance Portal",
-    portalSubtitle: "Portal",
+    portalSubtitle: "Compliance Portal",
     tagline: "Compliance Portal",
     slogan: "",
     // 🔴 EMPTY, not "/logo.png". That file is Hurlyvale's actual crest, and
