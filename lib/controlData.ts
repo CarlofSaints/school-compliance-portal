@@ -179,6 +179,31 @@ export async function deleteFile(blobPath: string): Promise<void> {
 }
 
 /**
+ * Deletes EVERY blob under a folder, however deep.
+ *
+ * For a record made of several blobs (minutes/<id>/ holds the record, an
+ * uploaded file and a PNG per signature), deleting the files you happen to
+ * know about leaves the rest behind for good: nothing lists them and nothing
+ * ever cleans them up. Unlike deleteFile this THROWS, so a caller telling
+ * somebody "deleted" is telling the truth.
+ */
+export async function deleteFolder(dirPath: string): Promise<number> {
+  const { prefix: tenantPrefix, token } = await scope();
+  const prefix = tenantPrefix + dirPath.replace(/\/+$/, "") + "/";
+  let removed = 0;
+  let cursor: string | undefined;
+  do {
+    const result = await list({ prefix, limit: 1000, cursor, token });
+    if (result.blobs.length) {
+      await del(result.blobs.map((b) => b.url), { token });
+      removed += result.blobs.length;
+    }
+    cursor = result.hasMore ? result.cursor : undefined;
+  } while (cursor);
+  return removed;
+}
+
+/**
  * The immediate child names under a path, each returned ONCE.
  *
  * 🔴 It returns the first path segment of every blob, so a record made of

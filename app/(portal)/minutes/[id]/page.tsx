@@ -12,6 +12,7 @@ import MinutesReviewPanel from "@/components/MinutesReviewPanel";
 import MinutesSigningPanel from "@/components/MinutesSigningPanel";
 import MinutesDistributePanel from "@/components/MinutesDistributePanel";
 import MinutesActionsPanel from "@/components/MinutesActionsPanel";
+import DangerConfirmModal from "@/components/DangerConfirmModal";
 import {
   formatPeriod,
   isLocked,
@@ -73,6 +74,7 @@ export default function MinutesDetailPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -124,14 +126,16 @@ export default function MinutesDetailPage() {
     }
   };
 
-  const remove = async () => {
+  // Returns an error message to keep the dialog open, per DangerConfirmModal.
+  const remove = async (typed: string) => {
     if (!record) return;
-    const res = await authFetch(`/api/minutes/${record.id}`, { method: "DELETE" });
+    const res = await authFetch(`/api/minutes/${record.id}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: typed }),
+    });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setToast({ message: data.error || "Could not delete.", type: "error" });
-      return;
-    }
+    if (!res.ok) return data.error || "Could not delete.";
     router.push("/minutes");
   };
 
@@ -320,15 +324,36 @@ export default function MinutesDetailPage() {
         </div>
       )}
 
-      {editable && record.status === "draft" && (
-        <div className="mt-6 pt-4 border-t border-gray-100">
+      {/* Any stage short of signed, not only a draft: minutes stuck out for
+          checking or half signed are exactly the ones somebody wants gone.
+          Signed minutes are refused by the server as the school's record. */}
+      {editable && (
+        <div className="mt-8 rounded-xl border border-risk-high/30 p-5 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-semibold text-risk-high">Danger zone</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Deletes these minutes, the uploaded file and any signatures
+              collected so far. Action items raised from them stay in the
+              action register.
+            </p>
+          </div>
           <button
-            onClick={remove}
-            className="text-sm text-risk-high hover:underline"
+            onClick={() => setConfirmingDelete(true)}
+            className="bg-risk-high hover:opacity-90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-opacity"
           >
-            Delete this draft
+            Delete minutes
           </button>
         </div>
+      )}
+
+      {confirmingDelete && (
+        <DangerConfirmModal
+          title="Delete minutes"
+          itemName={record.title}
+          actionLabel="Delete minutes"
+          onClose={() => setConfirmingDelete(false)}
+          onConfirm={remove}
+        />
       )}
     </div>
   );

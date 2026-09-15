@@ -7,8 +7,10 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import DownloadLink from "@/components/DownloadLink";
+import DangerConfirmModal from "@/components/DangerConfirmModal";
 import {
   formatPeriod,
+  isLocked,
   periodSortKey,
   MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
@@ -52,6 +54,7 @@ export default function MinutesPage() {
   const [adding, setAdding] = useState(false);
   const [templates, setTemplates] = useState<{ id: string; name: string; body?: MeetingBody; sections: unknown[] }[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [deleting, setDeleting] = useState<MinutesRow | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -100,6 +103,29 @@ export default function MinutesPage() {
           </button>
         )}
       </div>
+
+      {deleting && (
+        <DangerConfirmModal
+          title="Delete minutes"
+          itemName={deleting.title}
+          actionLabel="Delete minutes"
+          onClose={() => setDeleting(null)}
+          onConfirm={async (typed) => {
+            const res = await authFetch(`/api/minutes/${deleting.id}`, {
+              method: "DELETE",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirm: typed }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) return data.error || "Could not delete.";
+            // Dropped from the rows we hold rather than re-listed: a list
+            // straight after a delete can still include the deleted record.
+            setRows((r) => r.filter((m) => m.id !== deleting.id));
+            setDeleting(null);
+            setToast({ message: `Deleted "${deleting.title}".`, type: "success" });
+          }}
+        />
+      )}
 
       {adding && (
         <AddMinutes
@@ -187,6 +213,16 @@ export default function MinutesPage() {
                   >
                     Download
                   </DownloadLink>
+                  {/* Not offered on signed minutes: the server refuses, and
+                      a button that can only ever fail reads as broken. */}
+                  {canManage && !isLocked(m.status) && (
+                    <button
+                      onClick={() => setDeleting(m)}
+                      className="text-risk-high hover:underline text-xs ml-3"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

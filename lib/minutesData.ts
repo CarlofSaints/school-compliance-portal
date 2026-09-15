@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { readJson, writeJson, readFile, writeFile, deleteFile, listFiles } from "./controlData";
+import { readJson, writeJson, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
 import type {
   MeetingBody,
   MeetingPeriod,
@@ -201,16 +201,20 @@ export async function recordDistribution(
   return next;
 }
 
-/** Deletes minutes entirely. Only ever for a draft: a signed set is a record
- *  the school is legally required to keep. */
+/** Deletes minutes entirely, at any stage short of signed: a signed set is a
+ *  record the school is legally required to keep.
+ *
+ *  🔴 The WHOLE folder, not the files the record mentions. Minutes out for
+ *  signing already carry a PNG per signature under signatures/, and the old
+ *  version removed only record.json and the upload, leaving those behind
+ *  forever. The record goes FIRST, so if the sweep fails part way the minutes
+ *  are already gone from the list rather than half-deleted and still showing. */
 export async function deleteMinutes(id: string): Promise<boolean> {
   const existing = await getMinutes(id);
   if (!existing) return false;
   if (isLocked(existing.status)) throw new MinutesLockedError(id);
   await deleteFile(recordPath(id));
-  if (existing.original) {
-    await deleteFile(`${DIR}/${id}/original${extensionOf(existing.original.filename)}`);
-  }
+  await deleteFolder(`${DIR}/${id}`);
   return true;
 }
 

@@ -143,6 +143,17 @@ export async function DELETE(
   const session = await requireAnyPermission(req, CAN_MANAGE);
   if (session instanceof NextResponse) return session;
 
+  // 🔴 The typed word is checked HERE as well as in the dialog. The dialog is
+  // a courtesy; this route is callable by anything holding a session, and
+  // "cannot be undone" has to be true of every caller, not just the button.
+  const body = await req.json().catch(() => ({}));
+  if (String(body?.confirm ?? "").trim() !== "DELETE") {
+    return NextResponse.json(
+      { error: 'Type the word DELETE to confirm.' },
+      { status: 400 }
+    );
+  }
+
   const { id } = await params;
   const existing = await getMinutes(id);
   if (!existing) {
@@ -159,7 +170,7 @@ export async function DELETE(
       action: "minutes.deleted",
       entity: "minutes",
       entityId: id,
-      summary: `Deleted draft minutes "${existing.title}"`,
+      summary: `Deleted minutes "${existing.title}"`,
       detail: { status: existing.status, period: JSON.stringify(existing.period) },
     });
     return NextResponse.json({ success: true });
