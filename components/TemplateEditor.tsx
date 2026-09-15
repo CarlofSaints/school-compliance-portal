@@ -43,9 +43,19 @@ export default function TemplateEditor({
   onSave,
   onCancel,
   onDelete,
+  positions = POSITIONS,
 }: {
   template: MinutesTemplate;
   people: PersonRow[];
+  /**
+   * The school's OWN positions, as managed under Admin, Positions.
+   *
+   * 🔴 This used to be the built-in list from lib/positions, so a position a
+   * school added (Carl's "Head of Extramurals") could never be chosen here even
+   * though the People register offered it. The built-in list is only the
+   * fallback for when the saved one cannot be loaded.
+   */
+  positions?: readonly string[];
   onChange: (t: MinutesTemplate) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -311,7 +321,7 @@ export default function TemplateEditor({
                 whoever holds the post at the time.
               </p>
               <div className="flex flex-wrap gap-2">
-                {POSITIONS.map((position) => {
+                {positions.map((position) => {
                   const on = s.positions?.includes(position);
                   // Who currently holds it, shown underneath, so an admin can
                   // see the effect without leaving the page.

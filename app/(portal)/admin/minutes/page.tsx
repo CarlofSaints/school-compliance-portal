@@ -30,6 +30,9 @@ export default function MinutesAdminPage() {
 
   const [templates, setTemplates] = useState<MinutesTemplate[]>([]);
   const [people, setPeople] = useState<PersonRow[]>([]);
+  // The school's saved positions (Admin, Positions). Empty until loaded, in
+  // which case the editor falls back to the built-in list.
+  const [positions, setPositions] = useState<string[]>([]);
   const [editing, setEditing] = useState<MinutesTemplate | null>(null);
   const [tab, setTab] = useState<"templates" | "recipients">("templates");
   const [busy, setBusy] = useState(true);
@@ -38,14 +41,21 @@ export default function MinutesAdminPage() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const [t, p] = await Promise.all([
+      const [t, p, pos] = await Promise.all([
         authFetch("/api/minutes-templates"),
         authFetch("/api/people"),
+        // no-store, the same as Admin, People: a position added a moment ago
+        // in another tab must be offered here without a hard refresh.
+        authFetch("/api/settings/positions", { cache: "no-store" }),
       ]);
       if (t.ok) setTemplates(await t.json());
       if (p.ok) {
         const rows = await p.json();
         setPeople(Array.isArray(rows) ? rows : rows.people || []);
+      }
+      if (pos.ok) {
+        const list = await pos.json();
+        setPositions(Array.isArray(list) ? list : list.positions || []);
       }
     } finally {
       setBusy(false);
@@ -160,6 +170,27 @@ export default function MinutesAdminPage() {
         <TemplateEditor
           template={editing}
           people={people}
+          // The saved list, plus any position somebody on the register holds
+          // that has fallen off it, so a sitting member is never unpickable.
+          // Undefined until loaded, which leaves the built-in fallback.
+          positions={
+            positions.length > 0
+              ? [
+                  ...positions,
+                  ...[
+                    ...new Set(
+                      people
+                        .map((p) => (p.position || "").trim())
+                        .filter(
+                          (held) =>
+                            held &&
+                            !positions.some((known) => known.toLowerCase() === held.toLowerCase())
+                        )
+                    ),
+                  ],
+                ]
+              : undefined
+          }
           onChange={setEditing}
           onSave={() => save(editing)}
           onCancel={() => setEditing(null)}

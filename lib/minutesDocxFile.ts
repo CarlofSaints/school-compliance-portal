@@ -2,6 +2,7 @@ import { readSignatureImage } from "./minutesData";
 import type { MinutesRecord } from "./minutesData";
 import { readLetterheadFile } from "./letterheadData";
 import { getPeople } from "./peopleData";
+import { getPositions } from "./positionsData";
 import { buildMinutesDocx } from "./minutesDocx";
 import { resolveBranding, readLogo } from "./brandingData";
 import { formatPeriod } from "./minutes";
@@ -70,13 +71,29 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
     ]);
   }
 
+  // 🔴 The school's OWN positions (Admin, Positions), not the built-in list,
+  // or a position it added never reaches the governing body table. Plus any
+  // position somebody on the register holds that has since fallen off that
+  // list, appended at the end: a table that silently drops a sitting member
+  // looks complete when it is not. Same rule the People page follows.
+  const saved = await getPositions().catch(() => undefined);
+  const positions = saved
+    ? [
+        ...saved,
+        ...[...governorsByPosition.keys()].filter(
+          (held) => !saved.some((p) => p.trim().toLowerCase() === held.toLowerCase())
+        ),
+      ]
+    : undefined;
+
   return buildMinutesDocx(
     record,
     branding,
     crest,
     signatures,
     letterhead,
-    governorsByPosition
+    governorsByPosition,
+    positions
   );
 }
 

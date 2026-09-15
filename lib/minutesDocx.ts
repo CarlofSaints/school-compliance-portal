@@ -387,7 +387,15 @@ export async function buildMinutesDocx(
    * Empty by default: a letterhead with no {{governors}} marker keeps whatever
    * table the school typed, which is every existing letterhead.
    */
-  governorsByPosition: Map<string, string[]> = new Map()
+  governorsByPosition: Map<string, string[]> = new Map(),
+  /**
+   * The school's own positions, in its own order, for {{governors}}.
+   *
+   * 🔴 Was the built-in list, so a position the school added under Admin,
+   * Positions never reached its letterhead's governing body table. Defaults
+   * to the built-in list only for callers that have no saved one.
+   */
+  positions: readonly string[] = POSITIONS
 ): Promise<Buffer> {
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
@@ -653,7 +661,7 @@ export async function buildMinutesDocx(
           governors: {
             type: PatchType.DOCUMENT,
             children: [
-              governorsTable(POSITIONS, governorsByPosition, branding.colors.primary),
+              governorsTable(positions, governorsByPosition, branding.colors.primary),
             ],
           },
         },
