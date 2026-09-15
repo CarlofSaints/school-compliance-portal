@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { sectionNumbers, type MinutesSection } from "@/lib/minutes";
+import {
+  isAttendance,
+  rowsFromText,
+  sectionNumbers,
+  type MinutesSection,
+} from "@/lib/minutes";
+import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
+import AttendanceList from "@/components/AttendanceList";
 
 // The minute-taking surface: sections a school defines for itself.
 //
@@ -133,19 +140,77 @@ export default function MinutesSectionEditor({
             </div>
           )}
 
+          {editable && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {(["text", "attendance"] as const).map((k) => {
+                const on = (k === "attendance") === isAttendance(s);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() =>
+                      update(s.id, {
+                        kind: k === "attendance" ? "attendance" : undefined,
+                        attendees: k === "attendance" ? s.attendees ?? [] : s.attendees,
+                      })
+                    }
+                    className={`px-3 py-1 rounded-lg text-xs border transition-colors ${
+                      on
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {k === "text" ? "Text" : "Attendance list"}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {isAttendance(s) &&
+            (editable ? (
+              <div className="mb-3">
+                {(s.attendees?.length ?? 0) === 0 && rowsFromText(s.body).rows.length > 0 && (
+                  <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-3">
+                    <span>You typed a list in the box below. Turn it into rows?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const { rows, leftover } = rowsFromText(s.body);
+                        update(s.id, { attendees: rows, body: leftover });
+                      }}
+                      className="font-medium underline"
+                    >
+                      Turn my typed list into rows
+                    </button>
+                  </div>
+                )}
+                <AttendeeRowsEditor
+                  rows={s.attendees ?? []}
+                  onChange={(rows) => update(s.id, { attendees: rows })}
+                />
+              </div>
+            ) : (
+              <AttendanceList rows={s.attendees ?? []} />
+            ))}
+
           {editable ? (
             <textarea
               value={s.body}
               onChange={(e) => update(s.id, { body: e.target.value })}
-              rows={5}
-              placeholder="What was discussed and decided"
+              rows={isAttendance(s) ? 2 : 5}
+              placeholder={
+                isAttendance(s)
+                  ? "Wording under the list, e.g. apologies (optional)"
+                  : "What was discussed and decided"
+              }
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
             />
-          ) : (
+          ) : s.body || !isAttendance(s) || !s.attendees?.length ? (
             <p className="text-sm text-gray-700 whitespace-pre-wrap">
               {s.body || <span className="text-gray-400">Nothing recorded.</span>}
             </p>
-          )}
+          ) : null}
         </div>
       ))}
 

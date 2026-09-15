@@ -151,7 +151,14 @@ function check(label: string, ok: boolean, extra = "") {
   // The number lives in column 1, so it must NOT also be glued to the heading.
   check("the heading is not prefixed with its number", !xml.includes("2. Finance report"));
   const rowCount = (xml.match(/<w:tr>/g) || []).length;
-  check("a header row plus one per section", rowCount >= 5, `${rowCount} rows`);
+  // "Attendance and apologies" comes BEFORE numbering starts, so it is drawn
+  // above the table (as on a school's own letterhead), not as a blank-numbered
+  // row inside it. Header + Previous minutes + Finance + Grounds = 4.
+  check("a header row plus one per NUMBERED section", rowCount === 4, `${rowCount} rows`);
+  check(
+    "the unnumbered section sits above the numbered table",
+    xml.indexOf("Attendance and apologies") < xml.indexOf("<w:tbl>")
+  );
 
   console.log("\n🔴 The signature MARK is in the document");
   // Carl expected signing to work "as though they might on Adobe or SignNow",

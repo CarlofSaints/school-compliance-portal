@@ -16,14 +16,17 @@ import {
   TableCell,
   WidthType,
   ShadingType,
+  TableBorders,
 } from "docx";
 import type { SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
   formatPeriod,
+  isAttendance,
   MEETING_BODY_LABELS,
   SIGNATORY_ROLE_LABELS,
   sectionNumbers,
+  type AttendeeRow,
 } from "./minutes";
 import { POSITIONS } from "./positions";
 import type { MinutesRecord } from "./minutesData";
@@ -114,17 +117,24 @@ function sectionRow(
   number: number | null,
   title: string,
   body: string,
-  responsible: string
+  responsible: string,
+  attendees?: AttendeeRow[]
 ): TableRow {
+  const hasRows = !!attendees?.length;
   // Each line its own paragraph. A single run containing newlines renders as
   // one unbroken block in Word.
   const lines = (body || "").split(/\r?\n/);
   const bodyParagraphs = lines.every((l) => !l.trim())
     ? [
         new Paragraph({
-          children: [
-            new TextRun({ text: "Nothing recorded.", italics: true, color: "999999", size: 18 }),
-          ],
+          children: hasRows
+            ? // 🔴 Still a paragraph, never nothing. Word requires a cell to END
+              // with a paragraph, and a cell ending on the attendance table is
+              // a file Word reports as corrupt.
+              []
+            : [
+                new TextRun({ text: "Nothing recorded.", italics: true, color: "999999", size: 18 }),
+              ],
         }),
       ]
     : lines.map(
@@ -155,6 +165,8 @@ function sectionRow(
             spacing: { after: 80 },
             children: [new TextRun({ text: title, bold: true, size: 20 })],
           }),
+          // The Item column is 7300 twips less the cell padding.
+          ...(hasRows ? [attendanceTable(attendees!, { indent: 0, width: 7000 })] : []),
           ...bodyParagraphs,
         ],
       }),
@@ -174,6 +186,76 @@ function sectionRow(
       }),
     ],
   });
+}
+
+/**
+ * An attendance list: position and name in two lined-up columns, no borders.
+ *
+ * Carl's own letterhead lists the governing body this way, and typed spaces
+ * cannot reproduce it: Word draws text in a proportional font, so spaces land
+ * in a different place on every line. A borderless table is what Word itself
+ * uses for this.
+ *
+ * Runs carry no size or font, so on a school's letterhead they take the
+ * letterhead's own body style (patched with keepOriginalStyles).
+ */
+function attendanceTable(
+  rows: AttendeeRow[],
+  opts: { indent: number; width: number }
+): Table {
+  const col = Math.floor(opts.width / 2);
+  const cell = (text: string) =>
+    new TableCell({
+      width: { size: col, type: WidthType.DXA },
+      margins: { top: 0, bottom: 0, left: 60, right: 60 },
+      children: [new Paragraph({ spacing: { after: 20 }, children: [new TextRun({ text })] })],
+    });
+  return new Table({
+    width: { size: opts.width, type: WidthType.DXA },
+    columnWidths: [col, col],
+    ...(opts.indent ? { indent: { size: opts.indent, type: WidthType.DXA } } : {}),
+    borders: TableBorders.NONE,
+    rows: rows.map(
+      (r) => new TableRow({ children: [cell(r.position), cell(r.name)] })
+    ),
+  });
+}
+
+/**
+ * A section that comes BEFORE numbering starts, drawn above the numbered table
+ * rather than as a blank-numbered row inside it.
+ *
+ * Carl: the attendees are not agenda item 1. On his letterhead the governing
+ * body sits under its own bold heading at the top, and the numbered items
+ * follow. Minutes with no "start numbering here" have no such sections, so
+ * their layout is exactly as before.
+ */
+function leadingSection(
+  title: string,
+  body: string,
+  attendees?: AttendeeRow[]
+): (Paragraph | Table)[] {
+  const out: (Paragraph | Table)[] = [
+    new Paragraph({
+      spacing: { before: 120, after: 80 },
+      children: [new TextRun({ text: title, bold: true, size: 24 })],
+    }),
+  ];
+  if (attendees?.length) {
+    // Indented ~1.25cm under the heading, as on the letterhead.
+    out.push(attendanceTable(attendees, { indent: 720, width: 8400 }));
+  }
+  const lines = (body || "").split(/\r?\n/);
+  if (lines.some((l) => l.trim())) {
+    out.push(
+      ...lines.map(
+        (line) =>
+          new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: line })] })
+      )
+    );
+  }
+  out.push(spacer(240));
+  return out;
 }
 
 /**
@@ -412,23 +494,37 @@ export async function buildMinutesDocx(
     // column 1, the content in column 2 and the person responsible in column
     // 3". This is the shape a school already recognises, so the document does
     // not have to be reformatted before it goes to the DoE.
-    body.push(
-      new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        columnWidths: [700, 7300, 2000],
-        rows: [
-          headerRow(branding),
-          ...sections.map((s) =>
-            sectionRow(
-              numbers.get(s.id) ?? null,
-              s.title,
-              s.body,
-              s.responsible || ""
-            )
-          ),
-        ],
-      })
-    );
+    //
+    // Sections before numbering starts (the attendance list) go ABOVE the
+    // table as plain content; see leadingSection. With no start point set,
+    // every section is numbered and this is the table it always was.
+    const leading = sections.filter((s) => numbers.get(s.id) == null);
+    const numbered = sections.filter((s) => numbers.get(s.id) != null);
+
+    for (const s of leading) {
+      body.push(...leadingSection(s.title, s.body, isAttendance(s) ? s.attendees : undefined));
+    }
+
+    if (numbered.length > 0) {
+      body.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          columnWidths: [700, 7300, 2000],
+          rows: [
+            headerRow(branding),
+            ...numbered.map((s) =>
+              sectionRow(
+                numbers.get(s.id) ?? null,
+                s.title,
+                s.body,
+                s.responsible || "",
+                isAttendance(s) ? s.attendees : undefined
+              )
+            ),
+          ],
+        })
+      );
+    }
   }
   // Signatures. Present whether or not anybody has signed in the app, because
   // this file exists precisely so it can be signed by hand.

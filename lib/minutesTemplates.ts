@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { readJson, writeJson, deleteFile, listFiles } from "./controlData";
 import type { MeetingBody } from "./minutes";
 import type { MinutesTemplate, TemplateSection } from "./minutes";
+import { cleanAttendees } from "./minutes";
 
 // The types, the starter set and sectionsFromTemplate live in lib/minutes.ts
 // because they are pure and a client component needs them. Re-exported so
@@ -59,6 +60,10 @@ function normaliseSections(
     // Named explicitly. This function rebuilds a section field by field, so a
     // property it does not mention is silently discarded on every save.
     numberingStartsHere: s.numberingStartsHere || undefined,
+    // Named for the same reason. An attendance list saved through a function
+    // that forgot these would come back as an empty text section.
+    kind: s.kind === "attendance" ? "attendance" : undefined,
+    attendees: s.kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
     order: i + 1,
   }));
 }

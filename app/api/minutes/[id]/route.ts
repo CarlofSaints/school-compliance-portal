@@ -6,7 +6,7 @@ import {
   deleteMinutes,
   MinutesLockedError,
 } from "@/lib/minutesData";
-import { checkPeriod, isLocked } from "@/lib/minutes";
+import { checkPeriod, isLocked, cleanAttendees } from "@/lib/minutes";
 import { documentHash, shortHash } from "@/lib/minutesSigning";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -95,6 +95,9 @@ export async function PATCH(
             body?: string;
             numberingStartsHere?: boolean;
             personIds?: string[];
+            responsible?: string;
+            kind?: string;
+            attendees?: unknown;
           },
           i: number
         ) => ({
@@ -105,6 +108,9 @@ export async function PATCH(
           // property left out here is discarded on every save.
           numberingStartsHere: s.numberingStartsHere || undefined,
           personIds: s.personIds?.length ? s.personIds : undefined,
+          responsible: s.responsible?.trim() || undefined,
+          kind: s.kind === "attendance" ? ("attendance" as const) : undefined,
+          attendees: s.kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
           order: i + 1,
         })
       );

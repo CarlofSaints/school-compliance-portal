@@ -129,6 +129,73 @@ export interface MinutesSection {
    * subcommittee" as readily as one name.
    */
   responsible?: string;
+  /** "attendance" draws the section as a two-column list. Absent is text. */
+  kind?: SectionKind;
+  /** The list itself, for an attendance section. Frozen per meeting like
+   *  everything else in the minutes. */
+  attendees?: AttendeeRow[];
+}
+
+// ---------------------------------------------------------------------------
+// Attendance lists.
+//
+// Carl typed his governing body into a section with spaces lining the names
+// up, and asked why Word did not look like his letterhead. Spaces cannot line
+// anything up in a proportional font, so each row is stored as its two real
+// columns and every place that draws minutes (editor, sign page, Word) lays
+// them out as columns.
+// ---------------------------------------------------------------------------
+
+export type SectionKind = "text" | "attendance";
+
+/** One line of an attendance list: the seat, and who sat in it. */
+export interface AttendeeRow {
+  position: string;
+  name: string;
+}
+
+export function isAttendance(s: { kind?: SectionKind }): boolean {
+  return s.kind === "attendance";
+}
+
+/** Rows as they may be stored: trimmed, with fully blank rows dropped.
+ *  Undefined for an empty list, so a section with no rows stores nothing. */
+export function cleanAttendees(rows: unknown): AttendeeRow[] | undefined {
+  if (!Array.isArray(rows)) return undefined;
+  const out = rows
+    .map((r) => ({
+      position: String((r as AttendeeRow | null)?.position ?? "").trim(),
+      name: String((r as AttendeeRow | null)?.name ?? "").trim(),
+    }))
+    .filter((r) => r.position || r.name);
+  return out.length ? out : undefined;
+}
+
+/**
+ * Turns text lined up with spaces or tabs into rows.
+ *
+ * For a list already typed the old way, like Carl's first template: a line
+ * with a TAB or TWO or more spaces between two pieces becomes a row. A line
+ * with no such gap ("GOVERNING BODY", "HELD ON THURSDAY...") is not a row,
+ * and comes back in `leftover` so nothing typed is thrown away.
+ */
+export function rowsFromText(text: string): { rows: AttendeeRow[]; leftover: string } {
+  const rows: AttendeeRow[] = [];
+  const leftover: string[] = [];
+  for (const raw of (text || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line
+      .split(/\t+| {2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length >= 2) {
+      rows.push({ position: parts[0], name: parts.slice(1).join(" ") });
+    } else {
+      leftover.push(line);
+    }
+  }
+  return { rows, leftover: leftover.join("\n") };
 }
 
 /** The default set a new school starts with, so the first meeting is not a
@@ -342,6 +409,15 @@ export interface TemplateSection {
   /** 🔴 Numbering starts AT this section; everything before it is unnumbered.
    *  Carried into the minutes when the template is copied. */
   numberingStartsHere?: boolean;
+  /** "attendance" makes this a two-column Position | Name list. */
+  kind?: SectionKind;
+  /**
+   * The attendance list. A row with a blank name is filled in from the People
+   * register when a set of minutes is started, for that position, so a
+   * template can say "Principal" and survive the next appointment. A typed
+   * name ("Mrs Lester (DL)") is copied as typed.
+   */
+  attendees?: AttendeeRow[];
 }
 
 export interface MinutesTemplate {
@@ -399,6 +475,17 @@ export function sectionsFromTemplate(
       // The template names a POSITION; the minutes record the NAME of whoever
       // held it at this meeting. Resolved here, once, and frozen.
       responsible: resolvePositions(s.positions, holders),
+      kind: s.kind === "attendance" ? ("attendance" as const) : undefined,
+      // Same rule for the attendance list: a typed name is kept as typed, a
+      // blank one takes whoever holds that position NOW, and both are frozen
+      // into these minutes so the next election cannot rewrite them.
+      attendees:
+        s.kind === "attendance"
+          ? (s.attendees ?? []).map((r) => ({
+              position: r.position,
+              name: r.name?.trim() || holders.get(r.position.trim()) || "",
+            }))
+          : undefined,
     }));
 }
 
@@ -641,6 +728,18 @@ export function canonicalMinutes(m: {
         s.title.trim(),
         (s.body || "").replace(/\r\n/g, "\n").trim(),
         (s.responsible || "").trim(),
+        // The attendance list IS part of what was signed: who was present is
+        // a fact the minutes record. 🔴 Appended only when a section HAS rows.
+        // Adding an empty field for every section would change the hash of
+        // every set of minutes ever signed, and each of those signatures
+        // would suddenly read as if the document had been edited.
+        ...(s.attendees?.length
+          ? [
+              s.attendees
+                .map((r) => `${r.position.trim()}\u001d${r.name.trim()}`)
+                .join("\u001c"),
+            ]
+          : []),
       ].join("\u001f")
     );
   return [

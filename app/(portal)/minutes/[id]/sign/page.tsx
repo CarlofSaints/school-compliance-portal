@@ -8,8 +8,10 @@ import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
 import SignaturePad from "@/components/SignaturePad";
 import Toast from "@/components/Toast";
+import AttendanceList from "@/components/AttendanceList";
 import {
   formatPeriod,
+  isAttendance,
   numberedTitle,
   sectionNumbers,
   signingProgress,
@@ -157,8 +159,23 @@ export default function SignMinutesPage() {
           )}
         </div>
 
+        {/* Sections before numbering starts (the attendance list) sit above
+            the numbered table, exactly as the Word file prints them. */}
+        {ordered
+          .filter((s) => numbers.get(s.id) == null)
+          .map((s) => (
+            <div key={s.id} className="mb-6">
+              <p className="font-bold text-dark">{s.title}</p>
+              {isAttendance(s) && <AttendanceList rows={s.attendees ?? []} indent />}
+              {s.body?.trim() && (
+                <p className="text-gray-700 whitespace-pre-wrap mt-1">{s.body}</p>
+              )}
+            </div>
+          ))}
+
         {/* The same three columns as the Word file, so what somebody signs on
             screen is what comes out of the printer. */}
+        {(ordered.length === 0 || ordered.some((s) => numbers.get(s.id) != null)) && (
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr>
@@ -174,16 +191,17 @@ export default function SignMinutesPage() {
             </tr>
           </thead>
           <tbody>
-            {ordered.map((s) => (
+            {ordered.filter((s) => numbers.get(s.id) != null).map((s) => (
               <tr key={s.id} className="align-top">
                 <td className="py-2 px-3 border border-gray-200 text-gray-500">
                   {numbers.get(s.id) ?? ""}
                 </td>
                 <td className="py-2 px-3 border border-gray-200">
                   <p className="font-medium text-dark">{numberedTitle(s.title, null)}</p>
+                  {isAttendance(s) && <AttendanceList rows={s.attendees ?? []} />}
                   {s.body?.trim() ? (
                     <p className="text-gray-700 whitespace-pre-wrap mt-1">{s.body}</p>
-                  ) : (
+                  ) : isAttendance(s) && s.attendees?.length ? null : (
                     // Shown, not skipped: a reader cannot otherwise tell "not
                     // discussed" from "we left it out".
                     <p className="text-gray-400 italic mt-1">Nothing recorded</p>
@@ -203,6 +221,7 @@ export default function SignMinutesPage() {
             )}
           </tbody>
         </table>
+        )}
 
         <h2 className="text-sm font-semibold text-dark mt-10 mb-4 uppercase tracking-wide">
           Signatures

@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { POSITIONS } from "@/lib/positions";
+import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
 import {
   MEETING_BODY_LABELS,
+  isAttendance,
+  rowsFromText,
   sectionNumbers,
   type MeetingBody,
   type MinutesTemplate,
@@ -208,15 +211,85 @@ export default function TemplateEditor({
               )}
             </label>
 
+            {/* What the section IS. An attendance list is stored as real
+                columns, because spaces cannot line names up in Word. */}
+            <div className="flex flex-wrap items-stretch gap-2">
+              {(["text", "attendance"] as const).map((k) => {
+                const on = (k === "attendance") === isAttendance(s);
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() =>
+                      update(s.id, {
+                        kind: k === "attendance" ? "attendance" : undefined,
+                        attendees: k === "attendance" ? s.attendees ?? [] : s.attendees,
+                      })
+                    }
+                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors text-left ${
+                      on
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {k === "text" ? "Text" : "Attendance list"}
+                    <span className={`block text-[11px] ${on ? "text-white/75" : "text-gray-400"}`}>
+                      {k === "text" ? "Paragraphs of wording" : "Position and name, in two columns"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {isAttendance(s) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Attendance list
+                </label>
+                <p className="text-xs text-gray-500 mb-2">
+                  Comes out as two lined-up columns in the Word file. Leave a
+                  name blank and it is filled in from the People register each
+                  time minutes are started, so the list survives a change of
+                  Principal or Chair.
+                </p>
+                {(s.attendees?.length ?? 0) === 0 &&
+                  rowsFromText(s.staticContent ?? "").rows.length > 0 && (
+                    // For a list already typed with spaces, like the first
+                    // template Carl built. Offered, never done silently.
+                    <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-3">
+                      <span>
+                        You typed a list in the box below. Turn it into rows?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { rows, leftover } = rowsFromText(s.staticContent ?? "");
+                          update(s.id, { attendees: rows, staticContent: leftover });
+                        }}
+                        className="font-medium underline"
+                      >
+                        Turn my typed list into rows
+                      </button>
+                    </div>
+                  )}
+                <AttendeeRowsEditor
+                  rows={s.attendees ?? []}
+                  onChange={(rows) => update(s.id, { attendees: rows })}
+                  people={people}
+                  fillNames={false}
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Wording that carries over{" "}
+                {isAttendance(s) ? "Wording under the list" : "Wording that carries over"}{" "}
                 <span className="font-normal text-gray-400">(optional)</span>
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Copied into every set of minutes made from this template, and
-                editable for each meeting. Good for the attendee list or a
-                previous minutes sign off, which barely change.
+                {isAttendance(s)
+                  ? "Printed under the list, e.g. apologies. The meeting title and date belong on your letterhead, not here."
+                  : "Copied into every set of minutes made from this template, and editable for each meeting. Good for a previous minutes sign off, which barely changes."}
               </p>
               <textarea
                 value={s.staticContent ?? ""}

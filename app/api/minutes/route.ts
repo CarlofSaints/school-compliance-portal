@@ -8,6 +8,7 @@ import {
 } from "@/lib/minutesData";
 import { checkPeriod, type MeetingPeriod } from "@/lib/minutes";
 import { getTemplate, sectionsFromTemplate } from "@/lib/minutesTemplates";
+import { getPeople } from "@/lib/peopleData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { v4 as uuidv4 } from "uuid";
@@ -84,7 +85,20 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      sections = sectionsFromTemplate(template);
+      // Who holds each position now, so the copy can freeze real names: the
+      // "Who reports on this" column and any attendance row left without a
+      // name. 🔴 This used to call sectionsFromTemplate with no holders at
+      // all, so column 3 only ever said the position. Grouped, because two
+      // people genuinely share a seat. A register that cannot be read must
+      // not stop minutes being started, so it falls back to positions.
+      const holders = new Map<string, string>();
+      for (const p of await getPeople().catch(() => [])) {
+        const position = (p.position || "").trim();
+        const name = (p.name || "").trim();
+        if (!position || !name) continue;
+        holders.set(position, holders.has(position) ? `${holders.get(position)}, ${name}` : name);
+      }
+      sections = sectionsFromTemplate(template, holders);
     } else if (startBlank) {
       // No template chosen and nothing uploaded: one empty section, so the
       // secretary has somewhere to type rather than a page with no controls.
