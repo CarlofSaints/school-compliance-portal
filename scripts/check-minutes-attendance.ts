@@ -15,9 +15,12 @@ import {
   canonicalMinutes,
   cleanAttendees,
   rowsFromText,
+  sectionListGroups,
   sectionsFromTemplate,
   formatPeriod,
   sectionNumbers,
+  templateWithApologies,
+  withApologiesSection,
   type MinutesSection,
   type MinutesTemplate,
 } from "../lib/minutes";
@@ -177,6 +180,154 @@ check("a position nobody holds stays blank rather than vanishing", copied[0].att
 check("a text section gets no attendance fields", [copied[1].kind, copied[1].attendees], [undefined, undefined]);
 template.sections[0].attendees![0].name = "Changed later";
 check("editing the template later does not touch the copy", copied[0].attendees?.[0].name, "Mrs Lester (DL)");
+
+// ---------------------------------------------------------------------------
+console.log("\nApology and Not Present");
+
+check(
+  "a real status is kept, a made-up one dropped",
+  cleanAttendees([
+    { position: "Chair", name: "A", status: "apology" },
+    { position: "Principal", name: "B", status: "absent" },
+    { position: "Treasurer", name: "C", status: "on holiday" },
+  ]),
+  [
+    { position: "Chair", name: "A", status: "apology" },
+    { position: "Principal", name: "B", status: "absent" },
+    { position: "Treasurer", name: "C" },
+  ]
+);
+
+const ticked: MinutesSection[] = [
+  {
+    id: "att",
+    title: "GOVERNING BODY",
+    body: "",
+    order: 1,
+    kind: "attendance",
+    attendees: [
+      { position: "Chair", name: "Mrs Lester" },
+      { position: "Treasurer", name: "Ms Vukoicic", status: "apology" },
+      { position: "Principal", name: "Mrs Schoultz" },
+      { position: "Fundraising", name: "Mr Furlong", status: "absent" },
+      { position: "Co-opted", name: "Ms Rowe", status: "apology" },
+    ],
+  },
+  { id: "fin", title: "Finance", body: "Tabled", order: 2, numberingStartsHere: true },
+];
+
+// 🔴 Without an Apologies section nobody moves, so nobody can vanish.
+check(
+  "with NO apologies section, ticked people stay in the attendance list",
+  sectionListGroups(ticked[0], ticked)[0].rows.length,
+  5
+);
+
+const withApologies = withApologiesSection(ticked);
+check(
+  "an Apologies section is added straight after the attendance list",
+  withApologies.map((s) => [s.title, s.order, s.kind ?? "text"]),
+  [
+    ["GOVERNING BODY", 1, "attendance"],
+    ["Apologies", 2, "apologies"],
+    ["Finance", 3, "text"],
+  ]
+);
+check("adding it twice adds nothing", withApologiesSection(withApologies).length, 3);
+check(
+  "it lands BEFORE the numbering start, so it is unnumbered like attendance",
+  sectionNumbers(withApologies).get(withApologies[1].id),
+  null
+);
+check(
+  "with no attendance list it goes at the top",
+  withApologiesSection([{ id: "x", title: "Notes", body: "", order: 1 }]).map((s) => s.title),
+  ["Apologies", "Notes"]
+);
+
+check(
+  "ticked people leave the attendance list",
+  sectionListGroups(withApologies[0], withApologies)[0].rows.map((r) => r.name),
+  ["Mrs Lester", "Mrs Schoultz"]
+);
+const apologyGroups = sectionListGroups(withApologies[1], withApologies);
+check(
+  "Apologies lists the Apology ticks, in list order",
+  apologyGroups[0].rows.map((r) => r.name),
+  ["Ms Vukoicic", "Ms Rowe"]
+);
+check(
+  "then Not in Attendance, with its sub-heading",
+  [apologyGroups[1].heading, apologyGroups[1].rows.map((r) => r.name)],
+  ["Not in Attendance", ["Mr Furlong"]]
+);
+const nobodyAway = withApologiesSection([
+  { ...ticked[0], attendees: [{ position: "Chair", name: "Mrs Lester" }] },
+]);
+check(
+  "nobody away still draws both lists, saying None.",
+  sectionListGroups(nobodyAway[1], nobodyAway).map((g) => [g.heading ?? "", g.rows.length, g.emptyText]),
+  [
+    ["", 0, "None."],
+    ["Not in Attendance", 0, "None."],
+  ]
+);
+
+check(
+  "a template gets one too",
+  templateWithApologies([{ id: "t1", title: "Attendance", order: 1, kind: "attendance" }]).map(
+    (s) => s.kind
+  ),
+  ["attendance", "apologies"]
+);
+
+const presentOnly = { ...withList };
+const tickedHash = {
+  ...withList,
+  sections: [
+    {
+      ...withList.sections[0],
+      attendees: [{ position: "Chair", name: "Mrs Lester", status: "apology" as const }],
+    },
+    plain.sections[1],
+  ],
+};
+checkThat(
+  "ticking somebody away after signing changes the hash",
+  canonicalMinutes(tickedHash) !== canonicalMinutes(presentOnly)
+);
+// Written out by hand: the attendance formula as it was BEFORE ticks, for the
+// same minutes. An unticked row must still produce exactly this.
+const GS = String.fromCharCode(0x1d);
+check(
+  "an unticked row hashes exactly as before ticks existed",
+  canonicalMinutes(presentOnly),
+  [
+    plain.title,
+    plain.body,
+    formatPeriod(plain.period),
+    ["", "Attendance", "Present: all", "", `Chair${GS}Mrs Lester`].join(US),
+    ["1", "Finance", "Tabled", "Treasurer"].join(US),
+  ].join(RS)
+);
+
+const tickedTemplate: MinutesTemplate = {
+  ...template,
+  sections: [
+    {
+      id: "s1",
+      title: "GOVERNING BODY",
+      order: 1,
+      kind: "attendance",
+      attendees: [{ position: "Chair", name: "Mrs Lester", status: "apology" }],
+    },
+  ],
+};
+check(
+  "a tick is never copied from a template into new minutes",
+  sectionsFromTemplate(tickedTemplate)[0].attendees,
+  [{ position: "Chair", name: "Mrs Lester" }]
+);
 
 // ---------------------------------------------------------------------------
 console.log("\nThe Word file");

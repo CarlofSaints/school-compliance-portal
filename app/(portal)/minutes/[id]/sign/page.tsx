@@ -8,11 +8,11 @@ import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
 import SignaturePad from "@/components/SignaturePad";
 import Toast from "@/components/Toast";
-import AttendanceList from "@/components/AttendanceList";
+import { AttendanceGroups } from "@/components/AttendanceList";
 import {
   formatPeriod,
-  isAttendance,
   numberedTitle,
+  sectionListGroups,
   sectionNumbers,
   signingProgress,
   signatureMatchesDocument,
@@ -166,7 +166,7 @@ export default function SignMinutesPage() {
           .map((s) => (
             <div key={s.id} className="mb-6">
               <p className="font-bold text-dark">{s.title}</p>
-              {isAttendance(s) && <AttendanceList rows={s.attendees ?? []} indent />}
+              <AttendanceGroups groups={sectionListGroups(s, ordered)} indent />
               {s.body?.trim() && (
                 <p className="text-gray-700 whitespace-pre-wrap mt-1">{s.body}</p>
               )}
@@ -191,17 +191,19 @@ export default function SignMinutesPage() {
             </tr>
           </thead>
           <tbody>
-            {ordered.filter((s) => numbers.get(s.id) != null).map((s) => (
+            {ordered.filter((s) => numbers.get(s.id) != null).map((s) => {
+              const groups = sectionListGroups(s, ordered);
+              return (
               <tr key={s.id} className="align-top">
                 <td className="py-2 px-3 border border-gray-200 text-gray-500">
                   {numbers.get(s.id) ?? ""}
                 </td>
                 <td className="py-2 px-3 border border-gray-200">
                   <p className="font-medium text-dark">{numberedTitle(s.title, null)}</p>
-                  {isAttendance(s) && <AttendanceList rows={s.attendees ?? []} />}
+                  <AttendanceGroups groups={groups} />
                   {s.body?.trim() ? (
                     <p className="text-gray-700 whitespace-pre-wrap mt-1">{s.body}</p>
-                  ) : isAttendance(s) && s.attendees?.length ? null : (
+                  ) : groups.length > 0 ? null : (
                     // Shown, not skipped: a reader cannot otherwise tell "not
                     // discussed" from "we left it out".
                     <p className="text-gray-400 italic mt-1">Nothing recorded</p>
@@ -211,7 +213,8 @@ export default function SignMinutesPage() {
                   {s.responsible || ""}
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {ordered.length === 0 && (
               <tr>
                 <td colSpan={3} className="py-6 text-center text-gray-400 border border-gray-200">

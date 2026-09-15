@@ -146,29 +146,154 @@ export interface MinutesSection {
 // them out as columns.
 // ---------------------------------------------------------------------------
 
-export type SectionKind = "text" | "attendance";
+/** "apologies" is the permanent section that lists who was away; its lists are
+ *  never typed, they are worked out from the attendance rows. */
+export type SectionKind = "text" | "attendance" | "apologies";
 
-/** One line of an attendance list: the seat, and who sat in it. */
+/**
+ * Why somebody on the attendance list was not there. Absent means present.
+ *
+ * Carl: tick "Apology" or "Not Present" against a name, and they move out of
+ * the attendance list into the Apologies section, the Not Presents under a
+ * "Not in Attendance" sub-heading.
+ */
+export type AttendanceStatus = "apology" | "absent";
+
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
+  apology: "Apology",
+  absent: "Not Present",
+};
+
+export const APOLOGIES_TITLE = "Apologies";
+export const NOT_IN_ATTENDANCE_HEADING = "Not in Attendance";
+
+/** One line of an attendance list: the seat, who sat in it, and whether they
+ *  were actually there. */
 export interface AttendeeRow {
   position: string;
   name: string;
+  status?: AttendanceStatus;
 }
 
 export function isAttendance(s: { kind?: SectionKind }): boolean {
   return s.kind === "attendance";
 }
 
-/** Rows as they may be stored: trimmed, with fully blank rows dropped.
- *  Undefined for an empty list, so a section with no rows stores nothing. */
+export function isApologies(s: { kind?: SectionKind }): boolean {
+  return s.kind === "apologies";
+}
+
+/** Rows as they may be stored: trimmed, with fully blank rows dropped and any
+ *  status that is not a real one discarded. Undefined for an empty list, so a
+ *  section with no rows stores nothing. */
 export function cleanAttendees(rows: unknown): AttendeeRow[] | undefined {
   if (!Array.isArray(rows)) return undefined;
   const out = rows
-    .map((r) => ({
-      position: String((r as AttendeeRow | null)?.position ?? "").trim(),
-      name: String((r as AttendeeRow | null)?.name ?? "").trim(),
-    }))
+    .map((r) => {
+      const raw = (r as AttendeeRow | null)?.status;
+      const status = raw === "apology" || raw === "absent" ? raw : undefined;
+      return {
+        position: String((r as AttendeeRow | null)?.position ?? "").trim(),
+        name: String((r as AttendeeRow | null)?.name ?? "").trim(),
+        ...(status ? { status } : {}),
+      };
+    })
     .filter((r) => r.position || r.name);
   return out.length ? out : undefined;
+}
+
+type Ordered = { order: number; kind?: SectionKind; attendees?: AttendeeRow[] };
+
+/**
+ * The rows an attendance list SHOWS.
+ *
+ * 🔴 People marked away move to the Apologies section only when the minutes
+ * HAVE one. Without it they stay in the attendance list, so ticking a box can
+ * never make somebody vanish from the record.
+ */
+export function presentRows(rows: AttendeeRow[], sections: Ordered[]): AttendeeRow[] {
+  return sections.some(isApologies) ? rows.filter((r) => !r.status) : rows;
+}
+
+/** Everyone marked with a status, across every attendance list, in order. */
+export function awayRows(sections: Ordered[], status: AttendanceStatus): AttendeeRow[] {
+  return [...sections]
+    .sort((a, b) => a.order - b.order)
+    .filter(isAttendance)
+    .flatMap((s) => (s.attendees ?? []).filter((r) => r.status === status));
+}
+
+/** A list to draw under a section: an optional sub-heading, its rows, and
+ *  what to say when it is empty. */
+export interface ListGroup {
+  heading?: string;
+  rows: AttendeeRow[];
+  emptyText?: string;
+}
+
+/**
+ * The lists a section draws. ONE definition for the editor, the sign page and
+ * the Word file, so the three cannot disagree about who was there.
+ *
+ * An Apologies section always draws both lists, saying "None." when empty:
+ * "nobody sent apologies" is a fact the minutes record, and a missing list
+ * reads as a page that forgot to include it.
+ */
+export function sectionListGroups(
+  s: { kind?: SectionKind; attendees?: AttendeeRow[] },
+  sections: Ordered[]
+): ListGroup[] {
+  if (isAttendance(s)) {
+    const rows = presentRows(s.attendees ?? [], sections);
+    return rows.length ? [{ rows }] : [];
+  }
+  if (isApologies(s)) {
+    return [
+      { rows: awayRows(sections, "apology"), emptyText: "None." },
+      { heading: NOT_IN_ATTENDANCE_HEADING, rows: awayRows(sections, "absent"), emptyText: "None." },
+    ];
+  }
+  return [];
+}
+
+/**
+ * Makes sure there is an Apologies section, straight after the last attendance
+ * list (or at the top when there is none). Returns the list untouched when one
+ * already exists. Order is rewritten 1..n.
+ *
+ * Carl asked for it to be "a default, permanent section in all templates".
+ */
+function ensureApologies<T extends { id: string; order: number; kind?: SectionKind }>(
+  sections: T[],
+  make: (id: string) => T
+): T[] {
+  if (sections.some(isApologies)) return sections;
+  const ordered = [...sections].sort((a, b) => a.order - b.order);
+  let at = -1;
+  ordered.forEach((s, i) => {
+    if (isAttendance(s)) at = i;
+  });
+  ordered.splice(at + 1, 0, make(crypto.randomUUID()));
+  return ordered.map((s, i) => ({ ...s, order: i + 1 }));
+}
+
+export function withApologiesSection(sections: MinutesSection[]): MinutesSection[] {
+  return ensureApologies(sections, (id) => ({
+    id,
+    title: APOLOGIES_TITLE,
+    body: "",
+    order: 0,
+    kind: "apologies",
+  }));
+}
+
+export function templateWithApologies(sections: TemplateSection[]): TemplateSection[] {
+  return ensureApologies(sections, (id) => ({
+    id,
+    title: APOLOGIES_TITLE,
+    order: 0,
+    kind: "apologies",
+  }));
 }
 
 /**
@@ -475,10 +600,12 @@ export function sectionsFromTemplate(
       // The template names a POSITION; the minutes record the NAME of whoever
       // held it at this meeting. Resolved here, once, and frozen.
       responsible: resolvePositions(s.positions, holders),
-      kind: s.kind === "attendance" ? ("attendance" as const) : undefined,
+      kind: s.kind === "attendance" || s.kind === "apologies" ? s.kind : undefined,
       // Same rule for the attendance list: a typed name is kept as typed, a
       // blank one takes whoever holds that position NOW, and both are frozen
-      // into these minutes so the next election cannot rewrite them.
+      // into these minutes so the next election cannot rewrite them. Only
+      // position and name are copied, never a status: who was away belongs to
+      // ONE meeting, so every new set of minutes starts with everyone present.
       attendees:
         s.kind === "attendance"
           ? (s.attendees ?? []).map((r) => ({
@@ -497,11 +624,11 @@ export function sectionsFromTemplate(
  * sections came from.
  */
 export const STARTER_TEMPLATE: Omit<TemplateSection, "id" | "order">[] = [
-  {
-    title: "Attendance and apologies",
-    staticContent:
-      "Present:\n\nApologies:\n\nIn attendance (non-members):",
-  },
+  // An attendance list, not "Present:" typed out, so the names line up in
+  // Word and each can be ticked Apology or Not Present per meeting.
+  { title: "Attendance", kind: "attendance" },
+  // Permanent in every template; its lists come from those ticks.
+  { title: APOLOGIES_TITLE, kind: "apologies" },
   {
     title: "Previous minutes sign off",
     staticContent:
@@ -736,7 +863,13 @@ export function canonicalMinutes(m: {
         ...(s.attendees?.length
           ? [
               s.attendees
-                .map((r) => `${r.position.trim()}\u001d${r.name.trim()}`)
+                // A tick is part of the record (who was away), appended only
+                // when set so an unticked row hashes exactly as it always has.
+                .map(
+                  (r) =>
+                    `${r.position.trim()}\u001d${r.name.trim()}` +
+                    (r.status ? `\u001d${r.status}` : "")
+                )
                 .join("\u001c"),
             ]
           : []),

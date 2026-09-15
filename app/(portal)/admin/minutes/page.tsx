@@ -8,6 +8,7 @@ import MinutesRecipientSettings from "@/components/MinutesRecipientSettings";
 import {
   MEETING_BODY_LABELS,
   STARTER_TEMPLATE,
+  templateWithApologies,
   type MinutesTemplate,
   type TemplateSection,
 } from "@/lib/minutes";
@@ -72,7 +73,10 @@ export default function MinutesAdminPage() {
     id: "",
     name: "",
     body: "sgb",
-    sections: sections.map((s, i) => ({ ...s, id: newId(), order: i + 1 })),
+    // Apologies is permanent in every template, so a new one starts with it.
+    sections: templateWithApologies(
+      sections.map((s, i) => ({ ...s, id: newId(), order: i + 1 }))
+    ),
     createdAt: "",
     createdBy: session.email,
     updatedAt: "",

@@ -163,9 +163,15 @@ console.log("\nThe starter template is usable as offered");
 {
   checkThat("it has sections", STARTER_TEMPLATE.length > 0);
   checkThat("every one has a title", STARTER_TEMPLATE.every((s) => !!s.title.trim()));
+  // Attendance is a real two-column list now, not "Present:" typed out, and
+  // the permanent Apologies section sits right after it.
   checkThat(
-    "attendance carries standing wording",
-    !!STARTER_TEMPLATE.find((s) => s.title.includes("Attendance"))?.staticContent
+    "attendance is an attendance list",
+    STARTER_TEMPLATE.find((s) => s.title.includes("Attendance"))?.kind === "attendance"
+  );
+  checkThat(
+    "it carries the permanent Apologies section",
+    STARTER_TEMPLATE.some((s) => s.kind === "apologies")
   );
   checkThat(
     "previous minutes sign off carries standing wording",

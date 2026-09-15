@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { readJson, writeJson, deleteFile, listFiles } from "./controlData";
 import type { MeetingBody } from "./minutes";
 import type { MinutesTemplate, TemplateSection } from "./minutes";
-import { cleanAttendees } from "./minutes";
+import { cleanAttendees, templateWithApologies } from "./minutes";
 
 // The types, the starter set and sectionsFromTemplate live in lib/minutes.ts
 // because they are pure and a client component needs them. Re-exported so
@@ -34,7 +34,14 @@ const DIR = "minutes-templates";
 const templatePath = (id: string) => `${DIR}/${id}/template.json`;
 
 export async function getTemplate(id: string): Promise<MinutesTemplate | null> {
-  return readJson<MinutesTemplate | null>(templatePath(id), null);
+  const template = await readJson<MinutesTemplate | null>(templatePath(id), null);
+  // 🔴 Every template has an Apologies section (Carl: "a default, permanent
+  // section in all templates"), including ones saved before it existed. Added
+  // on READ, so an old template gains it without anybody opening and saving
+  // it, and minutes started from it get one too.
+  return template
+    ? { ...template, sections: templateWithApologies(template.sections) }
+    : null;
 }
 
 /** Enumerated from storage, not an index, so a template cannot exist and be
@@ -52,7 +59,7 @@ export async function listTemplates(): Promise<MinutesTemplate[]> {
 function normaliseSections(
   sections: Omit<TemplateSection, "order">[] | TemplateSection[]
 ): TemplateSection[] {
-  return sections.map((s, i) => ({
+  const clean: TemplateSection[] = sections.map((s, i) => ({
     id: s.id || crypto.randomUUID(),
     title: String(s.title || "").trim(),
     staticContent: s.staticContent?.trim() || undefined,
@@ -62,10 +69,13 @@ function normaliseSections(
     numberingStartsHere: s.numberingStartsHere || undefined,
     // Named for the same reason. An attendance list saved through a function
     // that forgot these would come back as an empty text section.
-    kind: s.kind === "attendance" ? "attendance" : undefined,
+    kind: s.kind === "attendance" || s.kind === "apologies" ? s.kind : undefined,
     attendees: s.kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
     order: i + 1,
   }));
+  // Permanent: a save that left it out (an old browser tab, a hand-built
+  // request) gets it back rather than quietly storing a template without it.
+  return templateWithApologies(clean);
 }
 
 export async function createTemplate(input: {

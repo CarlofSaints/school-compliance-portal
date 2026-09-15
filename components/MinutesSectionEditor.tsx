@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import {
+  isApologies,
   isAttendance,
   rowsFromText,
+  sectionListGroups,
   sectionNumbers,
+  withApologiesSection,
   type MinutesSection,
 } from "@/lib/minutes";
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
-import AttendanceList from "@/components/AttendanceList";
+import { AttendanceGroups } from "@/components/AttendanceList";
 
 // The minute-taking surface: sections a school defines for itself.
 //
@@ -41,8 +44,14 @@ export default function MinutesSectionEditor({
   // Order is rewritten from array position on every change, so it is always
   // 1..n with no gaps. It is part of the signing hash, so it cannot be allowed
   // to drift or two identical-looking documents would hash differently.
-  const commit = (next: MinutesSection[]) =>
-    onChange(next.map((s, i) => ({ ...s, order: i + 1 })));
+  //
+  // 🔴 Minutes with an attendance list always get an Apologies section, the
+  // moment they have one. Ticking somebody away moves them out of the list,
+  // and without somewhere to move to they would disappear from the page.
+  const commit = (next: MinutesSection[]) => {
+    const renumbered = next.map((s, i) => ({ ...s, order: i + 1 }));
+    onChange(renumbered.some(isAttendance) ? withApologiesSection(renumbered) : renumbered);
+  };
 
   const update = (id: string, patch: Partial<MinutesSection>) =>
     commit(ordered.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -75,144 +84,176 @@ export default function MinutesSectionEditor({
 
   return (
     <div className="space-y-4">
-      {ordered.map((s, i) => (
-        <div
-          key={s.id}
-          className="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
-        >
-          <div className="flex items-start gap-3 mb-3">
-            <span className="mt-2.5 w-8 shrink-0 text-sm font-medium text-gray-400 tabular-nums">
-              {numbers.get(s.id) == null ? "" : `${numbers.get(s.id)}.`}
-            </span>
-            {editable ? (
-              <input
-                value={s.title}
-                onChange={(e) => update(s.id, { title: e.target.value })}
-                placeholder="Section heading"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg font-medium text-dark focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-              />
-            ) : (
-              <h3 className="flex-1 font-semibold text-dark">{s.title}</h3>
-            )}
+      {ordered.map((s, i) => {
+        // The lists this section draws: the people present, or for Apologies
+        // the two lists worked out from the ticks. One helper, shared with the
+        // sign page and the Word file.
+        const groups = sectionListGroups(s, ordered);
+        return (
+          <div
+            key={s.id}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-5"
+          >
+            <div className="flex items-start gap-3 mb-3">
+              <span className="mt-2.5 w-8 shrink-0 text-sm font-medium text-gray-400 tabular-nums">
+                {numbers.get(s.id) == null ? "" : `${numbers.get(s.id)}.`}
+              </span>
+              {editable ? (
+                <input
+                  value={s.title}
+                  onChange={(e) => update(s.id, { title: e.target.value })}
+                  placeholder="Section heading"
+                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg font-medium text-dark focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                />
+              ) : (
+                <h3 className="flex-1 font-semibold text-dark">{s.title}</h3>
+              )}
 
-            {editable && (
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => move(s.id, -1)}
-                  disabled={i === 0}
-                  aria-label="Move up"
-                  className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(s.id, 1)}
-                  disabled={i === ordered.length - 1}
-                  aria-label="Move down"
-                  className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmRemove(s.id)}
-                  className="px-2 py-1 text-xs text-risk-high hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-            )}
-          </div>
-
-          {confirmRemove === s.id && (
-            // Confirmed, because a section can hold a whole meeting's worth of
-            // typing and there is no undo.
-            <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-risk-high flex items-center gap-3">
-              <span>Remove &quot;{s.title || "this section"}&quot; and its notes?</span>
-              <button onClick={() => remove(s.id)} className="font-medium underline">
-                Remove
-              </button>
-              <button onClick={() => setConfirmRemove(null)} className="text-gray-500">
-                Keep
-              </button>
-            </div>
-          )}
-
-          {editable && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              {(["text", "attendance"] as const).map((k) => {
-                const on = (k === "attendance") === isAttendance(s);
-                return (
+              {editable && (
+                <div className="flex items-center gap-1 shrink-0">
                   <button
-                    key={k}
                     type="button"
-                    onClick={() =>
-                      update(s.id, {
-                        kind: k === "attendance" ? "attendance" : undefined,
-                        attendees: k === "attendance" ? s.attendees ?? [] : s.attendees,
-                      })
-                    }
-                    className={`px-3 py-1 rounded-lg text-xs border transition-colors ${
-                      on
-                        ? "bg-primary text-white border-primary"
-                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
-                    }`}
+                    onClick={() => move(s.id, -1)}
+                    disabled={i === 0}
+                    aria-label="Move up"
+                    className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                   >
-                    {k === "text" ? "Text" : "Attendance list"}
+                    ↑
                   </button>
-                );
-              })}
-            </div>
-          )}
-
-          {isAttendance(s) &&
-            (editable ? (
-              <div className="mb-3">
-                {(s.attendees?.length ?? 0) === 0 && rowsFromText(s.body).rows.length > 0 && (
-                  <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-3">
-                    <span>You typed a list in the box below. Turn it into rows?</span>
+                  <button
+                    type="button"
+                    onClick={() => move(s.id, 1)}
+                    disabled={i === ordered.length - 1}
+                    aria-label="Move down"
+                    className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                  {/* Apologies is permanent: it is where people ticked away go. */}
+                  {!isApologies(s) && (
                     <button
                       type="button"
-                      onClick={() => {
-                        const { rows, leftover } = rowsFromText(s.body);
-                        update(s.id, { attendees: rows, body: leftover });
-                      }}
-                      className="font-medium underline"
+                      onClick={() => setConfirmRemove(s.id)}
+                      className="px-2 py-1 text-xs text-risk-high hover:underline"
                     >
-                      Turn my typed list into rows
+                      Remove
                     </button>
-                  </div>
-                )}
-                <AttendeeRowsEditor
-                  rows={s.attendees ?? []}
-                  onChange={(rows) => update(s.id, { attendees: rows })}
-                />
-              </div>
-            ) : (
-              <AttendanceList rows={s.attendees ?? []} />
-            ))}
+                  )}
+                </div>
+              )}
+            </div>
 
-          {editable ? (
-            <textarea
-              value={s.body}
-              onChange={(e) => update(s.id, { body: e.target.value })}
-              rows={isAttendance(s) ? 2 : 5}
-              placeholder={
-                isAttendance(s)
-                  ? "Wording under the list, e.g. apologies (optional)"
-                  : "What was discussed and decided"
-              }
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-            />
-          ) : s.body || !isAttendance(s) || !s.attendees?.length ? (
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
-              {s.body || <span className="text-gray-400">Nothing recorded.</span>}
-            </p>
-          ) : null}
-        </div>
-      ))}
+            {confirmRemove === s.id && (
+              // Confirmed, because a section can hold a whole meeting's worth of
+              // typing and there is no undo.
+              <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-risk-high flex items-center gap-3">
+                <span>Remove &quot;{s.title || "this section"}&quot; and its notes?</span>
+                <button onClick={() => remove(s.id)} className="font-medium underline">
+                  Remove
+                </button>
+                <button onClick={() => setConfirmRemove(null)} className="text-gray-500">
+                  Keep
+                </button>
+              </div>
+            )}
+
+            {editable && !isApologies(s) && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {(["text", "attendance"] as const).map((k) => {
+                  const on = (k === "attendance") === isAttendance(s);
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() =>
+                        update(s.id, {
+                          kind: k === "attendance" ? "attendance" : undefined,
+                          attendees: k === "attendance" ? s.attendees ?? [] : s.attendees,
+                        })
+                      }
+                      className={`px-3 py-1 rounded-lg text-xs border transition-colors ${
+                        on
+                          ? "bg-primary text-white border-primary"
+                          : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {k === "text" ? "Text" : "Attendance list"}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {isAttendance(s) &&
+              (editable ? (
+                <div className="mb-3">
+                  {(s.attendees?.length ?? 0) === 0 && rowsFromText(s.body).rows.length > 0 && (
+                    <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-3">
+                      <span>You typed a list in the box below. Turn it into rows?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const { rows, leftover } = rowsFromText(s.body);
+                          update(s.id, { attendees: rows, body: leftover });
+                        }}
+                        className="font-medium underline"
+                      >
+                        Turn my typed list into rows
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 mb-2">
+                    Tick <span className="font-medium">Apology</span> or{" "}
+                    <span className="font-medium">Not Present</span> and that person
+                    moves to the Apologies section.
+                  </p>
+                  <AttendeeRowsEditor
+                    rows={s.attendees ?? []}
+                    onChange={(rows) => update(s.id, { attendees: rows })}
+                    showStatus
+                  />
+                </div>
+              ) : (
+                <div className="mb-2">
+                  <AttendanceGroups groups={groups} />
+                </div>
+              ))}
+
+            {isApologies(s) && (
+              <div className="mb-3">
+                {editable && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    Filled in from the attendance list: anyone ticked Apology is
+                    listed here, and anyone ticked Not Present under Not in
+                    Attendance.
+                  </p>
+                )}
+                <AttendanceGroups groups={groups} />
+              </div>
+            )}
+
+            {editable ? (
+              <textarea
+                value={s.body}
+                onChange={(e) => update(s.id, { body: e.target.value })}
+                rows={isAttendance(s) || isApologies(s) ? 2 : 5}
+                placeholder={
+                  isApologies(s)
+                    ? "Anything else to record about apologies (optional)"
+                    : isAttendance(s)
+                      ? "Wording under the list (optional)"
+                      : "What was discussed and decided"
+                }
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+              />
+            ) : s.body || groups.length === 0 ? (
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                {s.body || <span className="text-gray-400">Nothing recorded.</span>}
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
 
       {editable && (
         <button

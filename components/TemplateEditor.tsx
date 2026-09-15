@@ -5,6 +5,7 @@ import { POSITIONS } from "@/lib/positions";
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
 import {
   MEETING_BODY_LABELS,
+  isApologies,
   isAttendance,
   rowsFromText,
   sectionNumbers,
@@ -193,13 +194,17 @@ export default function TemplateEditor({
                 >
                   ↓
                 </button>
-                <button
-                  type="button"
-                  onClick={() => commit(sections.filter((x) => x.id !== s.id))}
-                  className="px-2 py-1 text-xs text-risk-high hover:underline"
-                >
-                  Remove
-                </button>
+                {/* Apologies is permanent in every template (Carl), so it can be
+                    moved but not removed. */}
+                {!isApologies(s) && (
+                  <button
+                    type="button"
+                    onClick={() => commit(sections.filter((x) => x.id !== s.id))}
+                    className="px-2 py-1 text-xs text-risk-high hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             </div>
 
@@ -222,7 +227,17 @@ export default function TemplateEditor({
             </label>
 
             {/* What the section IS. An attendance list is stored as real
-                columns, because spaces cannot line names up in Word. */}
+                columns, because spaces cannot line names up in Word. The
+                Apologies section has no choice to make: it is always the list
+                of who was away. */}
+            {isApologies(s) ? (
+              <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                <span className="font-medium text-dark">Filled in automatically.</span>{" "}
+                In each set of minutes, anyone ticked Apology on the attendance
+                list is listed here, and anyone ticked Not Present under a Not in
+                Attendance heading. Every template has this section.
+              </p>
+            ) : (
             <div className="flex flex-wrap items-stretch gap-2">
               {(["text", "attendance"] as const).map((k) => {
                 const on = (k === "attendance") === isAttendance(s);
@@ -250,6 +265,7 @@ export default function TemplateEditor({
                 );
               })}
             </div>
+            )}
 
             {isAttendance(s) && (
               <div>
@@ -293,19 +309,29 @@ export default function TemplateEditor({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {isAttendance(s) ? "Wording under the list" : "Wording that carries over"}{" "}
+                {isApologies(s)
+                  ? "Wording under the apologies"
+                  : isAttendance(s)
+                    ? "Wording under the list"
+                    : "Wording that carries over"}{" "}
                 <span className="font-normal text-gray-400">(optional)</span>
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                {isAttendance(s)
-                  ? "Printed under the list, e.g. apologies. The meeting title and date belong on your letterhead, not here."
-                  : "Copied into every set of minutes made from this template, and editable for each meeting. Good for a previous minutes sign off, which barely changes."}
+                {isApologies(s)
+                  ? "Printed under the two lists in every set of minutes. The names themselves come from the ticks."
+                  : isAttendance(s)
+                    ? "Printed under the list. The meeting title and date belong on your letterhead, not here."
+                    : "Copied into every set of minutes made from this template, and editable for each meeting. Good for a previous minutes sign off, which barely changes."}
               </p>
               <textarea
                 value={s.staticContent ?? ""}
                 onChange={(e) => update(s.id, { staticContent: e.target.value })}
                 rows={4}
-                placeholder={"Present:\n\nApologies:"}
+                placeholder={
+                  isApologies(s) || isAttendance(s)
+                    ? ""
+                    : "e.g. The minutes of the previous meeting were tabled."
+                }
                 className={`${inputClass} text-sm`}
               />
             </div>

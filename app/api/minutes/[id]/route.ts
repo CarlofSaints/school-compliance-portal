@@ -6,7 +6,13 @@ import {
   deleteMinutes,
   MinutesLockedError,
 } from "@/lib/minutesData";
-import { checkPeriod, isLocked, cleanAttendees } from "@/lib/minutes";
+import {
+  checkPeriod,
+  isLocked,
+  cleanAttendees,
+  isAttendance,
+  withApologiesSection,
+} from "@/lib/minutes";
 import { documentHash, shortHash } from "@/lib/minutesSigning";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -87,7 +93,7 @@ export async function PATCH(
       // Renumbered from the order they arrive in, so the client never has to
       // keep the order field consistent while dragging things about. Order is
       // part of the signing hash, so it has to be unambiguous.
-      updates.sections = body.sections.map(
+      const rebuilt = body.sections.map(
         (
           s: {
             id?: string;
@@ -109,11 +115,20 @@ export async function PATCH(
           numberingStartsHere: s.numberingStartsHere || undefined,
           personIds: s.personIds?.length ? s.personIds : undefined,
           responsible: s.responsible?.trim() || undefined,
-          kind: s.kind === "attendance" ? ("attendance" as const) : undefined,
+          kind:
+            s.kind === "attendance" || s.kind === "apologies"
+              ? (s.kind as "attendance" | "apologies")
+              : undefined,
           attendees: s.kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
           order: i + 1,
         })
       );
+      // 🔴 Minutes with an attendance list always keep an Apologies section.
+      // Somebody ticked Apology or Not Present leaves the attendance list for
+      // it, so without one a save could put a name nowhere at all.
+      updates.sections = rebuilt.some(isAttendance)
+        ? withApologiesSection(rebuilt)
+        : rebuilt;
     }
 
     const saved = await updateMinutes(id, updates);

@@ -1,6 +1,10 @@
 "use client";
 
-import type { AttendeeRow } from "@/lib/minutes";
+import {
+  ATTENDANCE_STATUS_LABELS,
+  type AttendanceStatus,
+  type AttendeeRow,
+} from "@/lib/minutes";
 
 // The two-column attendance grid, shared by the template editor and the
 // minutes editor so the list is edited the same way in both.
@@ -12,11 +16,14 @@ import type { AttendeeRow } from "@/lib/minutes";
 const cell =
   "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition";
 
+const STATUSES: AttendanceStatus[] = ["apology", "absent"];
+
 export default function AttendeeRowsEditor({
   rows,
   onChange,
   people,
   fillNames = true,
+  showStatus = false,
 }: {
   rows: AttendeeRow[];
   onChange: (rows: AttendeeRow[]) => void;
@@ -32,6 +39,11 @@ export default function AttendeeRowsEditor({
    * with empty names, and the current holder is shown greyed in the box.
    */
   fillNames?: boolean;
+  /**
+   * The Apology and Not Present ticks. Minutes only: who was away is a fact
+   * about ONE meeting, so a template has nothing to tick.
+   */
+  showStatus?: boolean;
 }) {
   const holderOf = (position: string): string => {
     const wanted = position.trim().toLowerCase();
@@ -44,6 +56,19 @@ export default function AttendeeRowsEditor({
 
   const set = (i: number, patch: Partial<AttendeeRow>) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+
+  // The two ticks are exclusive: somebody either sent an apology or simply
+  // did not come. Ticking one clears the other; unticking leaves them present.
+  const setStatus = (i: number, status: AttendanceStatus, on: boolean) =>
+    onChange(
+      rows.map((r, j) => {
+        if (j !== i) return r;
+        const next = { ...r };
+        if (on) next.status = status;
+        else delete next.status;
+        return next;
+      })
+    );
 
   const move = (i: number, dir: -1 | 1) => {
     const j = i + dir;
@@ -71,13 +96,17 @@ export default function AttendeeRowsEditor({
   };
 
   const canFill = !!people?.some((p) => p.position?.trim() && p.name?.trim());
+  const columns = showStatus
+    ? "sm:grid-cols-[1fr_1fr_auto_auto]"
+    : "sm:grid-cols-[1fr_1fr_auto]";
 
   return (
     <div>
       {rows.length > 0 && (
-        <div className="hidden sm:grid grid-cols-[1fr_1fr_auto] gap-2 mb-1 text-xs font-medium text-gray-500">
+        <div className={`hidden sm:grid ${columns} gap-2 mb-1 text-xs font-medium text-gray-500`}>
           <span>Position</span>
           <span>Name</span>
+          {showStatus && <span className="w-44">Away</span>}
           <span className="w-28" />
         </div>
       )}
@@ -85,10 +114,7 @@ export default function AttendeeRowsEditor({
         {rows.map((r, i) => {
           const holder = holderOf(r.position);
           return (
-            <div
-              key={i}
-              className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center"
-            >
+            <div key={i} className={`grid grid-cols-1 ${columns} gap-2 items-center`}>
               <input
                 value={r.position}
                 onChange={(e) => set(i, { position: e.target.value })}
@@ -107,8 +133,24 @@ export default function AttendeeRowsEditor({
                       : "Blank fills from the People register"
                 }
                 aria-label={`Name, row ${i + 1}`}
-                className={cell}
+                className={`${cell} ${r.status ? "text-gray-400 line-through" : ""}`}
               />
+              {showStatus && (
+                <div className="flex items-center gap-4 w-44 text-xs text-gray-700">
+                  {STATUSES.map((status) => (
+                    <label key={status} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={r.status === status}
+                        onChange={(e) => setStatus(i, status, e.target.checked)}
+                        aria-label={`${ATTENDANCE_STATUS_LABELS[status]}, row ${i + 1}`}
+                        className="rounded border-gray-300"
+                      />
+                      {ATTENDANCE_STATUS_LABELS[status]}
+                    </label>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-1 w-28 justify-end">
                 <button
                   type="button"

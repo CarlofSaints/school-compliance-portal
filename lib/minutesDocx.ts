@@ -22,11 +22,12 @@ import type { SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
   formatPeriod,
-  isAttendance,
   MEETING_BODY_LABELS,
   SIGNATORY_ROLE_LABELS,
+  sectionListGroups,
   sectionNumbers,
   type AttendeeRow,
+  type ListGroup,
 } from "./minutes";
 import { POSITIONS } from "./positions";
 import type { MinutesRecord } from "./minutesData";
@@ -118,9 +119,11 @@ function sectionRow(
   title: string,
   body: string,
   responsible: string,
-  attendees?: AttendeeRow[]
+  /** The lists this section draws (sectionListGroups): an attendance list,
+   *  or the Apologies section's two. Empty for a text section. */
+  groups: ListGroup[] = []
 ): TableRow {
-  const hasRows = !!attendees?.length;
+  const hasRows = groups.length > 0;
   // Each line its own paragraph. A single run containing newlines renders as
   // one unbroken block in Word.
   const lines = (body || "").split(/\r?\n/);
@@ -166,7 +169,7 @@ function sectionRow(
             children: [new TextRun({ text: title, bold: true, size: 20 })],
           }),
           // The Item column is 7300 twips less the cell padding.
-          ...(hasRows ? [attendanceTable(attendees!, { indent: 0, width: 7000 })] : []),
+          ...listGroupBlocks(groups, { indent: 0, width: 7000 }),
           ...bodyParagraphs,
         ],
       }),
@@ -222,6 +225,44 @@ function attendanceTable(
 }
 
 /**
+ * The lists a section draws, as Word content: each group's sub-heading ("Not in
+ * Attendance"), then its two-column table, or its "None." when it is empty.
+ *
+ * The groups come from sectionListGroups in lib/minutes, the same helper the
+ * editor and the sign page use, so the Word file cannot list different people.
+ */
+function listGroupBlocks(
+  groups: ListGroup[],
+  opts: { indent: number; width: number }
+): (Paragraph | Table)[] {
+  const indent = opts.indent ? { left: opts.indent } : undefined;
+  const out: (Paragraph | Table)[] = [];
+  for (const g of groups) {
+    if (g.heading) {
+      out.push(
+        new Paragraph({
+          spacing: { before: 160, after: 60 },
+          indent,
+          children: [new TextRun({ text: g.heading, bold: true })],
+        })
+      );
+    }
+    if (g.rows.length > 0) {
+      out.push(attendanceTable(g.rows, opts));
+    } else if (g.emptyText) {
+      out.push(
+        new Paragraph({
+          spacing: { after: 60 },
+          indent,
+          children: [new TextRun({ text: g.emptyText, italics: true, color: "666666" })],
+        })
+      );
+    }
+  }
+  return out;
+}
+
+/**
  * A section that comes BEFORE numbering starts, drawn above the numbered table
  * rather than as a blank-numbered row inside it.
  *
@@ -233,7 +274,7 @@ function attendanceTable(
 function leadingSection(
   title: string,
   body: string,
-  attendees?: AttendeeRow[]
+  groups: ListGroup[] = []
 ): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [
     new Paragraph({
@@ -241,10 +282,8 @@ function leadingSection(
       children: [new TextRun({ text: title, bold: true, size: 24 })],
     }),
   ];
-  if (attendees?.length) {
-    // Indented ~1.25cm under the heading, as on the letterhead.
-    out.push(attendanceTable(attendees, { indent: 720, width: 8400 }));
-  }
+  // Indented ~1.25cm under the heading, as on the letterhead.
+  out.push(...listGroupBlocks(groups, { indent: 720, width: 8400 }));
   const lines = (body || "").split(/\r?\n/);
   if (lines.some((l) => l.trim())) {
     out.push(
@@ -510,7 +549,7 @@ export async function buildMinutesDocx(
     const numbered = sections.filter((s) => numbers.get(s.id) != null);
 
     for (const s of leading) {
-      body.push(...leadingSection(s.title, s.body, isAttendance(s) ? s.attendees : undefined));
+      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections)));
     }
 
     if (numbered.length > 0) {
@@ -526,7 +565,7 @@ export async function buildMinutesDocx(
                 s.title,
                 s.body,
                 s.responsible || "",
-                isAttendance(s) ? s.attendees : undefined
+                sectionListGroups(s, sections)
               )
             ),
           ],
