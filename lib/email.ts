@@ -318,7 +318,10 @@ export async function sendMinutesSignedEmail(
   minutesTitle: string,
   periodLabel: string,
   signedBy: string[],
-  documentRef: string
+  documentRef: string,
+  /** The signed minutes themselves. Absent when the file could not be built,
+   *  in which case the email still goes, with its link. */
+  attachment?: EmailAttachment | null
 ): Promise<boolean> {
   const b = await resolveBranding();
   const branding = b;
@@ -326,7 +329,9 @@ export async function sendMinutesSignedEmail(
   const url = `${SITE_URL}/minutes/${minutesId}`;
   const body = `
     <p style="color:#333;">Dear ${recipientName},</p>
-    <p style="color:#333;">The minutes below have been signed and are now the final record.</p>
+    <p style="color:#333;">The minutes below have been signed and are now the final record.${
+      attachment ? ` A copy is attached to this email (${esc(attachment.filename)}).` : ""
+    }</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
       <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
       <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
@@ -340,7 +345,8 @@ export async function sendMinutesSignedEmail(
     to,
     `Signed: ${minutesTitle}`,
     emailShell(b, "Signed minutes", body),
-    b.replyTo
+    b.replyTo,
+    attachment ? [attachment] : undefined
   );
 }
 
@@ -411,15 +417,26 @@ export async function sendApplicantConfirmationEmail(
   , b.replyTo);
 }
 
+/** A file sent with an email. Resend's limit is 40MB for the whole message
+ *  after encoding; a set of minutes, or a scan capped at 15MB on upload, fits. */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 async function sendEmail(
   from: string,
   to: string,
   subject: string,
   html: string,
-  replyTo?: string
+  replyTo?: string,
+  attachments?: EmailAttachment[]
 ): Promise<boolean> {
   if (!resend) {
     console.log(`[Email] Would send to ${to}: ${subject}`);
+    if (attachments?.length) {
+      console.log(`[Email] With ${attachments.map((a) => `${a.filename} (${a.content.length} bytes)`).join(", ")}`);
+    }
     console.log(`[Email] (No RESEND_API_KEY configured)`);
     return true;
   }
@@ -428,7 +445,30 @@ async function sendEmail(
     // empty: an invalid Reply-To can get the whole message rejected, and a
     // missing one just means a reply goes to the (unread) From address, which
     // is no worse than before.
-    await resend.emails.send({ from, to, subject, html, ...(replyTo ? { replyTo } : {}) });
+    const message = { from, to, subject, html, ...(replyTo ? { replyTo } : {}) };
+
+    // 🔴 Resend does not THROW on a rejected message, it RETURNS { error }.
+    // This used to await the call and return true regardless, so a message
+    // Resend refused was counted as sent and nobody found out.
+    let { error } = await resend.emails.send({
+      ...message,
+      ...(attachments?.length ? { attachments } : {}),
+    });
+
+    // A refused attachment must not cost the email itself. Signed minutes that
+    // arrive with only their link beat signed minutes that never arrive.
+    if (error && attachments?.length) {
+      console.error(
+        `[Email] Rejected with attachment to ${to}, retrying without it:`,
+        error
+      );
+      ({ error } = await resend.emails.send(message));
+    }
+
+    if (error) {
+      console.error(`[Email] Resend refused the message to ${to}:`, error);
+      return false;
+    }
     return true;
   } catch (err) {
     console.error("[Email] Failed to send:", err);

@@ -1,9 +1,41 @@
-import { recordDistribution } from "./minutesData";
+import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
 import { formatPeriod, canDistribute } from "./minutes";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
 import { documentHash, shortHash } from "./minutesSigning";
-import { sendMinutesSignedEmail } from "./email";
+import { sendMinutesSignedEmail, type EmailAttachment } from "./email";
+import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
+
+/**
+ * The file that travels with the signed minutes.
+ *
+ * Carl: attach the Word document, so a governor can read the minutes without
+ * signing in. Several people on a distribution tag are on the People register
+ * with no login at all, and a link to the portal is useless to them.
+ *
+ * 🔴 Minutes closed on PAPER send the signed SCAN, not a Word file. A Word copy
+ * of those minutes has empty signature lines, and a governor holding it would
+ * reasonably conclude nobody had signed. The scan is the signed record.
+ *
+ * Built ONCE per send, not per recipient, and never fatal: minutes that cannot
+ * be attached still go out with their link, because not sending the final
+ * record at all is worse than sending it without a copy.
+ */
+async function signedMinutesAttachment(
+  record: MinutesRecord
+): Promise<EmailAttachment | null> {
+  try {
+    if (record.signedCopy) {
+      const scan = await readSignedCopy(record.id);
+      if (scan) return { filename: record.signedCopy.filename, content: scan };
+    }
+    const docx = await buildMinutesDocxFile(record);
+    return { filename: minutesDocxFilename(record), content: docx };
+  } catch (err) {
+    console.error("[minutes distribution] Could not build the attachment:", err);
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Sending a fully signed set of minutes to the whole governing body.
@@ -101,6 +133,10 @@ export async function distributeSignedMinutes(
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
   const period = formatPeriod(record.period);
 
+  // Built once for the whole list. Null means it could not be built, and the
+  // minutes go out with their link regardless.
+  const attachment = await signedMinutesAttachment(record);
+
   const failed: string[] = [];
   let sent = 0;
   for (const person of [...preview.to, ...preview.cc]) {
@@ -111,7 +147,8 @@ export async function distributeSignedMinutes(
       record.title,
       period,
       signedBy,
-      ref
+      ref,
+      attachment
     );
     if (ok) sent += 1;
     else failed.push(person.email);

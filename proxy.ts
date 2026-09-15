@@ -36,7 +36,61 @@ const withClerk = isClerkEnabled()
   : null;
 
 
+/**
+ * Sends a page visit on the project's *.vercel.app address to the school's real
+ * domain, keeping the path and query.
+ *
+ * Carl: get rid of the Vercel URL "and ensure all users are directed to the
+ * proper domain". A redirect rather than removing the address, so an old
+ * bookmark lands on the right site instead of an error page.
+ *
+ * 🔴 OPT-IN, by REDIRECT_VERCEL_APP_TO_SITE_URL on the project. This file runs
+ * on every deployment of this repo, including the multi-tenant platform, whose
+ * vercel.app address is a real front door (see platformHostnames). Deciding
+ * from guesses about the environment would one day redirect the wrong app;
+ * a flag nobody set simply does nothing.
+ *
+ * Deliberately left alone:
+ * - /api/*: the cron job and every fetch from a page already open on the old
+ *   address. A redirected fetch loses its x-user-id header and fails.
+ * - anything but GET/HEAD: a 308 would replay a form POST at the other domain.
+ * - preview deployments: those URLs are for testing a specific build.
+ *
+ * ⚠️ The login is held in localStorage, which belongs to one address, so a
+ * person arriving from the old address signs in once on the new one.
+ */
+function vercelAppRedirect(req: NextRequest): NextResponse | null {
+  if (process.env.REDIRECT_VERCEL_APP_TO_SITE_URL !== "1") return null;
+  if (process.env.VERCEL_ENV !== "production") return null;
+  if (req.method !== "GET" && req.method !== "HEAD") return null;
+  if (req.nextUrl.pathname.startsWith("/api/")) return null;
+
+  const host = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (!host.endsWith(".vercel.app")) return null;
+
+  let site: URL;
+  try {
+    site = new URL(process.env.NEXT_PUBLIC_SITE_URL || "");
+  } catch {
+    return null;
+  }
+  // Never redirect to itself or to another vercel.app address: a site URL
+  // still set to the old address would otherwise loop forever.
+  if (site.hostname.toLowerCase() === host || site.hostname.endsWith(".vercel.app")) {
+    return null;
+  }
+
+  const target = new URL(req.nextUrl.pathname + req.nextUrl.search, site.origin);
+  return NextResponse.redirect(target, 308);
+}
+
 export default function proxy(req: NextRequest, event: never) {
+  const redirect = vercelAppRedirect(req);
+  if (redirect) return redirect;
+
   if (!withClerk) {
     return NextResponse.next({ request: { headers: withPathname(req) } });
   }
