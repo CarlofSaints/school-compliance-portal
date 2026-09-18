@@ -11,6 +11,8 @@ import type { ActionItem } from "./actionItems";
 import { summarise, isClosed, isOverdue, todayIso, addDays, daysBetween, daysUntilDue } from "./actionItems";
 import type { MinutesRecord } from "./minutesData";
 import { signingProgress, formatPeriod } from "./minutes";
+import type { SpendApplication } from "./spend";
+import { evaluateProgress } from "./approvalEngine";
 
 export interface WeeklyUpdateSettings {
   /** Off until somebody turns it on. An email to every governor is not a
@@ -144,6 +146,30 @@ export interface WeeklyMinutesLine {
   waitingOn: string[];
 }
 
+export interface WeeklySpendLine {
+  project: string;
+  amount: number;
+  approved: number;
+  total: number;
+  waitingOn: string[];
+  /** Nobody was named to approve it, so it cannot move on its own. */
+  noApprovers: boolean;
+}
+
+export interface WeeklySpend {
+  /** Submitted, not yet decided. */
+  awaiting: number;
+  awaitingValue: number;
+  /** Approved and not yet marked complete. */
+  approved: number;
+  approvedValue: number;
+  /** Sent back to the applicant. */
+  changes: number;
+  completed: number;
+  /** Largest first. Capped when drawn, never when counted. */
+  awaitingList: WeeklySpendLine[];
+}
+
 export interface WeeklyFacts {
   actions: {
     open: number;
@@ -157,6 +183,38 @@ export interface WeeklyFacts {
     notActivated: number;
   };
   minutes: WeeklyMinutesLine[];
+  spend: WeeklySpend;
+}
+
+export function buildWeeklySpend(apps: SpendApplication[]): WeeklySpend {
+  // "Logged only" bands need nobody's approval, so they are never waiting.
+  const waiting = apps.filter(
+    (a) => (a.status === "pending" || a.status === "pending_decision") && !a.approvalLogOnly
+  );
+  const approved = apps.filter((a) => a.status === "approved");
+  const sum = (list: SpendApplication[], pick: (a: SpendApplication) => number) =>
+    list.reduce((n, a) => n + (Number(pick(a)) || 0), 0);
+  return {
+    awaiting: waiting.length,
+    awaitingValue: sum(waiting, (a) => a.estimatedAmount),
+    approved: approved.length,
+    approvedValue: sum(approved, (a) => a.approvedAmount ?? a.estimatedAmount),
+    changes: apps.filter((a) => a.status === "requires_changes").length,
+    completed: apps.filter((a) => a.status === "completed").length,
+    awaitingList: waiting
+      .map((a) => {
+        const p = evaluateProgress(a);
+        return {
+          project: a.projectName,
+          amount: Number(a.estimatedAmount) || 0,
+          approved: p.approved,
+          total: p.total,
+          waitingOn: p.outstanding.map((o) => o.name),
+          noApprovers: (a.requiredApprovers || []).length === 0,
+        };
+      })
+      .sort((x, y) => y.amount - x.amount),
+  };
 }
 
 export interface AccountLike {
@@ -167,6 +225,7 @@ export function buildWeeklyFacts(
   actions: ActionItem[],
   users: AccountLike[],
   minutes: MinutesRecord[],
+  spend: SpendApplication[],
   now: Date = new Date()
 ): WeeklyFacts {
   const s = summarise(actions, now);
@@ -209,5 +268,6 @@ export function buildWeeklyFacts(
       notActivated: users.filter((u) => u.forcePasswordChange).length,
     },
     minutes: unsigned,
+    spend: buildWeeklySpend(spend),
   };
 }

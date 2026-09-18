@@ -826,10 +826,24 @@ export async function sendActionReminderEmail(
 
 const WEEKLY_LIST_CAP = 5;
 
-function weeklyCard(value: number, label: string, sub: string, colour: string): string {
+// Icons are emoji written as HTML entities. An SVG icon is stripped by Gmail
+// and Outlook, and an image icon is blocked until the reader allows images;
+// emoji are the one kind every mail client draws. Entities, not literal
+// characters, so no encoding step anywhere can mangle them.
+const WEEKLY_ICONS = {
+  actions: "&#128203;", // clipboard
+  notSignedIn: "&#128100;", // person
+  minutes: "&#9997;&#65039;", // writing hand
+  awaiting: "&#9203;", // hourglass
+  approved: "&#9989;", // green tick
+  sentBack: "&#8617;&#65039;", // return arrow
+};
+
+function weeklyCard(icon: string, value: number, label: string, sub: string, colour: string): string {
   return `
     <td width="33%" valign="top" style="padding:6px;">
       <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px 12px;text-align:center;background:#fafafa;">
+        <div style="font-size:22px;line-height:1;margin-bottom:8px;">${icon}</div>
         <div style="font-size:34px;line-height:1;font-weight:700;color:${colour};">${value}</div>
         <div style="margin-top:8px;font-size:13px;font-weight:600;color:#333;">${esc(label)}</div>
         <div style="margin-top:4px;font-size:12px;color:#777;">${esc(sub)}</div>
@@ -849,6 +863,9 @@ export interface WeeklyUpdateEmail {
   facts: import("@/lib/weeklyUpdate").WeeklyFacts;
   /** This recipient is still on their temporary password. */
   notActivated: boolean;
+  /** May see every spend application in the portal (view_all_spend). The
+   *  spend block is left out entirely for everyone else. */
+  seesSpend: boolean;
   /** Sent from "Send a preview to me": says so at the top. */
   preview?: boolean;
 }
@@ -876,9 +893,9 @@ export function buildWeeklyUpdateEmail(
   const cards = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;">
       <tr>
-        ${weeklyCard(actions.open, "Open action items", actionSub, actions.overdue > 0 ? RED : PRIMARY)}
-        ${weeklyCard(accounts.notActivated, "Not yet signed in", `of ${accounts.total} portal users`, PRIMARY)}
-        ${weeklyCard(minutes.length, "Minutes to sign", minutes.length ? `${waitingSignatures} signature${waitingSignatures === 1 ? "" : "s"} outstanding` : "all signed", PRIMARY)}
+        ${weeklyCard(WEEKLY_ICONS.actions, actions.open, "Open action items", actionSub, actions.overdue > 0 ? RED : PRIMARY)}
+        ${weeklyCard(WEEKLY_ICONS.notSignedIn, accounts.notActivated, "Not yet signed in", `of ${accounts.total} portal users`, PRIMARY)}
+        ${weeklyCard(WEEKLY_ICONS.minutes, minutes.length, "Minutes to sign", minutes.length ? `${waitingSignatures} signature${waitingSignatures === 1 ? "" : "s"} outstanding` : "all signed", PRIMARY)}
       </tr>
     </table>`;
 
@@ -915,6 +932,37 @@ export function buildWeeklyUpdateEmail(
       ${minutes.length > WEEKLY_LIST_CAP ? `<p style="color:#777;font-size:13px;margin:8px 0 0;">And ${minutes.length - WEEKLY_LIST_CAP} more in the portal.</p>` : ""}`
     : "";
 
+  const spend = e.facts.spend;
+  const rands = (n: number) => `R${Math.round(n).toLocaleString("en-ZA")}`;
+  const spendBlock = e.seesSpend
+    ? `${heading("Spend and projects")}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 8px;border-collapse:collapse;">
+        <tr>
+          ${weeklyCard(WEEKLY_ICONS.awaiting, spend.awaiting, "Awaiting approval", spend.awaiting ? rands(spend.awaitingValue) : "nothing waiting", PRIMARY)}
+          ${weeklyCard(WEEKLY_ICONS.approved, spend.approved, "Approved", spend.approved ? `${rands(spend.approvedValue)} in progress` : "none in progress", PRIMARY)}
+          ${weeklyCard(WEEKLY_ICONS.sentBack, spend.changes, "Sent back for changes", `${spend.completed} project${spend.completed === 1 ? "" : "s"} completed`, spend.changes > 0 ? "#d97706" : PRIMARY)}
+        </tr>
+      </table>
+      ${spend.awaitingList.length
+        ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;margin-top:8px;">
+        ${spend.awaitingList
+          .slice(0, WEEKLY_LIST_CAP)
+          .map(
+            (s) => `<tr>
+          <td style="padding:8px 0;border-bottom:1px solid #eee;color:#333;"><strong>${esc(s.project)}</strong><br><span style="color:#777;font-size:13px;">${
+            s.noApprovers
+              ? `<span style="color:${RED};">No approvers set, so this cannot move</span>`
+              : `${s.approved} of ${s.total} approved. Waiting on: ${esc(s.waitingOn.join(", ") || "nobody")}`
+          }</span></td>
+          <td style="padding:8px 0 8px 12px;border-bottom:1px solid #eee;color:#333;white-space:nowrap;text-align:right;" valign="top">${rands(s.amount)}</td>
+        </tr>`
+          )
+          .join("")}
+      </table>
+      ${spend.awaitingList.length > WEEKLY_LIST_CAP ? `<p style="color:#777;font-size:13px;margin:8px 0 0;">And ${spend.awaitingList.length - WEEKLY_LIST_CAP} more in the portal.</p>` : ""}`
+        : ""}`
+    : "";
+
   const activateBlock = e.notActivated
     ? `<div style="border:1px solid ${PRIMARY};border-radius:8px;padding:14px 16px;margin:20px 0 0;">
         <p style="margin:0;color:#333;font-size:14px;"><strong>You have not signed in yet.</strong> Your account is ready. If you no longer have your temporary password, set a new one here:</p>
@@ -928,6 +976,7 @@ export function buildWeeklyUpdateEmail(
     ${cards}
     ${overdueBlock}
     ${minutesBlock}
+    ${spendBlock}
     ${activateBlock}
     <div style="text-align:center;margin:28px 0 8px;">
       <a href="${SITE_URL}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;">Open the ${esc(b.shortName)} portal</a>
@@ -939,6 +988,7 @@ export function buildWeeklyUpdateEmail(
   const subjectBits = [
     `${actions.open} open action${actions.open === 1 ? "" : "s"}`,
     ...(minutes.length ? [`${minutes.length} set${minutes.length === 1 ? "" : "s"} of minutes to sign`] : []),
+    ...(e.seesSpend && spend.awaiting ? [`${spend.awaiting} project${spend.awaiting === 1 ? "" : "s"} awaiting approval`] : []),
   ];
   const subject = `${e.preview ? "[Preview] " : ""}${b.shortName} weekly SGB update: ${subjectBits.join(", ")}`;
 

@@ -21,6 +21,7 @@ import {
 import { buildWeeklyUpdateEmail } from "../lib/email";
 import type { ActionItem } from "../lib/actionItems";
 import type { MinutesRecord } from "../lib/minutesData";
+import type { SpendApplication } from "../lib/spend";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -118,7 +119,33 @@ const minutes = [
   { title: "FINCOM", period: { kind: "month", year: 2026, month: 7 }, status: "signed", signatories: [] },
   { title: "Draft", period: { kind: "month", year: 2026, month: 9 }, status: "draft", signatories: [] },
 ] as unknown as MinutesRecord[];
-const facts = buildWeeklyFacts(actions, users, minutes, at("2026-09-21"));
+const fincom = (key: string, name: string) => ({ key, userId: key, name, email: "", tagId: "t1", tagName: "FINCOM", mode: "all" as const });
+const app = (projectName: string, over: Partial<SpendApplication>) =>
+  ({ id: projectName, projectName, estimatedAmount: 0, status: "pending", approvals: [], ...over }) as unknown as SpendApplication;
+const spendApps = [
+  app("Sound and lighting", {
+    estimatedAmount: 52000,
+    status: "pending_decision",
+    requiredApprovers: [fincom("u1", "Graham"), fincom("u2", "Rob"), fincom("u3", "Carl")],
+    approvals: [{ userId: "u1", decision: "approved" }] as never,
+  }),
+  app("Paint the hall", { estimatedAmount: 180000, requiredApprovers: [] }),
+  app("Petty cash", { estimatedAmount: 900, approvalLogOnly: true }),
+  app("New fence", { estimatedAmount: 250000, status: "approved", approvedAmount: 240000 }),
+  app("Borehole", { estimatedAmount: 60000, status: "approved" }),
+  app("Tuckshop", { status: "requires_changes" }),
+  app("Old roof", { status: "completed" }),
+  app("Pool heater", { status: "rejected" }),
+];
+const facts = buildWeeklyFacts(actions, users, minutes, spendApps, at("2026-09-21"));
+check("spend awaiting excludes logged-only", facts.spend.awaiting, 2);
+check("spend awaiting value", facts.spend.awaitingValue, 232000);
+check("spend approved uses approvedAmount", [facts.spend.approved, facts.spend.approvedValue], [2, 300000]);
+check("spend changes / completed", [facts.spend.changes, facts.spend.completed], [1, 1]);
+check("spend list largest first", facts.spend.awaitingList.map((x) => x.project), ["Paint the hall", "Sound and lighting"]);
+check("no approvers flagged", facts.spend.awaitingList[0].noApprovers, true);
+check("waiting on the two who have not approved", facts.spend.awaitingList[1].waitingOn, ["Rob", "Carl"]);
+check("1 of 3 approved", [facts.spend.awaitingList[1].approved, facts.spend.awaitingList[1].total], [1, 3]);
 check("open = not done/cancelled", facts.actions.open, 4);
 check("overdue", facts.actions.overdue, 2);
 check("due this week", facts.actions.dueThisWeek, 1);
@@ -153,14 +180,17 @@ const jeppe = {
 
 const out = process.argv[2];
 for (const b of [hvps, jeppe]) {
-  for (const notActivated of [false, true]) {
-    const tag = `${b.key}${notActivated ? " (not signed in)" : ""}`;
+  for (const [notActivated, seesSpend] of [[false, true], [true, false]]) {
+    const tag = `${b.key}${notActivated ? " (not signed in, no spend access)" : ""}`;
     const { subject, html } = buildWeeklyUpdateEmail(b as never, "someone@example.com", "Test Person", {
       teamName: defaultTeamName(b.fullName),
       weekOf: "2026-09-21",
       facts,
       notActivated,
+      seesSpend,
     });
+    check(`${tag}: spend block only with spend access`, html.includes("Spend and projects"), seesSpend);
+    check(`${tag}: waiting-on names shown`, html.includes("Waiting on: Rob, Carl"), seesSpend);
     check(`${tag}: greeting`, html.includes(`Good day, ${defaultTeamName(b.fullName)} team.`), true);
     check(`${tag}: school colour used`, html.includes(b.colors.primary), true);
     check(`${tag}: set-password box only when not signed in`, html.includes("Set my password"), notActivated);

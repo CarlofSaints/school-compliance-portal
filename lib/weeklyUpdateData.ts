@@ -2,6 +2,8 @@ import { readJson, writeJson } from "./controlData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
 import { listMinutes } from "./minutesData";
+import { getSpendApplications } from "./spendData";
+import { getRoles, resolveRolePermissions } from "./rolesData";
 import { resolveBranding } from "./brandingData";
 import { isPlausibleEmail } from "./emailIdentity";
 import { sendWeeklyUpdateEmail } from "./email";
@@ -31,6 +33,10 @@ export interface WeeklyRecipient {
   name: string;
   email: string;
   notActivated: boolean;
+  /** Holds view_all_spend, the permission the portal's own Spend page uses to
+   *  show every application. Nobody learns about spend by email that they
+   *  could not see by logging in. */
+  seesSpend: boolean;
 }
 
 /** Every user with a usable address, once each. Users who have never signed
@@ -40,7 +46,7 @@ export async function weeklyRecipients(): Promise<{
   recipients: WeeklyRecipient[];
   noEmail: string[];
 }> {
-  const users = await getUsers();
+  const [users, roles] = await Promise.all([getUsers(), getRoles()]);
   const seen = new Set<string>();
   const recipients: WeeklyRecipient[] = [];
   const noEmail: string[] = [];
@@ -53,18 +59,26 @@ export async function weeklyRecipients(): Promise<{
     }
     if (seen.has(email)) continue;
     seen.add(email);
-    recipients.push({ id: u.id, name, email, notActivated: !!u.forcePasswordChange });
+    const perms = resolveRolePermissions(u.role, roles.find((r) => r.id === u.role));
+    recipients.push({
+      id: u.id,
+      name,
+      email,
+      notActivated: !!u.forcePasswordChange,
+      seesSpend: perms.includes("view_all_spend"),
+    });
   }
   return { recipients, noEmail };
 }
 
 export async function gatherWeeklyFacts(now: Date = new Date()): Promise<WeeklyFacts> {
-  const [actions, users, minutes] = await Promise.all([
+  const [actions, users, minutes, spend] = await Promise.all([
     getActionItems(),
     getUsers(),
     listMinutes(),
+    getSpendApplications(),
   ]);
-  return buildWeeklyFacts(actions, users, minutes, now);
+  return buildWeeklyFacts(actions, users, minutes, spend, now);
 }
 
 export interface WeeklySendResult {
@@ -86,7 +100,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function sendWeeklyUpdate(opts: {
   now?: Date;
-  onlyTo?: { email: string; name: string; notActivated: boolean };
+  onlyTo?: { email: string; name: string; notActivated: boolean; seesSpend: boolean };
 }): Promise<WeeklySendResult> {
   const now = opts.now ?? new Date();
   const [settings, branding, facts] = await Promise.all([
@@ -104,6 +118,7 @@ export async function sendWeeklyUpdate(opts: {
       weekOf,
       facts,
       notActivated: opts.onlyTo.notActivated,
+      seesSpend: opts.onlyTo.seesSpend,
       preview: true,
     });
     return {
@@ -132,6 +147,7 @@ export async function sendWeeklyUpdate(opts: {
       weekOf,
       facts,
       notActivated: r.notActivated,
+      seesSpend: r.seesSpend,
     });
     if (ok) sent++;
     else failed++;

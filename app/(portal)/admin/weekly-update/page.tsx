@@ -10,6 +10,7 @@ interface Recipient {
   name: string;
   email: string;
   notActivated: boolean;
+  seesSpend: boolean;
 }
 
 interface Data {
@@ -127,7 +128,7 @@ export default function WeeklyUpdatePage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Weekly SGB Update</h1>
         <p className="text-gray-500 mt-1">
-          One email a week to every portal user, with open action items, who has not signed in yet, and minutes
+          One email a week to every portal user, with open action items, spend awaiting approval, who has not signed in yet, and minutes
           still waiting for signatures. Sent in the school&apos;s own colours and crest.
         </p>
       </div>
@@ -212,6 +213,15 @@ export default function WeeklyUpdatePage() {
               />
               <Stat value={data.facts.minutes.length} label="Minutes to sign" sub="awaiting signatures" />
             </div>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <Stat value={data.facts.spend.awaiting} label="Awaiting approval" sub="spend projects" />
+              <Stat value={data.facts.spend.approved} label="Approved" sub="in progress" />
+              <Stat value={data.facts.spend.changes} label="Sent back" sub={`${data.facts.spend.completed} completed`} />
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              The spend row only goes to people whose role can see all spend applications
+              ({data.recipients.filter((r) => r.seesSpend).length} of {data.recipients.length}).
+            </p>
             {data.facts.minutes.map((m) => (
               <p key={m.title + m.period} className="text-sm text-gray-700">
                 <strong>{m.title}</strong> ({m.period}): waiting on {m.waitingOn.join(", ") || "nobody"}
@@ -272,6 +282,7 @@ export default function WeeklyUpdatePage() {
                   <span className="text-gray-800">
                     {r.name || "(no name)"} <span className="text-gray-500">{r.email}</span>
                   </span>
+                  {r.seesSpend && <span className="text-xs text-gray-500 whitespace-nowrap">sees spend</span>}
                   {r.notActivated ? (
                     <span className="text-amber-700 whitespace-nowrap">Not signed in yet</span>
                   ) : (

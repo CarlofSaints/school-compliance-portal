@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
         // Previewed as the admin sees it, plus the "not signed in yet" box
         // when asked, so both versions can be checked.
         notActivated: body?.asNotActivated === true,
+        // Previewed with exactly what this admin would receive.
+        seesSpend: session.permissions.includes("view_all_spend"),
       },
     });
     if (result.failed) {
