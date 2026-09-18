@@ -11,6 +11,11 @@ import { resolveRecipients } from "@/lib/reminderRecipients";
 import { getActionItems } from "@/lib/actionItemData";
 import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
 import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
+import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
+import {
+  getWeeklyUpdateSettings,
+  sendWeeklyUpdate,
+} from "@/lib/weeklyUpdateData";
 
 export const maxDuration = 300;
 
@@ -157,9 +162,24 @@ export async function GET(req: NextRequest) {
     detail.push(`Action ${item.ref} ${item.title}: ${outcome.result}`);
   }
 
+  // --- Weekly SGB update ------------------------------------------------------
+  //
+  // Rides this cron too (05:00 UTC = 07:00 in South Africa). Due is derived
+  // from the chosen weekday and the last send, like the action chases, so a
+  // missed morning sends the next day rather than skipping the week.
+  let weeklyDue = 0;
+  const weekly = await getWeeklyUpdateSettings();
+  if (weeklyUpdateDue(weekly, now)) {
+    weeklyDue = 1;
+    const result = await sendWeeklyUpdate({ now });
+    sent += result.sent;
+    failed += result.failed;
+    detail.push(`Weekly SGB update: ${result.summary}`);
+  }
+
   const run = {
     at: new Date().toISOString(),
-    due: due.length + dueActions.length,
+    due: due.length + dueActions.length + weeklyDue,
     sent,
     skipped,
     failed,

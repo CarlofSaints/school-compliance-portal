@@ -156,6 +156,7 @@ const navItems: NavItem[] = [
       { label: "Spend Settings", href: "/admin/spend-settings", permission: "manage_spend_settings" },
       { label: "Minutes Admin", href: "/admin/minutes", permission: "manage_users" },
       { label: "School Branding", href: "/admin/branding", permission: "manage_users" },
+      { label: "Weekly Update", href: "/admin/weekly-update", permission: "manage_users" },
       { label: "Activity Log", href: "/activity", permission: "manage_users" },
       { label: "Backup Data", href: "/admin/backup", permission: "manage_users" },
     ],

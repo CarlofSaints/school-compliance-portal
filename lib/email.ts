@@ -816,3 +816,141 @@ export async function sendActionReminderEmail(
     emailShell(b, overdue ? "An action is overdue" : "Action item reminder", body)
   , b.replyTo);
 }
+
+// --- Weekly SGB update --------------------------------------------------------
+//
+// Built from tables, not flex or grid: Outlook draws email with Word's layout
+// engine, and anything else collapses the three cards into one column of
+// unstyled text. Colours come from the school's own branding like every other
+// mail here, so Hurlyvale's update is cyan and Jeppe's is black.
+
+const WEEKLY_LIST_CAP = 5;
+
+function weeklyCard(value: number, label: string, sub: string, colour: string): string {
+  return `
+    <td width="33%" valign="top" style="padding:6px;">
+      <div style="border:1px solid #e4e4e7;border-radius:8px;padding:16px 12px;text-align:center;background:#fafafa;">
+        <div style="font-size:34px;line-height:1;font-weight:700;color:${colour};">${value}</div>
+        <div style="margin-top:8px;font-size:13px;font-weight:600;color:#333;">${esc(label)}</div>
+        <div style="margin-top:4px;font-size:12px;color:#777;">${esc(sub)}</div>
+      </div>
+    </td>`;
+}
+
+function formatZaDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+export interface WeeklyUpdateEmail {
+  teamName: string;
+  weekOf: string; // YYYY-MM-DD
+  facts: import("@/lib/weeklyUpdate").WeeklyFacts;
+  /** This recipient is still on their temporary password. */
+  notActivated: boolean;
+  /** Sent from "Send a preview to me": says so at the top. */
+  preview?: boolean;
+}
+
+/** Pure: builds the subject and HTML, so a script can render it with no
+ *  store and no mail provider. */
+export function buildWeeklyUpdateEmail(
+  b: SchoolBranding,
+  to: string,
+  recipientName: string,
+  e: WeeklyUpdateEmail
+): { subject: string; html: string } {
+  const PRIMARY = b.colors.primary;
+  const RED = "#dc2626";
+  const { actions, accounts, minutes } = e.facts;
+  const waitingSignatures = minutes.reduce((n, m) => n + m.waitingOn.length, 0);
+
+  const actionSub =
+    actions.overdue > 0
+      ? `${actions.overdue} overdue`
+      : actions.dueThisWeek > 0
+        ? `${actions.dueThisWeek} due this week`
+        : "none overdue";
+
+  const cards = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;">
+      <tr>
+        ${weeklyCard(actions.open, "Open action items", actionSub, actions.overdue > 0 ? RED : PRIMARY)}
+        ${weeklyCard(accounts.notActivated, "Not yet signed in", `of ${accounts.total} portal users`, PRIMARY)}
+        ${weeklyCard(minutes.length, "Minutes to sign", minutes.length ? `${waitingSignatures} signature${waitingSignatures === 1 ? "" : "s"} outstanding` : "all signed", PRIMARY)}
+      </tr>
+    </table>`;
+
+  const heading = (text: string) =>
+    `<h3 style="color:${b.colors.dark};font-size:16px;margin:24px 0 8px;">${esc(text)}</h3>`;
+
+  const overdueBlock = actions.overdueList.length
+    ? `${heading("Overdue action items")}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+        ${actions.overdueList
+          .slice(0, WEEKLY_LIST_CAP)
+          .map(
+            (a) => `<tr>
+          <td style="padding:8px 0;border-bottom:1px solid #eee;color:#333;"><strong>${esc(a.ref)}</strong> ${esc(a.title)}<br><span style="color:#777;font-size:13px;">${esc(a.owners)}</span></td>
+          <td style="padding:8px 0 8px 12px;border-bottom:1px solid #eee;color:${RED};white-space:nowrap;text-align:right;" valign="top">${a.daysLate} day${a.daysLate === 1 ? "" : "s"} late</td>
+        </tr>`
+          )
+          .join("")}
+      </table>
+      ${actions.overdueList.length > WEEKLY_LIST_CAP ? `<p style="color:#777;font-size:13px;margin:8px 0 0;">And ${actions.overdueList.length - WEEKLY_LIST_CAP} more in the portal.</p>` : ""}`
+    : "";
+
+  const minutesBlock = minutes.length
+    ? `${heading("Minutes waiting for signatures")}
+      ${minutes
+        .slice(0, WEEKLY_LIST_CAP)
+        .map(
+          (m) => `<div style="background:#f4f4f5;padding:12px 14px;border-radius:6px;margin:0 0 8px;font-size:14px;">
+        <p style="margin:0;color:#333;"><strong>${esc(m.title)}</strong> <span style="color:#777;">(${esc(m.period)})</span></p>
+        <p style="margin:6px 0 0;color:#333;">${m.signed} of ${m.total} signed. Waiting on: <strong>${esc(m.waitingOn.join(", ") || "nobody")}</strong></p>
+      </div>`
+        )
+        .join("")}
+      ${minutes.length > WEEKLY_LIST_CAP ? `<p style="color:#777;font-size:13px;margin:8px 0 0;">And ${minutes.length - WEEKLY_LIST_CAP} more in the portal.</p>` : ""}`
+    : "";
+
+  const activateBlock = e.notActivated
+    ? `<div style="border:1px solid ${PRIMARY};border-radius:8px;padding:14px 16px;margin:20px 0 0;">
+        <p style="margin:0;color:#333;font-size:14px;"><strong>You have not signed in yet.</strong> Your account is ready. If you no longer have your temporary password, set a new one here:</p>
+        <a href="${SITE_URL}/forgot-password" style="display:inline-block;margin-top:10px;color:${PRIMARY};font-weight:600;">Set my password</a>
+      </div>`
+    : "";
+
+  const body = `
+    ${e.preview ? `<p style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;font-size:13px;margin:0 0 16px;">Preview. Only you received this copy.</p>` : ""}
+    <p style="color:#333;margin:0;">Here's your weekly SGB update for the week of ${esc(formatZaDate(e.weekOf))}.</p>
+    ${cards}
+    ${overdueBlock}
+    ${minutesBlock}
+    ${activateBlock}
+    <div style="text-align:center;margin:28px 0 8px;">
+      <a href="${SITE_URL}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;">Open the ${esc(b.shortName)} portal</a>
+      <p style="margin:10px 0 0;font-size:12px;color:#777;">${esc(SITE_URL.replace(/^https?:\/\//, ""))}</p>
+    </div>
+    <p style="color:#999;font-size:12px;margin:24px 0 0;">You receive this because you have an account on the ${esc(b.fullName)} ${esc(b.tagline)}. Sent to ${esc(recipientName || to)}.</p>
+  `;
+
+  const subjectBits = [
+    `${actions.open} open action${actions.open === 1 ? "" : "s"}`,
+    ...(minutes.length ? [`${minutes.length} set${minutes.length === 1 ? "" : "s"} of minutes to sign`] : []),
+  ];
+  const subject = `${e.preview ? "[Preview] " : ""}${b.shortName} weekly SGB update: ${subjectBits.join(", ")}`;
+
+  return { subject, html: emailShell(b, `Good day, ${esc(e.teamName)} team.`, body) };
+}
+
+export async function sendWeeklyUpdateEmail(
+  to: string,
+  recipientName: string,
+  e: WeeklyUpdateEmail
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const { subject, html } = buildWeeklyUpdateEmail(b, to, recipientName, e);
+  return sendEmail(b.fromEmail, to, subject, html, b.replyTo);
+}
