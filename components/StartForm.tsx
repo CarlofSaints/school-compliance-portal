@@ -247,7 +247,7 @@ export default function StartForm() {
             id="adminName"
             value={adminName}
             onChange={(e) => setAdminName(e.target.value)}
-            placeholder="Carl Dos Santos"
+            placeholder="Your full name"
             className={field}
             autoComplete="name"
           />
