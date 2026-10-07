@@ -20,6 +20,9 @@ interface Props {
   stickyTop?: boolean;
   // Freeze the column to the left edge as the grid scrolls sideways.
   stickyLeft?: boolean;
+  // How far from the left edge a frozen column stops, so a second frozen
+  // column sits beside the first instead of on top of it.
+  stickyLeftOffset?: number;
 }
 
 // A grid header cell that can be clicked to sort and dragged on its right edge
@@ -37,6 +40,7 @@ export default function SortableTh({
   align = "left",
   stickyTop = false,
   stickyLeft = false,
+  stickyLeftOffset = 0,
 }: Props) {
   const thRef = useRef<HTMLTableCellElement>(null);
   const key = resizeKey || sortKey;
@@ -92,7 +96,10 @@ export default function SortableTh({
   return (
     <th
       ref={thRef}
-      style={width ? { width } : undefined}
+      style={{
+        ...(width ? { width } : {}),
+        ...(stickyLeft ? { left: stickyLeftOffset } : {}),
+      }}
       className={`${alignClass} ${stickyClass} px-4 py-3 font-medium text-gray-500 relative select-none ${
         sortable ? "cursor-pointer hover:text-gray-700" : ""
       }`}

@@ -210,25 +210,28 @@ export default function ActionItemsPage() {
   // counted against what you are actually looking at, rather than against the
   // whole register - a chip reading "In progress 4" when the view holds one is
   // worse than no count.
+  const searched = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter((item) =>
+      [
+        item.ref,
+        item.title,
+        item.description,
+        item.category,
+        ...item.assigneeNames,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    );
+  }, [items, search]);
+
   const viewFiltered = useMemo(() => {
     const today = todayIso();
     const weekOut = addDays(today, 7);
-    const needle = search.trim().toLowerCase();
 
-    return items.filter((item) => {
-      if (needle) {
-        const haystack = [
-          item.ref,
-          item.title,
-          item.description,
-          item.category,
-          ...item.assigneeNames,
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(needle)) return false;
-      }
-
+    return searched.filter((item) => {
       switch (filter) {
         case "all":
           return true;
@@ -249,15 +252,26 @@ export default function ActionItemsPage() {
           return true;
       }
     });
-  }, [items, filter, search, myPersonIds]);
+  }, [searched, filter, myPersonIds]);
 
+  // 🔴 The Open view holds no closed items by definition, so counting Done and
+  // Cancelled against it always read 0 - a just-cancelled action looked
+  // deleted. Clicking either chip widens the view to All (chooseStatus), so
+  // their counts come from that wider view: the number is what the click shows.
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { any: viewFiltered.length };
     for (const item of viewFiltered) {
       counts[item.status] = (counts[item.status] || 0) + 1;
     }
+    if (filter === "open") {
+      for (const item of searched) {
+        if (isClosed(item)) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+        }
+      }
+    }
     return counts;
-  }, [viewFiltered]);
+  }, [viewFiltered, searched, filter]);
 
   const filtered = useMemo(
     () =>
@@ -323,6 +337,13 @@ export default function ActionItemsPage() {
       return next;
     });
   }, []);
+
+  // A save that closes an item drops it out of the Open view the moment it
+  // lands, which looks like a delete. Say where it went.
+  const savedMessage = (message: string, saved: ActionItem) =>
+    filter === "open" && isClosed(saved)
+      ? `${message}. It is now ${STATUS_LABELS[saved.status]}, so Open hides it. Click ${STATUS_LABELS[saved.status]} to see it`
+      : message;
 
   const canUpdate = (item: ActionItem) =>
     canManage || item.assigneeIds.some((id) => myPersonIds.includes(id));
@@ -426,7 +447,8 @@ export default function ActionItemsPage() {
     label: string,
     key: string,
     align?: "left" | "right" | "center",
-    stickyLeft = false
+    stickyLeft = false,
+    stickyLeftOffset = 0
   ) => (
     <SortableTh
       label={label}
@@ -439,10 +461,13 @@ export default function ActionItemsPage() {
       align={align}
       stickyTop
       stickyLeft={stickyLeft}
+      stickyLeftOffset={stickyLeftOffset}
     />
   );
 
   const lastRun = runs[0];
+  // The Action column is frozen beside Ref, so it stops at Ref's width.
+  const refWidth = widths.ref ?? DEFAULT_WIDTHS.ref;
 
   return (
     <div>
@@ -581,7 +606,7 @@ export default function ActionItemsPage() {
           onSaved={(message, saved) => {
             setShowForm(false);
             setEditing(null);
-            setToast({ message, type: "success" });
+            setToast({ message: savedMessage(message, saved), type: "success" });
             applySaved(saved);
           }}
           onError={(message) => setToast({ message, type: "error" })}
@@ -594,7 +619,7 @@ export default function ActionItemsPage() {
           onClose={() => setProgressFor(null)}
           onSaved={(message, saved) => {
             setProgressFor(null);
-            setToast({ message, type: "success" });
+            setToast({ message: savedMessage(message, saved), type: "success" });
             applySaved(saved);
           }}
           onError={(message) => setToast({ message, type: "error" })}
@@ -609,7 +634,7 @@ export default function ActionItemsPage() {
             <thead className="bg-gray-50">
               <tr>
                 {th("Ref", "ref", "left", true)}
-                {th("Action", "title")}
+                {th("Action", "title", "left", true, refWidth)}
                 {th("Assigned to", "assignees")}
                 {th("Category", "category")}
                 {th("Priority", "priority")}
@@ -669,7 +694,10 @@ export default function ActionItemsPage() {
                     <td className="sticky left-0 z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-3 font-medium text-gray-500 align-top">
                       {item.ref}
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td
+                      style={{ left: refWidth }}
+                      className="sticky z-10 bg-white group-hover:bg-gray-50 border-r border-gray-100 px-4 py-3 align-top"
+                    >
                       <p className="font-medium text-dark">{item.title}</p>
                       {item.description && (
                         <p className="text-xs text-gray-400 mt-1 line-clamp-2">
