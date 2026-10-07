@@ -152,6 +152,11 @@ const navItems: NavItem[] = [
       { label: "People Types", href: "/admin/positions", permission: "manage_people" },
       { label: "Tags", href: "/admin/tags", permission: "manage_tags" },
       { label: "Policy Categories", href: "/admin/policy-categories", permission: "manage_policies" },
+      {
+        label: "Action Categories",
+        href: "/admin/action-categories",
+        permissions: ["manage_action_items", "manage_people"],
+      },
       { label: "Approval Settings", href: "/admin/approval-settings", permission: "manage_approval_settings" },
       { label: "Spend Settings", href: "/admin/spend-settings", permission: "manage_spend_settings" },
       { label: "Minutes Admin", href: "/admin/minutes", permission: "manage_users" },

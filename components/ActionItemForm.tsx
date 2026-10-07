@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import {
-  ACTION_CATEGORIES,
   ALL_RECIPIENTS,
+  DEFAULT_ACTION_CATEGORIES,
   DEFAULT_REMINDER,
   PRIORITY_LABELS,
   RECIPIENT_LABELS,
@@ -111,11 +111,25 @@ export default function ActionItemForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // The school's own list from Admin > Action Categories. The built-in set
+  // only fills the gap until it arrives.
+  const [categories, setCategories] = useState<string[]>(
+    DEFAULT_ACTION_CATEGORIES
+  );
+  useEffect(() => {
+    authFetch("/api/settings/action-categories", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((list) => {
+        if (Array.isArray(list) && list.length > 0) setCategories(list);
+      })
+      .catch(() => {});
+  }, []);
+
   // A stored category that is no longer on the list must still appear, or the
   // select would silently show the first option and the save would change it.
-  const categoryOptions = ACTION_CATEGORIES.includes(category)
-    ? ACTION_CATEGORIES
-    : [...ACTION_CATEGORIES, category];
+  const categoryOptions = categories.includes(category)
+    ? categories
+    : [...categories, category];
 
   const toggleAssignee = (id: string) => {
     setAssigneeIds((prev) =>

@@ -83,18 +83,57 @@ export const ALL_RECIPIENTS: ActionRecipient[] = [
 ];
 
 // Free text would fragment into "Finance", "finance" and "Finances", which is
-// what makes a filter useless. Fixed list, editable here.
-export const ACTION_CATEGORIES = [
+// what makes a filter useless, so categories are a list. The list itself is
+// editable in Admin > Action Categories; this is the starting set a school gets
+// before anyone has changed anything.
+export const DEFAULT_ACTION_CATEGORIES = [
   "Governance",
   "Finance",
   "Policy",
   "Compliance",
   "Infrastructure",
+  "Maintenance",
+  "Extra Murals",
   "Fundraising",
   "Staffing",
   "Health & Safety",
   "Other",
 ];
+
+// What a raised or imported action falls back to when its category is not on
+// the list, so it always has to exist.
+export const REQUIRED_ACTION_CATEGORY = "Other";
+
+// The list's own spelling of `value`, matched ignoring case, or null when it is
+// not on the list - so an import saying "finance" lands on "Finance" rather
+// than falling through to Other.
+export function matchActionCategory(
+  value: unknown,
+  categories: string[]
+): string | null {
+  const wanted = String(value ?? "").trim().toLowerCase();
+  if (!wanted) return null;
+  return categories.find((c) => c.toLowerCase() === wanted) ?? null;
+}
+
+// Tidies a list coming from the admin form: trimmed, no blanks, no duplicates
+// (case-insensitive), and always containing the required one.
+export function normaliseActionCategories(input: unknown[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of input) {
+    const value = String(raw ?? "").trim().slice(0, 60);
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
+  }
+  if (!seen.has(REQUIRED_ACTION_CATEGORY.toLowerCase())) {
+    out.push(REQUIRED_ACTION_CATEGORY);
+  }
+  return out;
+}
 
 // An item in one of these is finished: it is never chased, and it drops out of
 // the open counts.

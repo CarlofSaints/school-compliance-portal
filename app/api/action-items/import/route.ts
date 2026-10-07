@@ -5,9 +5,11 @@ import { getUsers } from "@/lib/userData";
 import {
   createActionItems,
   parseReminder,
-  ACTION_CATEGORIES,
+  REQUIRED_ACTION_CATEGORY,
+  matchActionCategory,
   STATUS_LABELS,
 } from "@/lib/actionItemData";
+import { getActionCategories } from "@/lib/actionCategoryData";
 import type {
   ActionItem,
   ActionPriority,
@@ -69,7 +71,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [people, users] = await Promise.all([getPeople(), getUsers()]);
+    const [people, users, categories] = await Promise.all([
+      getPeople(),
+      getUsers(),
+      getActionCategories(),
+    ]);
     const now = new Date().toISOString();
     const problems: string[] = [];
 
@@ -108,9 +114,9 @@ export async function POST(req: NextRequest) {
         assigneeNames: assigneeIds.map((id) =>
           displayNameFor(id, people, users)
         ),
-        category: ACTION_CATEGORIES.includes(String(row?.category))
-          ? String(row.category)
-          : "Other",
+        category:
+          matchActionCategory(row?.category, categories) ??
+          REQUIRED_ACTION_CATEGORY,
         priority: VALID_PRIORITIES.includes(row?.priority as ActionPriority)
           ? (row.priority as ActionPriority)
           : "medium",

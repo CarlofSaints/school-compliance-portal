@@ -9,6 +9,7 @@ import {
 } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { parseActionEdit } from "@/lib/actionItemFields";
+import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 
 // Editing ONE action. An assignee updating their own progress goes to
@@ -32,12 +33,16 @@ export async function PATCH(
 
   try {
     const body = await req.json();
-    const [people, users] = await Promise.all([getPeople(), getUsers()]);
+    const [people, users, categories] = await Promise.all([
+      getPeople(),
+      getUsers(),
+      getActionCategories(),
+    ]);
 
     // Shared with the bulk route, so the two cannot drift on what a valid edit
     // is - the sort of split where one validates an ETA and the other stores
     // rubbish.
-    const parsed = parseActionEdit(body, existing, people, users);
+    const parsed = parseActionEdit(body, existing, people, users, categories);
     if (parsed.error) {
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }

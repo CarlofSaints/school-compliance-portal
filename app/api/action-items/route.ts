@@ -6,9 +6,11 @@ import {
   getActionItems,
   createActionItem,
   parseReminder,
-  ACTION_CATEGORIES,
   STATUS_LABELS,
+  REQUIRED_ACTION_CATEGORY,
+  matchActionCategory,
 } from "@/lib/actionItemData";
+import { getActionCategories } from "@/lib/actionCategoryData";
 import type {
   ActionItem,
   ActionPriority,
@@ -94,9 +96,9 @@ export async function POST(req: NextRequest) {
     const priority: ActionPriority = VALID_PRIORITIES.includes(body?.priority)
       ? body.priority
       : "medium";
-    const category = ACTION_CATEGORIES.includes(String(body?.category))
-      ? String(body.category)
-      : "Other";
+    const category =
+      matchActionCategory(body?.category, await getActionCategories()) ??
+      REQUIRED_ACTION_CATEGORY;
 
     // 🔴 The origin is resolved from the MINUTES, never trusted from the
     // caller. A client-supplied title would let an action claim it came out of

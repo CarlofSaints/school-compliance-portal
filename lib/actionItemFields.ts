@@ -1,6 +1,6 @@
 import {
-  ACTION_CATEGORIES,
   STATUS_LABELS,
+  matchActionCategory,
   parseReminder,
 } from "./actionItems";
 import type {
@@ -33,7 +33,10 @@ export function parseActionEdit(
   body: Record<string, unknown>,
   existing: ActionItem,
   people: Person[],
-  users: User[]
+  users: User[],
+  // The school's saved category list, not the built-in defaults: a category
+  // added in Admin has to be one an existing action can be moved to.
+  categories: string[]
 ): ParsedEdit {
   const updates: Partial<ActionItem> = {};
   let newlyAssigned: string[] = [];
@@ -50,11 +53,18 @@ export function parseActionEdit(
   if (typeof body.description === "string") {
     updates.description = body.description.trim().slice(0, 4000);
   }
-  if (
-    typeof body.category === "string" &&
-    ACTION_CATEGORIES.includes(body.category)
-  ) {
-    updates.category = body.category;
+  if (body.category !== undefined) {
+    const category = matchActionCategory(body.category, categories);
+    // Unchanged is always allowed, so an item filed under a since-removed
+    // category can still be saved without being forced onto a new one.
+    if (category) updates.category = category;
+    else if (body.category !== existing.category) {
+      return {
+        updates: {},
+        newlyAssigned: [],
+        error: `"${String(body.category)}" is not an action category`,
+      };
+    }
   }
   if (VALID_PRIORITIES.includes(body.priority as ActionPriority)) {
     updates.priority = body.priority as ActionPriority;

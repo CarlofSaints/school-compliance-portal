@@ -6,6 +6,7 @@ import { getActionItems, updateActionItems } from "@/lib/actionItemData";
 import type { ActionItem } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { parseActionEdit } from "@/lib/actionItemFields";
+import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 
 export const maxDuration = 300;
@@ -39,10 +40,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const [items, people, users] = await Promise.all([
+    const [items, people, users, categories] = await Promise.all([
       getActionItems(),
       getPeople(),
       getUsers(),
+      getActionCategories(),
     ]);
     const byId = new Map(items.map((i) => [i.id, i]));
 
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
         problems.push(`${id || "(no id)"} is not an action on the register`);
         continue;
       }
-      const parsed = parseActionEdit(row, existing, people, users);
+      const parsed = parseActionEdit(row, existing, people, users, categories);
       if (parsed.error) {
         problems.push(`${existing.ref}: ${parsed.error}`);
         continue;
