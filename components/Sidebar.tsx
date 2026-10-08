@@ -168,7 +168,7 @@ const navItems: NavItem[] = [
         permissions: ["manage_action_items", "manage_people"],
       },
       { label: "Activity Log", href: "/activity", permission: "manage_users" },
-      { label: "Backup Data", href: "/admin/backup", permission: "manage_users" },
+      { label: "Backup Data", href: "/admin/backup", permission: "manage_roles" },
     ],
   },
 ];
