@@ -210,7 +210,8 @@ Visit once in a browser:
 https://riverside-compliance.vercel.app/api/seed?secret=<your SEED_SECRET>
 ```
 You should get `{"success":true, ...}`. This creates the super-admin
-(`carl@outerjoin.co.za` / `Admin@123`) + roles + permissions in the new store.
+`carl@outerjoin.co.za` with a random temporary password shown ONCE in that
+response (copy it then) + roles + permissions in the new store.
 
 > Re-run this same URL on an **existing** school whenever a new permission key
 > ships. Seeding tops `permissions.json` up with keys it doesn't have yet, so
