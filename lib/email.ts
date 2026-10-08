@@ -430,7 +430,10 @@ async function sendEmail(
   subject: string,
   html: string,
   replyTo?: string,
-  attachments?: EmailAttachment[]
+  attachments?: EmailAttachment[],
+  /** The body to send instead if the message has to go without its
+   *  attachments, so it does not promise a file that is not there. */
+  htmlWithoutAttachments?: string
 ): Promise<boolean> {
   if (!resend) {
     console.log(`[Email] Would send to ${to}: ${subject}`);
@@ -462,7 +465,9 @@ async function sendEmail(
         `[Email] Rejected with attachment to ${to}, retrying without it:`,
         error
       );
-      ({ error } = await resend.emails.send(message));
+      ({ error } = await resend.emails.send(
+        htmlWithoutAttachments ? { ...message, html: htmlWithoutAttachments } : message
+      ));
     }
 
     if (error) {
@@ -1003,4 +1008,102 @@ export async function sendWeeklyUpdateEmail(
   const b = await resolveBranding();
   const { subject, html } = buildWeeklyUpdateEmail(b, to, recipientName, e);
   return sendEmail(b.fromEmail, to, subject, html, b.replyTo);
+}
+
+// --- Action items summary -----------------------------------------------------
+//
+// The full open register goes in the attached workbook. The body is the three
+// numbers and the worst few, so somebody reading on a phone knows whether to
+// open the file at all.
+
+const SUMMARY_LIST_CAP = 8;
+
+export interface ActionSummaryEmail {
+  rows: import("@/lib/actionSummary").SummaryRow[];
+  counts: import("@/lib/actionSummary").SummaryCounts;
+  dueSoonDays: number;
+  asOf: string; // YYYY-MM-DD
+  /** "Every Monday at 07:00". Blank on a one-off send. */
+  scheduleText: string;
+  preview?: boolean;
+  /** The workbook did not attach, so the body says where to find the list. */
+  noAttachment?: boolean;
+}
+
+/** Pure: builds the subject and HTML, so a script can render it with no
+ *  store and no mail provider. */
+export function buildActionSummaryEmail(
+  b: SchoolBranding,
+  recipientName: string,
+  e: ActionSummaryEmail
+): { subject: string; html: string } {
+  const PRIMARY = b.colors.primary;
+  const RED = "#dc2626";
+  const ORANGE = "#ea580c";
+  const GREY = "#9ca3af";
+  const { counts } = e;
+
+  const cards = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 8px;border-collapse:collapse;">
+      <tr>
+        ${weeklyCard(WEEKLY_ICONS.actions, counts.open, "Open", `${counts.blocked} blocked`, PRIMARY)}
+        ${weeklyCard("&#128308;", counts.overdue, "Overdue", "ETA has passed", counts.overdue ? RED : GREY)}
+        ${weeklyCard("&#128992;", counts.dueSoon, "Due soon", `within ${e.dueSoonDays} days`, counts.dueSoon ? ORANGE : GREY)}
+      </tr>
+    </table>`;
+
+  // Overdue first, then due soon: the list is already sorted that way.
+  const urgent = e.rows.filter((r) => r.health === "overdue" || r.health === "due_soon");
+  const line = (r: (typeof e.rows)[number]) => {
+    const late = r.health === "overdue";
+    const colour = late ? RED : ORANGE;
+    const when = duePhrase(r.dueDate, r.daysLeft);
+    return `<tr>
+      <td width="4" style="background:${colour};padding:0;font-size:0;">&nbsp;</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #eee;color:#333;"><strong>${esc(r.ref)}</strong> ${esc(r.title)}<br><span style="color:#777;font-size:13px;">${esc(r.owners || "Nobody assigned")} &middot; ${r.progress}% done</span></td>
+      <td style="padding:8px 0 8px 12px;border-bottom:1px solid #eee;color:${colour};white-space:nowrap;text-align:right;font-weight:600;" valign="top">${esc(when)}</td>
+    </tr>`;
+  };
+  const urgentBlock = urgent.length
+    ? `<h3 style="color:${b.colors.dark};font-size:16px;margin:24px 0 8px;">Needs attention</h3>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px;">
+        ${urgent.slice(0, SUMMARY_LIST_CAP).map(line).join("")}
+      </table>
+      ${urgent.length > SUMMARY_LIST_CAP ? `<p style="color:#777;font-size:13px;margin:8px 0 0;">And ${urgent.length - SUMMARY_LIST_CAP} more in the attached workbook.</p>` : ""}`
+    : `<p style="color:#047857;font-size:14px;margin:16px 0 0;">Nothing is overdue or due in the next ${e.dueSoonDays} days.</p>`;
+
+  const attachmentNote = e.noAttachment
+    ? `<p style="color:#92400e;background:#fef3c7;padding:10px 12px;border-radius:6px;font-size:13px;margin:20px 0 0;">The Excel file could not be attached to this email. The full list is on the Action Items page in the portal.</p>`
+    : `<div style="border:1px solid #e4e4e7;border-radius:8px;padding:12px 14px;margin:20px 0 0;font-size:14px;color:#333;">
+        &#128206; <strong>Attached:</strong> every open action item in Excel, with the person responsible, ETA, progress and latest update. Red is overdue, orange is due within ${e.dueSoonDays} days, and the colours keep up with the date whenever you open it.
+      </div>`;
+
+  const body = `
+    ${e.preview ? `<p style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;font-size:13px;margin:0 0 16px;">Preview. Only you received this copy.</p>` : ""}
+    <p style="color:#333;margin:0;">Dear ${esc(recipientName || "colleague")},</p>
+    <p style="color:#333;">Here is where the action items stand as at ${esc(formatZaDate(e.asOf))}.</p>
+    ${cards}
+    ${urgentBlock}
+    ${attachmentNote}
+    <div style="text-align:center;margin:28px 0 8px;">
+      <a href="${SITE_URL}/action-items" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;">Open the action items</a>
+    </div>
+    <p style="color:#999;font-size:12px;margin:24px 0 0;">${e.scheduleText ? `This summary goes out ${esc(e.scheduleText.charAt(0).toLowerCase() + e.scheduleText.slice(1))}. ` : ""}You are on the list for it in the ${esc(b.fullName)} portal.</p>
+  `;
+
+  const bits = [`${counts.open} open`, `${counts.overdue} overdue`, ...(counts.dueSoon ? [`${counts.dueSoon} due soon`] : [])];
+  const subject = `${e.preview ? "[Preview] " : ""}${b.shortName} action items: ${bits.join(", ")}`;
+  return { subject, html: emailShell(b, "Action items summary", body) };
+}
+
+export async function sendActionSummaryEmail(
+  to: string,
+  recipientName: string,
+  e: ActionSummaryEmail,
+  attachment: EmailAttachment
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const { subject, html } = buildActionSummaryEmail(b, recipientName, e);
+  const bare = buildActionSummaryEmail(b, recipientName, { ...e, noAttachment: true }).html;
+  return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare);
 }

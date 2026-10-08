@@ -162,6 +162,11 @@ const navItems: NavItem[] = [
       { label: "Minutes Admin", href: "/admin/minutes", permission: "manage_users" },
       { label: "School Branding", href: "/admin/branding", permission: "manage_users" },
       { label: "Weekly Update", href: "/admin/weekly-update", permission: "manage_users" },
+      {
+        label: "Action Summary Email",
+        href: "/admin/action-summary",
+        permissions: ["manage_action_items", "manage_people"],
+      },
       { label: "Activity Log", href: "/activity", permission: "manage_users" },
       { label: "Backup Data", href: "/admin/backup", permission: "manage_users" },
     ],
