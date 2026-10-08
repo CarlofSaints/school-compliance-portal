@@ -1,4 +1,4 @@
-import { readJson, writeJson, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, listFiles } from "./controlData";
 
 // ---------------------------------------------------------------------------
 // The audit trail. One per school, and the school can see its own.
@@ -148,7 +148,7 @@ export async function readActivity(
 
   const loaded = await Promise.all(
     ordered.map((name) =>
-      readJson<ActivityEntry | null>(`activity/${month}/${name}`, null)
+      readJsonTolerant<ActivityEntry | null>(`activity/${month}/${name}`, null)
     )
   );
 

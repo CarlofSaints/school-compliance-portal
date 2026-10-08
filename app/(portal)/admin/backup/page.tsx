@@ -8,7 +8,7 @@ import { useBranding } from "@/components/BrandingProvider";
 
 export default function BackupPage() {
   const branding = useBranding();
-  const { session, loading } = useAuth("manage_users");
+  const { session, loading } = useAuth("manage_roles");
   const [downloading, setDownloading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;

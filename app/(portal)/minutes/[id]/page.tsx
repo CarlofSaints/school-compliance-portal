@@ -145,6 +145,10 @@ export default function MinutesDetailPage() {
 
   const locked = isLocked(record.status);
   const editable = canManage && !locked;
+  // Out for signing: the text people are signing must not move under them.
+  // The Danger zone (delete) stays, as the way out if something is wrong.
+  const signingOpen = record.status === "awaiting_signatures";
+  const textEditable = editable && !signingOpen;
 
   const patch = (u: Partial<MinutesDetail>) => {
     setRecord((r) => (r ? { ...r, ...u } : r));
@@ -179,7 +183,7 @@ export default function MinutesDetailPage() {
           >
             Download as Word
           </DownloadLink>
-          {editable && (
+          {textEditable && (
             <button
               onClick={save}
               disabled={saving || !dirty}
@@ -223,7 +227,14 @@ export default function MinutesDetailPage() {
         </div>
       )}
 
-      {editable && (
+      {signingOpen && canManage && (
+        <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          These minutes are out for signing, so the text is locked: everyone must sign the same words. If something
+          needs changing, delete these minutes and start them again, or record the correction in the next set.
+        </div>
+      )}
+
+      {textEditable && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -255,7 +266,7 @@ export default function MinutesDetailPage() {
 
       <MinutesSectionEditor
         sections={record.sections}
-        editable={editable}
+        editable={textEditable}
         onChange={(sections) => patch({ sections })}
       />
 

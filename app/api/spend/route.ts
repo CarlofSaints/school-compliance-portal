@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       ? (formData.get("applicantUserId") as string) || undefined
       : session.id;
 
-    if (!projectName || !description || isNaN(estimatedAmount)) {
+    if (!projectName || !description || !Number.isFinite(estimatedAmount) || estimatedAmount < 0) {
       return NextResponse.json(
         { error: "Project name, description, and amount are required" },
         { status: 400 }

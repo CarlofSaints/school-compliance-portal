@@ -3,6 +3,8 @@ import {
   requirePermission,
   requireAnyPermission,
   getRoles,
+  roleWithinReach,
+  roleExists,
 } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
 import { sendWelcomeEmail } from "@/lib/email";
@@ -38,6 +40,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "All fields are required" },
         { status: 400 }
+      );
+    }
+
+    if (!(await roleExists(role))) {
+      return NextResponse.json({ error: "That role does not exist." }, { status: 400 });
+    }
+    if (!(await roleWithinReach(session, role))) {
+      return NextResponse.json(
+        { error: "You can only give a role whose access you hold yourself." },
+        { status: 403 }
       );
     }
 

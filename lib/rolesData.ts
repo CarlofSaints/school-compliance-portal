@@ -147,3 +147,47 @@ export async function requirePermission(
   }
   return session;
 }
+
+// --- Who may hand out or touch which role ---------------------------------
+//
+// manage_users lets an SGB Admin run the user list, but it must not be a way
+// to gain what they were not given. Without this, PUT /api/users/<own id>
+// with { role: "super-admin" } made an SGB Admin a Super Admin, and they could
+// reset the Super Admin's password.
+//
+// The rule: you may only give a role, or edit, delete or reset a user holding
+// a role, whose permissions you hold ALL of yourself. Super Admin holds every
+// permission, so it can do anything; an SGB Admin can manage SGB Members.
+export async function roleWithinReach(
+  session: { permissions: string[] },
+  roleId: string
+): Promise<boolean> {
+  const roles = await getRoles();
+  const role = roles.find((x) => x.id === roleId);
+  // A role that no longer exists grants nothing, so it is within anyone's
+  // reach: refusing here made users left on a deleted role uneditable by
+  // everybody, the Super Admin included. Whether a role may be GIVEN is a
+  // separate question, answered by roleExists.
+  const needed = resolveRolePermissions(roleId, role);
+  return needed.every((p) => session.permissions.includes(p));
+}
+
+/** Only a real role may be handed out. */
+export async function roleExists(roleId: string): Promise<boolean> {
+  if (roleId === SUPER_ADMIN_ROLE_ID) return true;
+  return (await getRoles()).some((r) => r.id === roleId);
+}
+
+/** Tags carry approval authority (Principal, FINCOM). Nobody changes the
+ *  tags on their OWN login, or on the People entry linked to it, unless they
+ *  hold manage_roles: otherwise an SGB Admin could tag themselves FINCOM and
+ *  become a required approver on every large application. */
+export function maySelfTag(session: { permissions: string[] }): boolean {
+  return session.permissions.includes("manage_roles");
+}
+
+export function sameIds(a: string[] | undefined, b: string[] | undefined): boolean {
+  const x = [...(a || [])].sort().join("|");
+  const y = [...(b || [])].sort().join("|");
+  return x === y;
+}

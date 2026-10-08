@@ -172,10 +172,17 @@ export default function GuidePage() {
         // for body, h1 and table; dropped into the portal it would restyle the
         // sidebar around it. srcDoc keeps it in its own document, and its own
         // "Save as PDF" button prints the frame.
+        //
+        // 🔴 NEVER add allow-same-origin here. With it AND allow-scripts, the
+        // uploaded file runs as the portal itself: it can read the signed-in
+        // session from localStorage and call every API as whoever opened the
+        // page. Anyone with manage_policies can publish a guide, so that was
+        // a way to act as a Super Admin. Without it the guide's own scripts
+        // (contents, print button) still run, in an origin of their own.
         <iframe
           title={meta?.title || "Guide"}
           src={docUrl ?? undefined}
-          sandbox="allow-same-origin allow-scripts allow-modals allow-popups"
+          sandbox="allow-scripts allow-modals allow-popups"
           className="flex-1 w-full rounded-xl border border-gray-200 bg-white min-h-0"
         />
       )}

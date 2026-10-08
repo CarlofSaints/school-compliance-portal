@@ -29,13 +29,21 @@ export default function BrandingPage() {
   const [hadLogo, setHadLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(true);
+  // A failed load used to fall through to the built-in defaults, which a Save
+  // then wrote over the school's real name, short name and reply-to address.
+  const [loadError, setLoadError] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
       const res = await authFetch("/api/branding");
-      const stored = res.ok ? await res.json() : {};
+      if (!res.ok) {
+        setLoadError(true);
+        return;
+      }
+      setLoadError(false);
+      const stored = await res.json();
       setFullName(stored.fullName || branding.fullName);
       setShortName(stored.shortName || branding.shortName);
       setReplyTo(stored.replyTo || "");
@@ -49,6 +57,9 @@ export default function BrandingPage() {
         accent: stored.accent || branding.colors.accent,
       });
       setHadLogo(!!stored.logo);
+    } catch {
+      // A dropped connection THROWS rather than returning a bad response.
+      setLoadError(true);
     } finally {
       setBusy(false);
     }
@@ -60,6 +71,7 @@ export default function BrandingPage() {
   }, [session, load]);
 
   const save = async () => {
+    if (loadError) return;
     setSaving(true);
     try {
       const res = await authFetch("/api/branding", {
@@ -108,6 +120,11 @@ export default function BrandingPage() {
     <div className="p-6 max-w-3xl">
       {toast && (
         <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
+      {loadError && (
+        <div className="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          The saved branding settings could not be loaded, so saving is switched off to protect them. Refresh the page to try again.
+        </div>
       )}
 
       <div className="mb-6">
@@ -205,7 +222,7 @@ export default function BrandingPage() {
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
               <button
                 onClick={save}
-                disabled={saving}
+                disabled={saving || loadError}
                 className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? "Saving..." : "Save branding"}

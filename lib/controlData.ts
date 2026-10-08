@@ -96,17 +96,47 @@ function cacheKey(prefix: string, blobPath: string): string {
   return prefix + blobPath;
 }
 
-export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
+/**
+ * For READ-ONLY fan-outs over many files (the activity log, every set of
+ * minutes, every template): one unreadable entry is logged and skipped
+ * rather than failing the whole page. Never use this for a read that is
+ * about to be modified and written back; that is what readJson's
+ * fail-closed rule protects.
+ */
+export async function readJsonTolerant<T>(blobPath: string, fallback: T): Promise<T> {
   try {
-    const res = await readBlobBody(blobPath);
-    if (res) {
+    return await readJson(blobPath, fallback);
+  } catch (err) {
+    console.error(`[controlData] skipped unreadable ${blobPath}:`, err);
+    return fallback;
+  }
+}
+
+export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
+  // 🔴 FAIL CLOSED. Only "this file does not exist" (get() answering null on
+  // a 404) may fall through to the fallback. Any other failure - a network
+  // blip, a 5xx from storage, a half-written file that will not parse - is
+  // THROWN, so the request fails and nothing is saved.
+  //
+  // This used to catch everything and hand back the fallback. Every
+  // read-modify-write caller then took that empty list for the real one,
+  // added its one record and saved it: one transient error during a new spend
+  // application or a new action item replaced the whole register with a
+  // single row. A failed request can be retried; a wiped list cannot.
+  const res = await readBlobBody(blobPath);
+  if (res) {
+    try {
       return (await res.json()) as T;
+    } catch (err) {
+      throw new Error(
+        `Stored file ${blobPath} could not be read as JSON, refusing to treat it as empty: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
     }
-  } catch {
-    // blob not found
   }
 
-  // The blob could not be read at all. If this instance wrote this path moments
+  // The blob does not exist (yet). If this instance wrote this path moments
   // ago, that write is better evidence than the fallback — returning the
   // fallback here is what turns a slow list() into a wiped file.
   //

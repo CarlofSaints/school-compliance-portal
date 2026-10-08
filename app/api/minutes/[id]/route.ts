@@ -59,6 +59,20 @@ export async function PATCH(
   // Checked here as well as inside updateMinutes. The store is the rule and
   // this is the courtesy: it lets the caller be told WHY in words, rather than
   // catching an exception and guessing.
+  // 🔴 Out for signing, the words are frozen. Editing here used to be allowed,
+  // so the Chair could sign version 1, the text change, the Principal sign
+  // version 2, and the minutes close as "signed by both" on words the Chair
+  // never saw. Delete (below) stays open as the way out.
+  if (existing.status === "awaiting_signatures") {
+    return NextResponse.json(
+      {
+        error:
+          "These minutes are out for signing, so the text cannot change. Delete them and start again, or record the correction in the next set of minutes.",
+      },
+      { status: 409 }
+    );
+  }
+
   if (isLocked(existing.status)) {
     return NextResponse.json(
       {

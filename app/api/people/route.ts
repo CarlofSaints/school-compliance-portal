@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/rolesData";
-import { getPeople, createPerson, photoUrlFor } from "@/lib/peopleData";
+import { requirePermission, maySelfTag } from "@/lib/rolesData";
+import { getPeople, createPerson, photoUrlFor, isOwnPhotoPath } from "@/lib/peopleData";
 import { v4 as uuidv4 } from "uuid";
 
 const UUID =
@@ -39,6 +39,15 @@ export async function POST(req: NextRequest) {
     // lets the photo go up first and arrive WITH the record.
     const supplied = typeof id === "string" && UUID.test(id) ? id : null;
 
+    // Same rule as editing: a tagged entry linked to your own login hands you
+    // that tag's approval authority.
+    if (userId === session.id && Array.isArray(tagIds) && tagIds.length > 0 && !maySelfTag(session)) {
+      return NextResponse.json(
+        { error: "You cannot create a tagged People entry linked to your own login. Ask a Super Admin." },
+        { status: 403 }
+      );
+    }
+
     const person = {
       id: supplied || uuidv4(),
       position,
@@ -46,7 +55,8 @@ export async function POST(req: NextRequest) {
       name: name || "",
       email: email || "",
       phone: phone || "",
-      profilePic: profilePic || "",
+      // Only a photo already stored at this person's own path.
+      profilePic: isOwnPhotoPath(supplied || "", profilePic) ? profilePic : "",
       // Was dropped here: the form sends tagIds, so a person created with tags
       // silently arrived with none. Editing them afterwards worked, which is
       // what made it look like the tags had simply not been ticked.

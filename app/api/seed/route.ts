@@ -3,10 +3,20 @@ import { DEFAULT_PERMISSIONS, DEFAULT_ROLES } from "@/lib/roles";
 import { getPermissions, savePermissions, getRoles, saveRoles } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
 import { v4 as uuidv4 } from "uuid";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+
+// Constant-time, and refuses outright when SEED_SECRET is unset.
+function secretMatches(given: string | null): boolean {
+  const expected = process.env.SEED_SECRET || "";
+  if (!expected || !given) return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret");
-  if (secret !== process.env.SEED_SECRET) {
+  if (!secretMatches(secret)) {
     return NextResponse.json({ error: "Invalid secret" }, { status: 403 });
   }
 
@@ -49,16 +59,20 @@ export async function GET(req: NextRequest) {
     const users = await getUsers();
     const hasSuperAdmin = users.some((u) => u.role === "super-admin");
     if (!hasSuperAdmin) {
+      // A fresh random password, shown ONCE in this (secret-gated) response.
+      // It used to be "Admin@123", which is printed in a public repository:
+      // any store seeded and not yet signed into was open to anyone who read it.
+      const password = randomBytes(12).toString("base64url");
       await createUser({
         id: uuidv4(),
         name: "Super",
         surname: "Admin",
         email: "carl@outerjoin.co.za",
-        password: "Admin@123",
+        password,
         role: "super-admin",
         forcePasswordChange: true,
       });
-      results.push("Created super admin (carl@outerjoin.co.za / Admin@123)");
+      results.push(`Created super admin carl@outerjoin.co.za with temporary password ${password} (shown once; you must change it on first sign-in)`);
     } else {
       results.push("Super admin already exists");
     }
@@ -66,9 +80,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, results });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[seed] failed:", err);
     return NextResponse.json(
-      { error: message, stack, envCheck: { hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN } },
+      { error: message, envCheck: { hasBlobToken: !!process.env.BLOB_READ_WRITE_TOKEN } },
       { status: 500 }
     );
   }

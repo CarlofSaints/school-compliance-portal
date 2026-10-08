@@ -51,12 +51,24 @@ export default function ApprovalSettingsPage() {
     type: "success" | "error";
   } | null>(null);
 
+  // A failed load left the bands empty with no message, the same as "none
+  // configured", and adding one band and saving wiped every real one.
+  const [loadError, setLoadError] = useState(false);
+
   const load = useCallback(async () => {
-    const [settingsRes, tagsRes, peopleRes] = await Promise.all([
-      authFetch("/api/settings/approval"),
-      authFetch("/api/tags"),
-      authFetch("/api/people/directory"),
-    ]);
+    let settingsRes: Response, tagsRes: Response, peopleRes: Response;
+    try {
+      [settingsRes, tagsRes, peopleRes] = await Promise.all([
+        authFetch("/api/settings/approval"),
+        authFetch("/api/tags"),
+        authFetch("/api/people/directory"),
+      ]);
+    } catch {
+      // A dropped connection THROWS rather than returning a bad response.
+      setLoadError(true);
+      return;
+    }
+    setLoadError(!settingsRes.ok);
     if (settingsRes.ok) {
       const s = await settingsRes.json();
       setTiers(s.tiers || []);
@@ -178,6 +190,7 @@ export default function ApprovalSettingsPage() {
   };
 
   const save = async () => {
+    if (loadError) return;
     setSaving(true);
     const res = await authFetch("/api/settings/approval", {
       method: "PUT",
@@ -230,12 +243,18 @@ export default function ApprovalSettingsPage() {
         </div>
         <button
           onClick={save}
-          disabled={saving || !dirty}
+          disabled={saving || !dirty || loadError}
           className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           {saving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
         </button>
       </div>
+
+      {loadError && (
+        <div className="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          The saved approval bands could not be loaded, so saving is switched off to protect them. Refresh the page to try again.
+        </div>
+      )}
 
       {problems.length > 0 && (
         <div className="bg-risk-medium/10 border border-risk-medium/30 rounded-xl p-4 mb-6">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getPersonById, updatePerson } from "@/lib/peopleData";
+import { getPersonById, updatePerson, isOwnPhotoPath } from "@/lib/peopleData";
 import { writeFile, readFile, deleteFile, listFiles } from "@/lib/controlData";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +58,7 @@ function validId(id: string): boolean {
 // on the record stays as the fast path and the version marker.
 async function findPhotoPath(id: string): Promise<string | null> {
   const person = await getPersonById(id);
-  if (person?.profilePic) return person.profilePic;
+  if (person && isOwnPhotoPath(id, person.profilePic)) return person.profilePic;
 
   const files = await listFiles(`people/${id}`);
   const newest = files
@@ -161,7 +161,7 @@ export async function POST(
     // straight onto the record.
     const updated = await updatePerson(id, { profilePic: blobPath });
 
-    if (previous && previous !== blobPath) {
+    if (previous && previous !== blobPath && isOwnPhotoPath(id, previous)) {
       await deleteFile(previous);
     }
 
