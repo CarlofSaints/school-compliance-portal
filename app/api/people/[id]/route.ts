@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
-import { getPersonById, updatePerson, deletePerson } from "@/lib/peopleData";
+import { getPersonById, updatePerson, deletePerson, personFieldsFrom, isOwnPhotoPath } from "@/lib/peopleData";
 import { deleteFile, listFiles } from "@/lib/controlData";
 
 export async function GET(
@@ -28,7 +28,7 @@ export async function PUT(
   const { id } = await params;
   try {
     const body = await req.json();
-    const updated = await updatePerson(id, body);
+    const updated = await updatePerson(id, personFieldsFrom(body ?? {}));
     if (!updated) {
       return NextResponse.json({ error: "Person not found" }, { status: 404 });
     }
@@ -69,7 +69,7 @@ export async function DELETE(
       .filter((f) => f.startsWith("photo-"))
       .map((f) => deleteFile(`people/${id}/${f}`))
   );
-  if (person?.profilePic) await deleteFile(person.profilePic);
+  if (person && isOwnPhotoPath(person.id, person.profilePic)) await deleteFile(person.profilePic);
 
   return NextResponse.json({ success: true });
 }
