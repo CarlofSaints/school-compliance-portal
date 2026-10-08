@@ -48,7 +48,22 @@ export async function POST(
     // Kept deliberately awkward: an override skips the people who were meant to
     // decide, so it always costs a written reason and is stamped as an override
     // in the history rather than passing for a normal approval.
+    const ownApplication =
+      app.submittedBy === session.id || app.applicantUserId === session.id;
+
     if (forceApprove) {
+      if (ownApplication) {
+        return NextResponse.json(
+          { error: "You cannot manually approve your own application. Another admin has to." },
+          { status: 403 }
+        );
+      }
+      if (!["pending", "pending_decision", "requires_changes"].includes(app.status)) {
+        return NextResponse.json(
+          { error: `This application is already ${app.status.replace("_", " ")}, so it cannot be approved again.` },
+          { status: 409 }
+        );
+      }
       if (!session.permissions.includes("manage_spend_settings")) {
         return NextResponse.json(
           { error: "Only admins can approve manually" },
@@ -107,6 +122,31 @@ export async function POST(
     // --- Normal decision ----------------------------------------------------
     if (!["approved", "rejected", "requires_changes", "responded"].includes(decision)) {
       return NextResponse.json({ error: "Invalid decision" }, { status: 400 });
+    }
+
+    // A decision only means something while the application is waiting for
+    // one. The page hid the buttons, but the server accepted a decision at any
+    // stage: a completed project could be declined (and drop out of every
+    // total), or re-approved and the "fully approved" email sent again.
+    if (!["pending", "pending_decision"].includes(app.status)) {
+      return NextResponse.json(
+        {
+          error: `This application is ${app.status.replace("_", " ")}, so no decision can be recorded on it now.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Nobody approves their own spending, even when they hold the tag the band
+    // asks for. If they are the ONLY approver, an admin overrides with a reason.
+    if (decision === "approved" && ownApplication) {
+      return NextResponse.json(
+        {
+          error:
+            "You cannot approve your own application. If you are its only approver, an admin can approve it manually with a reason.",
+        },
+        { status: 403 }
+      );
     }
 
     // Only the people this application actually asked may decide it. Being an

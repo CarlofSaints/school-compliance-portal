@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFrom } from "@/lib/activityActor";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import type { SpendApplication } from "@/lib/spendData";
 
@@ -54,6 +56,26 @@ export async function PATCH(
   }
 
   const next = status as SpendApplication["status"];
+
+  // Approving from the grid skips the approvers the band asked for, so only a
+  // spend admin may do it (approve_spend holders decide on the application
+  // itself, where their vote is recorded). Moving an approved project on to
+  // completed is bookkeeping and stays open to both.
+  const alreadyApproved = app.status === "approved" || app.status === "completed";
+  if (
+    (next === "approved" || next === "completed") &&
+    !alreadyApproved &&
+    !session.permissions.includes("manage_spend_settings")
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Only a spend admin can set a project to approved or completed from the grid. Approvers decide on the application itself.",
+      },
+      { status: 403 }
+    );
+  }
+
   const updates: Partial<SpendApplication> = { status: next };
 
   // Changing the status from the grid has no quote selection behind it, so
@@ -70,6 +92,18 @@ export async function PATCH(
   }
 
   const updated = await updateSpendApplication(id, updates);
+
+  // A status set by hand, outside the approval flow, always leaves a trace.
+  if (next !== app.status) {
+    await recordActivity({
+      ...actorFrom(req, session),
+      action: "spend.status.set",
+      entity: "spend",
+      entityId: app.id,
+      summary: `Set "${app.projectName}" from ${app.status} to ${next} in the grid`,
+      detail: { from: app.status, to: next, amount: app.estimatedAmount },
+    });
+  }
   // approvedAmount is returned so the grid can update its totals without a
   // reload - the card is computed from the rows it already holds.
   return NextResponse.json({

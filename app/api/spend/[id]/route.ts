@@ -6,7 +6,10 @@ import {
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
-import type { QuoteDetail, FundingAllocation } from "@/lib/spendData";
+import type { QuoteDetail, FundingAllocation, SpendApplication } from "@/lib/spendData";
+import { resolveApprovers } from "@/lib/approvalResolver";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFrom } from "@/lib/activityActor";
 
 export async function GET(
   req: NextRequest,
@@ -80,6 +83,12 @@ export async function PUT(
     const estimatedAmount = estimatedAmountStr
       ? parseFloat(estimatedAmountStr)
       : app.estimatedAmount;
+    if (!Number.isFinite(estimatedAmount) || estimatedAmount < 0) {
+      return NextResponse.json(
+        { error: "The estimated amount must be a number of rand." },
+        { status: 400 }
+      );
+    }
     const supplierConnection =
       (formData.get("supplierConnection") as string) || app.supplierConnection;
     const budgetedStr = formData.get("budgeted") as string;
@@ -189,10 +198,32 @@ export async function PUT(
     }
 
     // If status was requires_changes, reset to pending on edit
-    const newStatus =
+    let newStatus: SpendApplication["status"] =
       app.status === "requires_changes" || app.status === "rejected"
         ? "pending"
         : app.status;
+
+    // 🔴 A new amount is a new application as far as approval goes. The band,
+    // and so WHO must approve, was frozen at submission; keeping it after the
+    // amount changed let R9 000 approved by the Principal become R250 000 with
+    // no FINCOM sign-off. So the approvers are worked out again and every
+    // decision so far is cleared.
+    const amountChanged = Math.abs(estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
+    let reband: Partial<SpendApplication> = {};
+    if (amountChanged) {
+      const approval = await resolveApprovers(estimatedAmount);
+      newStatus = approval.logOnly ? "approved" : "pending";
+      reband = {
+        approvalTierId: approval.tierId,
+        approvalTierLabel: approval.tierLabel,
+        approvalLogOnly: approval.logOnly,
+        requiredApprovers: approval.approvers,
+        approvalWarning: approval.warning,
+        approvals: [],
+        preferredQuotes: [],
+        approvedAmount: approval.logOnly ? estimatedAmount : undefined,
+      };
+    }
 
     await updateSpendApplication(id, {
       projectName,
@@ -214,7 +245,19 @@ export async function PUT(
       ...(app.status === "requires_changes" || app.status === "rejected"
         ? { approvals: [], preferredQuotes: [] }
         : {}),
+      ...reband,
     });
+
+    if (amountChanged) {
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "spend.amount.changed",
+        entity: "spend",
+        entityId: app.id,
+        summary: `Changed "${app.projectName}" from R${Number(app.estimatedAmount || 0).toLocaleString()} to R${estimatedAmount.toLocaleString()}; approvals restarted`,
+        detail: { from: app.estimatedAmount, to: estimatedAmount, previousApprovals: app.approvals?.length ?? 0 },
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch {
