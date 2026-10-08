@@ -147,3 +147,24 @@ export async function requirePermission(
   }
   return session;
 }
+
+// --- Who may hand out or touch which role ---------------------------------
+//
+// manage_users lets an SGB Admin run the user list, but it must not be a way
+// to gain what they were not given. Without this, PUT /api/users/<own id>
+// with { role: "super-admin" } made an SGB Admin a Super Admin, and they could
+// reset the Super Admin's password.
+//
+// The rule: you may only give a role, or edit, delete or reset a user holding
+// a role, whose permissions you hold ALL of yourself. Super Admin holds every
+// permission, so it can do anything; an SGB Admin can manage SGB Members.
+export async function roleWithinReach(
+  session: { permissions: string[] },
+  roleId: string
+): Promise<boolean> {
+  const roles = await getRoles();
+  const role = roles.find((x) => x.id === roleId);
+  if (!role && roleId !== SUPER_ADMIN_ROLE_ID) return false;
+  const needed = resolveRolePermissions(roleId, role);
+  return needed.every((p) => session.permissions.includes(p));
+}
