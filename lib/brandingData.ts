@@ -92,7 +92,17 @@ export async function readLogo(): Promise<Buffer | null> {
  * it to resolve without a login, which is why /api/branding/logo is public.
  */
 export async function resolveBranding(): Promise<SchoolBranding> {
-  const stored = await getStoredBranding();
+  // Read-only, and on every page and email: a storage blip here falls back to
+  // the built-in look rather than taking the whole site down (readJson now
+  // throws on a real read error). Never SAVE from this - the Branding admin
+  // page reads getStoredBranding directly, so a failed load there is an error,
+  // not a set of defaults that could be saved over the school's real ones.
+  let stored: StoredBranding = {};
+  try {
+    stored = await getStoredBranding();
+  } catch (err) {
+    console.error("[branding] could not read stored branding, using built-in:", err);
+  }
   return applyStoredBranding(codeBranding, stored);
 }
 
