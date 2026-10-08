@@ -85,9 +85,13 @@ export default function ActionItemForm({
   );
   // A fortnight out is the common case for an SGB action, and a date already in
   // the box is one less thing between somebody and a saved action.
-  const [dueDate, setDueDate] = useState(
-    existing?.dueDate ||
-      new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+  // The fortnight default is for a NEW action only. An existing action with
+  // no ETA was left undated on purpose (so it is never chased); "||" used to
+  // hand it a date 14 days out the moment anybody edited its title.
+  const [dueDate, setDueDate] = useState(() =>
+    existing
+      ? existing.dueDate || ""
+      : new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
   );
   const [meetingDate, setMeetingDate] = useState(
     existing?.meetingDate || seed?.meetingDate || ""
