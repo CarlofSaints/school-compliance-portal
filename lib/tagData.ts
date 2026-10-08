@@ -67,8 +67,16 @@ export interface TagMember {
 // Everyone carrying a tag, from both sides. A person linked to a user resolves
 // to that user, so somebody tagged on both sides is only ever counted once and
 // the approval they give as a logged-in user satisfies the requirement.
-export async function getTagMembers(tagId: string): Promise<TagMember[]> {
-  const [users, people] = await Promise.all([getUsers(), getPeople()]);
+export async function getTagMembers(
+  tagId: string,
+  // Pass both when resolving several tags at once, so each tag is not
+  // another full read of the users and the register.
+  preloaded?: { users: Awaited<ReturnType<typeof getUsers>>; people: Awaited<ReturnType<typeof getPeople>> }
+): Promise<TagMember[]> {
+  const { users, people } = preloaded ?? {
+    users: await getUsers(),
+    people: await getPeople(),
+  };
   const byKey = new Map<string, TagMember>();
 
   for (const u of users) {

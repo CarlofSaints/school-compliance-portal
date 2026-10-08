@@ -16,6 +16,11 @@ import {
   getWeeklyUpdateSettings,
   sendWeeklyUpdate,
 } from "@/lib/weeklyUpdateData";
+import { actionSummaryDue } from "@/lib/actionSummary";
+import {
+  getActionSummarySettings,
+  sendActionSummary,
+} from "@/lib/actionSummaryData";
 
 export const maxDuration = 300;
 
@@ -177,9 +182,30 @@ export async function GET(req: NextRequest) {
     detail.push(`Weekly SGB update: ${result.summary}`);
   }
 
+  // --- Action items summary --------------------------------------------------
+  //
+  // The full open register as an Excel workbook, to the list the admin chose,
+  // on the schedule they chose. Due is derived the same way as the weekly
+  // update. Wrapped on its own: a workbook that fails to build must not cost
+  // the run log, which is written below and is how a silent cron is caught.
+  let summaryDue = 0;
+  try {
+    const summarySettings = await getActionSummarySettings();
+    if (actionSummaryDue(summarySettings, now)) {
+      summaryDue = 1;
+      const result = await sendActionSummary({ now });
+      sent += result.sent;
+      failed += result.failed;
+      detail.push(`Action items summary: ${result.summary}`);
+    }
+  } catch (err) {
+    failed++;
+    detail.push(`Action items summary failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   const run = {
     at: new Date().toISOString(),
-    due: due.length + dueActions.length + weeklyDue,
+    due: due.length + dueActions.length + weeklyDue + summaryDue,
     sent,
     skipped,
     failed,
