@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ActionItem } from "./actionItems";
+import { lastOccurrence } from "./weeklyUpdate";
 import {
   isClosed,
   todayIso,
@@ -119,12 +120,30 @@ export function parseActionSummary(input: unknown): ActionSummarySettings {
 
 // --- Schedule ------------------------------------------------------------------
 
-const dow = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
-
-/** The most recent `weekday` on or before `today`. */
-function lastWeekday(today: string, weekday: number): string {
-  return addDays(today, -((dow(today) - weekday + 7) % 7));
+/**
+ * "Now" as a clock in South Africa reads it (UTC+2, no daylight saving).
+ *
+ * The rest of the portal dates things in UTC, which is harmless at the 07:00
+ * cron (05:00 UTC, same date). But "Send to the list now" pressed at 00:30 on
+ * a Monday is still Sunday in UTC: it would be stamped as Sunday's send, and
+ * the 07:00 run would email everybody a second time.
+ */
+export function schoolNow(now: Date = new Date()): Date {
+  return new Date(now.getTime() + 2 * 3600 * 1000);
 }
+
+export function schoolToday(now: Date = new Date()): string {
+  return todayIso(schoolNow(now));
+}
+
+/** True when a save changes WHEN it sends. Such a save restamps enabledOn,
+ *  or moving a Wednesday schedule to Monday on a Tuesday would count Monday
+ *  as missed and "catch it up" the morning after the last send. */
+export function scheduleChanged(a: ActionSummarySettings, b: ActionSummarySettings): boolean {
+  return a.frequency !== b.frequency || a.weekday !== b.weekday || a.dayOfMonth !== b.dayOfMonth;
+}
+
+const dow = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay();
 
 /** The first `weekday` on or after `from`. */
 function firstWeekdayFrom(from: string, weekday: number): string {
@@ -146,10 +165,10 @@ export function lastScheduledOn(s: ActionSummarySettings, today: string): string
       return d >= 1 && d <= 5 ? today : null;
     }
     case "weekly":
-      return lastWeekday(today, s.weekday);
+      return lastOccurrence(today, s.weekday);
     case "fortnightly": {
       const anchor = firstWeekdayFrom(s.enabledOn || today, s.weekday);
-      const last = lastWeekday(today, s.weekday);
+      const last = lastOccurrence(today, s.weekday);
       if (last < anchor) return null;
       return daysBetween(anchor, last) % 14 === 0 ? last : addDays(last, -7);
     }
@@ -177,7 +196,7 @@ export function lastScheduledOn(s: ActionSummarySettings, today: string): string
  */
 export function actionSummaryDue(s: ActionSummarySettings, now: Date = new Date()): boolean {
   if (!s.enabled) return false;
-  const today = todayIso(now);
+  const today = schoolToday(now);
   const sendDay = lastScheduledOn(s, today);
   if (!sendDay) return false;
   const lateBy = daysBetween(sendDay, today);
@@ -190,8 +209,8 @@ export function actionSummaryDue(s: ActionSummarySettings, now: Date = new Date(
 /** The next date the schedule will send, for the admin screen. */
 export function nextSummaryOn(s: ActionSummarySettings, now: Date = new Date()): string | null {
   if (!s.enabled) return null;
-  if (actionSummaryDue(s, now)) return todayIso(now);
-  const today = todayIso(now);
+  if (actionSummaryDue(s, now)) return schoolToday(now);
+  const today = schoolToday(now);
   for (let i = 1; i <= 62; i++) {
     const d = addDays(today, i);
     if (lastScheduledOn(s, d) === d && (!s.enabledOn || d > s.enabledOn)) return d;
@@ -244,6 +263,9 @@ export interface SummaryRow {
   /** 0-100 */
   progress: number;
   owners: string;
+  /** The same people as a list. Never split `owners` on commas: a name can
+   *  carry one ("Smith, J"). */
+  ownerList: string[];
   /** YYYY-MM-DD or "" */
   dueDate: string;
   /** Negative when late, null when there is no ETA. */
@@ -314,6 +336,7 @@ export function buildSummaryRows(
         statusKey: i.status,
         progress: Math.max(0, Math.min(100, Math.round(i.progress || 0))),
         owners: names.filter(Boolean).join(", "),
+        ownerList: names.filter(Boolean),
         dueDate: i.dueDate || "",
         daysLeft,
         health: healthOf(i.dueDate, daysLeft, dueSoonDays),
@@ -368,7 +391,7 @@ export interface OwnerLine {
 export function byOwner(rows: SummaryRow[]): OwnerLine[] {
   const map = new Map<string, OwnerLine>();
   for (const r of rows) {
-    const owners = r.owners ? r.owners.split(", ") : ["Nobody assigned"];
+    const owners = r.ownerList.length ? r.ownerList : ["Nobody assigned"];
     for (const owner of owners) {
       const line = map.get(owner) ?? { owner, open: 0, overdue: 0, dueSoon: 0 };
       line.open++;

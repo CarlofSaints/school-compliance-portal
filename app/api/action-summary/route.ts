@@ -6,7 +6,6 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { isEmailConfigured } from "@/lib/email";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
-import { todayIso } from "@/lib/actionItems";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { WEEKDAY_LABELS } from "@/lib/weeklyUpdate";
@@ -15,6 +14,9 @@ import {
   describeSchedule,
   nextSummaryOn,
   parseActionSummary,
+  scheduleChanged,
+  schoolNow,
+  schoolToday,
 } from "@/lib/actionSummary";
 import {
   buildSummaryFile,
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
     getUsers(),
     getTags(),
     getTagCounts(),
-    gatherSummaryRows(settings.dueSoonDays),
+    gatherSummaryRows(settings.dueSoonDays, schoolNow()),
     resolveSummaryRecipients(settings),
   ]);
 
@@ -102,16 +104,21 @@ export async function PUT(req: NextRequest) {
     tagIds: incoming.tagIds,
     extraEmails: incoming.extraEmails,
     dueSoonDays: incoming.dueSoonDays,
-    // Stamped each time it is switched ON: the first send is the next send
-    // day after today, and fortnightly counts its weeks from here.
-    enabledOn: switchingOn ? todayIso() : current.enabledOn,
+    // Stamped when it is switched ON, and again when the send day changes
+    // while it is on: the first send is the next send day after today
+    // (never a "catch-up" for a day it was not yet scheduled on), and
+    // fortnightly counts its weeks from here.
+    enabledOn:
+      switchingOn || (incoming.enabled && scheduleChanged(current, incoming))
+        ? schoolToday()
+        : current.enabledOn,
   };
 
   // Refused rather than saved: switched on with nobody on the list would
   // look scheduled and send nothing, every time.
+  const resolved = await resolveSummaryRecipients(next);
   if (next.enabled) {
-    const { recipients } = await resolveSummaryRecipients(next);
-    if (recipients.length === 0) {
+    if (resolved.recipients.length === 0) {
       return NextResponse.json(
         { error: "Pick at least one person, tag or address with a usable email before switching it on." },
         { status: 400 }
@@ -142,10 +149,12 @@ export async function PUT(req: NextRequest) {
     },
   });
 
-  const resolved = await resolveSummaryRecipients(next);
+  // Counts again, because "due soon" may have just changed what they are.
+  const rows = await gatherSummaryRows(next.dueSoonDays, schoolNow());
   return NextResponse.json(
     {
       settings: next,
+      counts: countRows(rows),
       nextSendOn: nextSummaryOn(next),
       scheduleText: describeSchedule(next, WEEKDAY_LABELS),
       recipients: resolved.recipients,

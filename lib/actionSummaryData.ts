@@ -7,7 +7,6 @@ import { displayNameFor } from "./actionItemRecipients";
 import { resolveBranding } from "./brandingData";
 import { isPlausibleEmail } from "./emailIdentity";
 import { sendActionSummaryEmail } from "./email";
-import { todayIso } from "./actionItems";
 import { WEEKDAY_LABELS } from "./weeklyUpdate";
 import {
   DEFAULT_ACTION_SUMMARY,
@@ -15,6 +14,8 @@ import {
   countRows,
   describeSchedule,
   parseActionSummary,
+  schoolNow,
+  schoolToday,
   type ActionSummarySettings,
   type SummaryRow,
 } from "./actionSummary";
@@ -28,6 +29,14 @@ export async function getActionSummarySettings(): Promise<ActionSummarySettings>
 
 export async function saveActionSummarySettings(s: ActionSummarySettings): Promise<void> {
   return writeJson(PATH, s);
+}
+
+/** Records a send against the settings AS THEY ARE NOW, re-read at the moment
+ *  of writing. Spreading a copy read at the start of the send would put back
+ *  whatever an admin saved while the workbook was being built. */
+async function recordSend(lastSentOn: string, lastResult: string): Promise<void> {
+  const current = await getActionSummarySettings();
+  await saveActionSummarySettings({ ...current, lastSentOn, lastResult });
 }
 
 export interface SummaryRecipient {
@@ -47,7 +56,7 @@ export async function resolveSummaryRecipients(s: ActionSummarySettings): Promis
   /** Picked but cannot be written to, with the reason. */
   problems: string[];
 }> {
-  const [users, tags] = await Promise.all([getUsers(), getTags()]);
+  const [users, people, tags] = await Promise.all([getUsers(), getPeople(), getTags()]);
   const out: SummaryRecipient[] = [];
   const problems: string[] = [];
   const seen = new Set<string>();
@@ -77,7 +86,7 @@ export async function resolveSummaryRecipients(s: ActionSummarySettings): Promis
       problems.push("A tag picked for this list has been deleted");
       continue;
     }
-    const members = await getTagMembers(tagId);
+    const members = await getTagMembers(tagId, { users, people });
     if (members.length === 0) problems.push(`Nobody carries the tag ${tag.name} yet`);
     for (const m of members) add(m.email, m.name, `Tag: ${tag.name}`);
   }
@@ -103,8 +112,8 @@ export async function gatherSummaryRows(dueSoonDays: number, now: Date = new Dat
 /** The workbook on its own, for the Download button. */
 export async function buildSummaryFile(now: Date = new Date()): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
-  const asOf = todayIso(now);
-  const rows = await gatherSummaryRows(settings.dueSoonDays, now);
+  const asOf = schoolToday(now);
+  const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
   const content = await buildSummaryWorkbook({
     branding,
     rows,
@@ -138,15 +147,15 @@ export async function sendActionSummary(opts: {
 }): Promise<SummarySendResult> {
   const now = opts.now ?? new Date();
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
-  const asOf = todayIso(now);
-  const rows = await gatherSummaryRows(settings.dueSoonDays, now);
+  const asOf = schoolToday(now);
+  const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
   const scheduleText = settings.enabled ? describeSchedule(settings, WEEKDAY_LABELS) : "";
   const content = await buildSummaryWorkbook({ branding, rows, dueSoonDays: settings.dueSoonDays, asOf, scheduleText });
   const attachment = { filename: summaryFilename(branding.shortName, asOf), content };
   const email = { rows, counts: countRows(rows), dueSoonDays: settings.dueSoonDays, asOf, scheduleText };
 
   if (opts.onlyTo) {
-    const ok = await sendActionSummaryEmail(opts.onlyTo.email, opts.onlyTo.name, { ...email, preview: true }, attachment);
+    const ok = await sendActionSummaryEmail(branding, opts.onlyTo.email, opts.onlyTo.name, { ...email, preview: true }, attachment);
     return {
       sent: ok ? 1 : 0,
       failed: ok ? 0 : 1,
@@ -160,18 +169,18 @@ export async function sendActionSummary(opts: {
     const summary = `nobody to send to${problems.length ? ` (${problems.join("; ")})` : ""}`;
     // Recorded as sent, so a schedule with an empty list does not retry the
     // same failure every morning of its catch-up window.
-    await saveActionSummarySettings({ ...settings, lastSentOn: asOf, lastResult: `${asOf}: ${summary}` });
+    await recordSend(asOf, `${asOf}: ${summary}`);
     return { sent: 0, failed: 0, total: 0, summary };
   }
 
-  await saveActionSummarySettings({ ...settings, lastSentOn: asOf, lastResult: `sending to ${recipients.length}...` });
+  await recordSend(asOf, `sending to ${recipients.length}...`);
 
   let sent = 0;
   let failed = 0;
   for (const [i, r] of recipients.entries()) {
     // One at a time with a gap, like the weekly update.
     if (i > 0) await sleep(600);
-    const ok = await sendActionSummaryEmail(r.email, r.name, email, attachment);
+    const ok = await sendActionSummaryEmail(branding, r.email, r.name, email, attachment);
     if (ok) sent++;
     else failed++;
   }
@@ -180,10 +189,6 @@ export async function sendActionSummary(opts: {
     `sent to ${sent} of ${recipients.length}` +
     (failed ? `, ${failed} failed` : "") +
     (problems.length ? `; ${problems.join("; ")}` : "");
-  await saveActionSummarySettings({
-    ...(await getActionSummarySettings()),
-    lastSentOn: asOf,
-    lastResult: `${asOf}: ${summary}`,
-  });
+  await recordSend(asOf, `${asOf}: ${summary}`);
   return { sent, failed, total: recipients.length, summary };
 }

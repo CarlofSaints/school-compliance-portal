@@ -288,7 +288,7 @@ export async function buildSummaryWorkbook(input: SummaryWorkbookInput): Promise
     // Status and priority never change with the calendar, so they are plain
     // fills. They sit outside the conditional-format ranges below, so the row
     // tint never paints over them.
-    const st = STATUS_STYLE[row.statusKey];
+    const st = STATUS_STYLE[row.statusKey] ?? STATUS_STYLE.not_started;
     r.getCell("status").fill = solid(st.fill);
     r.getCell("status").font = { bold: true, size: 10, color: { argb: argb(st.text) } };
     r.getCell("status").alignment = { horizontal: "center", vertical: "top" };

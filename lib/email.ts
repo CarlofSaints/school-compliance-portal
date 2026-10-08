@@ -1097,12 +1097,12 @@ export function buildActionSummaryEmail(
 }
 
 export async function sendActionSummaryEmail(
+  b: SchoolBranding,
   to: string,
   recipientName: string,
   e: ActionSummaryEmail,
   attachment: EmailAttachment
 ): Promise<boolean> {
-  const b = await resolveBranding();
   const { subject, html } = buildActionSummaryEmail(b, recipientName, e);
   const bare = buildActionSummaryEmail(b, recipientName, { ...e, noAttachment: true }).html;
   return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare);

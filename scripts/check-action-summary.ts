@@ -16,6 +16,8 @@ import {
   countRows,
   byOwner,
   describeSchedule,
+  scheduleChanged,
+  schoolToday,
   DEFAULT_ACTION_SUMMARY,
   type ActionSummarySettings,
 } from "../lib/actionSummary";
@@ -142,6 +144,17 @@ check("by owner: two-owner action counts for both", byOwner(rows).find((o) => o.
 check("by owner: most overdue first", byOwner(rows)[0].owner, "Sipho Dlamini");
 check("live register name wins", buildSummaryRows(items, 7, NOW, new Map([["A-003", ["Priya Pillay"]]])).find((r) => r.ref === "A-003")?.owners, "Priya Pillay");
 
+// --- review fixes ---
+check("00:30 SAST Monday is Monday, not Sunday", schoolToday(new Date("2026-10-04T22:30:00Z")), "2026-10-05");
+check("07:00 cron date unchanged", schoolToday(at("2026-10-05")), "2026-10-05");
+check("changing the weekday is a schedule change", scheduleChanged(on(), on({ weekday: 3 })), true);
+check("changing recipients is not", scheduleChanged(on(), on({ userIds: ["x"] })), false);
+check("moved Wed->Mon on Tue (restamped): no Wednesday catch-up",
+  actionSummaryDue(on({ weekday: 1, enabledOn: "2026-10-06", lastSentOn: "2026-09-30" }), at("2026-10-07")), false);
+const comma = buildSummaryRows([act("A-009", { assigneeNames: ["Smith, J"], dueDate: "2026-10-01" })], 7, NOW);
+check("a comma in a name is still one person", byOwner(comma).map((o) => o.owner), ["Smith, J"]);
+const oddStatus = buildSummaryRows([act("A-010", { status: "archived" as ActionItem["status"] })], 7, NOW);
+
 // --- render ---
 (async () => {
   const outDir = process.argv[2];
@@ -151,6 +164,8 @@ check("live register name wins", buildSummaryRows(items, 7, NOW, new Map([["A-00
   const xlsx = await buildSummaryWorkbook({ branding, rows, dueSoonDays: 7, asOf: "2026-10-08", scheduleText: describeSchedule(on(), WEEKDAY_LABELS) });
   check("workbook is a zip", xlsx.subarray(0, 2).toString(), "PK");
   check("filename", summaryFilename("HVPS", "2026-10-08"), "HVPS action items 2026-10-08.xlsx");
+  const odd = await buildSummaryWorkbook({ branding, rows: oddStatus, dueSoonDays: 7, asOf: "2026-10-08" });
+  check("an unknown status still builds", odd.subarray(0, 2).toString(), "PK");
   const empty = await buildSummaryWorkbook({ branding, rows: [], dueSoonDays: 7, asOf: "2026-10-08" });
   check("empty register still builds", empty.subarray(0, 2).toString(), "PK");
   const mail = buildActionSummaryEmail(branding, "Carl", { rows, counts, dueSoonDays: 7, asOf: "2026-10-08", scheduleText: "Every Monday at 07:00", preview: true });
