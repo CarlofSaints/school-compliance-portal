@@ -48,7 +48,13 @@ export async function getTemplate(id: string): Promise<MinutesTemplate | null> {
  *  invisible. Same reasoning as the minutes themselves. */
 export async function listTemplates(): Promise<MinutesTemplate[]> {
   const ids = await listFiles(DIR);
-  const all = await Promise.all(ids.map((id) => getTemplate(id)));
+  // Tolerant: one unreadable template must not hide all the others.
+  const all = await Promise.all(
+    ids.map((id) => getTemplate(id).catch((err) => {
+      console.error(`[minutesTemplates] skipped unreadable ${id}:`, err);
+      return null;
+    }))
+  );
   return all
     .filter((t): t is MinutesTemplate => t !== null)
     .sort((a, b) => a.name.localeCompare(b.name));

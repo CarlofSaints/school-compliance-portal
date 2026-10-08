@@ -56,11 +56,18 @@ export default function ApprovalSettingsPage() {
   const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
-    const [settingsRes, tagsRes, peopleRes] = await Promise.all([
-      authFetch("/api/settings/approval"),
-      authFetch("/api/tags"),
-      authFetch("/api/people/directory"),
-    ]);
+    let settingsRes: Response, tagsRes: Response, peopleRes: Response;
+    try {
+      [settingsRes, tagsRes, peopleRes] = await Promise.all([
+        authFetch("/api/settings/approval"),
+        authFetch("/api/tags"),
+        authFetch("/api/people/directory"),
+      ]);
+    } catch {
+      // A dropped connection THROWS rather than returning a bad response.
+      setLoadError(true);
+      return;
+    }
     setLoadError(!settingsRes.ok);
     if (settingsRes.ok) {
       const s = await settingsRes.json();

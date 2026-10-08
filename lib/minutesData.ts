@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { readJson, writeJson, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
 import type {
   MeetingBody,
   MeetingPeriod,
@@ -110,18 +110,33 @@ export async function getMinutes(id: string): Promise<MinutesRecord | null> {
  *  than an index, so a record cannot exist and be invisible. */
 export async function listMinutes(): Promise<MinutesRecord[]> {
   const ids = await listFiles(DIR);
-  const all = await Promise.all(ids.map((id) => getMinutes(id)));
+  // Tolerant: one unreadable record must not hide every other set of minutes.
+  const all = await Promise.all(
+    ids.map((id) => readJsonTolerant<MinutesRecord | null>(recordPath(id), null))
+  );
   return all
     .filter((m): m is MinutesRecord => m !== null)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export class MinutesLockedError extends Error {
-  constructor(readonly id: string) {
-    super("These minutes have been signed and can no longer be changed.");
+  constructor(
+    readonly id: string,
+    message = "These minutes have been signed and can no longer be changed."
+  ) {
+    super(message);
     this.name = "MinutesLockedError";
   }
 }
+
+// What people put their names to. While minutes are out for signing none of
+// these may change, whoever is writing: the store is the rule, the PATCH
+// route's check is the courtesy. Signatures, status and distribution still
+// move, because that is how signing itself proceeds.
+const SIGNED_CONTENT_FIELDS = ["title", "body", "period", "sections", "original"] as const;
+
+const SIGNING_FREEZE_MESSAGE =
+  "These minutes are out for signing, so the text cannot change. Delete them and start again, or record the correction in the next set of minutes.";
 
 export async function createMinutes(
   input: Omit<
@@ -158,6 +173,12 @@ export async function updateMinutes(
   const existing = await getMinutes(id);
   if (!existing) return null;
   if (isLocked(existing.status)) throw new MinutesLockedError(id);
+  if (
+    existing.status === "awaiting_signatures" &&
+    SIGNED_CONTENT_FIELDS.some((f) => f in updates && updates[f] !== undefined)
+  ) {
+    throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
+  }
 
   const next: MinutesRecord = {
     ...existing,
@@ -233,6 +254,12 @@ export async function saveOriginalFile(
   const existing = await getMinutes(id);
   if (!existing) return null;
   if (isLocked(existing.status)) throw new MinutesLockedError(id);
+  // Checked BEFORE the file is written: the document people are signing must
+  // not be swapped under them, and updateMinutes refusing afterwards would be
+  // too late, the file would already be replaced.
+  if (existing.status === "awaiting_signatures") {
+    throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
+  }
 
   await writeFile(`${DIR}/${id}/original${extensionOf(filename)}`, bytes);
   return updateMinutes(id, {

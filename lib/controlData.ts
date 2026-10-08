@@ -96,6 +96,22 @@ function cacheKey(prefix: string, blobPath: string): string {
   return prefix + blobPath;
 }
 
+/**
+ * For READ-ONLY fan-outs over many files (the activity log, every set of
+ * minutes, every template): one unreadable entry is logged and skipped
+ * rather than failing the whole page. Never use this for a read that is
+ * about to be modified and written back; that is what readJson's
+ * fail-closed rule protects.
+ */
+export async function readJsonTolerant<T>(blobPath: string, fallback: T): Promise<T> {
+  try {
+    return await readJson(blobPath, fallback);
+  } catch (err) {
+    console.error(`[controlData] skipped unreadable ${blobPath}:`, err);
+    return fallback;
+  }
+}
+
 export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
   // 🔴 FAIL CLOSED. Only "this file does not exist" (get() answering null on
   // a 404) may fall through to the fallback. Any other failure - a network

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission, roleWithinReach } from "@/lib/rolesData";
+import { requirePermission, roleWithinReach, roleExists, maySelfTag, sameIds } from "@/lib/rolesData";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
 const outOfReach = () =>
@@ -7,7 +7,7 @@ const outOfReach = () =>
     { error: "This user holds a role with more access than yours, so only someone with that access can change them." },
     { status: 403 }
   );
-import { getUserById, updateUser, deleteUser } from "@/lib/userData";
+import { getUserById, updateUser, deleteUser, getUsers } from "@/lib/userData";
 
 export async function GET(
   req: NextRequest,
@@ -51,12 +51,34 @@ export async function PUT(
       if (!isPlausibleEmail(email.toLowerCase())) {
         return NextResponse.json({ error: "That is not a usable email address." }, { status: 400 });
       }
+      // Same rule as creating a user: two accounts on one address means sign
+      // in and password resets reach whichever is found first.
+      if (email.toLowerCase() !== existing.email.toLowerCase()) {
+        const users = await getUsers();
+        if (users.some((u) => u.id !== id && u.email.toLowerCase() === email.toLowerCase())) {
+          return NextResponse.json({ error: "Another user already has that email address." }, { status: 409 });
+        }
+      }
       updates.email = email;
     }
     if (typeof body.forcePasswordChange === "boolean") updates.forcePasswordChange = body.forcePasswordChange;
-    if (Array.isArray(body.tagIds)) updates.tagIds = body.tagIds.filter((t: unknown) => typeof t === "string");
+    if (Array.isArray(body.tagIds)) {
+      const tagIds = body.tagIds.filter((t: unknown): t is string => typeof t === "string");
+      if (!sameIds(tagIds, existing.tagIds)) {
+        if (id === session.id && !maySelfTag(session)) {
+          return NextResponse.json(
+            { error: "You cannot change the tags on your own account. Ask a Super Admin." },
+            { status: 403 }
+          );
+        }
+        updates.tagIds = tagIds;
+      }
+    }
     if (typeof body.password === "string" && body.password) updates.password = body.password;
     if (typeof body.role === "string" && body.role !== existing.role) {
+      if (!(await roleExists(body.role))) {
+        return NextResponse.json({ error: "That role does not exist." }, { status: 400 });
+      }
       if (!(await roleWithinReach(session, body.role))) {
         return NextResponse.json(
           { error: "You can only give a role whose access you hold yourself." },

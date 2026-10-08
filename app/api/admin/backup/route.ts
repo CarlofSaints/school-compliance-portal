@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     const { prefix: PREFIX, token } = await tenantScope();
 
     // Enumerate all blobs with pagination
-    const allBlobs: { pathname: string; url: string }[] = [];
+    const allBlobs: { pathname: string; url: string; size: number }[] = [];
     let cursor: string | undefined;
 
     do {
@@ -45,13 +45,26 @@ export async function GET(req: NextRequest) {
         token,
       });
       for (const blob of result.blobs) {
-        allBlobs.push({ pathname: blob.pathname, url: blob.url });
+        allBlobs.push({ pathname: blob.pathname, url: blob.url, size: blob.size });
       }
       cursor = result.hasMore ? result.cursor : undefined;
     } while (cursor);
 
     if (allBlobs.length === 0) {
       return NextResponse.json({ error: "No data found to backup" }, { status: 404 });
+    }
+
+    // Refuse early when it cannot possibly fit: PDFs and images barely
+    // compress, so three times the limit in raw files will not zip under it.
+    // Saves fetching every file one by one only to say no at the end.
+    const rawBytes = allBlobs.reduce((n, b) => n + (b.size || 0), 0);
+    if (rawBytes > MAX_ZIP_BYTES * 3) {
+      return NextResponse.json(
+        {
+          error: `This school holds ${(rawBytes / 1_000_000).toFixed(1)}MB of files, which is too large to download from here (the limit is about 4.3MB). Ask Outerjoin for a full export.`,
+        },
+        { status: 413 }
+      );
     }
 
     // Build ZIP

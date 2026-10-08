@@ -10,6 +10,7 @@ import type { QuoteDetail, FundingAllocation, SpendApplication } from "@/lib/spe
 import { resolveApprovers } from "@/lib/approvalResolver";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
+import { sendApprovalRequestEmail } from "@/lib/email";
 
 export async function GET(
   req: NextRequest,
@@ -209,7 +210,17 @@ export async function PUT(
     // no FINCOM sign-off. So the approvers are worked out again and every
     // decision so far is cleared.
     const amountChanged = Math.abs(estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
+    // Any edit after votes have been cast restarts them, not just a new
+    // amount: a swapped quote, supplier or description is a different
+    // application from the one the earlier approvers said yes to.
+    const hadVotes =
+      (app.approvals?.length ?? 0) > 0 &&
+      (app.status === "pending" || app.status === "pending_decision");
     let reband: Partial<SpendApplication> = {};
+    if (hadVotes && !amountChanged) {
+      newStatus = "pending";
+      reband = { approvals: [], preferredQuotes: [] };
+    }
     if (amountChanged) {
       const approval = await resolveApprovers(estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
@@ -247,6 +258,45 @@ export async function PUT(
         : {}),
       ...reband,
     });
+
+    // Whoever has to decide now must be TOLD, as on a new application. A
+    // re-banded application otherwise sat waiting on people who never heard
+    // of it.
+    if (amountChanged || hadVotes) {
+      const approvers = (reband.requiredApprovers ?? app.requiredApprovers ?? []) as { name: string; email: string }[];
+      const needsApproval = !(reband.approvalLogOnly ?? app.approvalLogOnly);
+      if (needsApproval) {
+        for (const approver of approvers) {
+          if (!approver.email) continue;
+          try {
+            await sendApprovalRequestEmail(
+              approver.email,
+              approver.name,
+              app.id,
+              projectName,
+              sourceOfFunds,
+              quoteDetails.length,
+              estimatedAmount,
+              app.submittedByName,
+              (reband.approvalTierLabel ?? app.approvalTierLabel) || "Approval required"
+            );
+          } catch (err) {
+            console.error("[spend] approver email after edit failed:", err);
+          }
+        }
+      }
+    }
+
+    if (hadVotes && !amountChanged) {
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "spend.approvals.restarted",
+        entity: "spend",
+        entityId: app.id,
+        summary: `Edited "${app.projectName}" after ${app.approvals.length} decision(s); approvals restarted`,
+        detail: { previousApprovals: app.approvals.length },
+      });
+    }
 
     if (amountChanged) {
       await recordActivity({

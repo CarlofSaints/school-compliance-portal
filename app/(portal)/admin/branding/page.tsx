@@ -57,6 +57,9 @@ export default function BrandingPage() {
         accent: stored.accent || branding.colors.accent,
       });
       setHadLogo(!!stored.logo);
+    } catch {
+      // A dropped connection THROWS rather than returning a bad response.
+      setLoadError(true);
     } finally {
       setBusy(false);
     }

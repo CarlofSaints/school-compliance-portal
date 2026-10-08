@@ -76,6 +76,19 @@ export async function PATCH(
     );
   }
 
+  // The same rule as the approve route: nobody approves their own spending,
+  // and the grid must not be the way round it.
+  if (
+    (next === "approved" || next === "completed") &&
+    !alreadyApproved &&
+    (app.submittedBy === session.id || app.applicantUserId === session.id)
+  ) {
+    return NextResponse.json(
+      { error: "You cannot approve your own application. Another admin has to." },
+      { status: 403 }
+    );
+  }
+
   const updates: Partial<SpendApplication> = { status: next };
 
   // Changing the status from the grid has no quote selection behind it, so

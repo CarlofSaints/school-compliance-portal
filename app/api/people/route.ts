@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/rolesData";
+import { requirePermission, maySelfTag } from "@/lib/rolesData";
 import { getPeople, createPerson, photoUrlFor, isOwnPhotoPath } from "@/lib/peopleData";
 import { v4 as uuidv4 } from "uuid";
 
@@ -38,6 +38,15 @@ export async function POST(req: NextRequest) {
     // uploaded afterwards raced the register and lost. Knowing the id up front
     // lets the photo go up first and arrive WITH the record.
     const supplied = typeof id === "string" && UUID.test(id) ? id : null;
+
+    // Same rule as editing: a tagged entry linked to your own login hands you
+    // that tag's approval authority.
+    if (userId === session.id && Array.isArray(tagIds) && tagIds.length > 0 && !maySelfTag(session)) {
+      return NextResponse.json(
+        { error: "You cannot create a tagged People entry linked to your own login. Ask a Super Admin." },
+        { status: 403 }
+      );
+    }
 
     const person = {
       id: supplied || uuidv4(),
