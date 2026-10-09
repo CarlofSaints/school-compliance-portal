@@ -109,8 +109,10 @@ function fine(html: string, extra = ""): string {
 function buttonCell(href: string, label: string, colour: string, outline = false): string {
   const bg = outline ? "#ffffff" : colour;
   const fg = outline ? colour : "#ffffff";
-  return `<td style="border-radius:10px;background:${bg};${outline ? `border:1px solid ${colour};` : ""}">
-      <a href="${href}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:600;line-height:20px;color:${fg};text-decoration:none;border-radius:10px;">${label}</a>
+  // Outlook ignores padding on a link, so the cell carries it there
+  // (mso-padding-alt) and the link carries it everywhere else.
+  return `<td bgcolor="${bg}" style="border-radius:10px;background:${bg};mso-padding-alt:13px 26px;${outline ? `border:1px solid ${colour};` : ""}">
+      <a href="${href}" style="display:inline-block;padding:13px 26px;mso-padding-alt:0;font-family:${FONT};font-size:15px;font-weight:600;line-height:20px;color:${fg};text-decoration:none;border-radius:10px;">${label}</a>
     </td>`;
 }
 
@@ -195,13 +197,21 @@ function emailShell(b: SchoolBranding, title: string, body: string, opts: ShellO
   const branding = b;
   const siteHost = SITE_URL.replace(/^https?:\/\//, "");
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light only">
   <meta name="supported-color-schemes" content="light">
   <title>${title}</title>
+  <!--[if mso]>
+  <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+  <style>
+    /* Desktop Outlook falls back to Times New Roman when it does not
+       recognise the first font in a stack. */
+    table, td, div, p, a, span, h1, h3 { font-family:"Segoe UI", Arial, sans-serif !important; }
+  </style>
+  <![endif]-->
   <style>
     @media only screen and (max-width:620px) {
       .card-pad { padding:28px 22px !important; }
@@ -218,6 +228,7 @@ function emailShell(b: SchoolBranding, title: string, body: string, opts: ShellO
   }
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${CANVAS};">
     <tr><td align="center" style="padding:32px 12px 40px;">
+      <!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
         <tr><td style="padding:0 4px 18px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
@@ -242,9 +253,9 @@ function emailShell(b: SchoolBranding, title: string, body: string, opts: ShellO
             </td>
           </tr></table>
         </td></tr>
-        <tr><td style="background:#ffffff;border:1px solid ${LINE};border-radius:16px;overflow:hidden;">
+        <tr><td bgcolor="#ffffff" style="background:#ffffff;border:1px solid ${LINE};border-radius:16px;overflow:hidden;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-            <tr><td style="height:4px;line-height:4px;font-size:0;background:${STRIP};border-radius:16px 16px 0 0;">&nbsp;</td></tr>
+            <tr><td bgcolor="${STRIP}" style="height:4px;line-height:4px;mso-line-height-rule:exactly;font-size:0;background:${STRIP};border-radius:16px 16px 0 0;">&nbsp;</td></tr>
             <tr><td class="card-pad" style="padding:36px 40px 40px;">
               ${
                 opts.eyebrow
@@ -262,6 +273,7 @@ function emailShell(b: SchoolBranding, title: string, body: string, opts: ShellO
           <div style="margin-top:8px;"><a href="${SITE_URL}" style="color:#a1a1aa;text-decoration:underline;">${siteHost}</a></div>
         </td></tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td></tr>
   </table>
 </body>
