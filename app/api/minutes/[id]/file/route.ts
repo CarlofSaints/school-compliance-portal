@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMinutes, readOriginalFile } from "@/lib/minutesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -18,7 +19,7 @@ export async function GET(
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record?.original) {
+  if (!record?.original || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "No file for these minutes" }, { status: 404 });
   }
 

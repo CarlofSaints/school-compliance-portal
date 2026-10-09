@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMinutes } from "@/lib/minutesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { buildMinutesDocxFile, minutesDocxFilename } from "@/lib/minutesDocxFile";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { recordActivity } from "@/lib/activityLog";
@@ -27,7 +28,7 @@ export async function GET(
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record) {
+  if (!record || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
   }
 

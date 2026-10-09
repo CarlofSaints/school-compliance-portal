@@ -1,7 +1,8 @@
 import { readJson, writeJson } from "./controlData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
-import { listMinutes } from "./minutesData";
+import { listMinutes, type MinutesRecord } from "./minutesData";
+import { loadMinutesAccessContext, viewerForUser, viewerMayRead, type MinutesAccessContext } from "./minutesAccess";
 import { getSpendApplications } from "./spendData";
 import { getRoles, resolveRolePermissions } from "./rolesData";
 import { resolveBranding } from "./brandingData";
@@ -37,6 +38,9 @@ export interface WeeklyRecipient {
    *  show every application. Nobody learns about spend by email that they
    *  could not see by logging in. */
   seesSpend: boolean;
+  /** For the minutes block: each copy lists only minutes this person may read. */
+  permissions: string[];
+  tagIds: string[];
 }
 
 /** Every user with a usable address, once each. Users who have never signed
@@ -66,6 +70,8 @@ export async function weeklyRecipients(): Promise<{
       email,
       notActivated: !!u.forcePasswordChange,
       seesSpend: perms.includes("view_all_spend"),
+      permissions: perms,
+      tagIds: u.tagIds || [],
     });
   }
   return { recipients, noEmail };
@@ -91,6 +97,27 @@ export interface WeeklySendResult {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * One recipient's copy of the facts: the minutes block keeps only sets this
+ * person may read. A line with no id is dropped rather than shown, so the
+ * filter fails closed. Everything else is the same for everyone.
+ */
+function factsFor(
+  facts: WeeklyFacts,
+  who: { id: string; email: string; tagIds: string[]; permissions: string[] },
+  records: Map<string, MinutesRecord>,
+  ctx: MinutesAccessContext
+): WeeklyFacts {
+  const viewer = viewerForUser({ id: who.id, email: who.email, tagIds: who.tagIds }, who.permissions, ctx);
+  return {
+    ...facts,
+    minutes: facts.minutes.filter((line) => {
+      const record = line.minutesId ? records.get(line.minutesId) : undefined;
+      return !!record && viewerMayRead(record, viewer, ctx);
+    }),
+  };
+}
+
+/**
  * Sends the update. `onlyTo` = a preview to one address (the admin pressing
  * the button), which does not count as the week's send.
  *
@@ -100,14 +127,25 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function sendWeeklyUpdate(opts: {
   now?: Date;
-  onlyTo?: { email: string; name: string; notActivated: boolean; seesSpend: boolean };
+  onlyTo?: {
+    email: string;
+    name: string;
+    notActivated: boolean;
+    seesSpend: boolean;
+    userId: string;
+    permissions: string[];
+    tagIds: string[];
+  };
 }): Promise<WeeklySendResult> {
   const now = opts.now ?? new Date();
-  const [settings, branding, facts] = await Promise.all([
+  const [settings, branding, facts, minutesList, accessCtx] = await Promise.all([
     getWeeklyUpdateSettings(),
     resolveBranding(),
     gatherWeeklyFacts(now),
+    listMinutes(),
+    loadMinutesAccessContext(),
   ]);
+  const minutesById = new Map(minutesList.map((m) => [m.id, m]));
   const teamName = teamNameFor(settings, branding.fullName);
   const today = todayIso(now);
   const weekOf = lastOccurrence(today, 1); // the Monday of this week
@@ -116,7 +154,12 @@ export async function sendWeeklyUpdate(opts: {
     const ok = await sendWeeklyUpdateEmail(opts.onlyTo.email, opts.onlyTo.name, {
       teamName,
       weekOf,
-      facts,
+      facts: factsFor(
+        facts,
+        { id: opts.onlyTo.userId, email: opts.onlyTo.email, tagIds: opts.onlyTo.tagIds, permissions: opts.onlyTo.permissions },
+        minutesById,
+        accessCtx
+      ),
       notActivated: opts.onlyTo.notActivated,
       seesSpend: opts.onlyTo.seesSpend,
       preview: true,
@@ -145,7 +188,7 @@ export async function sendWeeklyUpdate(opts: {
     const ok = await sendWeeklyUpdateEmail(r.email, r.name, {
       teamName,
       weekOf,
-      facts,
+      facts: factsFor(facts, r, minutesById, accessCtx),
       notActivated: r.notActivated,
       seesSpend: r.seesSpend,
     });

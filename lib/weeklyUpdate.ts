@@ -139,6 +139,9 @@ export interface WeeklyActionLine {
 }
 
 export interface WeeklyMinutesLine {
+  /** Which set, so each recipient's copy can leave out minutes they may not
+   *  read (lib/minutesAccessRules.ts). */
+  minutesId?: string;
   title: string;
   period: string;
   signed: number;
@@ -245,6 +248,7 @@ export function buildWeeklyFacts(
     .map((m) => {
       const p = signingProgress(m.signatories || []);
       return {
+        minutesId: m.id,
         title: m.title,
         period: formatPeriod(m.period),
         signed: p.signed,
