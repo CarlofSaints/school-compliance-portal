@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserById, updateUser, verifyPassword } from "@/lib/userData";
 import { requireLogin } from "@/lib/rolesData";
+import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/session";
+import { tenantScope } from "@/lib/tenantContext";
 
 export async function POST(req: NextRequest) {
   const session = await requireLogin(req);
@@ -28,18 +30,33 @@ export async function POST(req: NextRequest) {
 
     const valid = await verifyPassword(user, currentPassword);
     if (!valid) {
+      // 400, not 401: the page treats a 401 as "signed out" and drops the
+      // session, so a mistyped current password used to log the person out.
       return NextResponse.json(
         { error: "Current password is incorrect" },
-        { status: 401 }
+        { status: 400 }
       );
     }
 
-    await updateUser(session.id, {
+    const updated = await updateUser(session.id, {
       password: newPassword,
       forcePasswordChange: false,
     });
 
-    return NextResponse.json({ success: true });
+    // A session is signed against the password hash, so the cookie this
+    // request came in with just died, along with every other device signed in
+    // as this person. Re-issue one for THIS browser so changing your own
+    // password does not sign you out; the other devices stay signed out.
+    const res = NextResponse.json({ success: true });
+    if (updated) {
+      const { key: tenantKey } = await tenantScope();
+      res.cookies.set(
+        SESSION_COOKIE,
+        createSessionToken(updated, tenantKey),
+        sessionCookieOptions(req.headers.get("x-forwarded-host") || req.headers.get("host"))
+      );
+    }
+    return res;
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

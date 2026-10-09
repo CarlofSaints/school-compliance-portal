@@ -10,11 +10,9 @@ import {
   DOWNLOAD_CONTENT_TYPES,
 } from "@/lib/contentDisposition";
 
-// Serves the file behind a policy. Note this cannot be reached with a plain
-// <a href download>: sessions are carried in an x-user-id header, which a
-// browser navigation does not send, so the response would be a 401 that the
-// browser reports as "file wasn't available on site". The caller must fetch it
-// and save the blob.
+// Serves the file behind a policy. Callers fetch it and save the blob (see
+// lib/download.ts) rather than linking to it, so a failure shows as a message
+// on the page instead of the browser's "file wasn't available on site".
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

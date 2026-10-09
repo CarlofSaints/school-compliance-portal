@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { User } from "./userData";
+import { authSigningKey } from "./signingKey";
 
 // ---------------------------------------------------------------------------
 // Password-reset tokens.
@@ -28,35 +29,10 @@ import { User } from "./userData";
  *  is not a standing key to the account. */
 export const RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-// Signing key.
-//
-// AUTH_SECRET is the one to set, but it is deliberately OPTIONAL: a new school
-// must be able to come up with nothing but a Blob store, and a reset flow that
-// silently does not work until somebody remembers an extra env var is worse
-// than no reset flow at all. BLOB_READ_WRITE_TOKEN is the fallback because the
-// app provably cannot run without it, and it is already a per-tenant secret.
-// It is only ever used as HMAC key material, so it is never exposed.
-//
-// Rotating whichever value is in play invalidates outstanding links. That is
-// the correct behaviour, not a bug.
-function signingKey(): string {
-  const key =
-    process.env.AUTH_SECRET ||
-    process.env.CRON_SECRET ||
-    // TENANT_SECRET is present on every multi-tenant deployment, where
-    // BLOB_READ_WRITE_TOKEN may not be set at all because each school brings
-    // its own store token. Without this the fallback chain would run out and
-    // password resets would throw on exactly the deployment that serves the
-    // most schools.
-    process.env.TENANT_SECRET ||
-    process.env.BLOB_READ_WRITE_TOKEN;
-  if (!key) {
-    throw new Error(
-      "No signing key available for password resets (set AUTH_SECRET)"
-    );
-  }
-  return key;
-}
+// Signing key: shared with sign-in sessions, see lib/signingKey.ts. The two
+// never collide: a session signs a message starting "session|", which a reset
+// message (it starts with the raw user id) can never be.
+const signingKey = authSigningKey;
 
 function b64url(input: string | Buffer): string {
   return Buffer.from(input).toString("base64url");

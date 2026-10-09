@@ -6,12 +6,12 @@ import { authFetch } from "./useAuth";
 // 🔴 A plain <a href="/api/..."> DOES NOT WORK in this app, and the failure
 // looks like a broken feature rather than an auth problem.
 //
-// Sessions here are carried by an `x-user-id` header that authFetch adds. A
-// browser navigation from an anchor sends no such header, so the route answers
-// 401 and the person gets a page of JSON reading {"error":"Unauthorized"}.
-// Carl hit exactly that clicking "Word" on a set of minutes.
-//
-// So: fetch it WITH the header, turn the bytes into an object URL, and click a
+// It started because the session was an `x-user-id` header that an anchor
+// cannot send: the route answered 401 and the person got a page of JSON
+// reading {"error":"Unauthorized"} (Carl hit exactly that clicking "Word" on a
+// set of minutes). The session is now a cookie, which an anchor does send, but
+// fetching still turns any failure into a message on the page rather than raw
+// JSON. So: fetch it, turn the bytes into an object URL, and click a
 // synthetic anchor at it. One helper, because this had already been written
 // once by hand on the backup page and five more anchors were added without it.
 //

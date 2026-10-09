@@ -68,18 +68,19 @@ async function findPhotoPath(id: string): Promise<string | null> {
   return newest ? `people/${id}/${newest}` : null;
 }
 
-// Serves a person's photo.
+// Serves a person's photo, to anyone signed in.
 //
-// Deliberately not behind requirePermission: a session here is carried in an
-// x-user-id header, and a browser rendering <img src="..."> cannot send one, so
-// a gated route would return 401 to every image tag on the page. This mirrors
-// the existing /api/account/avatar/[userId] route. The id is a uuid, and the
-// response is a face and nothing else, but treat the URL as guessable rather
-// than secret.
+// It used to be public, because the session was an x-user-id header that an
+// <img src="..."> request cannot send. The session is now a cookie, which an
+// image request DOES carry, so the photo sits behind sign-in like everything
+// else. Signed in is enough: the People page shows these faces to every member.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await requireLogin(req);
+  if (session instanceof NextResponse) return session;
+
   const { id } = await params;
   if (!validId(id)) {
     return NextResponse.json({ error: "No photo" }, { status: 404 });

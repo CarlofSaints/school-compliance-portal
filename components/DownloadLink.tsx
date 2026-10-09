@@ -5,9 +5,10 @@ import { downloadWithAuth } from "@/lib/download";
 
 // A link that downloads from an authenticated route.
 //
-// 🔴 Deliberately a <button>, not an <a href>. This app carries its session in
-// an `x-user-id` header, and a browser navigation from an anchor sends no
-// headers, so the route answers 401 and the person is shown a page of JSON.
+// Deliberately a <button>, not an <a href>. A failed download from an anchor
+// shows the person a page of raw JSON; fetching it lets the page say what went
+// wrong instead. (It was REQUIRED while the session was an x-user-id header an
+// anchor could not send; the session is now a cookie, which it does.)
 // Styled to look like a link so nothing changes visually.
 //
 // Use this for every download from /api/*, EXCEPT on the platform admin pages,

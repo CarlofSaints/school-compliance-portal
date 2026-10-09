@@ -52,11 +52,12 @@ const withClerk = isClerkEnabled()
  *
  * Deliberately left alone:
  * - /api/*: the cron job and every fetch from a page already open on the old
- *   address. A redirected fetch loses its x-user-id header and fails.
+ *   address. A redirected fetch arrives at the other address without this
+ *   one's session cookie and fails.
  * - anything but GET/HEAD: a 308 would replay a form POST at the other domain.
  * - preview deployments: those URLs are for testing a specific build.
  *
- * ⚠️ The login is held in localStorage, which belongs to one address, so a
+ * ⚠️ The sign-in (cookie + localStorage) belongs to one address, so a
  * person arriving from the old address signs in once on the new one.
  */
 function vercelAppRedirect(req: NextRequest): NextResponse | null {

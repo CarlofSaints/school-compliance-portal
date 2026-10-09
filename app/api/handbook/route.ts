@@ -17,10 +17,10 @@ export const maxDuration = 60;
 // using it, so gating it any harder than the portal itself would be perverse.
 //
 // Note this returns the document in the response body rather than serving it at
-// a URL a browser can navigate to. Sessions here travel in an x-user-id header,
-// which a navigation or an iframe src cannot send, so a navigable route would
-// have to be public, and the guide carries real names and the school's CAPEX
-// figures. The page fetches this and renders it in a sandboxed iframe instead.
+// a URL the guide iframe navigates to. The guide is uploaded HTML, so it runs
+// in a sandboxed, opaque-origin iframe that is handed the markup and never this
+// site's address or cookies: it carries real names and the school's CAPEX
+// figures, and a script inside it must not be able to act as the reader.
 export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
