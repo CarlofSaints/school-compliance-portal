@@ -2,10 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserByEmail, verifyPassword } from "@/lib/userData";
 import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
 import { SessionPayload } from "@/lib/roles";
-import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/session";
+import {
+  SESSION_COOKIE,
+  createSessionToken,
+  sessionCookieOptions,
+  isHttps,
+  isSameOriginWrite,
+} from "@/lib/session";
+
+// Sign-in and sign-out are the two writes that run with no session, so they
+// get the cross-site check here rather than from getSessionFromRequest.
+// Without it another site could post a form that signs a visitor into the
+// attacker's account.
+function fromThisSite(req: NextRequest): boolean {
+  return isSameOriginWrite(
+    req.method,
+    req.headers.get("origin"),
+    req.headers.get("x-forwarded-host") || req.headers.get("host")
+  );
+}
 import { tenantScope } from "@/lib/tenantContext";
 
 export async function POST(req: NextRequest) {
+  if (!fromThisSite(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   try {
     const { email, password } = await req.json();
     if (!email || !password) {
@@ -52,7 +73,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set(
       SESSION_COOKIE,
       createSessionToken(user, tenantKey),
-      sessionCookieOptions(req.headers.get("x-forwarded-host") || req.headers.get("host"))
+      sessionCookieOptions(isHttps(req))
     );
     return res;
   } catch {
@@ -67,9 +88,12 @@ export async function POST(req: NextRequest) {
 // Answers 200 whether or not anybody was signed in, so a double click or an
 // already-expired session never shows an error on the way out.
 export async function DELETE(req: NextRequest) {
+  if (!fromThisSite(req)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   const res = NextResponse.json({ success: true });
   res.cookies.set(SESSION_COOKIE, "", {
-    ...sessionCookieOptions(req.headers.get("x-forwarded-host") || req.headers.get("host"), 0),
+    ...sessionCookieOptions(isHttps(req), 0),
     maxAge: 0,
   });
   return res;

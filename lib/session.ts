@@ -94,18 +94,39 @@ export function verifySessionToken(
   return expected.length === given.length && crypto.timingSafeEqual(expected, given);
 }
 
-/** Cookie attributes. Secure everywhere but plain-http localhost, where a
- *  Secure cookie would never come back and local sign-in would fail. */
-export function sessionCookieOptions(host: string | null, maxAgeMs = SESSION_TTL_MS) {
-  const local = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(String(host || ""));
+/** True when the request came in over https. Vercel always does; a local
+ *  dev server (localhost, or a phone on the office network at
+ *  http://192.168.x.x) does not. */
+export function isHttps(req: { headers: Headers; nextUrl?: { protocol: string } }): boolean {
+  const forwarded = req.headers.get("x-forwarded-proto")?.split(",")[0].trim().toLowerCase();
+  if (forwarded) return forwarded === "https";
+  return req.nextUrl?.protocol === "https:";
+}
+
+/** Cookie attributes. Secure whenever the connection is https. Keyed on the
+ *  CONNECTION, not the hostname: a Secure cookie set over plain http is
+ *  dropped by the browser, so sign-in would look fine and then fail on the
+ *  very next click. */
+export function sessionCookieOptions(secure: boolean, maxAgeMs = SESSION_TTL_MS) {
   return {
     httpOnly: true,
-    secure: !local,
+    secure,
     sameSite: "lax" as const,
     path: "/",
     maxAge: Math.floor(maxAgeMs / 1000),
   };
 }
+
+/** When the token was issued, from its expiry. */
+export function issuedAt(claims: { e: number }): number {
+  return claims.e - SESSION_TTL_MS;
+}
+
+/** A token this new may have been signed against a password hash that the
+ *  store has not finished propagating (the change-password route issues one
+ *  the moment it saves). Such a token gets a short re-read before it is
+ *  refused; see getSessionFromRequest. */
+export const FRESH_TOKEN_MS = 15_000;
 
 /**
  * Whether a state-changing request came from this site.

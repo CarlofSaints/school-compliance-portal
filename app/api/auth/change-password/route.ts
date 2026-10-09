@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserById, updateUser, verifyPassword } from "@/lib/userData";
 import { requireLogin } from "@/lib/rolesData";
-import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/session";
+import { SESSION_COOKIE, createSessionToken, sessionCookieOptions, isHttps } from "@/lib/session";
 import { tenantScope } from "@/lib/tenantContext";
 
 export async function POST(req: NextRequest) {
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       res.cookies.set(
         SESSION_COOKIE,
         createSessionToken(updated, tenantKey),
-        sessionCookieOptions(req.headers.get("x-forwarded-host") || req.headers.get("host"))
+        sessionCookieOptions(isHttps(req))
       );
     }
     return res;

@@ -22,6 +22,9 @@ async function main() {
     readSessionClaims,
     isSameOriginWrite,
     sessionCookieOptions,
+    isHttps,
+    issuedAt,
+    FRESH_TOKEN_MS,
     SESSION_TTL_MS,
     SESSION_COOKIE,
   } = await import("../lib/session");
@@ -76,9 +79,15 @@ async function main() {
   check("host compare ignores case and port-less forms", isSameOriginWrite("PUT", "https://HVPS.schoolcompliance.co.za", "hvps.schoolcompliance.co.za"), true);
 
   // --- cookie attributes ---
-  const live = sessionCookieOptions("hvps.schoolcompliance.co.za");
+  const live = sessionCookieOptions(true);
   check("live cookie is httpOnly, Secure, Lax", [live.httpOnly, live.secure, live.sameSite], [true, true, "lax"]);
-  check("localhost cookie is not Secure (http)", sessionCookieOptions("localhost:3000").secure, false);
+  check("an http dev cookie is not Secure", sessionCookieOptions(false).secure, false);
+  const viaVercel = new NextRequest("http://internal/api/auth", { headers: { "x-forwarded-proto": "https" } });
+  check("https behind Vercel's proxy counts as https", isHttps(viaVercel), true);
+  const lanPhone = new NextRequest("http://192.168.1.20:3000/api/auth");
+  check("a phone on the office network over http is not https", isHttps(lanPhone), false);
+  check("issuedAt reads back the sign-in time", issuedAt(readSessionClaims(token)!), now);
+  check("the re-read window is short", FRESH_TOKEN_MS <= 30_000, true);
   check("cookie lasts the session length", live.maxAge, SESSION_TTL_MS / 1000);
 
   // --- the server ignores x-user-id ---
@@ -98,6 +107,29 @@ async function main() {
     headers: { cookie: `${SESSION_COOKIE}=garbage` },
   });
   check("a junk cookie is NOT a session", await getSessionFromRequest(garbage), null);
+
+  // --- sign-in itself refuses another site's form ---
+  const { POST: login, DELETE: logout } = await import("../app/api/auth/route");
+  const crossLogin = new NextRequest("https://hvps.schoolcompliance.co.za/api/auth", {
+    method: "POST",
+    headers: { origin: "https://evil.example", host: "hvps.schoolcompliance.co.za", "content-type": "text/plain" },
+    body: JSON.stringify({ email: "attacker@example.com", password: "x" }),
+  });
+  check("a cross-site sign-in form is refused", (await login(crossLogin)).status, 403);
+  const crossLogout = new NextRequest("https://hvps.schoolcompliance.co.za/api/auth", {
+    method: "DELETE",
+    headers: { origin: "https://evil.example", host: "hvps.schoolcompliance.co.za" },
+  });
+  check("a cross-site sign-out is refused", (await logout(crossLogout)).status, 403);
+  const ownLogout = new NextRequest("https://hvps.schoolcompliance.co.za/api/auth", {
+    method: "DELETE",
+    headers: { origin: "https://hvps.schoolcompliance.co.za", host: "hvps.schoolcompliance.co.za", "x-forwarded-proto": "https" },
+  });
+  const out = await logout(ownLogout);
+  const cleared = out.headers.get("set-cookie") || "";
+  check("sign-out clears the cookie", out.status === 200 && cleared.includes(`${SESSION_COOKIE}=;`) && /Max-Age=0/i.test(cleared), true);
+  // ⚠️ The re-read for a just-issued token (getSessionFromRequest) is NOT
+  // covered here: it needs a user store. It is proven on the preview instead.
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

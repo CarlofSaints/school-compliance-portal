@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { readJson, writeJson } from "./controlData";
 import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS } from "./roles";
 import { getUserById } from "./userData";
-import { SESSION_COOKIE, readSessionClaims, verifySessionToken, isSameOriginWrite } from "./session";
+import {
+  SESSION_COOKIE,
+  readSessionClaims,
+  verifySessionToken,
+  isSameOriginWrite,
+  issuedAt,
+  FRESH_TOKEN_MS,
+} from "./session";
 import { tenantScope } from "./tenantContext";
 
 export const SUPER_ADMIN_ROLE_ID = "super-admin";
@@ -100,10 +107,25 @@ export async function getSessionFromRequest(
   const claims = readSessionClaims(token);
   if (!token || !claims) return null;
 
-  const user = await getUserById(claims.u);
+  let user = await getUserById(claims.u);
   if (!user) return null;
   const { key: tenantKey } = await tenantScope();
-  if (!verifySessionToken(token, user, tenantKey)) return null;
+  if (!verifySessionToken(token, user, tenantKey)) {
+    // ⚠️ A blob overwrite can take a second or two to show everywhere, so the
+    // request straight after a password change may read the OLD hash while
+    // holding a cookie signed against the NEW one. Refusing it would sign the
+    // person out the moment they set their password. A token issued in the
+    // last few seconds gets a short re-read first; anything older, or a
+    // forgery, is refused exactly as before (it costs its own request time).
+    if (Date.now() - issuedAt(claims) > FRESH_TOKEN_MS) return null;
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      await new Promise((r) => setTimeout(r, 700));
+      user = await getUserById(claims.u);
+      ok = !!user && verifySessionToken(token, user, tenantKey);
+    }
+    if (!ok || !user) return null;
+  }
 
   const roles = await getRoles();
   const role = roles.find((r) => r.id === user.role);
