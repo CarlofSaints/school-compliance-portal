@@ -32,12 +32,24 @@ export async function GET(req: NextRequest) {
   // Worked out with the SAME rule as the real check, so this list cannot say
   // someone is in who is actually out. A tag on a register entry counts only
   // when that entry is linked to the person's login (Admin, People).
-  const holders = (tagIds: string[]) =>
-    resolver.users
+  const userEmails = new Set(resolver.users.map((u) => u.email.trim().toLowerCase()));
+  const holders = (tagIds: string[]) => [
+    ...resolver.users
       .filter((u) => resolver.forUser(u).viewer.tagIds.some((t) => tagIds.includes(t)))
       .map((u) => `${u.name} ${u.surname}`.trim())
       .filter(Boolean)
-      .sort();
+      .sort(),
+    // Register-only people (no login) receive the minutes by email.
+    ...ctx.people
+      .filter(
+        (p) =>
+          !p.userId &&
+          !userEmails.has(String(p.email || "").trim().toLowerCase()) &&
+          p.tagIds?.some((t) => tagIds.includes(t))
+      )
+      .map((p) => `${p.name} (no login, by email)`)
+      .sort(),
+  ];
 
   const access = Object.fromEntries(
     ACCESS_BODIES.map((body) => {

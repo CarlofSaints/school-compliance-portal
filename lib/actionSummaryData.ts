@@ -133,18 +133,25 @@ async function rowFilterFactory() {
         ctx
       )
     );
-  return { forEmail: (email: string) => forReader(resolver.forEmail(email)) };
+  return {
+    forEmail: (email: string) => forReader(resolver.forEmail(email)),
+    // Fails closed: an id that matches no account sees no meeting-raised rows.
+    forUserId: (id: string) => {
+      const u = resolver.users.find((x) => x.id === id);
+      return u ? forReader(resolver.forUser(u)) : (rows: SummaryRow[]) => rows.filter((r) => !r.fromMinutesId);
+    },
+  };
 }
 
 /** The workbook on its own, for the Download button, as THIS admin may see it. */
 export async function buildSummaryFile(
   now: Date = new Date(),
-  forEmail?: string
+  forUserId?: string
 ): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
   let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
-  if (forEmail) rows = (await rowFilterFactory()).forEmail(forEmail)(rows);
+  if (forUserId) rows = (await rowFilterFactory()).forUserId(forUserId)(rows);
   const content = await buildSummaryWorkbook({
     branding,
     rows,

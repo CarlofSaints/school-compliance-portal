@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   if (req.nextUrl.searchParams.get("download") === "1") {
     // As this admin may see it: no rows from minutes they may not read.
-    const file = await buildSummaryFile(undefined, session.email);
+    const file = await buildSummaryFile(undefined, session.id);
     return new NextResponse(new Uint8Array(file.content), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

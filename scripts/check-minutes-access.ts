@@ -87,17 +87,25 @@ async function main() {
     settings: {},
     distribution,
     people: [
-      person({ id: "p-sneaky", email: "teacher@school.co.za", userId: null, tagIds: [FINCOM] }),
+      // Linked to the treasurer's login.
       person({ id: "p-treasurer", email: "treasurer@school.co.za", userId: "u-treasurer", tagIds: [FINCOM] }),
+      // NOT linked to anyone, carrying the bursar's login email: the usual
+      // FINCOM setup. Counts, because nobody without manage_roles can put
+      // their own login email on a tagged entry (the People routes).
+      person({ id: "p-bursar", email: "bursar@school.co.za", userId: null, tagIds: [FINCOM] }),
+      // Linked to SOMEBODY ELSE but carrying the teacher's email: never counts.
+      person({ id: "p-other", email: "teacher@school.co.za", userId: "u-someone-else", tagIds: [FINCOM] }),
       person({ id: "p-teacher", email: "teacher@school.co.za", userId: "u-teacher", tagIds: [] }),
     ],
   };
   const teacher = readerForUser({ id: "u-teacher", email: "teacher@school.co.za", tagIds: [] }, ["view_dashboard"], ctx);
   const treasurer = readerForUser({ id: "u-treasurer", email: "treasurer@school.co.za", tagIds: [] }, ["view_dashboard"], ctx);
-  check("a register entry with MY email but not linked to me gives me no tags", teacher.viewer.tagIds, []);
+  const bursar = readerForUser({ id: "u-bursar", email: "Bursar@School.co.za", tagIds: [] }, ["view_dashboard"], ctx);
   check("a register entry LINKED to my login gives me its tags", treasurer.viewer.tagIds, [FINCOM]);
+  check("an UNLINKED register entry with my login email gives me its tags", bursar.viewer.tagIds, [FINCOM]);
+  check("an entry linked to someone ELSE with my email gives me nothing", teacher.viewer.tagIds, []);
   check(
-    "so an unlinked FINCOM entry with my email does not open FINCOM",
+    "so that entry does not open FINCOM to me",
     canReadMinutes(fincomSet, teacher.viewer, effectiveAccess("fincom", {}, distribution)),
     false
   );

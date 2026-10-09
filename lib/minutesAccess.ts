@@ -3,11 +3,12 @@ import { getUserById, getUsers, type User } from "./userData";
 import { getPeople, type Person } from "./peopleData";
 import { getRecipientSettings } from "./minutesRecipients";
 import { getRoles, resolveRolePermissions } from "./rolesData";
-import { listMinutes, type MinutesRecord } from "./minutesData";
+import { listMinutes, getMinutes, type MinutesRecord } from "./minutesData";
 import type { SessionPayload } from "./roles";
 import {
   canReadMinutes,
   effectiveAccess,
+  MINUTES_MANAGE_PERMISSIONS,
   type MinutesAccessSettings,
   type MinutesForAccess,
   type MinutesViewer,
@@ -29,15 +30,20 @@ export async function saveMinutesAccessSettings(next: MinutesAccessSettings): Pr
 const norm = (e: string | undefined | null) => String(e || "").trim().toLowerCase();
 
 /**
- * The People register entries that ARE this account.
+ * The People register entries that ARE this account: linked to the login by
+ * an admin (person.userId), or not linked to anybody and carrying the login's
+ * own email. Most schools tag FINCOM on the register entry, often unlinked, so
+ * counting only links would quietly cut FINCOM members off.
  *
- * 🔴 Only the admin-made link (person.userId). NOT a matching email: a
- * register entry's email is never confirmed, and somebody allowed to edit
- * People could otherwise put their own address on a FINCOM-tagged entry, or
- * make one, and read FINCOM minutes.
+ * 🔴 The email half is safe only because of two guards: a login's email can
+ * change only to an address its owner proved they receive (lib/emailChange),
+ * and nobody without manage_roles may put their OWN login email on a tagged
+ * register entry (the People routes). An entry linked to SOMEBODY ELSE never
+ * counts, whatever its email.
  */
-function ownPeople(userId: string, people: Person[]): Person[] {
-  return people.filter((p) => p.userId === userId);
+function ownPeople(user: { id: string; email?: string | null }, people: Person[]): Person[] {
+  const email = norm(user.email);
+  return people.filter((p) => p.userId === user.id || (!p.userId && !!email && norm(p.email) === email));
 }
 
 export interface MinutesAccessContext {
@@ -67,7 +73,7 @@ export function readerForUser(
   permissions: string[],
   ctx: MinutesAccessContext
 ): Reader {
-  const mine = ownPeople(user.id, ctx.people);
+  const mine = ownPeople(user, ctx.people);
   const tags = new Set<string>(user.tagIds || []);
   for (const p of mine) for (const t of p.tagIds || []) tags.add(t);
   return {
@@ -175,12 +181,19 @@ export async function redactMinutesActivity<
   T extends { entity: string; entityId?: string; summary: string; detail?: Record<string, unknown> },
 >(session: SessionPayload, entries: T[]): Promise<T[]> {
   if (!entries.some((e) => e.entity === "minutes" && e.entityId)) return entries;
-  const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutesIndex()]);
+  // Managers read every set, deleted ones included.
+  if (session.permissions.some((p) => MINUTES_MANAGE_PERMISSIONS.includes(p))) return entries;
+  const [ctx, byId] = await Promise.all([
+    loadMinutesAccessContext(),
+    minutesFor(entries.filter((e) => e.entity === "minutes").map((e) => e.entityId)),
+  ]);
   const { viewer } = await readerForSession(session, ctx);
   return entries.map((e) => {
     if (e.entity !== "minutes" || !e.entityId) return e;
     const record = byId.get(e.entityId);
-    if (!record || viewerMayRead(record, viewer, ctx)) return e;
+    // 🔴 A DELETED set fails closed: its category is gone with it, and "Deleted
+    // minutes <FINCOM title>" is exactly the title this hides.
+    if (record && viewerMayRead(record, viewer, ctx)) return e;
     return { ...e, summary: "Activity on minutes you do not have access to", detail: undefined };
   });
 }
@@ -190,10 +203,21 @@ export async function minutesIndex(): Promise<Map<string, MinutesRecord>> {
   return new Map((await listMinutes()).map((m) => [m.id, m]));
 }
 
+/** Only the sets these ids name, read one by one, rather than every set:
+ *  the action register and the activity log are opened all day. */
+async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, MinutesRecord>> {
+  const unique = [...new Set(ids.filter((i): i is string => !!i))];
+  const found = await Promise.all(unique.map((id) => getMinutes(id).catch(() => null)));
+  return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
+}
+
 /** For a session reading the action register. */
 export async function visibleActionsFor<T extends ActionOrigin>(session: SessionPayload, items: T[]): Promise<T[]> {
   if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
-  const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutesIndex()]);
+  const [ctx, byId] = await Promise.all([
+    loadMinutesAccessContext(),
+    minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
+  ]);
   const reader = await readerForSession(session, ctx);
   return items.filter((i) => actionVisible(i, reader, byId, ctx));
 }

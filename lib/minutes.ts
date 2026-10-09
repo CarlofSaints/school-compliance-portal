@@ -419,6 +419,8 @@ export interface MinutesDistributionNote {
   sent: number;
   recipients: number;
   failed: string[];
+  /** On the list but outside who may read this kind of minutes, so not sent. */
+  heldBack?: string[];
 }
 
 export type SignatoryRole = "sgb_chair" | "principal" | "deputy_chair" | "other";

@@ -41,9 +41,13 @@ export async function POST(req: NextRequest) {
 
     // Same rule as editing: a tagged entry linked to your own login hands you
     // that tag's approval authority.
-    if (userId === session.id && Array.isArray(tagIds) && tagIds.length > 0 && !maySelfTag(session)) {
+    const ownEmail =
+      !!session.email &&
+      typeof email === "string" &&
+      email.trim().toLowerCase() === session.email.trim().toLowerCase();
+    if ((userId === session.id || ownEmail) && Array.isArray(tagIds) && tagIds.length > 0 && !maySelfTag(session)) {
       return NextResponse.json(
-        { error: "You cannot create a tagged People entry linked to your own login. Ask a Super Admin." },
+        { error: "You cannot create a tagged People entry linked to your own login or email. Ask a Super Admin." },
         { status: 403 }
       );
     }

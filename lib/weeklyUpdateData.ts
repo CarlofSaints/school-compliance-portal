@@ -114,13 +114,19 @@ function factsFor(
   ctx: MinutesAccessContext
 ): WeeklyFacts {
   const reader = readerForUser({ id: who.id, email: who.email, tagIds: who.tagIds }, who.permissions, ctx);
+  const overdueList = facts.actions.overdueList.filter((line) =>
+    actionVisible({ fromMinutes: line.fromMinutes, assigneeIds: line.assigneeIds || [] }, reader, records, ctx)
+  );
+  const hidden = facts.actions.overdueList.length - overdueList.length;
   return {
     ...facts,
     actions: {
       ...facts.actions,
-      overdueList: facts.actions.overdueList.filter((line) =>
-        actionVisible({ fromMinutes: line.fromMinutes, assigneeIds: line.assigneeIds || [] }, reader, records, ctx)
-      ),
+      // The list is never capped when counted, so the difference is exactly
+      // the overdue actions this reader may not see; the figures follow it.
+      overdue: facts.actions.overdue - hidden,
+      open: facts.actions.open - hidden,
+      overdueList,
     },
     minutes: facts.minutes.filter((line) => {
       const record = line.minutesId ? records.get(line.minutesId) : undefined;

@@ -67,6 +67,8 @@ export interface DistributionResult {
    *  a governor who is meant to receive the minutes and quietly does not is
    *  exactly the gap the register exists to close. */
   withoutEmail: string[];
+  /** On the list but not allowed to read this kind of minutes, so not sent. */
+  heldBack: string[];
   /** Which audience was used, so the caller can say "the SGB list" out loud
    *  rather than reporting an anonymous number. */
   audienceLabel: string;
@@ -96,7 +98,8 @@ export async function previewDistribution(record: MinutesRecord) {
     cc,
     withoutEmail: resolved.withoutEmail,
     heldBack,
-    empty: to.length + cc.length === 0,
+    // Unchanged meaning: nobody on the To list means do not send.
+    empty: to.length === 0,
   };
 }
 
@@ -185,6 +188,9 @@ export async function distributeSignedMinutes(
     sent,
     recipients: preview.to.length + preview.cc.length,
     failed,
+    // Recorded on the minutes, so an AUTOMATIC send (the last signature) still
+    // shows the secretary who was on the list but outside the read setting.
+    ...(preview.heldBack.length ? { heldBack: preview.heldBack } : {}),
   };
   await recordDistribution(record, note);
 
@@ -194,6 +200,7 @@ export async function distributeSignedMinutes(
     to: preview.to.map((r) => r.email),
     cc: preview.cc.map((r) => r.email),
     withoutEmail: preview.withoutEmail,
+    heldBack: preview.heldBack,
     audienceLabel: preview.audienceLabel,
   };
 }

@@ -176,6 +176,8 @@ export default function MinutesDistributePanel({
                 {" — "}
                 {last.sent} of {last.recipients} delivered
                 {last.failed.length > 0 && `, failed for ${last.failed.join(", ")}`}.
+                {(last.heldBack?.length ?? 0) > 0 &&
+                  ` Not sent to ${last.heldBack!.join(", ")}: outside who may read these minutes.`}
                 {sends.length > 1 && ` Sent ${sends.length} times in all.`}
               </>
             ) : (
