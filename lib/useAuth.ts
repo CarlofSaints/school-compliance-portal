@@ -83,27 +83,41 @@ export function clearSession(): void {
   emitSessionChange();
 }
 
+/** Signs out: the server clears the cookie, this clears the drawn copy. The
+ *  local copy goes even if the call fails, so the page never looks signed in
+ *  after the person asked to leave. */
+export async function signOut(): Promise<void> {
+  try {
+    await fetch("/api/auth", { method: "DELETE", credentials: "same-origin" });
+  } catch {
+    // Offline: the cookie stays until it expires, but this browser shows the
+    // sign-in page, which is what was asked for.
+  }
+  clearSession();
+}
+
 // Shown instead of the API's raw "Unauthorized", which reads like "you lack
 // permission" when it actually means "you are logged out".
 export const SESSION_EXPIRED_MESSAGE =
   "Your session has expired - please log in again.";
 
+// The session itself travels in an httpOnly cookie the server set at sign-in
+// (lib/session.ts), which the browser attaches to every same-origin request on
+// its own. Nothing is added here, and that is the point: the old x-user-id
+// header was a value this page chose, and the server believed it.
+//
+// The copy in localStorage above is only what the pages DRAW (name, menu). It
+// grants nothing; the server decides from the cookie alone.
 export async function authFetch(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const session = getSession();
-  const headers = new Headers(options.headers);
-  if (session?.id) {
-    headers.set("x-user-id", session.id);
-  }
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, credentials: "same-origin" });
 
-  // A 401 means the server could not resolve a session AT ALL - either no
-  // x-user-id reached it, or that id is no longer in the user store. Whatever
-  // the cause, the stored session is dead and every further write will fail the
-  // same way, so drop it. The next navigation then bounces to /login via
-  // useAuth instead of leaving a page that looks fine but cannot save.
+  // A 401 means the server could not resolve a session AT ALL: no cookie, an
+  // expired one, a password changed elsewhere, or the account removed. Every
+  // further request will fail the same way, so drop the stored copy and go to
+  // sign-in, rather than leaving a page that looks fine but cannot save.
   //
   // Deliberately NOT done for 403: that session is valid, it just lacks a
   // permission, and logging the user out over it would be wrong.
@@ -112,6 +126,9 @@ export async function authFetch(
   // reaches here.
   if (res.status === 401) {
     clearSession();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.replace("/login");
+    }
   }
   return res;
 }

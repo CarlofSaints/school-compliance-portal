@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useSessionValue, clearSession } from "@/lib/useAuth";
+import { useSessionValue, signOut } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
 import { useState } from "react";
@@ -206,8 +206,8 @@ export default function Sidebar() {
     setOpenMenus((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
-  const handleLogout = () => {
-    clearSession();
+  const handleLogout = async () => {
+    await signOut();
     router.push("/login");
   };
 

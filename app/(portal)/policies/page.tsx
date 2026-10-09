@@ -146,10 +146,9 @@ export default function PoliciesPage() {
 
   // Saves the current version of a policy to the reader's machine.
   //
-  // Fetched and saved as a blob rather than linked to directly: the session is
-  // carried in an x-user-id header, which a plain <a href download> does not
-  // send, so the browser would get a 401 and report it as "file wasn't
-  // available on site".
+  // Fetched and saved as a blob rather than linked to directly, so a failure
+  // shows here as a message instead of the browser's "file wasn't available
+  // on site".
   const downloadPolicy = async (policy: PolicyRecord) => {
     setDownloading(policy.id);
     setNotice(null);

@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { readJson, writeJson } from "./controlData";
 import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS } from "./roles";
 import { getUserById } from "./userData";
+import {
+  SESSION_COOKIE,
+  readSessionClaims,
+  verifySessionToken,
+  isSameOriginWrite,
+  issuedAt,
+  FRESH_TOKEN_MS,
+} from "./session";
+import { tenantScope } from "./tenantContext";
 
 export const SUPER_ADMIN_ROLE_ID = "super-admin";
 
@@ -85,14 +94,38 @@ export async function deletePermission(key: string): Promise<boolean> {
 }
 
 // --- Server Auth Guards ---
+// 🔴 The ONLY place a request becomes a person. It reads the signed session
+// cookie (lib/session.ts) and nothing else: the old x-user-id header is
+// ignored, because it was a value the browser chose.
 export async function getSessionFromRequest(
   req: NextRequest
 ): Promise<SessionPayload | null> {
-  const userId = req.headers.get("x-user-id");
-  if (!userId) return null;
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
+  if (!isSameOriginWrite(req.method, req.headers.get("origin"), host)) return null;
 
-  const user = await getUserById(userId);
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const claims = readSessionClaims(token);
+  if (!token || !claims) return null;
+
+  let user = await getUserById(claims.u);
   if (!user) return null;
+  const { key: tenantKey } = await tenantScope();
+  if (!verifySessionToken(token, user, tenantKey)) {
+    // ⚠️ A blob overwrite can take a second or two to show everywhere, so the
+    // request straight after a password change may read the OLD hash while
+    // holding a cookie signed against the NEW one. Refusing it would sign the
+    // person out the moment they set their password. A token issued in the
+    // last few seconds gets a short re-read first; anything older, or a
+    // forgery, is refused exactly as before (it costs its own request time).
+    if (Date.now() - issuedAt(claims) > FRESH_TOKEN_MS) return null;
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      await new Promise((r) => setTimeout(r, 700));
+      user = await getUserById(claims.u);
+      ok = !!user && verifySessionToken(token, user, tenantKey);
+    }
+    if (!ok || !user) return null;
+  }
 
   const roles = await getRoles();
   const role = roles.find((r) => r.id === user.role);
