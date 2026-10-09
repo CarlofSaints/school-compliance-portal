@@ -7,6 +7,7 @@ import {
   type ActivityEntity,
 } from "@/lib/activityLog";
 import { contentDisposition } from "@/lib/contentDisposition";
+import { redactMinutesActivity } from "@/lib/minutesAccess";
 
 // Reading the audit trail is gated, but on ANY of these rather than one narrow
 // key. A stored role that predates a new permission never gains it, so a
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
-    const entries = await exportActivity(month);
+    const entries = await redactMinutesActivity(session, await exportActivity(month));
     const csv = activityToCsv(entries);
     return new Response(csv, {
       headers: {
@@ -50,5 +51,5 @@ export async function GET(req: NextRequest) {
     search: sp.get("search") || undefined,
   });
 
-  return NextResponse.json(page);
+  return NextResponse.json({ ...page, entries: await redactMinutesActivity(session, page.entries) });
 }

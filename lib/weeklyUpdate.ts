@@ -131,6 +131,10 @@ export function nextSendOn(
 // --- The facts in the email ---------------------------------------------------
 
 export interface WeeklyActionLine {
+  /** Origin and carriers, so each recipient's copy can leave out actions from
+   *  minutes they may not read (lib/minutesAccess.ts actionVisible). */
+  fromMinutes?: { minutesId: string };
+  assigneeIds?: string[];
   ref: string;
   title: string;
   owners: string;
@@ -235,6 +239,8 @@ export function buildWeeklyFacts(
   const overdueList = actions
     .filter((a) => isOverdue(a, now))
     .map((a) => ({
+      fromMinutes: a.fromMinutes ? { minutesId: a.fromMinutes.minutesId } : undefined,
+      assigneeIds: a.assigneeIds,
       ref: a.ref,
       title: a.title,
       owners: a.assigneeNames.join(", ") || "Nobody assigned",

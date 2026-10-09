@@ -79,6 +79,41 @@ async function main() {
   check("swapping in another address breaks the signature", verifyEmailChangeToken(forged, user, now), "invalid");
   check("rubbish is invalid", verifyEmailChangeToken("nope", user, now), "invalid");
 
+  // --- review fixes: register links, actions from restricted meetings ---
+  const { readerForUser, actionVisible } = await import("../lib/minutesAccess");
+  type P = import("../lib/peopleData").Person;
+  const person = (over: Partial<P>): P => ({ id: "p", name: "X", email: "", userId: null, tagIds: [], ...over }) as P;
+  const ctx = {
+    settings: {},
+    distribution,
+    people: [
+      person({ id: "p-sneaky", email: "teacher@school.co.za", userId: null, tagIds: [FINCOM] }),
+      person({ id: "p-treasurer", email: "treasurer@school.co.za", userId: "u-treasurer", tagIds: [FINCOM] }),
+      person({ id: "p-teacher", email: "teacher@school.co.za", userId: "u-teacher", tagIds: [] }),
+    ],
+  };
+  const teacher = readerForUser({ id: "u-teacher", email: "teacher@school.co.za", tagIds: [] }, ["view_dashboard"], ctx);
+  const treasurer = readerForUser({ id: "u-treasurer", email: "treasurer@school.co.za", tagIds: [] }, ["view_dashboard"], ctx);
+  check("a register entry with MY email but not linked to me gives me no tags", teacher.viewer.tagIds, []);
+  check("a register entry LINKED to my login gives me its tags", treasurer.viewer.tagIds, [FINCOM]);
+  check(
+    "so an unlinked FINCOM entry with my email does not open FINCOM",
+    canReadMinutes(fincomSet, teacher.viewer, effectiveAccess("fincom", {}, distribution)),
+    false
+  );
+
+  const byId = new Map<string, typeof fincomSet | typeof sgbSet>([
+    ["m-fincom", fincomSet],
+    ["m-sgb", sgbSet],
+  ]);
+  const fromFincom = { fromMinutes: { minutesId: "m-fincom" }, assigneeIds: ["p-somebody"] };
+  check("an action from FINCOM minutes is hidden from a non-FINCOM member", actionVisible(fromFincom, teacher, byId, ctx), false);
+  check("...but shown to a FINCOM member", actionVisible(fromFincom, treasurer, byId, ctx), true);
+  check("...and shown to the person carrying it", actionVisible({ ...fromFincom, assigneeIds: ["p-teacher"] }, teacher, byId, ctx), true);
+  check("an action from SGB minutes is shown to everyone", actionVisible({ fromMinutes: { minutesId: "m-sgb" }, assigneeIds: [] }, teacher, byId, ctx), true);
+  check("an action not from any meeting is shown to everyone", actionVisible({ assigneeIds: [] }, teacher, byId, ctx), true);
+  check("an action whose minutes were deleted is shown", actionVisible({ fromMinutes: { minutesId: "gone" }, assigneeIds: [] }, teacher, byId, ctx), true);
+
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);
 }

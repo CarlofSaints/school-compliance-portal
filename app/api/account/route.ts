@@ -3,7 +3,7 @@ import { requireLogin } from "@/lib/rolesData";
 import { getUserById, getUsers, updateUser, verifyPassword } from "@/lib/userData";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 import { createEmailChangeToken, EMAIL_CHANGE_TTL_MS } from "@/lib/emailChange";
-import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from "@/lib/email";
+import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, isEmailConfigured } from "@/lib/email";
 import { getPeople, photoUrlFor } from "@/lib/peopleData";
 
 export async function GET(req: NextRequest) {
@@ -71,6 +71,14 @@ export async function PUT(req: NextRequest) {
     const wanted = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const changingEmail = !!wanted && wanted !== current.email.trim().toLowerCase();
     if (changingEmail) {
+      // sendEmail "succeeds" without a mail provider (it only logs), which
+      // would tell the person a link was sent when nothing was.
+      if (!isEmailConfigured()) {
+        return NextResponse.json(
+          { error: "Email is not set up on this portal, so the address cannot be confirmed. Ask your administrator to change it." },
+          { status: 503 }
+        );
+      }
       if (!isPlausibleEmail(wanted)) {
         return NextResponse.json({ error: "That does not look like an email address." }, { status: 400 });
       }

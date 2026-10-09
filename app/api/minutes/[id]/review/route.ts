@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes, updateMinutes } from "@/lib/minutesData";
 import {
   canReview,
@@ -31,7 +32,7 @@ export async function POST(
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record) {
+  if (!record || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
   }
 

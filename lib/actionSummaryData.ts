@@ -20,6 +20,13 @@ import {
   type SummaryRow,
 } from "./actionSummary";
 import { buildSummaryWorkbook, summaryFilename } from "./actionSummaryWorkbook";
+import {
+  loadMinutesAccessContext,
+  loadRecipientResolver,
+  minutesIndex,
+  actionVisible,
+  type Reader,
+} from "./minutesAccess";
 
 const PATH = "settings/action-summary.json";
 
@@ -109,11 +116,35 @@ export async function gatherSummaryRows(dueSoonDays: number, now: Date = new Dat
   return buildSummaryRows(items, dueSoonDays, now, owners);
 }
 
-/** The workbook on its own, for the Download button. */
-export async function buildSummaryFile(now: Date = new Date()): Promise<{ filename: string; content: Buffer }> {
+/**
+ * Keeps only the rows this reader may see: an action raised in minutes they
+ * may not read is left out, unless they are carrying it. Built once per send,
+ * then applied per recipient.
+ */
+async function rowFilterFactory() {
+  const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutesIndex()]);
+  const resolver = await loadRecipientResolver(ctx);
+  const forReader = (reader: Reader) => (rows: SummaryRow[]) =>
+    rows.filter((r) =>
+      actionVisible(
+        { fromMinutes: r.fromMinutesId ? { minutesId: r.fromMinutesId } : undefined, assigneeIds: r.assigneeIds || [] },
+        reader,
+        byId,
+        ctx
+      )
+    );
+  return { forEmail: (email: string) => forReader(resolver.forEmail(email)) };
+}
+
+/** The workbook on its own, for the Download button, as THIS admin may see it. */
+export async function buildSummaryFile(
+  now: Date = new Date(),
+  forEmail?: string
+): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
+  let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
+  if (forEmail) rows = (await rowFilterFactory()).forEmail(forEmail)(rows);
   const content = await buildSummaryWorkbook({
     branding,
     rows,
@@ -150,11 +181,29 @@ export async function sendActionSummary(opts: {
   const asOf = schoolToday(now);
   const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
   const scheduleText = settings.enabled ? describeSchedule(settings, WEEKDAY_LABELS) : "";
-  const content = await buildSummaryWorkbook({ branding, rows, dueSoonDays: settings.dueSoonDays, asOf, scheduleText });
-  const attachment = { filename: summaryFilename(branding.shortName, asOf), content };
-  const email = { rows, counts: countRows(rows), dueSoonDays: settings.dueSoonDays, asOf, scheduleText };
+  const filename = summaryFilename(branding.shortName, asOf);
+
+  // 🔴 Per recipient: an action raised in minutes somebody may not read (a
+  // FINCOM-only set) is left out of THEIR email and workbook. Usually every
+  // copy is the same, so workbooks are built once per distinct set of rows.
+  const filters = await rowFilterFactory();
+  const workbooks = new Map<string, Buffer>();
+  const copyFor = async (email: string) => {
+    const mine = filters.forEmail(email)(rows);
+    const key = mine.map((r) => r.ref).join("|");
+    let content = workbooks.get(key);
+    if (!content) {
+      content = await buildSummaryWorkbook({ branding, rows: mine, dueSoonDays: settings.dueSoonDays, asOf, scheduleText });
+      workbooks.set(key, content);
+    }
+    return {
+      attachment: { filename, content },
+      email: { rows: mine, counts: countRows(mine), dueSoonDays: settings.dueSoonDays, asOf, scheduleText },
+    };
+  };
 
   if (opts.onlyTo) {
+    const { attachment, email } = await copyFor(opts.onlyTo.email);
     const ok = await sendActionSummaryEmail(branding, opts.onlyTo.email, opts.onlyTo.name, { ...email, preview: true }, attachment);
     return {
       sent: ok ? 1 : 0,
@@ -180,6 +229,7 @@ export async function sendActionSummary(opts: {
   for (const [i, r] of recipients.entries()) {
     // One at a time with a gap, like the weekly update.
     if (i > 0) await sleep(600);
+    const { attachment, email } = await copyFor(r.email);
     const ok = await sendActionSummaryEmail(branding, r.email, r.name, email, attachment);
     if (ok) sent++;
     else failed++;

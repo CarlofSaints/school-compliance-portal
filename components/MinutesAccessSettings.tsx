@@ -34,6 +34,10 @@ export default function MinutesAccessSettings({
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
   const [access, setAccess] = useState<Partial<Record<MeetingBody, Shown>>>({});
   const [draft, setDraft] = useState<Partial<Record<MeetingBody, BodyAccess>>>({});
+  // Only bodies somebody changed are saved; "default" puts one back on its
+  // default. Sending all three would freeze FINCOM's default (its distribution
+  // list) into a fixed copy the first time anyone changed SGB.
+  const [touched, setTouched] = useState<Partial<Record<MeetingBody, "set" | "default">>>({});
   const [busy, setBusy] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -65,6 +69,7 @@ export default function MinutesAccessSettings({
           ACCESS_BODIES.map((b) => [b, { mode: data.access?.[b]?.mode ?? "everyone", tagIds: data.access?.[b]?.tagIds ?? [] }])
         )
       );
+      setTouched({});
       setLoadFailed(false);
     } finally {
       setBusy(false);
@@ -75,8 +80,12 @@ export default function MinutesAccessSettings({
     load();
   }, [load]);
 
-  const set = (body: MeetingBody, next: Partial<BodyAccess>) =>
+  const set = (body: MeetingBody, next: Partial<BodyAccess>) => {
     setDraft((d) => ({ ...d, [body]: { mode: "everyone", tagIds: [], ...d[body], ...next } }));
+    setTouched((t) => ({ ...t, [body]: "set" }));
+  };
+
+  const backToDefault = (body: MeetingBody) => setTouched((t) => ({ ...t, [body]: "default" }));
 
   const toggleTag = (body: MeetingBody, tagId: string) => {
     const current = draft[body]?.tagIds ?? [];
@@ -89,7 +98,14 @@ export default function MinutesAccessSettings({
       const res = await authFetch("/api/minutes-access", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify(
+          Object.fromEntries(
+            Object.entries(touched).map(([b, how]) => [
+              b,
+              how === "default" ? { mode: "default" } : draft[b as MeetingBody],
+            ])
+          )
+        ),
       });
       if (!res.ok) {
         onError(await apiErrorMessage(res, "Could not save."));
@@ -126,7 +142,19 @@ export default function MinutesAccessSettings({
           <div key={body} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="font-semibold text-dark">{ACCESS_BODY_LABELS[body]}</h3>
-              {shown?.isDefault && <span className="text-xs text-gray-400">Default: {DEFAULT_NOTE[body]}</span>}
+              {touched[body] === "default" ? (
+                <span className="text-xs text-amber-700">Goes back to the default when you save.</span>
+              ) : shown?.isDefault && !touched[body] ? (
+                <span className="text-xs text-gray-400">Default: {DEFAULT_NOTE[body]}</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => backToDefault(body)}
+                  className="text-xs text-primary hover:text-primary-dark"
+                >
+                  Use the default instead
+                </button>
+              )}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -197,7 +225,7 @@ export default function MinutesAccessSettings({
       <div className="flex justify-end">
         <button
           onClick={save}
-          disabled={saving}
+          disabled={saving || Object.keys(touched).length === 0}
           className="bg-primary hover:bg-primary-dark disabled:opacity-60 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
         >
           {saving ? "Saving..." : "Save who can read minutes"}

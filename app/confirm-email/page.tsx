@@ -32,8 +32,10 @@ function ConfirmEmail() {
         return;
       }
       setEmail(data.email || "");
-      // If this browser is signed in, show the new address straight away.
-      if (getSession()) updateSession({ email: data.email });
+      // If this browser is signed in AS THAT PERSON, show the new address
+      // straight away. A link opened in someone else's signed-in browser must
+      // not relabel their session.
+      if (getSession()?.id === data.userId) updateSession({ email: data.email });
       setState("done");
     } catch {
       setMessage("We could not reach the portal. Please try again.");

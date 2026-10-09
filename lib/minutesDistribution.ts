@@ -2,6 +2,7 @@ import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
 import { formatPeriod, canDistribute } from "./minutes";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
+import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
 import { documentHash, shortHash } from "./minutesSigning";
 import { sendMinutesSignedEmail, type EmailAttachment } from "./email";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
@@ -76,13 +77,26 @@ export interface DistributionResult {
 export async function previewDistribution(record: MinutesRecord) {
   const audience = audienceForBody(record.body);
   const resolved = await resolveAudience(audience);
+
+  // 🔴 Nobody is sent minutes they may not read. "Other" goes to the SGB list,
+  // so a set limited to a disciplinary panel would otherwise land in the whole
+  // SGB's inbox with the document attached. Those held back are NAMED, so the
+  // secretary sees who is on the list but outside the read setting.
+  const ctx = await loadMinutesAccessContext();
+  const resolver = await loadRecipientResolver(ctx);
+  const allowed = (r: { email: string }) => viewerMayRead(record, resolver.forEmail(r.email).viewer, ctx);
+  const to = resolved.to.filter(allowed);
+  const cc = resolved.cc.filter(allowed);
+  const heldBack = [...resolved.to, ...resolved.cc].filter((r) => !allowed(r)).map((r) => r.name);
+
   return {
     audience,
     audienceLabel: AUDIENCE_LABELS[audience],
-    to: resolved.to,
-    cc: resolved.cc,
+    to,
+    cc,
     withoutEmail: resolved.withoutEmail,
-    empty: resolved.empty,
+    heldBack,
+    empty: to.length + cc.length === 0,
   };
 }
 
@@ -120,6 +134,11 @@ export async function distributeSignedMinutes(
   }
 
   const preview = await previewDistribution(record);
+  if (preview.empty && preview.heldBack.length > 0) {
+    throw new DistributionError(
+      `Everyone on the ${preview.audienceLabel.toLowerCase()} list is outside who may read these minutes. Check Admin, Minutes Admin, Who can read minutes.`
+    );
+  }
   if (preview.empty) {
     throw new DistributionError(
       `Nobody is set up to receive ${preview.audienceLabel.toLowerCase()}. Set that tag under Admin, Minutes Admin, and try again.`

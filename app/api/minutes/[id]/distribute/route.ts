@@ -38,6 +38,7 @@ export async function GET(
       to: preview.to,
       cc: preview.cc,
       withoutEmail: preview.withoutEmail,
+      heldBack: preview.heldBack,
       empty: preview.empty,
       // Whether the button should be offered at all, through the one shared
       // rule - a wet-ink upload closes minutes without the status ever

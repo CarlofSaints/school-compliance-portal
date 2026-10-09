@@ -65,5 +65,5 @@ export async function POST(req: NextRequest) {
     summary: `Changed their email address to ${claims.n} (confirmed from that address)`,
   }).catch(() => {});
 
-  return NextResponse.json({ success: true, email: claims.n });
+  return NextResponse.json({ success: true, email: claims.n, userId: user.id });
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { visibleActionsFor, sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -36,6 +37,10 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // directory: it belongs to everybody in the portal, and an assignee who cannot
 // see their own action cannot act on it. Raising and editing sits behind
 // manage_action_items - see POST.
+//
+// 🔴 EXCEPT an action raised in minutes the reader may not see (a FINCOM-only
+// set, say): it says what that meeting decided, so it follows the minutes'
+// read access. Whoever is carrying it always sees it.
 export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
@@ -49,7 +54,7 @@ export async function GET(req: NextRequest) {
   // Names are refreshed from the register on the way out, so an item does not
   // go stale when somebody updates their account or a position changes hands.
   // The stored name stays as the fallback for a person since removed.
-  const withNames = items.map((item) => ({
+  const withNames = (await visibleActionsFor(session, items)).map((item) => ({
     ...item,
     assigneeNames: item.assigneeIds.map((id, i) =>
       displayNameFor(id, people, users, item.assigneeNames[i] || "")
@@ -108,7 +113,9 @@ export async function POST(req: NextRequest) {
     const minutesId = String(body?.fromMinutesId ?? "").trim();
     if (minutesId) {
       const record = await getMinutes(minutesId);
-      if (!record) {
+      // Same answer for "not there" and "not yours to read": raising an action
+      // must not be a way to learn a restricted set's title and sections.
+      if (!record || !(await sessionMayReadMinutes(session, record))) {
         return NextResponse.json(
           { error: "Those minutes could not be found" },
           { status: 400 }

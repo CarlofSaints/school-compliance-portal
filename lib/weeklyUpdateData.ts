@@ -2,7 +2,13 @@ import { readJson, writeJson } from "./controlData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
 import { listMinutes, type MinutesRecord } from "./minutesData";
-import { loadMinutesAccessContext, viewerForUser, viewerMayRead, type MinutesAccessContext } from "./minutesAccess";
+import {
+  loadMinutesAccessContext,
+  readerForUser,
+  viewerMayRead,
+  actionVisible,
+  type MinutesAccessContext,
+} from "./minutesAccess";
 import { getSpendApplications } from "./spendData";
 import { getRoles, resolveRolePermissions } from "./rolesData";
 import { resolveBranding } from "./brandingData";
@@ -107,12 +113,18 @@ function factsFor(
   records: Map<string, MinutesRecord>,
   ctx: MinutesAccessContext
 ): WeeklyFacts {
-  const viewer = viewerForUser({ id: who.id, email: who.email, tagIds: who.tagIds }, who.permissions, ctx);
+  const reader = readerForUser({ id: who.id, email: who.email, tagIds: who.tagIds }, who.permissions, ctx);
   return {
     ...facts,
+    actions: {
+      ...facts.actions,
+      overdueList: facts.actions.overdueList.filter((line) =>
+        actionVisible({ fromMinutes: line.fromMinutes, assigneeIds: line.assigneeIds || [] }, reader, records, ctx)
+      ),
+    },
     minutes: facts.minutes.filter((line) => {
       const record = line.minutesId ? records.get(line.minutesId) : undefined;
-      return !!record && viewerMayRead(record, viewer, ctx);
+      return !!record && viewerMayRead(record, reader.viewer, ctx);
     }),
   };
 }
