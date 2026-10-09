@@ -5,6 +5,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import TemplateEditor from "@/components/TemplateEditor";
 import MinutesRecipientSettings from "@/components/MinutesRecipientSettings";
+import MinutesAccessSettings from "@/components/MinutesAccessSettings";
 import {
   MEETING_BODY_LABELS,
   STARTER_TEMPLATE,
@@ -35,7 +36,7 @@ export default function MinutesAdminPage() {
   // which case the editor falls back to the built-in list.
   const [positions, setPositions] = useState<string[]>([]);
   const [editing, setEditing] = useState<MinutesTemplate | null>(null);
-  const [tab, setTab] = useState<"templates" | "recipients">("templates");
+  const [tab, setTab] = useState<"templates" | "recipients" | "access">("templates");
   const [busy, setBusy] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -147,6 +148,7 @@ export default function MinutesAdminPage() {
           {([
             ["templates", "Templates"],
             ["recipients", "Who receives minutes"],
+            ["access", "Who can read minutes"],
           ] as const).map(([k, label]) => (
             <button
               key={k}
@@ -165,6 +167,13 @@ export default function MinutesAdminPage() {
 
       {!editing && tab === "recipients" && (
         <MinutesRecipientSettings
+          onSaved={(message) => setToast({ message, type: "success" })}
+          onError={(message) => setToast({ message, type: "error" })}
+        />
+      )}
+
+      {!editing && tab === "access" && (
+        <MinutesAccessSettings
           onSaved={(message) => setToast({ message, type: "success" })}
           onError={(message) => setToast({ message, type: "error" })}
         />

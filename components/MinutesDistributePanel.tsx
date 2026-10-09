@@ -28,6 +28,8 @@ interface Preview {
   to: Recipient[];
   cc: Recipient[];
   withoutEmail: string[];
+  /** On the list, but outside who may read this kind of minutes. */
+  heldBack?: string[];
   empty: boolean;
   closed: boolean;
 }
@@ -152,6 +154,13 @@ export default function MinutesDistributePanel({
 
           {/* Shown, never ignored. Somebody on the list with no address is a
               gap the secretary has to be able to see. */}
+          {(preview.heldBack?.length ?? 0) > 0 && (
+            <p className="text-sm text-amber-700 mb-1">
+              Not sent to {preview.heldBack!.join(", ")}: they are on the list but not allowed to
+              read these minutes (Admin, Minutes Admin, Who can read minutes).
+            </p>
+          )}
+
           {preview.withoutEmail.length > 0 && (
             <p className="text-sm text-amber-700 mb-1">
               No email address for {preview.withoutEmail.join(", ")}, so they
@@ -167,6 +176,8 @@ export default function MinutesDistributePanel({
                 {" — "}
                 {last.sent} of {last.recipients} delivered
                 {last.failed.length > 0 && `, failed for ${last.failed.join(", ")}`}.
+                {(last.heldBack?.length ?? 0) > 0 &&
+                  ` Not sent to ${last.heldBack!.join(", ")}: outside who may read these minutes.`}
                 {sends.length > 1 && ` Sent ${sends.length} times in all.`}
               </>
             ) : (

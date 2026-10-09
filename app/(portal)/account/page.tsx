@@ -21,6 +21,11 @@ function AccountContent() {
   const [name, setName] = useState(session?.name || "");
   const [surname, setSurname] = useState(session?.surname || "");
   const [email, setEmail] = useState(session?.email || "");
+  // The address on the account, so the form knows when the email box has been
+  // changed and has to ask for the password and send a confirmation.
+  const [savedEmail, setSavedEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,6 +56,7 @@ function AccountContent() {
       setName(data.name ?? "");
       setSurname(data.surname ?? "");
       setEmail(data.email ?? "");
+      setSavedEmail(data.email ?? "");
     }
     setPersonLoaded(true);
   }, []);
@@ -79,6 +85,9 @@ function AccountContent() {
     }
   };
 
+  const emailChanged =
+    !!savedEmail && email.trim().toLowerCase() !== savedEmail.trim().toLowerCase();
+
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -98,17 +107,30 @@ function AccountContent() {
     const res = await authFetch("/api/account", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, surname, email }),
+      body: JSON.stringify({ name, surname, email, currentPassword: emailChanged ? emailPassword : undefined }),
     });
 
     if (res.ok) {
-      updateSession({ name, surname, email });
+      const saved = await res.json().catch(() => ({}));
+      // The email does NOT change here. A new address waits for the link sent
+      // to it, so the session and the box go back to the address in force.
+      updateSession({ name, surname });
+      if (saved.pendingEmail) {
+        setPendingEmail(saved.pendingEmail);
+        setEmail(savedEmail);
+        setEmailPassword("");
+      }
       try {
         await savePhoto();
         setPhotoFile(null);
         setPhotoRemoved(false);
         await loadAccount();
-        setToast({ message: "Profile updated", type: "success" });
+        setToast({
+          message: saved.pendingEmail
+            ? `Saved. We emailed a link to ${saved.pendingEmail}: your email changes when you click it.`
+            : "Profile updated",
+          type: "success",
+        });
       } catch (err) {
         // The details saved. Say so, rather than reporting a failure that
         // would have them type everything again.
@@ -120,7 +142,8 @@ function AccountContent() {
         });
       }
     } else {
-      setToast({ message: "Failed to update profile", type: "error" });
+      const data = await res.json().catch(() => ({}));
+      setToast({ message: data.error || "Failed to update profile", type: "error" });
     }
     setSaving(false);
   };
@@ -251,6 +274,28 @@ function AccountContent() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 />
+                {emailChanged && (
+                  <div className="mt-2">
+                    <label className="block text-xs text-gray-500 mb-1">
+                      Your current password, to change your email
+                    </label>
+                    <input
+                      type="password"
+                      value={emailPassword}
+                      onChange={(e) => setEmailPassword(e.target.value)}
+                      autoComplete="current-password"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      We will email a link to the new address. Your email changes when you click it.
+                    </p>
+                  </div>
+                )}
+                {pendingEmail && !emailChanged && (
+                  <p className="text-xs text-amber-700 mt-2">
+                    Waiting for you to confirm <strong>{pendingEmail}</strong>. Check that inbox for the link.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>

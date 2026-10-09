@@ -280,6 +280,10 @@ export interface SummaryRow {
   raisedOn: string;
   /** "SGB meeting (March 2026)" or the meeting date, or "" */
   fromMeeting: string;
+  /** Origin and carriers, so a recipient who may not read those minutes gets
+   *  a copy without this row (lib/minutesAccess.ts actionVisible). Not shown. */
+  fromMinutesId?: string;
+  assigneeIds?: string[];
 }
 
 export function healthOf(
@@ -346,6 +350,8 @@ export function buildSummaryRows(
         raisedBy: i.raisedByName || "",
         raisedOn: (i.createdAt || "").slice(0, 10),
         fromMeeting,
+        fromMinutesId: i.fromMinutes?.minutesId,
+        assigneeIds: i.assigneeIds,
       };
     })
     .sort(

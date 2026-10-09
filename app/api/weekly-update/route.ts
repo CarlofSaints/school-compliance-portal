@@ -115,6 +115,10 @@ export async function POST(req: NextRequest) {
         notActivated: body?.asNotActivated === true,
         // Previewed with exactly what this admin would receive.
         seesSpend: session.permissions.includes("view_all_spend"),
+        // And with only the minutes this admin may read.
+        userId: me.id,
+        permissions: session.permissions,
+        tagIds: me.tagIds || [],
       },
     });
     if (result.failed) {

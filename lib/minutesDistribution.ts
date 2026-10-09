@@ -2,6 +2,7 @@ import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
 import { formatPeriod, canDistribute } from "./minutes";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
+import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
 import { documentHash, shortHash } from "./minutesSigning";
 import { sendMinutesSignedEmail, type EmailAttachment } from "./email";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
@@ -66,6 +67,8 @@ export interface DistributionResult {
    *  a governor who is meant to receive the minutes and quietly does not is
    *  exactly the gap the register exists to close. */
   withoutEmail: string[];
+  /** On the list but not allowed to read this kind of minutes, so not sent. */
+  heldBack: string[];
   /** Which audience was used, so the caller can say "the SGB list" out loud
    *  rather than reporting an anonymous number. */
   audienceLabel: string;
@@ -76,13 +79,27 @@ export interface DistributionResult {
 export async function previewDistribution(record: MinutesRecord) {
   const audience = audienceForBody(record.body);
   const resolved = await resolveAudience(audience);
+
+  // 🔴 Nobody is sent minutes they may not read. "Other" goes to the SGB list,
+  // so a set limited to a disciplinary panel would otherwise land in the whole
+  // SGB's inbox with the document attached. Those held back are NAMED, so the
+  // secretary sees who is on the list but outside the read setting.
+  const ctx = await loadMinutesAccessContext();
+  const resolver = await loadRecipientResolver(ctx);
+  const allowed = (r: { email: string }) => viewerMayRead(record, resolver.forEmail(r.email).viewer, ctx);
+  const to = resolved.to.filter(allowed);
+  const cc = resolved.cc.filter(allowed);
+  const heldBack = [...resolved.to, ...resolved.cc].filter((r) => !allowed(r)).map((r) => r.name);
+
   return {
     audience,
     audienceLabel: AUDIENCE_LABELS[audience],
-    to: resolved.to,
-    cc: resolved.cc,
+    to,
+    cc,
     withoutEmail: resolved.withoutEmail,
-    empty: resolved.empty,
+    heldBack,
+    // Unchanged meaning: nobody on the To list means do not send.
+    empty: to.length === 0,
   };
 }
 
@@ -120,6 +137,11 @@ export async function distributeSignedMinutes(
   }
 
   const preview = await previewDistribution(record);
+  if (preview.empty && preview.heldBack.length > 0) {
+    throw new DistributionError(
+      `Everyone on the ${preview.audienceLabel.toLowerCase()} list is outside who may read these minutes. Check Admin, Minutes Admin, Who can read minutes.`
+    );
+  }
   if (preview.empty) {
     throw new DistributionError(
       `Nobody is set up to receive ${preview.audienceLabel.toLowerCase()}. Set that tag under Admin, Minutes Admin, and try again.`
@@ -166,6 +188,9 @@ export async function distributeSignedMinutes(
     sent,
     recipients: preview.to.length + preview.cc.length,
     failed,
+    // Recorded on the minutes, so an AUTOMATIC send (the last signature) still
+    // shows the secretary who was on the list but outside the read setting.
+    ...(preview.heldBack.length ? { heldBack: preview.heldBack } : {}),
   };
   await recordDistribution(record, note);
 
@@ -175,6 +200,7 @@ export async function distributeSignedMinutes(
     to: preview.to.map((r) => r.email),
     cc: preview.cc.map((r) => r.email),
     withoutEmail: preview.withoutEmail,
+    heldBack: preview.heldBack,
     audienceLabel: preview.audienceLabel,
   };
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes, saveSignedCopy, readSignedCopy } from "@/lib/minutesData";
 import { isLocked, MINUTES_STATUS_LABELS } from "@/lib/minutes";
 import { documentHash, shortHash } from "@/lib/minutesSigning";
@@ -94,7 +95,7 @@ export async function GET(
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record?.signedCopy) {
+  if (!record?.signedCopy || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "No signed copy for these minutes" }, { status: 404 });
   }
 

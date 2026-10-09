@@ -168,6 +168,57 @@ export async function sendPasswordResetLinkEmail(
   return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body), b.replyTo);
 }
 
+// Sent to the NEW address when somebody changes their own email. Nothing
+// changes until the link is used, which proves they receive mail there (see
+// lib/emailChange.ts). The page behind the link asks for a click rather than
+// acting on arrival, because mail scanners open links on their own.
+export async function sendEmailChangeConfirmEmail(
+  to: string,
+  name: string,
+  token: string,
+  ttlHours: number
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const PRIMARY = b.colors.primary;
+  const url = `${SITE_URL}/confirm-email?token=${encodeURIComponent(token)}`;
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">You asked to use this address for your ${esc(b.shortName)} ${esc(b.tagline)} account. Confirm it using the button below and it becomes the address you sign in with.</p>
+    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Confirm my new email</a>
+    <p style="color:#666;font-size:13px;">This link expires in ${ttlHours} hours. Until it is used, your account keeps its old address.</p>
+    <p style="color:#666;font-size:13px;">If you did not ask for this, ignore this email and nothing changes.</p>
+  `;
+  return sendEmail(b.fromEmail, to, `Confirm your new email for ${b.shortName} ${b.portalSubtitle}`, emailShell(b, "Confirm your new email", body), b.replyTo);
+}
+
+// Sent to the OLD address, both when a change is asked for and when it goes
+// through. If somebody else is in the account, this is how the real owner
+// finds out while it can still be stopped.
+export async function sendEmailChangeNoticeEmail(
+  to: string,
+  name: string,
+  newEmail: string,
+  stage: "requested" | "changed"
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const what =
+    stage === "requested"
+      ? `Someone signed in to your account asked to change its email address to <strong>${esc(newEmail)}</strong>. It changes only if that address confirms it.`
+      : `The email address on your account has been changed to <strong>${esc(newEmail)}</strong>. From now on you sign in with that address.`;
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${what}</p>
+    <p style="color:#333;">If this was not you, contact your school's portal administrator straight away and change your password.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    stage === "requested" ? `Email change requested on ${b.shortName} ${b.portalSubtitle}` : `Your ${b.shortName} ${b.portalSubtitle} email was changed`,
+    emailShell(b, stage === "requested" ? "Email change requested" : "Your email was changed", body),
+    b.replyTo
+  );
+}
+
 // The draft, out for checking. Carl: it "explains that this is draft 1, asks
 // them to check it and then a link in the email directs them to the doc, so
 // they can approve or decline with comments".

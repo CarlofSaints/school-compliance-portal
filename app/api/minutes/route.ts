@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readableMinutes } from "@/lib/minutesAccess";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import {
   listMinutes,
@@ -29,13 +30,14 @@ const ACCEPTED: Record<string, true> = {
 };
 const MAX_BYTES = 15 * 1024 * 1024;
 
-// READING needs only a login, not a permission. Minutes are what the governing
-// body agreed; a member who cannot read them cannot do their job, and gating
-// them would make the module useless to the people it is for.
+// READING needs a login and, per meeting body, whatever Admin -> Minutes Admin
+// says (lib/minutesAccessRules.ts): FINCOM minutes go to FINCOM unless the
+// school opens them up. A set someone may not read is left out of the list
+// entirely, not shown greyed out.
 export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
-  return NextResponse.json(await listMinutes());
+  return NextResponse.json(await readableMinutes(session, await listMinutes()));
 }
 
 export async function POST(req: NextRequest) {

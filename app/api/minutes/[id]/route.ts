@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import {
   getMinutes,
   updateMinutes,
@@ -28,7 +29,9 @@ export async function GET(
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record) {
+  // Not allowed reads exactly like not there: a FINCOM-only set is not even
+  // confirmed to exist to someone outside FINCOM.
+  if (!record || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
   }
   // The hash of the document AS IT STANDS NOW, so the page can tell a

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMinutes, readSignatureImage } from "@/lib/minutesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 
 // A signatory's mark, as a PNG.
 //
@@ -23,7 +24,7 @@ export async function GET(
   const signatory = record?.signatories.find(
     (s) => s.email.trim().toLowerCase() === address.trim().toLowerCase()
   );
-  if (!signatory?.signedAt) {
+  if (!signatory?.signedAt || !record || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "No signature" }, { status: 404 });
   }
 

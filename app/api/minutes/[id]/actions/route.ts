@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
+import { getMinutes } from "@/lib/minutesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getActionItems } from "@/lib/actionItemData";
 
 /**
@@ -20,6 +22,12 @@ export async function GET(
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
+  // The actions raised in a meeting say what the meeting decided, so they
+  // follow the minutes' own read access.
+  const record = await getMinutes(id);
+  if (!record || !(await sessionMayReadMinutes(session, record))) {
+    return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
+  }
   const items = await getActionItems();
   const raised = items
     .filter((i) => i.fromMinutes?.minutesId === id)

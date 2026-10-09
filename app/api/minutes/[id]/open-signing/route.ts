@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes } from "@/lib/minutesData";
 import { canOpenSigning, MINUTES_STATUS_LABELS } from "@/lib/minutes";
 import { openSigning, SigningSetupError } from "@/lib/minutesSigningFlow";
@@ -28,7 +29,7 @@ export async function POST(
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record) {
+  if (!record || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
   }
 

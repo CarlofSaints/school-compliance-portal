@@ -38,11 +38,19 @@ export async function PUT(
       const nextUserId = fields.userId !== undefined ? fields.userId : existing.userId;
       const nextTags = fields.tagIds ?? existing.tagIds ?? [];
       const tagsChanged = !sameIds(nextTags, existing.tagIds);
-      const becomesMe = nextUserId === session.id && existing.userId !== session.id;
-      const isMe = nextUserId === session.id || existing.userId === session.id;
+      // An entry carrying your own login email is you too: minutes access and
+      // distribution recognise a register entry by its email, so putting your
+      // address on a FINCOM-tagged entry would otherwise hand you FINCOM.
+      const mine = (e: string | undefined | null) =>
+        !!session.email && String(e || "").trim().toLowerCase() === session.email.trim().toLowerCase();
+      const nextEmail = fields.email !== undefined ? fields.email : existing.email;
+      const wasMe = existing.userId === session.id || mine(existing.email);
+      const willBeMe = nextUserId === session.id || mine(nextEmail);
+      const becomesMe = willBeMe && !wasMe;
+      const isMe = wasMe || willBeMe;
       if ((isMe && tagsChanged) || (becomesMe && nextTags.length > 0)) {
         return NextResponse.json(
-          { error: "You cannot change the tags on your own People entry, or link a tagged entry to your own login. Ask a Super Admin." },
+          { error: "You cannot change the tags on your own People entry, or link a tagged entry to your own login or email. Ask a Super Admin." },
           { status: 403 }
         );
       }
