@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { readJson, readJsonTolerant, writeJson, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, updateJson, NO_CHANGE, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
 import type {
   MeetingBody,
   MeetingPeriod,
@@ -166,32 +166,52 @@ export async function createMinutes(
  * not a UI rule, it is the whole point of signing them, so it is enforced here
  * where every writer must pass rather than in each caller.
  */
+/** A change to one set of minutes: fields to set, or a function of the record
+ *  AS IT IS NOW. Use the function for signatures, reviews and anything else
+ *  built from a list on the record: two governors signing the same minute each
+ *  built the signatory list from their own earlier read, and the second save
+ *  erased the first signature. */
+export type MinutesChange =
+  | Partial<Omit<MinutesRecord, "id" | "createdAt" | "createdBy">>
+  | ((current: MinutesRecord) => Partial<Omit<MinutesRecord, "id" | "createdAt" | "createdBy">>);
+
+/** Thrown from inside a change to abandon it without writing. */
+export class MinutesChangeRefused extends Error {}
+
 export async function updateMinutes(
   id: string,
-  updates: Partial<Omit<MinutesRecord, "id" | "createdAt" | "createdBy">>
+  change: MinutesChange
 ): Promise<MinutesRecord | null> {
-  const existing = await getMinutes(id);
-  if (!existing) return null;
-  if (isLocked(existing.status)) throw new MinutesLockedError(id);
-  if (
-    existing.status === "awaiting_signatures" &&
-    SIGNED_CONTENT_FIELDS.some((f) => f in updates && updates[f] !== undefined)
-  ) {
-    throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
-  }
-
-  const next: MinutesRecord = {
-    ...existing,
-    ...updates,
-    id: existing.id,
-    createdAt: existing.createdAt,
-    createdBy: existing.createdBy,
-    updatedAt: new Date().toISOString(),
-  };
-  await writeJson(recordPath(id), next);
-  // Returned so the caller can render what was SAVED. A read straight after a
-  // write can still serve the previous copy.
-  return next;
+  let saved: MinutesRecord | null = null;
+  // 🔴 Through updateJson: the write only lands if nobody else wrote since
+  // this read, otherwise it is worked out again on the fresh copy. The lock
+  // rules are checked INSIDE, against that fresh copy, so a set that became
+  // locked a moment ago is refused rather than overwritten.
+  await updateJson<MinutesRecord | null>(recordPath(id), null, (existing) => {
+    if (!existing) {
+      saved = null;
+      return NO_CHANGE;
+    }
+    if (isLocked(existing.status)) throw new MinutesLockedError(id);
+    const updates = typeof change === "function" ? change(existing) : change;
+    if (
+      existing.status === "awaiting_signatures" &&
+      SIGNED_CONTENT_FIELDS.some((f) => f in updates && updates[f] !== undefined)
+    ) {
+      throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
+    }
+    saved = {
+      ...existing,
+      ...updates,
+      id: existing.id,
+      createdAt: existing.createdAt,
+      createdBy: existing.createdBy,
+      updatedAt: new Date().toISOString(),
+    };
+    return saved;
+  });
+  // Returned so the caller can render what was SAVED.
+  return saved;
 }
 
 /**
@@ -214,11 +234,17 @@ export async function recordDistribution(
   base: MinutesRecord,
   note: MinutesDistributionNote
 ): Promise<MinutesRecord> {
-  const next: MinutesRecord = {
-    ...base,
-    distributions: [...(base.distributions ?? []), note],
-  };
-  await writeJson(recordPath(base.id), next);
+  // Now through updateJson, which reads with the file's version and only writes
+  // if it is still current. That answers the worry above properly: a stale
+  // copy can no longer be saved over the signature, because a write based on
+  // it is refused and redone on the fresh copy. `base` is the fallback only if
+  // the file cannot be found at all.
+  let next: MinutesRecord = base;
+  await updateJson<MinutesRecord | null>(recordPath(base.id), null, (current) => {
+    const from = current ?? base;
+    next = { ...from, distributions: [...(from.distributions ?? []), note] };
+    return next;
+  });
   return next;
 }
 

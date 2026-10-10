@@ -3,8 +3,8 @@ import { requirePermission } from "@/lib/rolesData";
 import {
   getPolicyById,
   updatePolicy,
-  getPolicyVersions,
-  savePolicyVersions,
+  reservePolicyVersion,
+  releasePolicyVersion,
   uploadPolicyFile,
 } from "@/lib/policyData";
 
@@ -33,21 +33,25 @@ export async function POST(
 
     const ext = file.name.split(".").pop() || "pdf";
     const buffer = Buffer.from(await file.arrayBuffer());
-    const versions = await getPolicyVersions(id);
-    const newVersion = (policy.currentVersion || versions.length) + 1;
-
-    await uploadPolicyFile(id, newVersion, ext, buffer);
-
-    versions.push({
-      version: newVersion,
+    // The number is reserved under a guarded write, so two uploads at once
+    // each get their own instead of overwriting one file.
+    const newVersion = await reservePolicyVersion(id, policy.currentVersion || 0, {
       filename: file.name,
       ext,
       uploadedBy: session.id,
       uploadedAt: new Date().toISOString(),
       size: buffer.length,
     });
-    await savePolicyVersions(id, versions);
-    await updatePolicy(id, { currentVersion: newVersion });
+    try {
+      await uploadPolicyFile(id, newVersion, ext, buffer);
+    } catch (err) {
+      await releasePolicyVersion(id, newVersion).catch(() => {});
+      throw err;
+    }
+    // Never moves backwards: if a later version landed first, it stays current.
+    await updatePolicy(id, (current) => ({
+      currentVersion: Math.max(current.currentVersion || 0, newVersion),
+    }));
 
     return NextResponse.json({ version: newVersion }, { status: 201 });
   } catch {

@@ -110,14 +110,12 @@ export async function POST(
   // empty signature block and reads like a forgery rather than a failed save.
   await saveSignatureImage(id, signatory.email, mark.png);
 
-  const signatories = [...record.signatories];
-  signatories[index] = {
-    ...signatory,
+  const mine = {
     signedAt: new Date().toISOString(),
     documentHash: hash,
     ip: clientIp(req),
     signature: {
-      kind: body.kind === "typed" ? "typed" : "drawn",
+      kind: (body.kind === "typed" ? "typed" : "drawn") as "typed" | "drawn",
       width: mark.width,
       height: mark.height,
     },
@@ -126,11 +124,21 @@ export async function POST(
     codeHash: undefined,
   };
 
-  const progress = signingProgress(signatories);
-  const updated = await updateMinutes(id, {
-    signatories,
-    status: progress.complete ? "signed" : "awaiting_signatures",
-    signedAt: progress.complete ? new Date().toISOString() : undefined,
+  // 🔴 Applied to the signatories AS THEY ARE AT SAVE TIME. Two governors
+  // signing in the same minute each changed their own earlier copy of the
+  // list, and the second save erased the first signature. Matched by email,
+  // not by position, in case the list was rebuilt in between.
+  let progress = signingProgress(record.signatories);
+  const updated = await updateMinutes(id, (current) => {
+    const signatories = current.signatories.map((s) =>
+      s.email.trim().toLowerCase() === signatory.email.trim().toLowerCase() ? { ...s, ...mine } : s
+    );
+    progress = signingProgress(signatories);
+    return {
+      signatories,
+      status: progress.complete ? "signed" : "awaiting_signatures",
+      signedAt: progress.complete ? new Date().toISOString() : undefined,
+    };
   });
 
   await recordActivity({

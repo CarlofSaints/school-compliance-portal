@@ -1,6 +1,8 @@
 import {
   readJson,
   writeJson,
+  updateJson,
+  NO_CHANGE,
   writeFile,
   readFile,
   deleteFile,
@@ -14,10 +16,19 @@ export * from "./spend";
 
 const SPEND_INDEX = "spend/index.json";
 
+// 🔴 The index is the source of truth, and every change to it goes through
+// updateJson (lib/controlData.ts), which only writes if nobody else wrote since
+// the read and otherwise re-applies the change. Before, two approvers deciding
+// at the same moment kept one decision, and a new application could wipe a
+// decision made the same second. The per-application file is a copy written
+// after, from what the index now holds.
+
 export async function getSpendApplications(): Promise<SpendApplication[]> {
   return readJson<SpendApplication[]>(SPEND_INDEX, []);
 }
 
+/** Replaces the whole list. Only for seeding demo data; everything else
+ *  changes one application through updateSpendApplication. */
 export async function saveSpendApplications(
   apps: SpendApplication[]
 ): Promise<void> {
@@ -34,22 +45,17 @@ export async function getSpendById(
 export async function createSpendApplication(
   app: SpendApplication
 ): Promise<void> {
-  const apps = await getSpendApplications();
-  apps.push(app);
-  await saveSpendApplications(apps);
+  await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => [...apps, app]);
   await writeJson(`spend/${app.id}.json`, app);
 }
 
-// Batch equivalent of createSpendApplication for bulk import. Reads and writes
-// the shared index ONCE for the whole batch - creating them one at a time would
-// re-read and re-write the index per row.
+// Batch equivalent of createSpendApplication for bulk import: one guarded
+// write of the index for the whole batch.
 export async function createSpendApplications(
   newApps: SpendApplication[]
 ): Promise<void> {
   if (newApps.length === 0) return;
-  const apps = await getSpendApplications();
-  apps.push(...newApps);
-  await saveSpendApplications(apps);
+  await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => [...apps, ...newApps]);
   for (const app of newApps) {
     await writeJson(`spend/${app.id}.json`, app);
   }
@@ -61,12 +67,11 @@ export async function createSpendApplications(
 export async function deleteSpendImportBatch(
   batchId: string
 ): Promise<number> {
-  const apps = await getSpendApplications();
-  const doomed = apps.filter((a) => a.importBatchId === batchId);
-  if (doomed.length === 0) return 0;
-  await saveSpendApplications(
-    apps.filter((a) => a.importBatchId !== batchId)
-  );
+  let doomed: SpendApplication[] = [];
+  await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
+    doomed = apps.filter((a) => a.importBatchId === batchId);
+    return doomed.length ? apps.filter((a) => a.importBatchId !== batchId) : NO_CHANGE;
+  });
   for (const app of doomed) {
     // Best effort: the index is the source of truth for the list, so a failed
     // per-application blob delete must not fail the undo.
@@ -84,35 +89,52 @@ export async function deleteSpendImportBatch(
 export async function deleteSpendApplication(
   id: string
 ): Promise<SpendApplication | null> {
-  const apps = await getSpendApplications();
-  const app = apps.find((a) => a.id === id);
-  if (!app) return null;
-
-  await saveSpendApplications(apps.filter((a) => a.id !== id));
+  let app: SpendApplication | null = null;
+  await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
+    app = apps.find((a) => a.id === id) ?? null;
+    return app ? apps.filter((a) => a.id !== id) : NO_CHANGE;
+  });
+  const removed = app as SpendApplication | null;
+  if (!removed) return null;
 
   // Best effort: the index is the source of truth for the list, so a failed
   // blob delete must not leave the record half-removed.
-  for (const path of [...app.quotes, `spend/${id}.json`]) {
+  for (const path of [...removed.quotes, `spend/${id}.json`]) {
     try {
       await deleteFile(path);
     } catch {
       // ignore
     }
   }
-  return app;
+  return removed;
 }
+
+/** A change to one application: fields to set, or a function of the
+ *  application AS IT IS NOW. Use the function for anything that adds to a list
+ *  on it (approvals, notes, reminder history), or that is worked out from one:
+ *  a list built from an earlier read loses whatever was added in between. */
+export type SpendChange =
+  | Partial<Omit<SpendApplication, "id">>
+  | ((current: SpendApplication) => Partial<Omit<SpendApplication, "id">>);
 
 export async function updateSpendApplication(
   id: string,
-  updates: Partial<Omit<SpendApplication, "id">>
+  change: SpendChange
 ): Promise<SpendApplication | null> {
-  const apps = await getSpendApplications();
-  const idx = apps.findIndex((a) => a.id === id);
-  if (idx === -1) return null;
-  apps[idx] = { ...apps[idx], ...updates };
-  await saveSpendApplications(apps);
-  await writeJson(`spend/${id}.json`, apps[idx]);
-  return apps[idx];
+  let updated: SpendApplication | null = null;
+  await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
+    const idx = apps.findIndex((a) => a.id === id);
+    if (idx === -1) {
+      updated = null;
+      return NO_CHANGE;
+    }
+    const updates = typeof change === "function" ? change(apps[idx]) : change;
+    apps[idx] = { ...apps[idx], ...updates };
+    updated = apps[idx];
+    return apps;
+  });
+  if (updated) await writeJson(`spend/${id}.json`, updated);
+  return updated;
 }
 
 export async function uploadQuoteFile(
@@ -131,3 +153,5 @@ export async function downloadQuoteFile(
 ): Promise<Buffer | null> {
   return readFile(path);
 }
+
+export type { QuoteDetail };

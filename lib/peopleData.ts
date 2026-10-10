@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "./controlData";
+import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { POSITIONS } from "./positions";
 
 export { POSITIONS };
@@ -57,8 +57,23 @@ export async function getPeople(): Promise<Person[]> {
   return readJson<Person[]>(PEOPLE_PATH, []);
 }
 
+/** Replaces the whole register. Only for seeding demo data. */
 export async function savePeople(people: Person[]): Promise<void> {
   return writeJson(PEOPLE_PATH, people);
+}
+
+// 🔴 Every change below goes through updateJson (lib/controlData.ts): it only
+// writes if nobody else saved the register since it was read, otherwise it
+// re-applies the change to the fresh copy. Before, saving the People form and
+// uploading that person's photo at the same moment kept only one of them, and
+// two admins editing different people could lose an edit.
+
+/** Changes the register in one guarded write. `change` may run more than
+ *  once; return NO_CHANGE to write nothing. */
+export async function changePeople(
+  change: (people: Person[]) => Person[] | typeof NO_CHANGE
+): Promise<Person[]> {
+  return updateJson<Person[]>(PEOPLE_PATH, [], change);
 }
 
 export async function getPersonById(id: string): Promise<Person | undefined> {
@@ -67,29 +82,36 @@ export async function getPersonById(id: string): Promise<Person | undefined> {
 }
 
 export async function createPerson(person: Person): Promise<void> {
-  const people = await getPeople();
-  people.push(person);
-  await savePeople(people);
+  await changePeople((people) => [...people, person]);
 }
 
 export async function updatePerson(
   id: string,
-  updates: Partial<Omit<Person, "id">>
+  updates: Partial<Omit<Person, "id">> | ((current: Person) => Partial<Omit<Person, "id">>)
 ): Promise<Person | null> {
-  const people = await getPeople();
-  const idx = people.findIndex((p) => p.id === id);
-  if (idx === -1) return null;
-  people[idx] = { ...people[idx], ...updates };
-  await savePeople(people);
-  return people[idx];
+  let saved: Person | null = null;
+  await changePeople((people) => {
+    const idx = people.findIndex((p) => p.id === id);
+    if (idx === -1) {
+      saved = null;
+      return NO_CHANGE;
+    }
+    const u = typeof updates === "function" ? updates(people[idx]) : updates;
+    people[idx] = { ...people[idx], ...u };
+    saved = people[idx];
+    return people;
+  });
+  return saved;
 }
 
 export async function deletePerson(id: string): Promise<boolean> {
-  const people = await getPeople();
-  const filtered = people.filter((p) => p.id !== id);
-  if (filtered.length === people.length) return false;
-  await savePeople(filtered);
-  return true;
+  let removed = false;
+  await changePeople((people) => {
+    const filtered = people.filter((p) => p.id !== id);
+    removed = filtered.length !== people.length;
+    return removed ? filtered : NO_CHANGE;
+  });
+  return removed;
 }
 
 export async function getPeopleByPositions(

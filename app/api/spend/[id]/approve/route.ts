@@ -80,8 +80,7 @@ export async function POST(
         );
       }
 
-      const approvals: SpendApproval[] = [
-        ...app.approvals,
+      const override: SpendApproval[] = [
         {
           userId: session.id,
           userName: `${session.name} ${session.surname}`,
@@ -93,11 +92,13 @@ export async function POST(
         },
       ];
 
-      await updateSpendApplication(id, {
+      // Appended to the approvals AS THEY ARE NOW, so a decision another
+      // approver recorded a moment ago is kept alongside the override.
+      await updateSpendApplication(id, (current) => ({
         status: "approved",
-        approvals,
-        approvedAmount: app.approvedAmount ?? app.estimatedAmount,
-      });
+        approvals: [...current.approvals, ...override],
+        approvedAmount: current.approvedAmount ?? current.estimatedAmount,
+      }));
 
       await recordActivity({
         ...actorFrom(req, session),
@@ -198,32 +199,49 @@ export async function POST(
         preferredQuoteIndex !== undefined ? preferredQuoteIndex : undefined,
     };
 
-    // Append rather than replace: every response is kept on the record.
-    const approvals = [...app.approvals, approval];
-
-    const preferredQuotes = [
-      ...(app.preferredQuotes || []).filter((q) => q.userId !== session.id),
-      ...(preferredQuoteIndex !== undefined
-        ? [{ userId: session.id, quoteIndex: preferredQuoteIndex }]
-        : []),
-    ];
-
-    const next = { ...app, approvals };
-    const status =
-      decision === "requires_changes"
-        ? ("requires_changes" as const)
-        : deriveStatus(next);
-
-    const updates: Partial<SpendApplication> = {
-      approvals,
-      preferredQuotes,
-      status,
-    };
-    if (status === "approved" && app.approvedAmount === undefined) {
-      updates.approvedAmount = app.estimatedAmount;
+    // 🔴 Worked out from the application AS IT IS AT SAVE TIME, not from the
+    // copy read at the top of this request. Two approvers deciding the same
+    // minute each appended to their own stale copy and the second save erased
+    // the first decision; and a double click could record one approver twice.
+    // updateSpendApplication re-runs this on the fresh copy if anybody saved in
+    // between, so both decisions land and the status is derived from both.
+    let duplicate = false;
+    const saved = await updateSpendApplication(id, (current) => {
+      if (current.approvals.some((a) => a.userId === session.id && a.decision !== "responded")) {
+        duplicate = true;
+        return {};
+      }
+      duplicate = false;
+      // Append rather than replace: every response is kept on the record.
+      const approvals = [...current.approvals, approval];
+      const preferredQuotes = [
+        ...(current.preferredQuotes || []).filter((q) => q.userId !== session.id),
+        ...(preferredQuoteIndex !== undefined
+          ? [{ userId: session.id, quoteIndex: preferredQuoteIndex }]
+          : []),
+      ];
+      const status =
+        decision === "requires_changes"
+          ? ("requires_changes" as const)
+          : deriveStatus({ ...current, approvals });
+      const updates: Partial<SpendApplication> = { approvals, preferredQuotes, status };
+      if (status === "approved" && current.approvedAmount === undefined) {
+        updates.approvedAmount = current.estimatedAmount;
+      }
+      return updates;
+    });
+    if (duplicate) {
+      return NextResponse.json(
+        { error: "You have already recorded your decision" },
+        { status: 400 }
+      );
     }
-
-    await updateSpendApplication(id, updates);
+    if (!saved) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+    }
+    const approvals = saved.approvals;
+    const status = saved.status;
+    const next = saved;
 
     // Logged AFTER the write succeeds, so the trail never claims something
     // happened that did not. recordActivity never throws, so a logging

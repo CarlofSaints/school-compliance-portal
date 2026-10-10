@@ -14,7 +14,7 @@ import {
 import {
   gatherWeeklyFacts,
   getWeeklyUpdateSettings,
-  saveWeeklyUpdateSettings,
+  patchWeeklyUpdateSettings,
   sendWeeklyUpdate,
   weeklyRecipients,
 } from "@/lib/weeklyUpdateData";
@@ -58,19 +58,22 @@ export async function PUT(req: NextRequest) {
   if (session instanceof NextResponse) return session;
 
   const body = await req.json().catch(() => ({}));
-  const current = await getWeeklyUpdateSettings();
-  const incoming = parseWeeklyUpdate({ ...current, ...body });
-  const next = {
-    ...current,
-    enabled: incoming.enabled,
-    weekday: incoming.weekday,
-    teamName: incoming.teamName,
-    // Stamped each time it is switched ON, so turning it on mid-week waits
-    // for the next send day instead of firing a catch-up tomorrow morning.
-    enabledOn:
-      incoming.enabled && !current.enabled ? todayIso() : current.enabledOn,
-  };
-  await saveWeeklyUpdateSettings(next);
+  const before = await getWeeklyUpdateSettings();
+  // Only the schedule fields, worked out from the settings AS THEY ARE NOW and
+  // saved in one guarded write, so a send stamping lastSentOn at the same
+  // moment is neither lost nor put back.
+  const next = await patchWeeklyUpdateSettings((current) => {
+    const incoming = parseWeeklyUpdate({ ...current, ...body });
+    return {
+      enabled: incoming.enabled,
+      weekday: incoming.weekday,
+      teamName: incoming.teamName,
+      // Stamped each time it is switched ON, so turning it on mid-week waits
+      // for the next send day instead of firing a catch-up tomorrow morning.
+      enabledOn: incoming.enabled && !current.enabled ? todayIso() : current.enabledOn,
+    };
+  });
+  const current = before;
 
   if (next.enabled !== current.enabled) {
     await recordActivity({

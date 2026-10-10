@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "./controlData";
+import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
 import { getTags, getTagMembers } from "./tagData";
@@ -42,8 +42,21 @@ export async function saveActionSummarySettings(s: ActionSummarySettings): Promi
  *  of writing. Spreading a copy read at the start of the send would put back
  *  whatever an admin saved while the workbook was being built. */
 async function recordSend(lastSentOn: string, lastResult: string): Promise<void> {
-  const current = await getActionSummarySettings();
-  await saveActionSummarySettings({ ...current, lastSentOn, lastResult });
+  await patchActionSummarySettings(() => ({ lastSentOn, lastResult }));
+}
+
+/** Changes some settings fields in one guarded write, against the settings AS
+ *  THEY ARE NOW (see patchWeeklyUpdateSettings for why). */
+export async function patchActionSummarySettings(
+  change: (current: ActionSummarySettings) => Partial<ActionSummarySettings> | typeof NO_CHANGE
+): Promise<ActionSummarySettings> {
+  return parseActionSummary(
+    await updateJson<ActionSummarySettings>(PATH, DEFAULT_ACTION_SUMMARY, (raw) => {
+      const current = parseActionSummary(raw);
+      const patch = change(current);
+      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch };
+    })
+  );
 }
 
 export interface SummaryRecipient {
@@ -181,6 +194,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 export async function sendActionSummary(opts: {
   now?: Date;
+  /** The scheduled run: claims the day first so two runs cannot both send. */
+  scheduled?: boolean;
   onlyTo?: { email: string; name: string };
 }): Promise<SummarySendResult> {
   const now = opts.now ?? new Date();
@@ -229,7 +244,19 @@ export async function sendActionSummary(opts: {
     return { sent: 0, failed: 0, total: 0, summary };
   }
 
-  await recordSend(asOf, `sending to ${recipients.length}...`);
+  // Claimed in one guarded write before the first email.
+  let claimed = true;
+  await patchActionSummarySettings((current) => {
+    if (opts.scheduled && current.lastSentOn === asOf) {
+      claimed = false;
+      return NO_CHANGE;
+    }
+    claimed = true;
+    return { lastSentOn: asOf, lastResult: `sending to ${recipients.length}...` };
+  });
+  if (!claimed) {
+    return { sent: 0, failed: 0, total: 0, summary: "already sent today by another run" };
+  }
 
   let sent = 0;
   let failed = 0;

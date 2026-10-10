@@ -254,12 +254,51 @@ export async function updateJson<T>(
       if (!lost) throw err;
       if (attempt === attempts) break;
       // A little jitter so two retrying requests do not collide again.
-      await sleep(40 * attempt + Math.floor(Math.random() * 60));
+      await sleep(75 * attempt + Math.floor(Math.random() * 75));
     }
   }
   throw new UpdateConflictError(
     `Could not save ${blobPath}: it kept changing underneath. Please try again.`
   );
+}
+
+// --- The three changes every list file needs, each one guarded ---------------
+
+/** Adds to a list file. */
+export async function addToList<T>(blobPath: string, ...items: T[]): Promise<void> {
+  if (items.length === 0) return;
+  await updateJson<T[]>(blobPath, [], (list) => [...list, ...items]);
+}
+
+/** Changes one entry of a list file, by id. `change` works from the entry as
+ *  it is now. Null when there is no such entry. */
+export async function updateInList<T extends { id: string }>(
+  blobPath: string,
+  id: string,
+  change: (current: T) => T
+): Promise<T | null> {
+  let saved: T | null = null;
+  await updateJson<T[]>(blobPath, [], (list) => {
+    const idx = list.findIndex((x) => x.id === id);
+    if (idx === -1) {
+      saved = null;
+      return NO_CHANGE;
+    }
+    list[idx] = change(list[idx]);
+    saved = list[idx];
+    return list;
+  });
+  return saved;
+}
+
+/** Removes one entry of a list file, by id. Returns what was removed. */
+export async function removeFromList<T extends { id: string }>(blobPath: string, id: string): Promise<T | null> {
+  let removed: T | null = null;
+  await updateJson<T[]>(blobPath, [], (list) => {
+    removed = list.find((x) => x.id === id) ?? null;
+    return removed ? list.filter((x) => x.id !== id) : NO_CHANGE;
+  });
+  return removed;
 }
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {

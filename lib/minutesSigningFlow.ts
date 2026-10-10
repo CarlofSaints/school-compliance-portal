@@ -62,42 +62,65 @@ export async function openSigning(
   );
 
   const wanted = only?.map((e) => e.trim().toLowerCase());
-  const existing = new Map(
-    record.signatories.map((s) => [s.email.trim().toLowerCase(), s] as const)
-  );
 
-  const codes: { signatory: Signatory; code: string }[] = [];
-  const signatories: Signatory[] = audience.to.map((r) => {
-    const prior = existing.get(r.email);
-
-    // 🔴 Never re-issue a code to somebody who has already signed. Their
-    // signature is bound to the document as it was; handing them a new code
-    // would invite them to sign the same minutes twice and would suggest the
-    // first signature no longer counted.
-    if (prior?.signedAt) return prior;
-
-    // A targeted resend leaves everybody else exactly as they were.
-    if (wanted && !wanted.includes(r.email)) {
-      return prior ?? blank(r.email, r.name, byEmail);
-    }
-
-    const code = mintSigningCode();
-    const person = byEmail.get(r.email);
-    const signatory: Signatory = {
+  // Codes are minted ONCE per address, outside the save, so the code stored is
+  // the code emailed even if the save has to be redone on a fresher copy.
+  const minted = new Map<string, string>();
+  const codeFor = (email: string) => {
+    if (!minted.has(email)) minted.set(email, mintSigningCode());
+    return minted.get(email)!;
+  };
+  const issue = (email: string, name: string, prior?: Signatory): Signatory => {
+    const person = byEmail.get(email);
+    return {
       personId: person?.id ?? prior?.personId ?? "",
-      name: r.name,
-      email: r.email,
+      name,
+      email,
       role: signatoryRoleForPosition(person?.position),
-      codeHash: hashSigningCode(code, id),
+      codeHash: hashSigningCode(codeFor(email), id),
       codeSentAt: new Date().toISOString(),
     };
-    codes.push({ signatory, code });
-    return signatory;
-  });
+  };
 
-  const updated = await updateMinutes(id, {
-    signatories,
-    status: "awaiting_signatures",
+  // 🔴 Worked out from the signatories AS THEY ARE AT SAVE TIME. Before, this
+  // rebuilt the list from an earlier read, so a code re-sent while somebody
+  // else was signing could erase that signature.
+  let codes: { signatory: Signatory; code: string }[] = [];
+  const updated = await updateMinutes(id, (current) => {
+    codes = [];
+    const existing = new Map(
+      current.signatories.map((s) => [s.email.trim().toLowerCase(), s] as const)
+    );
+
+    // A targeted RESEND changes only the people asked for, on the list as it
+    // stands. It no longer rebuilds the list from today's "Ready to sign" tag:
+    // the people signing were fixed when signing opened, and somebody added to
+    // the tag since is not a signatory of these minutes.
+    if (wanted) {
+      const signatories = current.signatories.map((prior) => {
+        const email = prior.email.trim().toLowerCase();
+        // 🔴 Never re-issue a code to somebody who has already signed.
+        if (prior.signedAt || !wanted.includes(email)) return prior;
+        const signatory = issue(email, prior.name, prior);
+        codes.push({ signatory, code: codeFor(email) });
+        return signatory;
+      });
+      return { signatories, status: "awaiting_signatures" as const };
+    }
+
+    // OPENING signing: the list comes from the "Ready to sign" tag.
+    const signatories: Signatory[] = audience.to.map((r) => {
+      const prior = existing.get(r.email);
+      // 🔴 Never re-issue a code to somebody who has already signed. Their
+      // signature is bound to the document as it was; handing them a new code
+      // would invite them to sign the same minutes twice and would suggest the
+      // first signature no longer counted.
+      if (prior?.signedAt) return prior;
+      const signatory = issue(r.email, r.name, prior);
+      codes.push({ signatory, code: codeFor(r.email) });
+      return signatory;
+    });
+    return { signatories, status: "awaiting_signatures" as const };
   });
 
   const periodLabel = formatPeriod(record.period);
@@ -120,20 +143,5 @@ export async function openSigning(
     sent: codes.length - failed.length,
     failed,
     withoutEmail: audience.withoutEmail,
-  };
-}
-
-/** A signatory we know of but have not issued a code to on this pass. */
-function blank(
-  email: string,
-  name: string,
-  byEmail: Map<string, { id: string; position?: string }>
-): Signatory {
-  const person = byEmail.get(email);
-  return {
-    personId: person?.id ?? "",
-    name,
-    email,
-    role: signatoryRoleForPosition(person?.position),
   };
 }

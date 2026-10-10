@@ -78,19 +78,26 @@ export async function POST(
     // still count after the secretary rewrote it as draft 2.
     draftNumber: record.draftNumber,
   };
-  const reviews = [...record.reviews, review];
-
-  // One objection sends it back. There is no point collecting the remaining
-  // approvals for a document that is already being rewritten.
-  const progress = reviewProgress(reviewers, reviews, record.draftNumber);
-  const status =
-    decision === "changes_requested"
-      ? "changes_requested"
-      : progress.complete
-        ? "awaiting_signatures"
-        : "in_review";
-
-  const updated = await updateMinutes(id, { reviews, status });
+  // 🔴 Worked out from the record AS IT IS AT SAVE TIME. Two reviewers
+  // answering in the same minute each appended to their own earlier copy, and
+  // the second save erased the first answer, so a round could stall forever
+  // one approval short. updateMinutes re-runs this on the fresh copy if
+  // anybody saved in between.
+  let progress = reviewProgress(reviewers, [...record.reviews, review], record.draftNumber);
+  let status: "changes_requested" | "awaiting_signatures" | "in_review" = "in_review";
+  const updated = await updateMinutes(id, (current) => {
+    const reviews = [...(current.reviews || []), review];
+    // One objection sends it back. There is no point collecting the remaining
+    // approvals for a document that is already being rewritten.
+    progress = reviewProgress(reviewers, reviews, current.draftNumber);
+    status =
+      decision === "changes_requested"
+        ? "changes_requested"
+        : progress.complete
+          ? "awaiting_signatures"
+          : "in_review";
+    return { reviews, status };
+  });
 
   /** Set when the round finished but signing could not be opened. */
   let signingProblem: string | undefined;

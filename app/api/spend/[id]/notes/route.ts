@@ -108,9 +108,10 @@ export async function POST(
     createdAt: new Date().toISOString(),
   };
 
-  const updated = await updateSpendApplication(id, {
-    notes: [...(app.notes || []), note],
-  });
+  // Added to the notes AS THEY ARE NOW, so two notes posted together both stay.
+  const updated = await updateSpendApplication(id, (current) => ({
+    notes: [...(current.notes || []), note],
+  }));
 
   return NextResponse.json(
     { note, count: updated?.notes?.length ?? 0 },

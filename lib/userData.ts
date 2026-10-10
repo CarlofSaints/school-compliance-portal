@@ -1,4 +1,4 @@
-import { readJson, writeJson, listFiles, deleteFile } from "./controlData";
+import { readJson, writeJson, updateJson, NO_CHANGE, listFiles, deleteFile } from "./controlData";
 import bcrypt from "bcryptjs";
 
 export interface User {
@@ -116,7 +116,6 @@ export async function createUser(
     password: string;
   }
 ): Promise<User> {
-  const users = await getUsers();
   const hashed = await bcrypt.hash(user.password, 10);
   const now = new Date().toISOString();
   const newUser: User = {
@@ -129,8 +128,8 @@ export async function createUser(
   // Own copy first. If appending to the shared index is the step that gets
   // lost, everything needed to put this account back is already safely stored.
   await saveUserRecord(newUser);
-  users.push(newUser);
-  await saveUsers(users);
+  // Guarded (updateJson): two accounts created at the same moment both stay.
+  await updateJson<User[]>(USERS_PATH, [], (list) => [...list, newUser]);
   return newUser;
 }
 
@@ -138,25 +137,38 @@ export async function updateUser(
   id: string,
   updates: Partial<Omit<User, "id" | "createdAt">>
 ): Promise<User | null> {
-  const users = await getUsers();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) return null;
+  // Hashed once, before the guarded write, which may run its change twice.
   if (updates.password) {
     updates.password = await bcrypt.hash(updates.password, 10);
   }
-  users[idx] = { ...users[idx], ...updates, updatedAt: new Date().toISOString() };
-  await saveUsers(users);
+  let saved: User | null = null;
+  // Guarded (updateJson): an admin editing one account and a sign-in
+  // stamping another at the same moment no longer lose either change.
+  await updateJson<User[]>(USERS_PATH, [], (users) => {
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx === -1) {
+      saved = null;
+      return NO_CHANGE;
+    }
+    users[idx] = { ...users[idx], ...updates, updatedAt: new Date().toISOString() };
+    saved = users[idx];
+    return users;
+  });
+  if (!saved) return null;
   // Keep the own copy in step, or a repair would restore this account as it was
   // before its last edit, including an old role or a superseded password.
-  await saveUserRecord(users[idx]);
-  return users[idx];
+  await saveUserRecord(saved);
+  return saved;
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
-  const users = await getUsers();
-  const filtered = users.filter((u) => u.id !== id);
-  if (filtered.length === users.length) return false;
-  await saveUsers(filtered);
+  let removed = false;
+  await updateJson<User[]>(USERS_PATH, [], (users) => {
+    const filtered = users.filter((u) => u.id !== id);
+    removed = filtered.length !== users.length;
+    return removed ? filtered : NO_CHANGE;
+  });
+  if (!removed) return false;
   await writeJson(tombstonePath(id), { deletedAt: new Date().toISOString() });
   await deleteFile(recordPath(id));
   return true;
@@ -205,7 +217,20 @@ export async function repairUserIndex(): Promise<{
     restored.push({ id, name: `${record.name} ${record.surname}`.trim(), email: record.email });
   }
 
-  if (restored.length > 0) await saveUsers(users);
+  // Added to the index AS IT IS NOW, skipping anybody who appeared or took
+  // the same email in the meantime, so a repair cannot undo a fresh change.
+  if (restored.length > 0) {
+    const back = restored
+      .map((r) => r.id)
+      .map((rid) => users.find((u) => u.id === rid))
+      .filter((u): u is User => !!u);
+    await updateJson<User[]>(USERS_PATH, [], (current) => {
+      const ids = new Set(current.map((u) => u.id));
+      const emails = new Set(current.map((u) => u.email.trim().toLowerCase()));
+      const add = back.filter((u) => !ids.has(u.id) && !emails.has(u.email.trim().toLowerCase()));
+      return add.length ? [...current, ...add] : NO_CHANGE;
+    });
+  }
   return { restored, backfilled, scanned: ids.length };
 }
 
