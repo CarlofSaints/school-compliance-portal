@@ -196,7 +196,18 @@ export const NO_CHANGE = Symbol("no-change");
 
 async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: string } | null> {
   const { prefix, token } = await scope();
-  const result = await get(prefix + blobPath, { access: "private", useCache: false, token });
+  const result = await get(prefix + blobPath, {
+    access: "private",
+    useCache: false,
+    token,
+    // 🔴 Uncompressed, or the ETag is not the one the write is checked against.
+    // fetch asks for gzip/br by default, and a file big enough to be compressed
+    // comes back with the COMPRESSED copy's tag. Every ifMatch on it was then
+    // refused, eight times over, as "kept changing underneath" with nobody else
+    // writing: action-items.json on HVPS, 10 Oct. Small files (rate-limit
+    // buckets, a new minutes record) are never compressed, so they saved fine.
+    headers: { "accept-encoding": "identity" },
+  });
   if (!result || result.statusCode !== 200) return null;
   const text = await new Response(result.stream).text();
   try {
@@ -261,7 +272,16 @@ export async function updateJson<T>(
         err instanceof BlobPreconditionFailedError ||
         (now !== undefined && (found ? now?.etag !== found.etag : now !== null));
       if (!lost) throw err;
-      if (attempt === attempts) break;
+      if (attempt === attempts) {
+        // What the store actually said, and the tags compared: "kept changing"
+        // with nobody else writing is a bug in the check, not a busy file.
+        console.error(`[updateJson] ${blobPath} refused ${attempts} times`, {
+          readEtag: found?.etag,
+          nowEtag: now?.etag,
+          err,
+        });
+        break;
+      }
       // A little jitter so two retrying requests do not collide again.
       await sleep(75 * attempt + Math.floor(Math.random() * 75));
     }
