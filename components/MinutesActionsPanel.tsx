@@ -52,6 +52,8 @@ interface Props {
   sections: MinutesSection[];
   canRaise: boolean;
   onToast: (message: string, type: "success" | "error") => void;
+  /** Bumped by the page when an action is added from the editor. */
+  refreshKey?: number;
 }
 
 export default function MinutesActionsPanel({
@@ -59,6 +61,7 @@ export default function MinutesActionsPanel({
   sections,
   canRaise,
   onToast,
+  refreshKey,
 }: Props) {
   const [actions, setActions] = useState<RaisedAction[] | null>(null);
   const [directory, setDirectory] = useState<DirectoryPerson[]>([]);
@@ -74,7 +77,7 @@ export default function MinutesActionsPanel({
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   useEffect(() => {
     if (!canRaise) return;

@@ -7,6 +7,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
+import { quickActionTitle } from "@/lib/minutesCapture";
 import DownloadLink from "@/components/DownloadLink";
 import MinutesReviewPanel from "@/components/MinutesReviewPanel";
 import MinutesSigningPanel from "@/components/MinutesSigningPanel";
@@ -74,6 +75,7 @@ export default function MinutesDetailPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [actionsRefresh, setActionsRefresh] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const load = useCallback(async () => {
@@ -94,6 +96,36 @@ export default function MinutesDetailPage() {
   useEffect(() => {
     if (session) load();
   }, [session, load]);
+
+  // "+ Add to action items" under a section: one click puts the point on the
+  // register with just a name and the minuted wording. Who, when and how
+  // urgent are added later on the Action Items page, so the minute-taker is
+  // not pulled out of the meeting to fill in a form. Nobody is assigned, so
+  // nobody is emailed.
+  const captureAction = async (minutesId: string, sectionId: string, text: string) => {
+    const res = await authFetch("/api/action-items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: quickActionTitle(text),
+        description: text,
+        fromMinutesId: minutesId,
+        fromSectionId: sectionId,
+        notify: false,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setToast({ message: data.error || "Could not add it to the action list.", type: "error" });
+      return false;
+    }
+    setToast({
+      message: `Added ${data.ref} to the action list. Add who and when later in Action Items.`,
+      type: "success",
+    });
+    setActionsRefresh((n) => n + 1);
+    return true;
+  };
 
   const save = async () => {
     if (!record) return;
@@ -268,6 +300,7 @@ export default function MinutesDetailPage() {
         sections={record.sections}
         editable={textEditable}
         onChange={(sections) => patch({ sections })}
+        onCaptureAction={canRaiseActions ? (sectionId, text) => captureAction(record.id, sectionId, text) : undefined}
       />
 
       <MinutesSigningPanel
@@ -292,6 +325,7 @@ export default function MinutesDetailPage() {
         sections={record.sections}
         canRaise={canRaiseActions}
         onToast={(message, type) => setToast({ message, type })}
+        refreshKey={actionsRefresh}
       />
 
       <MinutesDistributePanel
