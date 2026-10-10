@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requirePermission } from "@/lib/rolesData";
 import { getUserById } from "@/lib/userData";
 import { resolveBranding } from "@/lib/brandingData";
@@ -98,6 +99,10 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, PERMISSION);
   if (session instanceof NextResponse) return session;
+
+  // Sends email (paid, Resend): per person per hour.
+  const emailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (emailLimited) return emailLimited;
 
   const body = await req.json().catch(() => ({}));
 

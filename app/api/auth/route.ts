@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce, peek, hit, clear, tooMany, ipOf } from "@/lib/rateLimit";
 import { getUserByEmail, verifyPassword } from "@/lib/userData";
 import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
 import { SessionPayload } from "@/lib/roles";
@@ -36,8 +37,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Rate limits: every attempt counts against the connection; WRONG
+    // passwords count against the address, whether or not it has an account,
+    // so the lock cannot be used to find out which addresses exist.
+    const limited = await enforce([[LIMITS.loginIp, ipOf(req)]]);
+    if (limited) return limited;
+    const account = String(email).trim().toLowerCase();
+    const locked = await peek(LIMITS.loginAccount, account);
+    if (!locked.ok) return tooMany(LIMITS.loginAccount, locked);
+
     const user = await getUserByEmail(email);
     if (!user) {
+      await hit(LIMITS.loginAccount, account);
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -46,11 +57,14 @@ export async function POST(req: NextRequest) {
 
     const valid = await verifyPassword(user, password);
     if (!valid) {
+      await hit(LIMITS.loginAccount, account);
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
       );
     }
+    // The right password wipes the wrong-password count.
+    await clear(LIMITS.loginAccount, account);
 
     const role = await getRoleById(user.role);
     const session: SessionPayload = {

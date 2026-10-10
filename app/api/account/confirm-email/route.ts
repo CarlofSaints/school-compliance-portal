@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserById, getUsers, updateUser } from "@/lib/userData";
 import { readEmailChangeClaims, verifyEmailChangeToken } from "@/lib/emailChange";
 import { sendEmailChangeNoticeEmail } from "@/lib/email";
@@ -23,6 +24,9 @@ export async function POST(req: NextRequest) {
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const limited = await enforce([[LIMITS.confirmEmailIp, ipOf(req)]]);
+  if (limited) return limited;
 
   const { token } = await req.json().catch(() => ({ token: "" }));
   const claims = readEmailChangeClaims(String(token || ""));

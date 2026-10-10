@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireLogin } from "@/lib/rolesData";
 import { getUserById, getUsers, updateUser, verifyPassword } from "@/lib/userData";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
@@ -71,6 +72,9 @@ export async function PUT(req: NextRequest) {
     const wanted = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const changingEmail = !!wanted && wanted !== current.email.trim().toLowerCase();
     if (changingEmail) {
+      // Each request emails both addresses (paid): three per person per hour.
+      const changeLimited = await enforce([[LIMITS.emailChangeUser, session.id]]);
+      if (changeLimited) return changeLimited;
       // sendEmail "succeeds" without a mail provider (it only logs), which
       // would tell the person a link was sent when nothing was.
       if (!isEmailConfigured()) {

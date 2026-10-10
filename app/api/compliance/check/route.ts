@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { createHash } from "crypto";
 import { requirePermission } from "@/lib/rolesData";
 import { runComplianceCheckOnFile } from "@/lib/complianceEngine";
@@ -14,6 +15,14 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, "check_compliance");
   if (session instanceof NextResponse) return session;
+
+  // Paid AI call (Anthropic): per person per hour, and a daily cap for the
+  // school so one account cannot run up the bill.
+  const aiLimited = await enforce([
+    [LIMITS.aiUser, session.id],
+    [LIMITS.aiSchool, "school"],
+  ]);
+  if (aiLimited) return aiLimited;
 
   try {
     const formData = await req.formData();
