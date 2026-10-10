@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   isApologies,
   isAttendance,
@@ -11,6 +11,7 @@ import {
   type MinutesSection,
 } from "@/lib/minutes";
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
+import { captureText } from "@/lib/minutesCapture";
 import { AttendanceGroups } from "@/components/AttendanceList";
 
 // The minute-taking surface: sections a school defines for itself.
@@ -30,12 +31,33 @@ export default function MinutesSectionEditor({
   sections,
   editable,
   onChange,
+  onCaptureAction,
 }: {
   sections: MinutesSection[];
   editable: boolean;
   onChange: (next: MinutesSection[]) => void;
+  /** Present when this person may add to the action register. Resolves true
+   *  once the action is saved. */
+  onCaptureAction?: (sectionId: string, text: string) => Promise<boolean>;
 }) {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  // The text boxes, so the capture button can read where the cursor is.
+  const boxes = useRef(new Map<string, HTMLTextAreaElement>());
+  const [capturing, setCapturing] = useState<string | null>(null);
+  const [captureHint, setCaptureHint] = useState<{ id: string; text: string } | null>(null);
+
+  const capture = async (s: MinutesSection) => {
+    const box = boxes.current.get(s.id);
+    const text = box ? captureText(s.body, box.selectionStart, box.selectionEnd) : "";
+    if (!text) {
+      setCaptureHint({ id: s.id, text: "Click into the point you want, or select its text, then press the button." });
+      return;
+    }
+    setCaptureHint(null);
+    setCapturing(s.id);
+    await onCaptureAction?.(s.id, text);
+    setCapturing(null);
+  };
 
   const ordered = [...sections].sort((a, b) => a.order - b.order);
   // Same helper as the template editor and the Word export.
@@ -233,7 +255,12 @@ export default function MinutesSectionEditor({
             )}
 
             {editable ? (
+              <>
               <textarea
+                ref={(el) => {
+                  if (el) boxes.current.set(s.id, el);
+                  else boxes.current.delete(s.id);
+                }}
                 value={s.body}
                 onChange={(e) => update(s.id, { body: e.target.value })}
                 rows={isAttendance(s) || isApologies(s) ? 2 : 5}
@@ -246,6 +273,26 @@ export default function MinutesSectionEditor({
                 }
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               />
+              {onCaptureAction && !isApologies(s) && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <button
+                    type="button"
+                    // Kept from taking focus, so the cursor and any selection
+                    // in the box are still there when the click lands.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => capture(s)}
+                    disabled={capturing === s.id || !s.body.trim()}
+                    title="Adds the text you have selected, or the paragraph your cursor is in, to the action list. Add who and when later."
+                    className="text-xs font-medium text-primary hover:underline disabled:text-gray-300 disabled:no-underline"
+                  >
+                    {capturing === s.id ? "Adding..." : "+ Add to action items"}
+                  </button>
+                  {captureHint?.id === s.id && (
+                    <span className="text-xs text-gray-500">{captureHint.text}</span>
+                  )}
+                </div>
+              )}
+              </>
             ) : s.body || groups.length === 0 ? (
               <p className="text-sm text-gray-700 whitespace-pre-wrap">
                 {s.body || <span className="text-gray-400">Nothing recorded.</span>}
