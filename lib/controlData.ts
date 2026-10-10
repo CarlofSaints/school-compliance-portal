@@ -217,7 +217,7 @@ export async function updateJson<T>(
   blobPath: string,
   fallback: T,
   mutate: (current: T) => T | typeof NO_CHANGE | Promise<T | typeof NO_CHANGE>,
-  attempts = 6
+  attempts = 8
 ): Promise<T> {
   const { prefix, token } = await scope();
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -240,12 +240,17 @@ export async function updateJson<T>(
     } catch (err) {
       // Somebody else wrote in between (ETag moved), or created the file
       // first. Anything else is a real failure and is thrown as it is.
-      // For a CREATE, the store's wording for "already exists" is not part of
-      // its contract, so ask the store itself: if the file is there now,
-      // somebody else made it first.
+      // Was it a collision? The store answers a lost race in more than one
+      // way (BlobPreconditionFailedError, or a plain error reading "the
+      // conditional request cannot succeed due to a conflicting operation",
+      // seen on the live store), and its wording is not a contract. So ask the
+      // store itself: if the file's version moved, or a file we were creating
+      // now exists, somebody else wrote first, and we retry. If nothing moved,
+      // the failure was something else and it is thrown as it is.
+      const now = await readWithEtag<T>(blobPath).catch(() => undefined);
       const lost =
         err instanceof BlobPreconditionFailedError ||
-        (!found && (await readWithEtag<T>(blobPath).catch(() => null)) !== null);
+        (now !== undefined && (found ? now?.etag !== found.etag : now !== null));
       if (!lost) throw err;
       if (attempt === attempts) break;
       // A little jitter so two retrying requests do not collide again.
