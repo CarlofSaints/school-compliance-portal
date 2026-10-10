@@ -157,7 +157,15 @@ export async function updateUser(
   if (!saved) return null;
   // Keep the own copy in step, or a repair would restore this account as it was
   // before its last edit, including an old role or a superseded password.
-  await saveUserRecord(saved);
+  //
+  // 🔴 Guarded, and never moved BACKWARDS. Sign-in reads this own copy first,
+  // so two edits to one account landing in the wrong order (an admin edit
+  // while the person changes their password) must not leave the older one
+  // here. Written only if it is at least as new as what is already there.
+  const fresh: User = saved;
+  await updateJson<User | null>(recordPath(id), null, (own) =>
+    own && own.updatedAt && fresh.updatedAt && own.updatedAt > fresh.updatedAt ? NO_CHANGE : fresh
+  );
   return saved;
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
 import type { SpendApplication, SpendApproval } from "@/lib/spendData";
 import { getPeople } from "@/lib/peopleData";
 import { getApprovalSettings } from "@/lib/approvalSettings";
@@ -94,11 +94,20 @@ export async function POST(
 
       // Appended to the approvals AS THEY ARE NOW, so a decision another
       // approver recorded a moment ago is kept alongside the override.
-      await updateSpendApplication(id, (current) => ({
-        status: "approved",
-        approvals: [...current.approvals, ...override],
-        approvedAmount: current.approvedAmount ?? current.estimatedAmount,
-      }));
+      await updateSpendApplication(id, (current) => {
+        // Checked again on the record AS IT IS NOW: it may have been decided
+        // since this request read it.
+        if (!["pending", "pending_decision", "requires_changes"].includes(current.status)) {
+          throw new SpendChangeRefused(
+            `This application is already ${current.status.replace("_", " ")}, so it cannot be approved again.`
+          );
+        }
+        return {
+          status: "approved",
+          approvals: [...current.approvals, ...override],
+          approvedAmount: current.approvedAmount ?? current.estimatedAmount,
+        };
+      });
 
       await recordActivity({
         ...actorFrom(req, session),
@@ -205,13 +214,18 @@ export async function POST(
     // the first decision; and a double click could record one approver twice.
     // updateSpendApplication re-runs this on the fresh copy if anybody saved in
     // between, so both decisions land and the status is derived from both.
-    let duplicate = false;
     const saved = await updateSpendApplication(id, (current) => {
+      // Both checks again on the record AS IT IS NOW. Thrown, so nothing is
+      // written: a double click, or a decision on an application somebody
+      // rejected or completed a moment ago, changes nothing.
       if (current.approvals.some((a) => a.userId === session.id && a.decision !== "responded")) {
-        duplicate = true;
-        return {};
+        throw new SpendChangeRefused("You have already recorded your decision", 400);
       }
-      duplicate = false;
+      if (!["pending", "pending_decision"].includes(current.status)) {
+        throw new SpendChangeRefused(
+          `This application is ${current.status.replace("_", " ")}, so no decision can be recorded on it now.`
+        );
+      }
       // Append rather than replace: every response is kept on the record.
       const approvals = [...current.approvals, approval];
       const preferredQuotes = [
@@ -220,8 +234,10 @@ export async function POST(
           ? [{ userId: session.id, quoteIndex: preferredQuoteIndex }]
           : []),
       ];
+      // Sent back by one approver stays sent back: another approver's
+      // approval landing the same minute must not quietly undo it.
       const status =
-        decision === "requires_changes"
+        decision === "requires_changes" || current.status === "requires_changes"
           ? ("requires_changes" as const)
           : deriveStatus({ ...current, approvals });
       const updates: Partial<SpendApplication> = { approvals, preferredQuotes, status };
@@ -230,12 +246,6 @@ export async function POST(
       }
       return updates;
     });
-    if (duplicate) {
-      return NextResponse.json(
-        { error: "You have already recorded your decision" },
-        { status: 400 }
-      );
-    }
     if (!saved) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
@@ -273,7 +283,10 @@ export async function POST(
       approved: progress.approved,
       total: progress.total,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof SpendChangeRefused) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

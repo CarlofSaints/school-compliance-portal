@@ -162,11 +162,19 @@ export async function deleteActionItem(id: string): Promise<boolean> {
  * (Vercel can fire a job twice) used to both read "not chased today" and both
  * email everybody.
  */
-export async function claimActionChase(id: string, today: string): Promise<boolean> {
-  return changeStore((store) => {
+export type ChaseClaim = { claimed: false } | { claimed: true; previous: string | undefined };
+
+export async function claimActionChase(
+  id: string,
+  today: string
+): Promise<ChaseClaim> {
+  return changeStore<ChaseClaim>((store) => {
     const idx = store.items.findIndex((i) => i.id === id);
-    if (idx === -1 || store.items[idx].lastRemindedOn === today) return { result: false, write: false };
+    if (idx === -1 || store.items[idx].lastRemindedOn === today) {
+      return { result: { claimed: false as const }, write: false };
+    }
+    const previous = store.items[idx].lastRemindedOn;
     store.items[idx] = { ...store.items[idx], lastRemindedOn: today, lastReminderResult: "sending..." };
-    return { result: true, write: true };
+    return { result: { claimed: true as const, previous }, write: true };
   });
 }

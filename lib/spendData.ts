@@ -113,6 +113,15 @@ export async function deleteSpendApplication(
  *  application AS IT IS NOW. Use the function for anything that adds to a list
  *  on it (approvals, notes, reminder history), or that is worked out from one:
  *  a list built from an earlier read loses whatever was added in between. */
+/** Thrown from inside a change to refuse it against the CURRENT record (it
+ *  moved on since the request read it). Nothing is written; the message is
+ *  for the person. */
+export class SpendChangeRefused extends Error {
+  constructor(message: string, readonly status = 409) {
+    super(message);
+  }
+}
+
 export type SpendChange =
   | Partial<Omit<SpendApplication, "id">>
   | ((current: SpendApplication) => Partial<Omit<SpendApplication, "id">>);

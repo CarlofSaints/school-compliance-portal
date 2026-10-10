@@ -1,4 +1,4 @@
-import { readJson, writeJson, readFile, writeFile, deleteFile } from "./controlData";
+import { readJson, writeJson, readFile, writeFile, deleteFile, updateJson } from "./controlData";
 import { branding as codeBranding, type SchoolBranding } from "./branding";
 import { derivePalette, normaliseHex } from "./brandingColors";
 import { buildFromAddress, buildReplyTo } from "./emailIdentity";
@@ -53,14 +53,23 @@ export async function saveStoredBranding(
   return next;
 }
 
+/** Changes some branding fields in one guarded write (lib/controlData.ts),
+ *  against the branding AS IT IS NOW. The crest upload and the colours form
+ *  each touch only their own fields, so neither can put back what the other
+ *  just saved (a form saved while a crest uploaded used to drop the crest). */
+export async function patchStoredBranding(
+  change: (current: StoredBranding) => StoredBranding
+): Promise<StoredBranding> {
+  return updateJson<StoredBranding>(BRANDING_PATH, {}, (current) => change(current));
+}
+
 export async function saveLogo(
   bytes: Buffer,
   contentType: string,
   filename: string
 ): Promise<StoredBranding> {
-  const current = await getStoredBranding();
   await writeFile(LOGO_PATH, bytes);
-  return saveStoredBranding({
+  return patchStoredBranding((current) => ({
     ...current,
     logo: {
       contentType,
@@ -68,15 +77,16 @@ export async function saveLogo(
       version: (current.logo?.version ?? 0) + 1,
       updatedAt: new Date().toISOString(),
     },
-  });
+  }));
 }
 
 export async function removeLogo(): Promise<StoredBranding> {
-  const current = await getStoredBranding();
   await deleteFile(LOGO_PATH);
-  const next = { ...current };
-  delete next.logo;
-  return saveStoredBranding(next);
+  return patchStoredBranding((current) => {
+    const next = { ...current };
+    delete next.logo;
+    return next;
+  });
 }
 
 export async function readLogo(): Promise<Buffer | null> {

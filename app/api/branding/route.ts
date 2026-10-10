@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import {
   getStoredBranding,
-  saveStoredBranding,
+  patchStoredBranding,
   saveLogo,
   removeLogo,
 } from "@/lib/brandingData";
@@ -73,10 +73,9 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    let stored = await getStoredBranding();
 
     if (removeExistingLogo) {
-      stored = await removeLogo();
+      await removeLogo();
     } else if (typeof logoDataUrl === "string" && logoDataUrl.startsWith("data:")) {
       // [\s\S] rather than the /s flag, which this tsconfig target rejects.
       const match = /^data:([^;,]+);base64,([\s\S]+)$/.exec(logoDataUrl);
@@ -105,17 +104,18 @@ export async function PUT(req: NextRequest) {
           { status: 400 }
         );
       }
-      stored = await saveLogo(bytes, contentType, String(body.logoFilename || "logo"));
+      await saveLogo(bytes, contentType, String(body.logoFilename || "logo"));
     }
 
-    const next = await saveStoredBranding({
-      ...stored,
+    // Only the fields in this form, on the branding AS IT IS NOW (guarded).
+    const next = await patchStoredBranding((current) => ({
+      ...current,
       ...(fullName !== undefined ? { fullName: String(fullName).trim() } : {}),
       ...(shortName !== undefined ? { shortName: String(shortName).trim() } : {}),
       ...(primary ? { primary: normaliseHex(primary)! } : {}),
       ...(accent ? { accent: normaliseHex(accent)! } : {}),
       ...(replyTo !== undefined ? { replyTo: String(replyTo).trim() } : {}),
-    });
+    }));
 
     // Hand back what was saved. A re-read moments after a write can still serve
     // the previous copy, which would make a correct save look like it failed.

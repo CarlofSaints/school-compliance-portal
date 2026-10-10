@@ -241,8 +241,9 @@ export async function recordDistribution(
   // the file cannot be found at all.
   let next: MinutesRecord = base;
   await updateJson<MinutesRecord | null>(recordPath(base.id), null, (current) => {
-    const from = current ?? base;
-    next = { ...from, distributions: [...(from.distributions ?? []), note] };
+    // Deleted meanwhile: do not bring it back just to note a send.
+    if (!current) return NO_CHANGE;
+    next = { ...current, distributions: [...(current.distributions ?? []), note] };
     return next;
   });
   return next;

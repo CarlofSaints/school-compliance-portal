@@ -8,7 +8,7 @@ import {
   recordRun,
 } from "@/lib/reminderData";
 import { resolveRecipients } from "@/lib/reminderRecipients";
-import { getActionItems, claimActionChase, todayIso } from "@/lib/actionItemData";
+import { getActionItems, claimActionChase, updateActionItem, todayIso } from "@/lib/actionItemData";
 import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
 import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
 import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
@@ -162,12 +162,28 @@ export async function GET(req: NextRequest) {
   for (const item of dueActions) {
     // Claimed first, in one guarded write, so an overlapping run cannot send
     // the same chase twice.
-    if (!(await claimActionChase(item.id, todayIso(now)))) {
+    const claim = await claimActionChase(item.id, todayIso(now));
+    if (!claim.claimed) {
       skipped++;
       detail.push(`Action ${item.ref} ${item.title}: already chased today by another run`);
       continue;
     }
-    const outcome = await chaseActionItem(item, now);
+    let outcome;
+    try {
+      outcome = await chaseActionItem(item, now);
+    } catch (err) {
+      // 🔴 The claim stamped today BEFORE sending. A failure here must hand the
+      // day back, or the action looks chased, waits a whole cycle, and nobody
+      // is told. One failed action also must not stop the rest of the run.
+      const why = err instanceof Error ? err.message : String(err);
+      await updateActionItem(item.id, {
+        lastRemindedOn: claim.previous,
+        lastReminderResult: `failed: ${why}`.slice(0, 300),
+      }).catch(() => {});
+      failed++;
+      detail.push(`Action ${item.ref} ${item.title}: failed (${why}), will try again next run`);
+      continue;
+    }
     sent += outcome.sent;
     failed += outcome.failed;
     if (outcome.sent === 0) skipped++;

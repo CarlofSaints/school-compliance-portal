@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { readJson, writeJson, writeFile, readFile, listFiles, deleteFile, updateJson, addToList, updateInList, removeFromList } from "./controlData";
+import { NO_CHANGE, readJson, writeJson, writeFile, readFile, listFiles, deleteFile, updateJson, addToList, updateInList, removeFromList } from "./controlData";
 
 export type RiskStatus =
   | "not_an_issue"
@@ -242,7 +242,9 @@ export async function updateRiskStatus(
   // is how the two views start disagreeing again.
   let updated: ComplianceCheckRecord = mark(current);
   await updateJson<ComplianceCheckRecord | null>(checkPath(checkId), null, (own) => {
-    updated = mark(own ?? current);
+    // Deleted meanwhile: do not bring it back.
+    if (!own) return NO_CHANGE;
+    updated = mark(own);
     return updated;
   });
   await updateInList<ComplianceCheckRecord>(CHECKS_INDEX, checkId, mark);
@@ -264,7 +266,8 @@ export async function attachCheckToPolicy(
   const attach = (rec: ComplianceCheckRecord): ComplianceCheckRecord => ({ ...rec, policyId, policyVersion, name });
   let updated: ComplianceCheckRecord = attach(current);
   await updateJson<ComplianceCheckRecord | null>(checkPath(checkId), null, (own) => {
-    updated = attach(own ?? current);
+    if (!own) return NO_CHANGE;
+    updated = attach(own);
     return updated;
   });
   await updateInList<ComplianceCheckRecord>(CHECKS_INDEX, checkId, attach);

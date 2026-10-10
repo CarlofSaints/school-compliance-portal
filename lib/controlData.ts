@@ -248,6 +248,15 @@ export async function updateJson<T>(
       // now exists, somebody else wrote first, and we retry. If nothing moved,
       // the failure was something else and it is thrown as it is.
       const now = await readWithEtag<T>(blobPath).catch(() => undefined);
+      // 🔴 OUR write may be the one that moved it. The SDK retries a put on a
+      // network error or 5xx by itself; if the first try landed but its answer
+      // was lost, the retry is refused and the file now holds exactly what we
+      // wrote. Treating that as a lost race would apply the change TWICE: a
+      // duplicate row, a second reference number spent, a note posted twice.
+      if (now && JSON.stringify(now.data) === JSON.stringify(next)) {
+        recentWrites.set(cacheKey(prefix, blobPath), { data: next, ts: Date.now() });
+        return next;
+      }
       const lost =
         err instanceof BlobPreconditionFailedError ||
         (now !== undefined && (found ? now?.etag !== found.etag : now !== null));
