@@ -1,4 +1,4 @@
-import { put, del, list, get } from "@vercel/blob";
+import { put, del, list, get, BlobPreconditionFailedError } from "@vercel/blob";
 import { tenantScope } from "@/lib/tenantContext";
 
 // 🔴 EVERY blob call in this file is scoped PER REQUEST, and this is the only
@@ -168,6 +168,93 @@ export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
   // Cache the write so immediate re-reads get fresh data. Keyed WITH the
   // prefix: every school writes to the same relative paths.
   recentWrites.set(cacheKey(prefix, blobPath), { data, ts: Date.now() });
+}
+
+// --- Safe read-modify-write ---------------------------------------------------
+//
+// 🔴 readJson + writeJson is a LOST UPDATE waiting to happen whenever two
+// people save the same file at once: both read version 1, both change it, and
+// the second save silently throws away the first. Two approvers deciding the
+// same afternoon, two governors signing in the same minute, the photo upload
+// racing the People form, the morning cron stamping reminders while somebody
+// updates progress - every one of those lost a change.
+//
+// updateJson closes it with the store's own optimistic locking: the read
+// returns the file's ETag, and the write carries `ifMatch` so it only lands if
+// nobody has written since. If somebody has, the store refuses
+// (BlobPreconditionFailedError), and the change is re-applied to the fresh
+// copy. A brand-new file is written with allowOverwrite: false, so two
+// requests both creating it cannot both win either.
+//
+// `mutate` may run MORE THAN ONCE, so it must only compute from what it is
+// handed (no emails, no counters outside it). Side effects go after.
+
+export class UpdateConflictError extends Error {}
+
+/** What mutate can return to say "nothing to write". */
+export const NO_CHANGE = Symbol("no-change");
+
+async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: string } | null> {
+  const { prefix, token } = await scope();
+  const result = await get(prefix + blobPath, { access: "private", useCache: false, token });
+  if (!result || result.statusCode !== 200) return null;
+  const text = await new Response(result.stream).text();
+  try {
+    return { data: JSON.parse(text) as T, etag: result.blob.etag };
+  } catch (err) {
+    // Same fail-closed rule as readJson: an unreadable file is never "empty".
+    throw new Error(
+      `Stored file ${blobPath} could not be read as JSON, refusing to treat it as empty: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function updateJson<T>(
+  blobPath: string,
+  fallback: T,
+  mutate: (current: T) => T | typeof NO_CHANGE | Promise<T | typeof NO_CHANGE>,
+  attempts = 6
+): Promise<T> {
+  const { prefix, token } = await scope();
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const found = await readWithEtag<T>(blobPath);
+    // structuredClone: mutate may change what it is handed in place, and a
+    // retry must start from the stored copy, not a half-changed one.
+    const current = found ? found.data : structuredClone(fallback);
+    const next = await mutate(current);
+    if (next === NO_CHANGE) return current;
+    try {
+      await put(prefix + blobPath, JSON.stringify(next, null, 2), {
+        access: "private",
+        contentType: "application/json",
+        addRandomSuffix: false,
+        token,
+        ...(found ? { allowOverwrite: true, ifMatch: found.etag } : { allowOverwrite: false }),
+      });
+      recentWrites.set(cacheKey(prefix, blobPath), { data: next, ts: Date.now() });
+      return next;
+    } catch (err) {
+      // Somebody else wrote in between (ETag moved), or created the file
+      // first. Anything else is a real failure and is thrown as it is.
+      // For a CREATE, the store's wording for "already exists" is not part of
+      // its contract, so ask the store itself: if the file is there now,
+      // somebody else made it first.
+      const lost =
+        err instanceof BlobPreconditionFailedError ||
+        (!found && (await readWithEtag<T>(blobPath).catch(() => null)) !== null);
+      if (!lost) throw err;
+      if (attempt === attempts) break;
+      // A little jitter so two retrying requests do not collide again.
+      await sleep(40 * attempt + Math.floor(Math.random() * 60));
+    }
+  }
+  throw new UpdateConflictError(
+    `Could not save ${blobPath}: it kept changing underneath. Please try again.`
+  );
 }
 
 export async function readFile(blobPath: string): Promise<Buffer | null> {
