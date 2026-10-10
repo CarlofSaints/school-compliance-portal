@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserById, updateUser } from "@/lib/userData";
 import { parseResetToken, verifyResetToken } from "@/lib/passwordReset";
 
@@ -36,6 +37,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = await enforce([[LIMITS.resetCompleteIp, ipOf(req)]]);
+  if (limited) return limited;
   try {
     const { token, newPassword } = await req.json();
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireAnyPermission } from "@/lib/rolesData";
 import { getActionItemById } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
@@ -18,6 +19,10 @@ export async function POST(
 ) {
   const session = await requireAnyPermission(req, ACTION_ADMIN_PERMISSIONS);
   if (session instanceof NextResponse) return session;
+
+  // Sends email (paid, Resend): per person per hour.
+  const emailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (emailLimited) return emailLimited;
 
   const { id } = await params;
   const item = await getActionItemById(id);

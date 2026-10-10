@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserByEmail } from "@/lib/userData";
 import { createResetToken, RESET_TTL_MS } from "@/lib/passwordReset";
 import { sendPasswordResetLinkEmail, isEmailConfigured } from "@/lib/email";
@@ -17,6 +18,15 @@ export async function POST(req: NextRequest) {
   try {
     const { email } = await req.json();
     if (!email || typeof email !== "string") return same;
+
+    // Each request sends an email (paid) to a real inbox: limited per
+    // connection and per address. Counted for every address, account or not,
+    // so the limit itself does not reveal who has a login.
+    const limited = await enforce([
+      [LIMITS.resetRequestIp, ipOf(req)],
+      [LIMITS.resetRequestEmail, email.trim().toLowerCase()],
+    ]);
+    if (limited) return limited;
 
     // Trim before the lookup. getUserByEmail lowercases both sides but does not
     // trim, and an address pasted into the form with a trailing space would

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requirePermission } from "@/lib/rolesData";
 import { getDocumentById, downloadDocumentFile, saveDocumentCheck } from "@/lib/documentData";
 import { runComplianceCheckOnFile } from "@/lib/complianceEngine";
@@ -10,6 +11,14 @@ export async function POST(
 ) {
   const session = await requirePermission(req, "check_documents");
   if (session instanceof NextResponse) return session;
+
+  // Paid AI call (Anthropic): per person per hour, and a daily cap for the
+  // school so one account cannot run up the bill.
+  const aiLimited = await enforce([
+    [LIMITS.aiUser, session.id],
+    [LIMITS.aiSchool, "school"],
+  ]);
+  if (aiLimited) return aiLimited;
 
   const { id } = await params;
   const doc = await getDocumentById(id);

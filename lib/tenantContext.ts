@@ -116,6 +116,27 @@ export async function runAsTenant<T>(
 }
 
 /**
+ * Runs `fn` against the PLATFORM's own control store, under `_platform/`.
+ *
+ * For the one kind of data that belongs to no school: rate-limit counters for
+ * requests that arrive before there is a school (new-school signup on the
+ * platform address). Without this they would run against no store at all,
+ * fail, and - because limits fail open - not limit anything.
+ *
+ * The prefix keeps them clear of the tenant records (hosts/, tenants/). On a
+ * deployment with no control store (HVPS, Jeppe) it simply runs `fn` in the
+ * normal scope.
+ */
+export async function runInControlStore<T>(fn: () => Promise<T>): Promise<T> {
+  const token = process.env.CONTROL_BLOB_READ_WRITE_TOKEN;
+  if (!token) return fn();
+  return override.run(
+    { prefix: "_platform/", token, key: "_platform", fromRegistry: false },
+    fn
+  );
+}
+
+/**
  * The scope every blob call runs under.
  *
  * 🔴 This is THE isolation choke point. One school's data never reaching

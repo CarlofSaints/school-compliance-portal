@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import {
   provisionSchool,
   validateNewSchool,
@@ -37,6 +38,8 @@ function hostnameFor(key: string): string {
  * drifts, which is why validateNewSchool was split out.
  */
 export async function GET(req: NextRequest) {
+  const limited = await enforce([[LIMITS.signupCheckIp, ipOf(req)]]);
+  if (limited) return limited;
   const key = (req.nextUrl.searchParams.get("key") || "").trim().toLowerCase();
   if (!key) {
     return NextResponse.json({ error: "Give an address to check" }, { status: 400 });
@@ -71,6 +74,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // A new school creates real storage and a hostname through Vercel's API and
+  // sends emails: three per connection per hour.
+  const limited = await enforce([[LIMITS.signupIp, ipOf(req)]]);
+  if (limited) return limited;
   let body: Partial<NewSchoolRequest>;
   try {
     body = await req.json();

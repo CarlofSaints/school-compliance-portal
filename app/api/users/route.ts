@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import {
   requirePermission,
   requireAnyPermission,
@@ -31,6 +32,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, "manage_users");
   if (session instanceof NextResponse) return session;
+
+  // Sends email (paid, Resend): per person per hour.
+  const emailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (emailLimited) return emailLimited;
 
   try {
     const body = await req.json();

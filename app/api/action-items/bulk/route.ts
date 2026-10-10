@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -23,6 +24,10 @@ const MAX_ROWS = 200;
 export async function POST(req: NextRequest) {
   const session = await requireAnyPermission(req, ACTION_ADMIN_PERMISSIONS);
   if (session instanceof NextResponse) return session;
+
+  // Sends email (paid, Resend): per person per hour.
+  const emailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (emailLimited) return emailLimited;
 
   try {
     const body = await req.json();
