@@ -51,6 +51,18 @@ export async function POST(
     const ownApplication =
       app.submittedBy === session.id || app.applicantUserId === session.id;
 
+    // Who may act on this application at all, checked BEFORE anything about
+    // its state. The state checks below answered first, so a member with no
+    // part in it was told "This application is approved": that it existed and
+    // what had happened to it. Everyone else gets the same plain refusal.
+    if (
+      !ownApplication &&
+      !isRequiredApprover(app, session.id) &&
+      !session.permissions.includes("manage_spend_settings")
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     if (forceApprove) {
       if (ownApplication) {
         return NextResponse.json(
