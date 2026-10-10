@@ -236,7 +236,16 @@ export async function PUT(
       };
     }
 
-    await updateSpendApplication(id, {
+    // 🔴 The vote-restart rule is applied again to the application AS IT IS
+    // AT SAVE TIME: an approval that landed while this edit was being made
+    // was cast on the old wording, so it is cleared too.
+    let restartedNow = false;
+    await updateSpendApplication(id, (current) => {
+      const votesNow =
+        (current.approvals?.length ?? 0) > 0 &&
+        (current.status === "pending" || current.status === "pending_decision");
+      restartedNow = votesNow && !hadVotes && !amountChanged;
+      return {
       projectName,
       description,
       estimatedAmount,
@@ -253,16 +262,18 @@ export async function PUT(
       submittedOnBehalf: isOnBehalf,
       status: newStatus,
       // Clear approvals on re-submission after changes
-      ...(app.status === "requires_changes" || app.status === "rejected"
+      ...(current.status === "requires_changes" || current.status === "rejected"
         ? { approvals: [], preferredQuotes: [] }
         : {}),
       ...reband,
+      ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
+      };
     });
 
     // Whoever has to decide now must be TOLD, as on a new application. A
     // re-banded application otherwise sat waiting on people who never heard
     // of it.
-    if (amountChanged || hadVotes) {
+    if (amountChanged || hadVotes || restartedNow) {
       const approvers = (reband.requiredApprovers ?? app.requiredApprovers ?? []) as { name: string; email: string }[];
       const needsApproval = !(reband.approvalLogOnly ?? app.approvalLogOnly);
       if (needsApproval) {

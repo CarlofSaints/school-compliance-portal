@@ -1,4 +1,4 @@
-import { readJson, writeJson, writeFile, readFile, listFiles } from "./controlData";
+import { readJson, writeJson, writeFile, readFile, listFiles, addToList, removeFromList } from "./controlData";
 
 export interface DocumentMeta {
   id: string;
@@ -48,18 +48,13 @@ export async function getDocumentById(
   return docs.find((d) => d.id === id);
 }
 
+// Guarded writes (lib/controlData.ts): two documents uploaded together both stay.
 export async function createDocument(doc: DocumentMeta): Promise<void> {
-  const docs = await getDocuments();
-  docs.push(doc);
-  await saveDocuments(docs);
+  await addToList(DOCUMENTS_INDEX, doc);
 }
 
 export async function deleteDocument(id: string): Promise<boolean> {
-  const docs = await getDocuments();
-  const filtered = docs.filter((d) => d.id !== id);
-  if (filtered.length === docs.length) return false;
-  await saveDocuments(filtered);
-  return true;
+  return (await removeFromList<DocumentMeta>(DOCUMENTS_INDEX, id)) !== null;
 }
 
 export async function uploadDocumentFile(

@@ -1,6 +1,7 @@
 import { readJson, writeJson } from "./controlData";
 import { POSITIONS } from "./positions";
-import { getPeople, savePeople } from "./peopleData";
+import { getPeople, changePeople } from "./peopleData";
+import { NO_CHANGE } from "./controlData";
 import { getSpendApplications } from "./spendData";
 
 const PATH = "settings/positions.json";
@@ -163,15 +164,19 @@ export async function renamePositionOnPeople(
   from: string,
   to: string
 ): Promise<number> {
-  const people = await getPeople();
   const key = from.trim().toLowerCase();
   let moved = 0;
-  for (const person of people) {
-    if ((person.position || "").trim().toLowerCase() === key) {
-      person.position = to;
-      moved++;
+  // One guarded write, so an edit to somebody else's entry made at the same
+  // moment is not lost under the rename.
+  await changePeople((people) => {
+    moved = 0;
+    for (const person of people) {
+      if ((person.position || "").trim().toLowerCase() === key) {
+        person.position = to;
+        moved++;
+      }
     }
-  }
-  if (moved > 0) await savePeople(people);
+    return moved > 0 ? people : NO_CHANGE;
+  });
   return moved;
 }

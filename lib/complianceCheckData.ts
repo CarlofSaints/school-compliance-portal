@@ -1,12 +1,5 @@
 import { createHash } from "crypto";
-import {
-  readJson,
-  writeJson,
-  writeFile,
-  readFile,
-  listFiles,
-  deleteFile,
-} from "./controlData";
+import { NO_CHANGE, readJson, writeJson, writeFile, readFile, listFiles, deleteFile, updateJson, addToList, updateInList, removeFromList } from "./controlData";
 
 export type RiskStatus =
   | "not_an_issue"
@@ -193,9 +186,8 @@ export async function addComplianceCheck(
   if (record.hash) {
     await writeJson(hashPointerPath(record.hash, record.name), { id: record.id });
   }
-  const checks = await readIndex();
-  checks.push(record);
-  await writeJson(CHECKS_INDEX, checks);
+  // Guarded (lib/controlData.ts): two checks finishing together both stay.
+  await addToList(CHECKS_INDEX, record);
 }
 
 export async function deleteComplianceCheck(id: string): Promise<boolean> {
@@ -206,16 +198,11 @@ export async function deleteComplianceCheck(id: string): Promise<boolean> {
     await deleteFile(hashPointerPath(existing.hash, existing.name));
   }
 
-  const checks = await readIndex();
-  const remaining = checks.filter((c) => c.id !== id);
-  const wasIndexed = remaining.length !== checks.length;
-
   // The own copy has to go even when the index never had the record, or a
   // check deleted before its index append landed would come back on the next
   // read by id.
   await deleteFile(checkPath(id));
-  if (wasIndexed) await writeJson(CHECKS_INDEX, remaining);
-  return wasIndexed;
+  return (await removeFromList<ComplianceCheckRecord>(CHECKS_INDEX, id)) !== null;
 }
 
 export async function downloadComplianceCheckFile(
@@ -236,25 +223,31 @@ export async function updateRiskStatus(
     return null;
   }
 
-  const risks = current.risks.map((r, i) => {
-    if (i !== riskIndex) return r;
-    const next = { ...r };
-    if (status === null) delete next.status;
-    else next.status = status;
-    return next;
+  // Applied to the risks AS THEY ARE NOW, in both copies, each in a guarded
+  // write: two people marking different risks on one check at the same moment
+  // used to keep only the second person's change.
+  const mark = (rec: ComplianceCheckRecord): ComplianceCheckRecord => ({
+    ...rec,
+    risks: (rec.risks || []).map((r, i) => {
+      if (i !== riskIndex) return r;
+      const next = { ...r };
+      if (status === null) delete next.status;
+      else next.status = status;
+      return next;
+    }),
   });
-  const updated = { ...current, risks };
 
   // Both copies, always. The dashboard totals its status pills from the index
   // while the check page reads the own copy, so updating one and not the other
   // is how the two views start disagreeing again.
-  await writeJson(checkPath(checkId), updated);
-  const checks = await readIndex();
-  const idx = checks.findIndex((c) => c.id === checkId);
-  if (idx !== -1) {
-    checks[idx] = updated;
-    await writeJson(CHECKS_INDEX, checks);
-  }
+  let updated: ComplianceCheckRecord = mark(current);
+  await updateJson<ComplianceCheckRecord | null>(checkPath(checkId), null, (own) => {
+    // Deleted meanwhile: do not bring it back.
+    if (!own) return NO_CHANGE;
+    updated = mark(own);
+    return updated;
+  });
+  await updateInList<ComplianceCheckRecord>(CHECKS_INDEX, checkId, mark);
   return updated;
 }
 
@@ -270,14 +263,14 @@ export async function attachCheckToPolicy(
   const current = await getComplianceCheckById(checkId);
   if (!current) return null;
 
-  const updated = { ...current, policyId, policyVersion, name };
-  await writeJson(checkPath(checkId), updated);
-  const checks = await readIndex();
-  const idx = checks.findIndex((c) => c.id === checkId);
-  if (idx !== -1) {
-    checks[idx] = updated;
-    await writeJson(CHECKS_INDEX, checks);
-  }
+  const attach = (rec: ComplianceCheckRecord): ComplianceCheckRecord => ({ ...rec, policyId, policyVersion, name });
+  let updated: ComplianceCheckRecord = attach(current);
+  await updateJson<ComplianceCheckRecord | null>(checkPath(checkId), null, (own) => {
+    if (!own) return NO_CHANGE;
+    updated = attach(own);
+    return updated;
+  });
+  await updateInList<ComplianceCheckRecord>(CHECKS_INDEX, checkId, attach);
   return updated;
 }
 

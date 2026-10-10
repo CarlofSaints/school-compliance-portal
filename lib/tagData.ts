@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "./controlData";
+import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
 import type { Tag } from "./tags";
@@ -24,30 +24,38 @@ export async function getTagById(id: string): Promise<Tag | undefined> {
   return (await getTags()).find((t) => t.id === id);
 }
 
+// Guarded writes (updateJson, lib/controlData.ts): two tags created or edited
+// at the same moment both stay.
 export async function createTag(tag: Tag): Promise<void> {
-  const tags = await getTags();
-  tags.push(tag);
-  await saveTags(tags);
+  await updateJson<Tag[]>(TAGS_PATH, [], (tags) => [...tags, tag]);
 }
 
 export async function updateTag(
   id: string,
   updates: Partial<Omit<Tag, "id">>
 ): Promise<Tag | null> {
-  const tags = await getTags();
-  const idx = tags.findIndex((t) => t.id === id);
-  if (idx === -1) return null;
-  tags[idx] = { ...tags[idx], ...updates };
-  await saveTags(tags);
-  return tags[idx];
+  let saved: Tag | null = null;
+  await updateJson<Tag[]>(TAGS_PATH, [], (tags) => {
+    const idx = tags.findIndex((t) => t.id === id);
+    if (idx === -1) {
+      saved = null;
+      return NO_CHANGE;
+    }
+    tags[idx] = { ...tags[idx], ...updates };
+    saved = tags[idx];
+    return tags;
+  });
+  return saved;
 }
 
 export async function deleteTag(id: string): Promise<boolean> {
-  const tags = await getTags();
-  const next = tags.filter((t) => t.id !== id);
-  if (next.length === tags.length) return false;
-  await saveTags(next);
-  return true;
+  let removed = false;
+  await updateJson<Tag[]>(TAGS_PATH, [], (tags) => {
+    const next = tags.filter((t) => t.id !== id);
+    removed = next.length !== tags.length;
+    return removed ? next : NO_CHANGE;
+  });
+  return removed;
 }
 
 // --- Membership -----------------------------------------------------------

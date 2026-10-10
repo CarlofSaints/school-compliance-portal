@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
 import type { SpendApplication, SpendApproval } from "@/lib/spendData";
 import { getPeople } from "@/lib/peopleData";
 import { getApprovalSettings } from "@/lib/approvalSettings";
@@ -80,8 +80,7 @@ export async function POST(
         );
       }
 
-      const approvals: SpendApproval[] = [
-        ...app.approvals,
+      const override: SpendApproval[] = [
         {
           userId: session.id,
           userName: `${session.name} ${session.surname}`,
@@ -93,10 +92,21 @@ export async function POST(
         },
       ];
 
-      await updateSpendApplication(id, {
-        status: "approved",
-        approvals,
-        approvedAmount: app.approvedAmount ?? app.estimatedAmount,
+      // Appended to the approvals AS THEY ARE NOW, so a decision another
+      // approver recorded a moment ago is kept alongside the override.
+      await updateSpendApplication(id, (current) => {
+        // Checked again on the record AS IT IS NOW: it may have been decided
+        // since this request read it.
+        if (!["pending", "pending_decision", "requires_changes"].includes(current.status)) {
+          throw new SpendChangeRefused(
+            `This application is already ${current.status.replace("_", " ")}, so it cannot be approved again.`
+          );
+        }
+        return {
+          status: "approved",
+          approvals: [...current.approvals, ...override],
+          approvedAmount: current.approvedAmount ?? current.estimatedAmount,
+        };
       });
 
       await recordActivity({
@@ -198,32 +208,50 @@ export async function POST(
         preferredQuoteIndex !== undefined ? preferredQuoteIndex : undefined,
     };
 
-    // Append rather than replace: every response is kept on the record.
-    const approvals = [...app.approvals, approval];
-
-    const preferredQuotes = [
-      ...(app.preferredQuotes || []).filter((q) => q.userId !== session.id),
-      ...(preferredQuoteIndex !== undefined
-        ? [{ userId: session.id, quoteIndex: preferredQuoteIndex }]
-        : []),
-    ];
-
-    const next = { ...app, approvals };
-    const status =
-      decision === "requires_changes"
-        ? ("requires_changes" as const)
-        : deriveStatus(next);
-
-    const updates: Partial<SpendApplication> = {
-      approvals,
-      preferredQuotes,
-      status,
-    };
-    if (status === "approved" && app.approvedAmount === undefined) {
-      updates.approvedAmount = app.estimatedAmount;
+    // 🔴 Worked out from the application AS IT IS AT SAVE TIME, not from the
+    // copy read at the top of this request. Two approvers deciding the same
+    // minute each appended to their own stale copy and the second save erased
+    // the first decision; and a double click could record one approver twice.
+    // updateSpendApplication re-runs this on the fresh copy if anybody saved in
+    // between, so both decisions land and the status is derived from both.
+    const saved = await updateSpendApplication(id, (current) => {
+      // Both checks again on the record AS IT IS NOW. Thrown, so nothing is
+      // written: a double click, or a decision on an application somebody
+      // rejected or completed a moment ago, changes nothing.
+      if (current.approvals.some((a) => a.userId === session.id && a.decision !== "responded")) {
+        throw new SpendChangeRefused("You have already recorded your decision", 400);
+      }
+      if (!["pending", "pending_decision"].includes(current.status)) {
+        throw new SpendChangeRefused(
+          `This application is ${current.status.replace("_", " ")}, so no decision can be recorded on it now.`
+        );
+      }
+      // Append rather than replace: every response is kept on the record.
+      const approvals = [...current.approvals, approval];
+      const preferredQuotes = [
+        ...(current.preferredQuotes || []).filter((q) => q.userId !== session.id),
+        ...(preferredQuoteIndex !== undefined
+          ? [{ userId: session.id, quoteIndex: preferredQuoteIndex }]
+          : []),
+      ];
+      // Sent back by one approver stays sent back: another approver's
+      // approval landing the same minute must not quietly undo it.
+      const status =
+        decision === "requires_changes" || current.status === "requires_changes"
+          ? ("requires_changes" as const)
+          : deriveStatus({ ...current, approvals });
+      const updates: Partial<SpendApplication> = { approvals, preferredQuotes, status };
+      if (status === "approved" && current.approvedAmount === undefined) {
+        updates.approvedAmount = current.estimatedAmount;
+      }
+      return updates;
+    });
+    if (!saved) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
-
-    await updateSpendApplication(id, updates);
+    const approvals = saved.approvals;
+    const status = saved.status;
+    const next = saved;
 
     // Logged AFTER the write succeeds, so the trail never claims something
     // happened that did not. recordActivity never throws, so a logging
@@ -255,7 +283,10 @@ export async function POST(
       approved: progress.approved,
       total: progress.total,
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof SpendChangeRefused) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

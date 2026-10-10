@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
-import { getMinutes, updateMinutes, saveSignatureImage } from "@/lib/minutesData";
+import { getMinutes, updateMinutes, saveSignatureImage, MinutesChangeRefused } from "@/lib/minutesData";
 import { signingProgress } from "@/lib/minutes";
 import {
   signingCodeMatches,
@@ -110,14 +110,12 @@ export async function POST(
   // empty signature block and reads like a forgery rather than a failed save.
   await saveSignatureImage(id, signatory.email, mark.png);
 
-  const signatories = [...record.signatories];
-  signatories[index] = {
-    ...signatory,
+  const mine = {
     signedAt: new Date().toISOString(),
     documentHash: hash,
     ip: clientIp(req),
     signature: {
-      kind: body.kind === "typed" ? "typed" : "drawn",
+      kind: (body.kind === "typed" ? "typed" : "drawn") as "typed" | "drawn",
       width: mark.width,
       height: mark.height,
     },
@@ -126,12 +124,39 @@ export async function POST(
     codeHash: undefined,
   };
 
-  const progress = signingProgress(signatories);
-  const updated = await updateMinutes(id, {
-    signatories,
-    status: progress.complete ? "signed" : "awaiting_signatures",
-    signedAt: progress.complete ? new Date().toISOString() : undefined,
+  // 🔴 Applied to the signatories AS THEY ARE AT SAVE TIME. Two governors
+  // signing in the same minute each changed their own earlier copy of the
+  // list, and the second save erased the first signature. Matched by email,
+  // not by position, in case the list was rebuilt in between.
+  let progress = signingProgress(record.signatories);
+  let updated;
+  try {
+  updated = await updateMinutes(id, (current) => {
+    // Checked again on the record AS IT IS NOW: a second submit, or a list
+    // reopened since, must not be reported as a signature that never landed.
+    const there = current.signatories.find((s) => s.email.trim().toLowerCase() === me);
+    if (!there) {
+      throw new MinutesChangeRefused("You are no longer on the signing list for these minutes.");
+    }
+    if (there.signedAt) {
+      throw new MinutesChangeRefused("You have already signed these minutes.");
+    }
+    const signatories = current.signatories.map((s) =>
+      s.email.trim().toLowerCase() === me ? { ...s, ...mine } : s
+    );
+    progress = signingProgress(signatories);
+    return {
+      signatories,
+      status: progress.complete ? "signed" : "awaiting_signatures",
+      signedAt: progress.complete ? new Date().toISOString() : undefined,
+    };
   });
+  } catch (err) {
+    if (err instanceof MinutesChangeRefused) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    throw err;
+  }
 
   await recordActivity({
     ...actorFrom(req, session),

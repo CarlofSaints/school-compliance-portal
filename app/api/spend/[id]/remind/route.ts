@@ -136,9 +136,10 @@ export async function POST(
       byName: chasedBy,
       sentTo,
     };
-    await updateSpendApplication(id, {
-      manualReminders: [...history, entry].slice(-20),
-    });
+    // Added to the history AS IT IS NOW, not the copy read before sending.
+    await updateSpendApplication(id, (current) => ({
+      manualReminders: [...(current.manualReminders || []), entry].slice(-20),
+    }));
   }
 
   return NextResponse.json({

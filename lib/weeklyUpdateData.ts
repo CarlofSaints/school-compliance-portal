@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "./controlData";
+import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
 import { listMinutes, type MinutesRecord } from "./minutesData";
@@ -33,6 +33,24 @@ export async function getWeeklyUpdateSettings(): Promise<WeeklyUpdateSettings> {
 
 export async function saveWeeklyUpdateSettings(s: WeeklyUpdateSettings): Promise<void> {
   return writeJson(PATH, s);
+}
+
+/**
+ * Changes some settings fields in one guarded write (lib/controlData.ts),
+ * against the settings AS THEY ARE NOW. The admin's save touches only the
+ * schedule and a send touches only lastSentOn / lastResult, so neither can put
+ * back what the other just wrote.
+ */
+export async function patchWeeklyUpdateSettings(
+  change: (current: WeeklyUpdateSettings) => Partial<WeeklyUpdateSettings> | typeof NO_CHANGE
+): Promise<WeeklyUpdateSettings> {
+  return parseWeeklyUpdate(
+    await updateJson<WeeklyUpdateSettings>(PATH, DEFAULT_WEEKLY_UPDATE, (raw) => {
+      const current = parseWeeklyUpdate(raw);
+      const patch = change(current);
+      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch };
+    })
+  );
 }
 
 export interface WeeklyRecipient {
@@ -145,6 +163,9 @@ function factsFor(
  */
 export async function sendWeeklyUpdate(opts: {
   now?: Date;
+  /** The scheduled run. It claims the day first, so two runs at once cannot
+   *  both send; a send an admin presses on purpose is not blocked by it. */
+  scheduled?: boolean;
   onlyTo?: {
     email: string;
     name: string;
@@ -191,11 +212,20 @@ export async function sendWeeklyUpdate(opts: {
   }
 
   const { recipients, noEmail } = await weeklyRecipients();
-  await saveWeeklyUpdateSettings({
-    ...settings,
-    lastSentOn: today,
-    lastResult: `sending to ${recipients.length}...`,
+  // Stamped BEFORE the first email, in one guarded write. A scheduled run
+  // that finds today already stamped stops: another run got there first.
+  let claimed = true;
+  await patchWeeklyUpdateSettings((current) => {
+    if (opts.scheduled && current.lastSentOn === today) {
+      claimed = false;
+      return NO_CHANGE;
+    }
+    claimed = true;
+    return { lastSentOn: today, lastResult: `sending to ${recipients.length}...` };
   });
+  if (!claimed) {
+    return { sent: 0, failed: 0, total: 0, summary: "already sent today by another run" };
+  }
 
   let sent = 0;
   let failed = 0;
@@ -218,10 +248,6 @@ export async function sendWeeklyUpdate(opts: {
     `sent to ${sent} of ${recipients.length}` +
     (failed ? `, ${failed} failed` : "") +
     (noEmail.length ? `; no email address for: ${noEmail.join(", ")}` : "");
-  await saveWeeklyUpdateSettings({
-    ...(await getWeeklyUpdateSettings()),
-    lastSentOn: today,
-    lastResult: `${today}: ${summary}`,
-  });
+  await patchWeeklyUpdateSettings(() => ({ lastSentOn: today, lastResult: `${today}: ${summary}` }));
   return { sent, failed, total: recipients.length, summary };
 }

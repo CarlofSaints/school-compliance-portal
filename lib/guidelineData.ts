@@ -1,4 +1,4 @@
-import { readJson, writeJson, writeFile, readFile } from "./controlData";
+import { readJson, writeJson, writeFile, readFile, addToList, removeFromList } from "./controlData";
 
 export interface GuidelineMeta {
   id: string;
@@ -31,18 +31,13 @@ export async function getGuidelineById(
   return guidelines.find((g) => g.id === id);
 }
 
+// Guarded writes (lib/controlData.ts): two guidelines uploaded together both stay.
 export async function createGuideline(guideline: GuidelineMeta): Promise<void> {
-  const guidelines = await getGuidelines();
-  guidelines.push(guideline);
-  await saveGuidelines(guidelines);
+  await addToList(GUIDELINES_INDEX, guideline);
 }
 
 export async function deleteGuideline(id: string): Promise<boolean> {
-  const guidelines = await getGuidelines();
-  const filtered = guidelines.filter((g) => g.id !== id);
-  if (filtered.length === guidelines.length) return false;
-  await saveGuidelines(filtered);
-  return true;
+  return (await removeFromList<GuidelineMeta>(GUIDELINES_INDEX, id)) !== null;
 }
 
 export async function uploadGuidelineFile(

@@ -23,7 +23,7 @@ import {
   gatherSummaryRows,
   getActionSummarySettings,
   resolveSummaryRecipients,
-  saveActionSummarySettings,
+  patchActionSummarySettings,
   sendActionSummary,
 } from "@/lib/actionSummaryData";
 
@@ -127,7 +127,11 @@ export async function PUT(req: NextRequest) {
     }
   }
 
-  await saveActionSummarySettings(next);
+  // Only the fields this form owns, in one guarded write against the settings
+  // AS THEY ARE NOW: a send stamping lastSentOn meanwhile is neither lost nor
+  // put back (which would let a later run send the same day again).
+  const { lastSentOn: _sent, lastResult: _result, ...owned } = next;
+  await patchActionSummarySettings(() => owned);
 
   await recordActivity({
     ...actorFrom(req, session),

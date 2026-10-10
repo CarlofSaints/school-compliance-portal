@@ -8,7 +8,7 @@ import {
   recordRun,
 } from "@/lib/reminderData";
 import { resolveRecipients } from "@/lib/reminderRecipients";
-import { getActionItems } from "@/lib/actionItemData";
+import { getActionItems, claimActionChase, updateActionItem, todayIso } from "@/lib/actionItemData";
 import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
 import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
 import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
@@ -160,7 +160,30 @@ export async function GET(req: NextRequest) {
   const dueActions = actionsDueForChase(actions, now);
 
   for (const item of dueActions) {
-    const outcome = await chaseActionItem(item, now);
+    // Claimed first, in one guarded write, so an overlapping run cannot send
+    // the same chase twice.
+    const claim = await claimActionChase(item.id, todayIso(now));
+    if (!claim.claimed) {
+      skipped++;
+      detail.push(`Action ${item.ref} ${item.title}: already chased today by another run`);
+      continue;
+    }
+    let outcome;
+    try {
+      outcome = await chaseActionItem(item, now);
+    } catch (err) {
+      // 🔴 The claim stamped today BEFORE sending. A failure here must hand the
+      // day back, or the action looks chased, waits a whole cycle, and nobody
+      // is told. One failed action also must not stop the rest of the run.
+      const why = err instanceof Error ? err.message : String(err);
+      await updateActionItem(item.id, {
+        lastRemindedOn: claim.previous,
+        lastReminderResult: `failed: ${why}`.slice(0, 300),
+      }).catch(() => {});
+      failed++;
+      detail.push(`Action ${item.ref} ${item.title}: failed (${why}), will try again next run`);
+      continue;
+    }
     sent += outcome.sent;
     failed += outcome.failed;
     if (outcome.sent === 0) skipped++;
@@ -176,7 +199,7 @@ export async function GET(req: NextRequest) {
   const weekly = await getWeeklyUpdateSettings();
   if (weeklyUpdateDue(weekly, now)) {
     weeklyDue = 1;
-    const result = await sendWeeklyUpdate({ now });
+    const result = await sendWeeklyUpdate({ now, scheduled: true });
     sent += result.sent;
     failed += result.failed;
     detail.push(`Weekly SGB update: ${result.summary}`);
@@ -193,7 +216,7 @@ export async function GET(req: NextRequest) {
     const summarySettings = await getActionSummarySettings();
     if (actionSummaryDue(summarySettings, now)) {
       summaryDue = 1;
-      const result = await sendActionSummary({ now });
+      const result = await sendActionSummary({ now, scheduled: true });
       sent += result.sent;
       failed += result.failed;
       detail.push(`Action items summary: ${result.summary}`);

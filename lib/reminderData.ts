@@ -1,4 +1,4 @@
-import { readJson, writeJson } from "./controlData";
+import { readJson, writeJson, updateJson, addToList, updateInList, removeFromList } from "./controlData";
 
 // Who a reminder goes to. Resolved to actual addresses at send time, not when
 // the reminder is created, so a change of custodian or applicant is picked up
@@ -92,30 +92,21 @@ export async function saveReminders(list: SpendReminder[]): Promise<void> {
   return writeJson(REMINDERS_PATH, list);
 }
 
+// Guarded writes (lib/controlData.ts): the reminder run stamping one reminder
+// and somebody creating another at the same moment both keep their change.
 export async function createReminder(reminder: SpendReminder): Promise<void> {
-  const list = await getReminders();
-  list.push(reminder);
-  await saveReminders(list);
+  await addToList(REMINDERS_PATH, reminder);
 }
 
 export async function updateReminder(
   id: string,
   updates: Partial<Omit<SpendReminder, "id">>
 ): Promise<SpendReminder | null> {
-  const list = await getReminders();
-  const idx = list.findIndex((r) => r.id === id);
-  if (idx === -1) return null;
-  list[idx] = { ...list[idx], ...updates };
-  await saveReminders(list);
-  return list[idx];
+  return updateInList<SpendReminder>(REMINDERS_PATH, id, (r) => ({ ...r, ...updates }));
 }
 
 export async function deleteReminder(id: string): Promise<boolean> {
-  const list = await getReminders();
-  const next = list.filter((r) => r.id !== id);
-  if (next.length === list.length) return false;
-  await saveReminders(next);
-  return true;
+  return (await removeFromList<SpendReminder>(REMINDERS_PATH, id)) !== null;
 }
 
 // --- Scheduling ---
@@ -205,9 +196,7 @@ export interface ReminderRun {
 // Keeps the last 50 runs. Without this a cron that never fires and a cron that
 // fires and finds nothing to do look identical.
 export async function recordRun(run: ReminderRun): Promise<void> {
-  const runs = await readJson<ReminderRun[]>(RUNS_PATH, []);
-  runs.unshift(run);
-  await writeJson(RUNS_PATH, runs.slice(0, 50));
+  await updateJson<ReminderRun[]>(RUNS_PATH, [], (runs) => [run, ...runs].slice(0, 50));
 }
 
 export async function getRuns(): Promise<ReminderRun[]> {

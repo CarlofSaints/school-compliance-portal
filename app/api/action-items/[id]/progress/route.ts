@@ -74,12 +74,15 @@ export async function POST(
       status,
     };
 
-    const saved = await updateActionItem(id, {
+    // A function of the action AS IT IS NOW: two people posting an update at
+    // the same moment must both land, so the list is never built from the
+    // copy read at the top of this request.
+    const saved = await updateActionItem(id, (current) => ({
       progress,
       status,
       // Newest first, so the grid's "last update" column is updates[0].
-      updates: [update, ...item.updates].slice(0, 100),
-    });
+      updates: [update, ...(current.updates || [])].slice(0, 100),
+    }));
 
     return NextResponse.json(saved);
   } catch (err) {

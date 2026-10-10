@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
-import { getMinutes, updateMinutes } from "@/lib/minutesData";
+import { getMinutes, updateMinutes, MinutesChangeRefused } from "@/lib/minutesData";
 import {
   canReview,
   isReviewer,
@@ -78,19 +78,44 @@ export async function POST(
     // still count after the secretary rewrote it as draft 2.
     draftNumber: record.draftNumber,
   };
-  const reviews = [...record.reviews, review];
-
-  // One objection sends it back. There is no point collecting the remaining
-  // approvals for a document that is already being rewritten.
-  const progress = reviewProgress(reviewers, reviews, record.draftNumber);
-  const status =
-    decision === "changes_requested"
-      ? "changes_requested"
-      : progress.complete
-        ? "awaiting_signatures"
-        : "in_review";
-
-  const updated = await updateMinutes(id, { reviews, status });
+  // 🔴 Worked out from the record AS IT IS AT SAVE TIME. Two reviewers
+  // answering in the same minute each appended to their own earlier copy, and
+  // the second save erased the first answer, so a round could stall forever
+  // one approval short. updateMinutes re-runs this on the fresh copy if
+  // anybody saved in between.
+  let progress = reviewProgress(reviewers, [...record.reviews, review], record.draftNumber);
+  let status: "changes_requested" | "awaiting_signatures" | "in_review" = "in_review";
+  let updated;
+  try {
+  updated = await updateMinutes(id, (current) => {
+    // Checked again on the record AS IT IS NOW: it may have been sent back,
+    // or rewritten as a new draft, since this request read it. An answer to
+    // an old draft must not count towards the new one.
+    if (!canReview(current.status) || current.draftNumber !== record.draftNumber) {
+      throw new MinutesChangeRefused(
+        "These minutes changed while you were reading them. Open them again to see the current draft."
+      );
+    }
+    const reviews = [...(current.reviews || []), review];
+    // One objection sends it back. There is no point collecting the remaining
+    // approvals for a document that is already being rewritten.
+    progress = reviewProgress(reviewers, reviews, current.draftNumber);
+    // One send-back stands: an approval landing the same minute must not
+    // quietly put the minutes back into review over somebody's objection.
+    status =
+      decision === "changes_requested" || current.status === "changes_requested"
+        ? "changes_requested"
+        : progress.complete
+          ? "awaiting_signatures"
+          : "in_review";
+    return { reviews, status };
+  });
+  } catch (err) {
+    if (err instanceof MinutesChangeRefused) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    throw err;
+  }
 
   /** Set when the round finished but signing could not be opened. */
   let signingProblem: string | undefined;

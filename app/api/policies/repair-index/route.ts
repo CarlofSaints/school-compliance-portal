@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { updateJson, NO_CHANGE } from "@/lib/controlData";
 import { requirePermission } from "@/lib/rolesData";
 import { listFiles } from "@/lib/controlData";
 import {
   getPolicies,
-  savePolicies,
   getPolicyVersions,
   getPolicyMeta,
   savePolicyMeta,
@@ -89,7 +89,17 @@ export async function POST(req: NextRequest) {
       recovered.push({ id: policyId, name, fromMeta: false });
     }
 
-    if (recovered.length > 0) await savePolicies(existing);
+    // Added to the index AS IT IS NOW (guarded), skipping anything that
+    // appeared meanwhile, so a repair cannot wipe a policy uploaded while it ran.
+    if (recovered.length > 0) {
+      const ids = new Set(recovered.map((r) => r.id));
+      const back = existing.filter((p) => ids.has(p.id));
+      await updateJson<typeof existing>("policies/index.json", [], (current) => {
+        const have = new Set(current.map((p) => p.id));
+        const add = back.filter((p) => !have.has(p.id));
+        return add.length ? [...current, ...add] : NO_CHANGE;
+      });
+    }
 
     return NextResponse.json({
       recovered: recovered.length,
