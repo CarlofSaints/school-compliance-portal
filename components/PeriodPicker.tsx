@@ -1,14 +1,16 @@
 "use client";
 
 import { checkPeriod, type MeetingPeriod } from "@/lib/minutes";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 // Carl asked for "year + month or year + quarter or year AND custom period the
 // user can select". Three shapes behind one control, so the form does not grow
 // three sets of fields that can contradict each other.
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  tk("January"), tk("February"), tk("March"), tk("April"), tk("May"), tk("June"),
+  tk("July"), tk("August"), tk("September"), tk("October"), tk("November"), tk("December"),
 ];
 
 const inputClass =
@@ -21,6 +23,7 @@ export default function PeriodPicker({
   value: MeetingPeriod;
   onChange: (p: MeetingPeriod) => void;
 }) {
+  const t = useT();
   const thisYear = new Date().getFullYear();
   // A school loading historical minutes needs to go back; five years forward
   // covers planning a meeting calendar.
@@ -46,7 +49,7 @@ export default function PeriodPicker({
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">
-        Period these minutes cover
+        {t("Period these minutes cover")}
       </label>
 
       <div className="flex gap-2 mb-3">
@@ -61,7 +64,7 @@ export default function PeriodPicker({
                 : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
           >
-            {k === "month" ? "Month" : k === "quarter" ? "Quarter" : "Custom dates"}
+            {k === "month" ? t("Month") : k === "quarter" ? t("Quarter") : t("Custom dates")}
           </button>
         ))}
       </div>
@@ -87,7 +90,7 @@ export default function PeriodPicker({
           >
             {MONTHS.map((m, i) => (
               <option key={m} value={i + 1}>
-                {m}
+                {t(m)}
               </option>
             ))}
           </select>
@@ -116,20 +119,20 @@ export default function PeriodPicker({
               value={value.from}
               onChange={(e) => onChange({ ...value, from: e.target.value })}
               className={inputClass}
-              aria-label="From"
+              aria-label={t("From")}
             />
             <input
               type="date"
               value={value.to}
               onChange={(e) => onChange({ ...value, to: e.target.value })}
               className={inputClass}
-              aria-label="To"
+              aria-label={t("To")}
             />
             <input
               type="text"
               value={value.label ?? ""}
               onChange={(e) => onChange({ ...value, label: e.target.value })}
-              placeholder="Name it, e.g. Term 1"
+              placeholder={t("Name it, e.g. Term 1")}
               className={`${inputClass} flex-1 min-w-[140px]`}
             />
           </>

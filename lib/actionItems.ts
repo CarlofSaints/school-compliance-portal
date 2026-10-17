@@ -1,4 +1,5 @@
 import { GOVERNANCE_LABEL } from "./positions";
+import { tk } from "./i18n/translate";
 
 // ---------------------------------------------------------------------------
 // Action items: the register of who agreed to do what, by when.
@@ -28,9 +29,9 @@ export type ActionPriority = "low" | "medium" | "high";
 export type ActionRecipient = "assignees" | "admins" | "raiser";
 
 export const STATUS_LABELS: Record<ActionStatus, string> = {
-  not_started: "Not started",
+  not_started: tk("Not started"),
   in_progress: "In progress",
-  blocked: "Blocked",
+  blocked: tk("Blocked"),
   done: "Done",
   cancelled: "Cancelled",
 };
@@ -53,9 +54,9 @@ export const STATUS_PILL: Record<ActionStatus, string> = {
 };
 
 export const PRIORITY_LABELS: Record<ActionPriority, string> = {
-  high: "High",
-  medium: "Medium",
-  low: "Low",
+  high: tk("High"),
+  medium: tk("Medium"),
+  low: tk("Low"),
 };
 
 export const PRIORITY_RANK: Record<ActionPriority, number> = {
@@ -73,7 +74,7 @@ export const PRIORITY_PILL: Record<ActionPriority, string> = {
 export const RECIPIENT_LABELS: Record<ActionRecipient, string> = {
   assignees: "The people assigned",
   admins: `${GOVERNANCE_LABEL} admins`,
-  raiser: "Whoever raised it",
+  raiser: tk("Whoever raised it"),
 };
 
 export const ALL_RECIPIENTS: ActionRecipient[] = [

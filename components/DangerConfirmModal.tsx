@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "@/components/I18nProvider";
 
 // A destructive action that cannot be taken back, confirmed by TYPING a word
 // rather than clicking OK. A click is muscle memory; typing DELETE is a
@@ -25,6 +26,7 @@ export default function DangerConfirmModal({
   onConfirm: (typed: string) => Promise<string | void>;
   onClose: () => void;
 }) {
+  const t = useT();
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -46,7 +48,7 @@ export default function DangerConfirmModal({
       const problem = await onConfirm(typed.trim());
       if (problem) setError(problem);
     } catch {
-      setError("Something went wrong. Nothing was deleted.");
+      setError(t("Something went wrong. Nothing was deleted."));
     } finally {
       setBusy(false);
     }
@@ -67,10 +69,9 @@ export default function DangerConfirmModal({
 
         <div className="p-6 space-y-4">
           <div className="rounded-lg border border-risk-high/30 bg-risk-high/10 px-4 py-3 text-sm text-risk-high">
-            <span className="font-bold tracking-wide">DANGER</span>
+            <span className="font-bold tracking-wide">{t("DANGER")}</span>
             <p className="mt-1">
-              This action cannot be undone. Type in the word &quot;DELETE&quot; to
-              confirm.
+              {t("This action cannot be undone. Type in the word \"{word}\" to confirm.", { word: WORD })}
             </p>
           </div>
 
@@ -84,7 +85,7 @@ export default function DangerConfirmModal({
             autoComplete="off"
             spellCheck={false}
             placeholder={WORD}
-            aria-label='Type DELETE to confirm'
+            aria-label={t("Type {word} to confirm", { word: WORD })}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-risk-high focus:border-transparent outline-none transition"
           />
 
@@ -97,14 +98,14 @@ export default function DangerConfirmModal({
             disabled={busy}
             className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors disabled:opacity-50"
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             onClick={confirm}
             disabled={!matches || busy}
             className="bg-risk-high hover:opacity-90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {busy ? "Deleting..." : actionLabel}
+            {busy ? t("Deleting...") : actionLabel}
           </button>
         </div>
       </div>

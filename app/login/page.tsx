@@ -6,9 +6,11 @@ import Link from "next/link";
 import SchoolCrest from "@/components/SchoolCrest";
 import { setSession, getSession } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
+import { useT } from "@/components/I18nProvider";
 
 export default function LoginPage() {
   const branding = useBranding();
+  const t = useT();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,7 +36,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Login failed");
+        setError(data.error || t("Login failed"));
         return;
       }
       setSession(data.session);
@@ -44,7 +46,7 @@ export default function LoginPage() {
         router.push("/dashboard");
       }
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("Network error. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -62,7 +64,7 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-          <h2 className="text-xl font-semibold text-dark mb-6">Sign In</h2>
+          <h2 className="text-xl font-semibold text-dark mb-6">{t("Sign In")}</h2>
 
           {error && (
             <div className="bg-red-50 text-risk-high px-4 py-3 rounded-lg mb-4 text-sm">
@@ -73,7 +75,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
+                {t("Email")}
               </label>
               <input
                 type="email"
@@ -81,13 +83,13 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-                placeholder="your@email.com"
+                placeholder={t("your@email.com")}
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password
+                {t("Password")}
               </label>
               <div className="relative">
                 <input
@@ -96,7 +98,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition pr-10"
-                  placeholder="Enter password"
+                  placeholder={t("Enter password")}
                 />
                 <button
                   type="button"
@@ -122,13 +124,13 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? t("Signing in...") : t("Sign In")}
             </button>
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-5">
             <Link href="/forgot-password" className="text-primary hover:underline">
-              Forgot your password?
+              {t("Forgot your password?")}
             </Link>
           </p>
         </div>

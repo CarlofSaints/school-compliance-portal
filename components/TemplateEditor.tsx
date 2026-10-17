@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { POSITIONS } from "@/lib/positions";
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
+import { useT } from "@/components/I18nProvider";
 import {
   MEETING_BODY_LABELS,
   isApologies,
@@ -62,6 +63,7 @@ export default function TemplateEditor({
   onCancel: () => void;
   onDelete?: () => void;
 }) {
+  const t = useT();
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Computed from the same helper the Word export uses, so the numbers on
@@ -99,11 +101,11 @@ export default function TemplateEditor({
 
   const problem =
     !template.name.trim()
-      ? "Give the template a name."
+      ? t("Give the template a name.")
       : sections.length === 0
-        ? "Add at least one section."
+        ? t("Add at least one section.")
         : sections.some((s) => !s.title.trim())
-          ? "Every section needs a heading."
+          ? t("Every section needs a heading.")
           : null;
 
   return (
@@ -112,18 +114,18 @@ export default function TemplateEditor({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Template name
+              {t("Template name")}
             </label>
             <input
               value={template.name}
               onChange={(e) => onChange({ ...template, name: e.target.value })}
-              placeholder="e.g. SGB monthly meeting"
+              placeholder={t("e.g. SGB monthly meeting")}
               className={inputClass}
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              For which meeting
+              {t("For which meeting")}
             </label>
             <select
               value={template.body ?? ""}
@@ -135,10 +137,10 @@ export default function TemplateEditor({
               }
               className={inputClass}
             >
-              <option value="">Any meeting</option>
+              <option value="">{t("Any meeting")}</option>
               {Object.entries(MEETING_BODY_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>
-                  {v}
+                  {t(v)}
                 </option>
               ))}
             </select>
@@ -146,12 +148,12 @@ export default function TemplateEditor({
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description <span className="font-normal text-gray-400">(optional)</span>
+            {t("Description")} <span className="font-normal text-gray-400">{t("(optional)")}</span>
           </label>
           <input
             value={template.description ?? ""}
             onChange={(e) => onChange({ ...template, description: e.target.value })}
-            placeholder="When the secretary should pick this one"
+            placeholder={t("When the secretary should pick this one")}
             className={inputClass}
           />
         </div>
@@ -172,7 +174,7 @@ export default function TemplateEditor({
               <input
                 value={s.title}
                 onChange={(e) => update(s.id, { title: e.target.value })}
-                placeholder="Section heading"
+                placeholder={t("Section heading")}
                 className={`flex-1 ${inputClass} font-medium`}
               />
               <div className="flex items-center gap-1 shrink-0">
@@ -180,7 +182,7 @@ export default function TemplateEditor({
                   type="button"
                   onClick={() => move(s.id, -1)}
                   disabled={i === 0}
-                  aria-label="Move up"
+                  aria-label={t("Move up")}
                   className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                 >
                   ↑
@@ -189,7 +191,7 @@ export default function TemplateEditor({
                   type="button"
                   onClick={() => move(s.id, 1)}
                   disabled={i === sections.length - 1}
-                  aria-label="Move down"
+                  aria-label={t("Move down")}
                   className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                 >
                   ↓
@@ -202,7 +204,7 @@ export default function TemplateEditor({
                     onClick={() => commit(sections.filter((x) => x.id !== s.id))}
                     className="px-2 py-1 text-xs text-risk-high hover:underline"
                   >
-                    Remove
+                    {t("Remove")}
                   </button>
                 )}
               </div>
@@ -218,10 +220,10 @@ export default function TemplateEditor({
                 onChange={() => startNumberingAt(s.id)}
                 className="rounded border-gray-300"
               />
-              Start numbering from here
+              {t("Start numbering from here")}
               {s.numberingStartsHere && (
                 <span className="text-gray-400">
-                  (everything above this is left unnumbered)
+                  {t("(everything above this is left unnumbered)")}
                 </span>
               )}
             </label>
@@ -232,10 +234,8 @@ export default function TemplateEditor({
                 of who was away. */}
             {isApologies(s) ? (
               <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                <span className="font-medium text-dark">Filled in automatically.</span>{" "}
-                In each set of minutes, anyone ticked Apology on the attendance
-                list is listed here, and anyone ticked Not Present under a Not in
-                Attendance heading. Every template has this section.
+                <span className="font-medium text-dark">{t("Filled in automatically.")}</span>{" "}
+                {t("In each set of minutes, anyone ticked Apology on the attendance list is listed here, and anyone ticked Not Present under a Not in Attendance heading. Every template has this section.")}
               </p>
             ) : (
             <div className="flex flex-wrap items-stretch gap-2">
@@ -257,9 +257,9 @@ export default function TemplateEditor({
                         : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
                     }`}
                   >
-                    {k === "text" ? "Text" : "Attendance list"}
+                    {k === "text" ? t("Text") : t("Attendance list")}
                     <span className={`block text-[11px] ${on ? "text-white/75" : "text-gray-400"}`}>
-                      {k === "text" ? "Paragraphs of wording" : "Position and name, in two columns"}
+                      {k === "text" ? t("Paragraphs of wording") : t("Position and name, in two columns")}
                     </span>
                   </button>
                 );
@@ -270,13 +270,10 @@ export default function TemplateEditor({
             {isAttendance(s) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Attendance list
+                  {t("Attendance list")}
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  Comes out as two lined-up columns in the Word file. Leave a
-                  name blank and it is filled in from the People register each
-                  time minutes are started, so the list survives a change of
-                  Principal or Chair.
+                  {t("Comes out as two lined-up columns in the Word file. Leave a name blank and it is filled in from the People register each time minutes are started, so the list survives a change of Principal or Chair.")}
                 </p>
                 {(s.attendees?.length ?? 0) === 0 &&
                   rowsFromText(s.staticContent ?? "").rows.length > 0 && (
@@ -284,7 +281,7 @@ export default function TemplateEditor({
                     // template Carl built. Offered, never done silently.
                     <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-3">
                       <span>
-                        You typed a list in the box below. Turn it into rows?
+                        {t("You typed a list in the box below. Turn it into rows?")}
                       </span>
                       <button
                         type="button"
@@ -294,7 +291,7 @@ export default function TemplateEditor({
                         }}
                         className="font-medium underline"
                       >
-                        Turn my typed list into rows
+                        {t("Turn my typed list into rows")}
                       </button>
                     </div>
                   )}
@@ -310,18 +307,18 @@ export default function TemplateEditor({
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {isApologies(s)
-                  ? "Wording under the apologies"
+                  ? t("Wording under the apologies")
                   : isAttendance(s)
-                    ? "Wording under the list"
-                    : "Wording that carries over"}{" "}
-                <span className="font-normal text-gray-400">(optional)</span>
+                    ? t("Wording under the list")
+                    : t("Wording that carries over")}{" "}
+                <span className="font-normal text-gray-400">{t("(optional)")}</span>
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 {isApologies(s)
-                  ? "Printed under the two lists in every set of minutes. The names themselves come from the ticks."
+                  ? t("Printed under the two lists in every set of minutes. The names themselves come from the ticks.")
                   : isAttendance(s)
-                    ? "Printed under the list. The meeting title and date belong on your letterhead, not here."
-                    : "Copied into every set of minutes made from this template, and editable for each meeting. Good for a previous minutes sign off, which barely changes."}
+                    ? t("Printed under the list. The meeting title and date belong on your letterhead, not here.")
+                    : t("Copied into every set of minutes made from this template, and editable for each meeting. Good for a previous minutes sign off, which barely changes.")}
               </p>
               <textarea
                 value={s.staticContent ?? ""}
@@ -330,7 +327,7 @@ export default function TemplateEditor({
                 placeholder={
                   isApologies(s) || isAttendance(s)
                     ? ""
-                    : "e.g. The minutes of the previous meeting were tabled."
+                    : t("e.g. The minutes of the previous meeting were tabled.")
                 }
                 className={`${inputClass} text-sm`}
               />
@@ -338,13 +335,11 @@ export default function TemplateEditor({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Who reports on this{" "}
-                <span className="font-normal text-gray-400">(optional)</span>
+                {t("Who reports on this")}{" "}
+                <span className="font-normal text-gray-400">{t("(optional)")}</span>
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Choose the POSITION, not the person. When the chair changes, the
-                template keeps working and each new set of minutes picks up
-                whoever holds the post at the time.
+                {t("Choose the POSITION, not the person. When the chair changes, the template keeps working and each new set of minutes picks up whoever holds the post at the time.")}
               </p>
               <div className="flex flex-wrap gap-2">
                 {positions.map((position) => {
@@ -363,7 +358,7 @@ export default function TemplateEditor({
                             : [...(s.positions || []), position],
                         })
                       }
-                      title={holder ? `Currently ${holder.name}` : "Nobody holds this yet"}
+                      title={holder ? t("Currently {name}", { name: holder.name }) : t("Nobody holds this yet")}
                       className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
                         on
                           ? "bg-primary text-white border-primary"
@@ -391,7 +386,7 @@ export default function TemplateEditor({
           }
           className="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors"
         >
-          Add a section
+          {t("Add a section")}
         </button>
       </div>
 
@@ -410,14 +405,14 @@ export default function TemplateEditor({
           disabled={saving || !!problem}
           className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
         >
-          {saving ? "Saving..." : template.id ? "Save template" : "Create template"}
+          {saving ? t("Saving...") : template.id ? t("Save template") : t("Create template")}
         </button>
         <button
           onClick={onCancel}
           disabled={saving}
           className="px-5 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
-          Cancel
+          {t("Cancel")}
         </button>
 
         {onDelete && (
@@ -427,12 +422,12 @@ export default function TemplateEditor({
                 {/* Safe to delete at any time: minutes COPY their sections, so
                     no existing record depends on this one. Said out loud,
                     because deleting a template sounds more dangerous than it is. */}
-                Delete this template? Minutes already written keep their sections.
+                {t("Delete this template? Minutes already written keep their sections.")}
                 <button onClick={onDelete} className="font-medium underline">
-                  Delete
+                  {t("Delete")}
                 </button>
                 <button onClick={() => setConfirmDelete(false)} className="text-gray-500">
-                  Keep
+                  {t("Keep")}
                 </button>
               </span>
             ) : (
@@ -440,7 +435,7 @@ export default function TemplateEditor({
                 onClick={() => setConfirmDelete(true)}
                 className="text-sm text-risk-high hover:underline"
               >
-                Delete template
+                {t("Delete template")}
               </button>
             )}
           </div>

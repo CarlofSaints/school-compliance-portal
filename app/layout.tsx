@@ -7,6 +7,9 @@ import NoSchoolHere from "@/components/NoSchoolHere";
 import { readableTextOn } from "@/lib/brandingColors";
 import { BrandingProvider } from "@/components/BrandingProvider";
 import MaybeClerkProvider from "@/components/MaybeClerkProvider";
+import { I18nProvider } from "@/components/I18nProvider";
+import LanguagePicker from "@/components/LanguagePicker";
+import { getLocale, dictFor } from "@/lib/i18n/server";
 import "./globals.css";
 
 const inter = Inter({
@@ -30,6 +33,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const branding = await resolveBranding();
+  const locale = await getLocale();
 
   // 🔴 A wildcard means an INFINITE set of hostnames resolves here. Without
   // this, every one of them renders a working looking sign-in page under the
@@ -63,11 +67,17 @@ export default async function RootLayout({
   } as React.CSSProperties;
 
   return (
-    <html lang="en" className={`${inter.variable} h-full`} style={themeVars}>
+    <html lang={locale} className={`${inter.variable} h-full`} style={themeVars}>
       <body className="min-h-full font-sans antialiased">
         <MaybeClerkProvider>
           <BrandingProvider value={branding}>
-            {strayHost ? <NoSchoolHere hostname={strayHost} /> : children}
+            <I18nProvider locale={locale} dict={dictFor(locale)}>
+              {/* Fixed so it reaches every page; the portal layout leaves room for it. */}
+              <div className="fixed top-3 right-4 z-50">
+                <LanguagePicker />
+              </div>
+              {strayHost ? <NoSchoolHere hostname={strayHost} /> : children}
+            </I18nProvider>
           </BrandingProvider>
         </MaybeClerkProvider>
       </body>

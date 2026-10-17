@@ -3,6 +3,8 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 interface SpendSettings {
   capexBudget: number;
@@ -13,21 +15,22 @@ interface SpendSettings {
 }
 
 const MONTHS = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
+  tk("January"),
+  tk("February"),
+  tk("March"),
+  tk("April"),
+  tk("May"),
+  tk("June"),
+  tk("July"),
+  tk("August"),
+  tk("September"),
+  tk("October"),
+  tk("November"),
+  tk("December"),
 ];
 
 export default function SpendSettingsPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_spend_settings");
   const [settings, setSettings] = useState<SpendSettings | null>(null);
   const [saving, setSaving] = useState(false);
@@ -66,9 +69,9 @@ export default function SpendSettingsPage() {
       body: JSON.stringify(settings),
     });
     if (res.ok) {
-      setToast({ message: "Settings saved", type: "success" });
+      setToast({ message: t("Settings saved"), type: "success" });
     } else {
-      setToast({ message: "Failed to save settings", type: "error" });
+      setToast({ message: t("Failed to save settings"), type: "error" });
     }
     setSaving(false);
   };
@@ -128,7 +131,7 @@ export default function SpendSettingsPage() {
     setEditingConnection(null);
   };
 
-  if (loading || !settings) return <div className="p-6">Loading...</div>;
+  if (loading || !settings) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -142,9 +145,9 @@ export default function SpendSettingsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Spend Settings</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Spend Settings")}</h1>
           <p className="text-gray-500 text-sm">
-            Configure CAPEX budget, sources of funds, and supplier connections
+            {t("Configure CAPEX budget, sources of funds, and supplier connections")}
           </p>
         </div>
         <button
@@ -152,7 +155,7 @@ export default function SpendSettingsPage() {
           disabled={saving}
           className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
         >
-          {saving ? "Saving..." : "Save Settings"}
+          {saving ? t("Saving...") : t("Save Settings")}
         </button>
       </div>
 
@@ -160,12 +163,12 @@ export default function SpendSettingsPage() {
         {/* CAPEX Budget */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-medium text-sm text-gray-500 mb-4">
-            CAPEX BUDGET
+            {t("CAPEX BUDGET")}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Budget Year
+                {t("Budget Year")}
               </label>
               <select
                 value={settings.capexYear}
@@ -189,7 +192,7 @@ export default function SpendSettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Total CAPEX Budget (ZAR)
+                {t("Total CAPEX Budget (ZAR)")}
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
@@ -212,7 +215,7 @@ export default function SpendSettingsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Financial Year Ends
+                {t("Financial Year Ends")}
               </label>
               <select
                 value={settings.financialYearEndMonth || 12}
@@ -226,24 +229,23 @@ export default function SpendSettingsPage() {
               >
                 {MONTHS.map((m, i) => (
                   <option key={m} value={i + 1}>
-                    End of {m}
+                    {t("End of {month}", { month: t(m) })}
                   </option>
                 ))}
               </select>
             </div>
           </div>
           <p className="text-xs text-gray-400 mt-3">
-            The financial year is labelled by the year it <strong>ends</strong>.
-            E.g. &ldquo;ends February&rdquo; means FY {settings.capexYear} runs
-            Mar {settings.capexYear - 1} – Feb {settings.capexYear}.
-            &ldquo;Ends December&rdquo; is a standard Jan–Dec calendar year.
+            {t("The financial year is labelled by the year it")} <strong>{t("ends")}</strong>.{" "}
+            {t("E.g. “ends February” means FY {year} runs Mar {prev} – Feb {year}.", { year: settings.capexYear, prev: settings.capexYear - 1 })}{" "}
+            {t("“Ends December” is a standard Jan–Dec calendar year.")}
           </p>
         </div>
 
         {/* Sources of Funds */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-medium text-sm text-gray-500 mb-4">
-            SOURCES OF FUNDS
+            {t("SOURCES OF FUNDS")}
           </h3>
           <div className="space-y-2 mb-4">
             {settings.sourcesOfFunds.map((source, i) => (
@@ -270,13 +272,13 @@ export default function SpendSettingsPage() {
                       onClick={saveEditSource}
                       className="text-xs text-primary hover:text-primary-dark font-medium"
                     >
-                      Save
+                      {t("Save")}
                     </button>
                     <button
                       onClick={() => setEditingSource(null)}
                       className="text-xs text-gray-400 hover:text-gray-600"
                     >
-                      Cancel
+                      {t("Cancel")}
                     </button>
                   </>
                 ) : (
@@ -290,13 +292,13 @@ export default function SpendSettingsPage() {
                       }
                       className="text-xs text-primary hover:text-primary-dark font-medium"
                     >
-                      Edit
+                      {t("Edit")}
                     </button>
                     <button
                       onClick={() => removeSource(i)}
                       className="text-xs text-risk-high hover:text-red-700 font-medium"
                     >
-                      Remove
+                      {t("Remove")}
                     </button>
                   </>
                 )}
@@ -309,14 +311,14 @@ export default function SpendSettingsPage() {
               value={newSource}
               onChange={(e) => setNewSource(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addSource()}
-              placeholder="Add new source of funds..."
+              placeholder={t("Add new source of funds...")}
               className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             />
             <button
               onClick={addSource}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              Add
+              {t("Add")}
             </button>
           </div>
         </div>
@@ -324,7 +326,7 @@ export default function SpendSettingsPage() {
         {/* Supplier Connections */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <h3 className="font-medium text-sm text-gray-500 mb-4">
-            SUPPLIER CONNECTIONS
+            {t("SUPPLIER CONNECTIONS")}
           </h3>
           <div className="space-y-2 mb-4">
             {settings.supplierConnections.map((conn, i) => (
@@ -353,13 +355,13 @@ export default function SpendSettingsPage() {
                       onClick={saveEditConnection}
                       className="text-xs text-primary hover:text-primary-dark font-medium"
                     >
-                      Save
+                      {t("Save")}
                     </button>
                     <button
                       onClick={() => setEditingConnection(null)}
                       className="text-xs text-gray-400 hover:text-gray-600"
                     >
-                      Cancel
+                      {t("Cancel")}
                     </button>
                   </>
                 ) : (
@@ -373,13 +375,13 @@ export default function SpendSettingsPage() {
                       }
                       className="text-xs text-primary hover:text-primary-dark font-medium"
                     >
-                      Edit
+                      {t("Edit")}
                     </button>
                     <button
                       onClick={() => removeConnection(i)}
                       className="text-xs text-risk-high hover:text-red-700 font-medium"
                     >
-                      Remove
+                      {t("Remove")}
                     </button>
                   </>
                 )}
@@ -392,14 +394,14 @@ export default function SpendSettingsPage() {
               value={newConnection}
               onChange={(e) => setNewConnection(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addConnection()}
-              placeholder="Add new supplier connection..."
+              placeholder={t("Add new supplier connection...")}
               className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             />
             <button
               onClick={addConnection}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              Add
+              {t("Add")}
             </button>
           </div>
         </div>

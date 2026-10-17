@@ -8,6 +8,7 @@ import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
 import SignaturePad from "@/components/SignaturePad";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 import { AttendanceGroups } from "@/components/AttendanceList";
 import {
   formatPeriod,
@@ -61,6 +62,7 @@ function when(iso: string): string {
 }
 
 export default function SignMinutesPage() {
+  const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { session, loading } = useAuth();
@@ -88,8 +90,8 @@ export default function SignMinutesPage() {
   }, [session, load]);
 
   if (loading || !session) return null;
-  if (busy) return <div className="p-6 text-gray-400">Loading...</div>;
-  if (!record) return <div className="p-6 text-gray-400">Not found.</div>;
+  if (busy) return <div className="p-6 text-gray-400">{t("Loading...")}</div>;
+  if (!record) return <div className="p-6 text-gray-400">{t("Not found.")}</div>;
 
   const me = session.email.trim().toLowerCase();
   const mine = record.signatories.find((s) => s.email.trim().toLowerCase() === me);
@@ -109,15 +111,15 @@ export default function SignMinutesPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setToast({ message: data.error || "Could not sign these minutes.", type: "error" });
+        setToast({ message: data.error || t("Could not sign these minutes."), type: "error" });
         return;
       }
       setCode("");
       setMark(null);
       setToast({
         message: data.progress?.complete
-          ? "Signed. Everyone has now signed, so the minutes are final and have gone out."
-          : `Signed. Still waiting on ${data.progress?.waitingOn?.join(", ") || "the others"}.`,
+          ? t("Signed. Everyone has now signed, so the minutes are final and have gone out.")
+          : t("Signed. Still waiting on {names}.", { names: data.progress?.waitingOn?.join(", ") || t("the others") }),
         type: "success",
       });
       load();
@@ -136,7 +138,7 @@ export default function SignMinutesPage() {
         href={`/minutes/${record.id}`}
         className="text-sm text-gray-500 hover:text-primary"
       >
-        Back to these minutes
+        {t("Back to these minutes")}
       </Link>
 
       {/* The document. Deliberately white on grey with a page-like width: it
@@ -148,13 +150,13 @@ export default function SignMinutesPage() {
             {branding.fullName}
           </h1>
           <p className="text-gray-600 mt-2 font-medium">
-            Minutes of the {MEETING_BODY_LABELS[record.body]} meeting
+            {t("Minutes of the {body} meeting", { body: t(MEETING_BODY_LABELS[record.body]) })}
           </p>
           <p className="text-gray-500 text-sm">{formatPeriod(record.period)}</p>
           <p className="text-dark font-medium mt-2">{record.title}</p>
           {record.status !== "signed" && record.draftNumber > 0 && (
             <p className="mt-3 inline-block text-xs font-bold tracking-widest text-risk-high border border-risk-high rounded px-2 py-0.5">
-              DRAFT {record.draftNumber}
+              {t("DRAFT {n}", { n: record.draftNumber })}
             </p>
           )}
         </div>
@@ -180,13 +182,13 @@ export default function SignMinutesPage() {
           <thead>
             <tr>
               <th className="text-left py-2 px-3 w-12 bg-gray-50 border border-gray-200 font-semibold">
-                No.
+                {t("No.")}
               </th>
               <th className="text-left py-2 px-3 bg-gray-50 border border-gray-200 font-semibold">
-                Item
+                {t("Item")}
               </th>
               <th className="text-left py-2 px-3 w-40 bg-gray-50 border border-gray-200 font-semibold">
-                Responsible
+                {t("Responsible")}
               </th>
             </tr>
           </thead>
@@ -206,7 +208,7 @@ export default function SignMinutesPage() {
                   ) : groups.length > 0 ? null : (
                     // Shown, not skipped: a reader cannot otherwise tell "not
                     // discussed" from "we left it out".
-                    <p className="text-gray-400 italic mt-1">Nothing recorded</p>
+                    <p className="text-gray-400 italic mt-1">{t("Nothing recorded")}</p>
                   )}
                 </td>
                 <td className="py-2 px-3 border border-gray-200 text-gray-700">
@@ -218,7 +220,7 @@ export default function SignMinutesPage() {
             {ordered.length === 0 && (
               <tr>
                 <td colSpan={3} className="py-6 text-center text-gray-400 border border-gray-200">
-                  These minutes have no sections yet.
+                  {t("These minutes have no sections yet.")}
                 </td>
               </tr>
             )}
@@ -227,7 +229,7 @@ export default function SignMinutesPage() {
         )}
 
         <h2 className="text-sm font-semibold text-dark mt-10 mb-4 uppercase tracking-wide">
-          Signatures
+          {t("Signatures")}
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           {record.signatories.map((s) => {
@@ -242,35 +244,34 @@ export default function SignMinutesPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={`/api/minutes/${record.id}/signature/${encodeURIComponent(s.email)}`}
-                      alt={`Signed by ${s.name}`}
+                      alt={t("Signed by {name}", { name: s.name })}
                       className="max-h-20 w-auto"
                     />
                   ) : null}
                 </div>
                 <p className="text-sm font-medium text-dark mt-1">{s.name}</p>
-                <p className="text-xs text-gray-500">{SIGNATORY_ROLE_LABELS[s.role]}</p>
+                <p className="text-xs text-gray-500">{t(SIGNATORY_ROLE_LABELS[s.role])}</p>
                 {s.signedAt ? (
-                  <p className="text-xs text-emerald-700 mt-1">Signed {when(s.signedAt)}</p>
+                  <p className="text-xs text-emerald-700 mt-1">{t("Signed {when}", { when: when(s.signedAt) })}</p>
                 ) : (
-                  <p className="text-xs text-gray-400 mt-1">Not yet signed</p>
+                  <p className="text-xs text-gray-400 mt-1">{t("Not yet signed")}</p>
                 )}
                 {stale && (
                   <p className="text-xs text-risk-high font-medium mt-1">
-                    Signed a different version of this document
+                    {t("Signed a different version of this document")}
                   </p>
                 )}
               </div>
             );
           })}
           {record.signatories.length === 0 && (
-            <p className="text-sm text-gray-400">Nobody has been asked to sign yet.</p>
+            <p className="text-sm text-gray-400">{t("Nobody has been asked to sign yet.")}</p>
           )}
         </div>
 
         {record.documentRef && (
           <p className="text-xs text-gray-400 mt-8">
-            Document reference {record.documentRef}. This identifies the exact wording above, so
-            a later copy can be checked against it.
+            {t("Document reference {ref}. This identifies the exact wording above, so a later copy can be checked against it.", { ref: record.documentRef })}
           </p>
         )}
       </div>
@@ -279,20 +280,19 @@ export default function SignMinutesPage() {
           you are agreeing to before you can agree to it. */}
       {open && mine && !mine.signedAt && (
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
-          <h2 className="text-sm font-semibold text-dark">Sign as {mine.name}</h2>
+          <h2 className="text-sm font-semibold text-dark">{t("Sign as {name}", { name: mine.name })}</h2>
           <p className="text-sm text-gray-500 mt-1 mb-5">
-            Signing means you agree the minutes above are a correct record. Once everyone has
-            signed they are locked and cannot be changed.
+            {t("Signing means you agree the minutes above are a correct record. Once everyone has signed they are locked and cannot be changed.")}
           </p>
 
           <SignaturePad name={mine.name} onChange={setMark} />
 
           <div className="mt-6 pt-5 border-t border-gray-100">
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Your signing code
+              {t("Your signing code")}
             </label>
             <p className="text-xs text-gray-500 mb-2">
-              From the email sent to {mine.email}. It is what proves the signature is yours.
+              {t("From the email sent to {email}. It is what proves the signature is yours.", { email: mine.email })}
             </p>
             <div className="flex flex-wrap gap-2">
               <input
@@ -307,7 +307,7 @@ export default function SignMinutesPage() {
                 disabled={signing || !mark || !code.trim()}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
               >
-                {signing ? "Signing..." : "Sign these minutes"}
+                {signing ? t("Signing...") : t("Sign these minutes")}
               </button>
             </div>
             {/* Says which half is missing. "Sign" being greyed out with no
@@ -315,10 +315,10 @@ export default function SignMinutesPage() {
             {(!mark || !code.trim()) && (
               <p className="text-xs text-gray-400 mt-2">
                 {!mark && !code.trim()
-                  ? "Draw or type your signature, then enter your code."
+                  ? t("Draw or type your signature, then enter your code.")
                   : !mark
-                    ? "Draw or type your signature above."
-                    : "Enter the code from your email."}
+                    ? t("Draw or type your signature above.")
+                    : t("Enter the code from your email.")}
               </p>
             )}
           </div>
@@ -327,40 +327,41 @@ export default function SignMinutesPage() {
 
       {open && mine?.signedAt && (
         <div className="mt-6 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          You signed these minutes on {when(mine.signedAt)}.{" "}
+          {t("You signed these minutes on {when}.", { when: when(mine.signedAt) })}{" "}
           {progress.waitingOn.length > 0
-            ? `Still waiting on ${progress.waitingOn.join(", ")}.`
+            ? t("Still waiting on {names}.", { names: progress.waitingOn.join(", ") })
             : ""}
         </div>
       )}
 
       {open && !mine && (
         <div className="mt-6 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-          You are not on the signing list for these minutes, so there is nothing for you to sign.
+          {t("You are not on the signing list for these minutes, so there is nothing for you to sign.")}
         </div>
       )}
 
       {record.status === "signed" && (
         <div className="mt-6 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          These minutes are signed and final
-          {record.signedAt &&
-            ` as of ${new Date(record.signedAt).toLocaleDateString("en-ZA", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}`}
-          .
+          {record.signedAt
+            ? t("These minutes are signed and final as of {date}.", {
+                date: new Date(record.signedAt).toLocaleDateString("en-ZA", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                }),
+              })
+            : t("These minutes are signed and final.")}
         </div>
       )}
 
       {!open && record.status !== "signed" && (
         <div className="mt-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          These minutes are not out for signing yet.{" "}
+          {t("These minutes are not out for signing yet.")}{" "}
           <button
             onClick={() => router.push(`/minutes/${record.id}`)}
             className="underline hover:no-underline"
           >
-            Back to the minutes
+            {t("Back to the minutes")}
           </button>
           .
         </div>

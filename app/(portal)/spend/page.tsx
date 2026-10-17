@@ -10,14 +10,16 @@ import Toast from "@/components/Toast";
 import { useTableSort, useColumnWidths } from "@/lib/useTable";
 import { evaluateProgress } from "@/lib/approvalEngine";
 import type { RequiredApprover } from "@/lib/approvalEngine";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 const STATUS_DISPLAY: Record<string, string> = {
-  pending: "APPLIED",
-  pending_decision: "PENDING DECISION",
-  approved: "APPROVED",
-  rejected: "DECLINED",
-  requires_changes: "NEEDS MORE WORK",
-  completed: "COMPLETED",
+  pending: tk("APPLIED"),
+  pending_decision: tk("PENDING DECISION"),
+  approved: tk("APPROVED"),
+  rejected: tk("DECLINED"),
+  requires_changes: tk("NEEDS MORE WORK"),
+  completed: tk("COMPLETED"),
 };
 
 const STATUS_ORDER = [
@@ -30,13 +32,13 @@ const STATUS_ORDER = [
 ];
 
 const STATUS_FILTERS = [
-  { key: "all", label: "All" },
-  { key: "pending", label: "Applied" },
-  { key: "pending_decision", label: "Pending Decision" },
-  { key: "approved", label: "Approved" },
-  { key: "rejected", label: "Declined" },
-  { key: "requires_changes", label: "Needs More Work" },
-  { key: "completed", label: "Completed" },
+  { key: "all", label: tk("All") },
+  { key: "pending", label: tk("Applied") },
+  { key: "pending_decision", label: tk("Pending Decision") },
+  { key: "approved", label: tk("Approved") },
+  { key: "rejected", label: tk("Declined") },
+  { key: "requires_changes", label: tk("Needs More Work") },
+  { key: "completed", label: tk("Completed") },
 ];
 
 interface SpendRecord {
@@ -123,6 +125,7 @@ const DEFAULT_WIDTHS: Record<string, number> = {
 
 export default function SpendPage() {
   const { session, loading } = useAuth("submit_spend");
+  const t = useT();
   const [apps, setApps] = useState<SpendRecord[]>([]);
   const [settings, setSettings] = useState<SpendSettings | null>(null);
   const [users, setUsers] = useState<DirectoryUser[]>([]);
@@ -314,7 +317,7 @@ export default function SpendPage() {
       optimistic,
       `/api/spend/${id}/status`,
       { status },
-      "Could not change the status"
+      t("Could not change the status")
     );
   };
 
@@ -328,7 +331,7 @@ export default function SpendPage() {
       },
       `/api/spend/${id}/custodian`,
       { custodianUserId: userId },
-      "Could not change the custodian"
+      t("Could not change the custodian")
     );
   };
 
@@ -352,7 +355,10 @@ export default function SpendPage() {
     const outstanding = evaluateProgress(app).outstanding.map((o) => o.name);
     if (
       !confirm(
-        `Email a reminder to ${outstanding.join(", ")} about "${app.projectName}"?`
+        t('Email a reminder to {names} about "{project}"?', {
+          names: outstanding.join(", "),
+          project: app.projectName,
+        })
       )
     ) {
       return;
@@ -364,14 +370,16 @@ export default function SpendPage() {
     if (res.ok && data.success) {
       setToast({
         message:
-          `Reminder sent to ${data.sentTo.join(", ")}` +
-          (data.failed?.length ? ` (failed for ${data.failed.join(", ")})` : ""),
+          t("Reminder sent to {names}", { names: data.sentTo.join(", ") }) +
+          (data.failed?.length
+            ? " " + t("(failed for {names})", { names: data.failed.join(", ") })
+            : ""),
         type: data.failed?.length ? "error" : "success",
       });
       fetchData();
     } else {
       setToast({
-        message: data.error || "Could not send the reminder",
+        message: data.error || t("Could not send the reminder"),
         type: "error",
       });
     }
@@ -380,7 +388,9 @@ export default function SpendPage() {
   const handleDelete = async (app: SpendRecord) => {
     if (
       !confirm(
-        `Delete "${app.projectName}"? This removes the project and its quotes permanently.`
+        t('Delete "{project}"? This removes the project and its quotes permanently.', {
+          project: app.projectName,
+        })
       )
     ) {
       return;
@@ -388,11 +398,11 @@ export default function SpendPage() {
     const res = await authFetch(`/api/spend/${app.id}`, { method: "DELETE" });
     if (res.ok) {
       setApps((prev) => prev.filter((a) => a.id !== app.id));
-      setToast({ message: `Deleted "${app.projectName}"`, type: "success" });
+      setToast({ message: t('Deleted "{project}"', { project: app.projectName }), type: "success" });
     } else {
       const data = await res.json().catch(() => ({}));
       setToast({
-        message: data.error || "Could not delete that project",
+        message: data.error || t("Could not delete that project"),
         type: "error",
       });
     }
@@ -400,18 +410,18 @@ export default function SpendPage() {
 
   const handleCSVExport = () => {
     const headers = [
-      "Project Name",
-      "Est. Amount",
-      "Source of Funds",
-      "Budgeted",
-      "# Quotes",
-      "# Notes",
-      "Submitted By",
-      "Applicant",
-      "Custodian",
-      "Date",
-      "Status",
-      "Stuck to Budget",
+      t("Project Name"),
+      t("Est. Amount"),
+      t("Source of Funds"),
+      t("Budgeted"),
+      t("# Quotes"),
+      t("# Notes"),
+      t("Submitted By"),
+      t("Applicant"),
+      t("Custodian"),
+      t("Date"),
+      t("Status"),
+      t("Stuck to Budget"),
     ];
 
     const quote = (v: string) => `"${v.replace(/"/g, '""')}"`;
@@ -420,18 +430,18 @@ export default function SpendPage() {
       quote(app.projectName),
       app.estimatedAmount,
       quote(app.sourceOfFunds || ""),
-      app.budgeted ? "Yes" : "No",
+      app.budgeted ? t("Yes") : t("No"),
       app.quoteDetails?.length || 0,
       app.notes?.length || 0,
       quote(app.submittedByName),
       quote(applicantOf(app)),
       quote(custodianOf(app).name),
       new Date(app.submittedAt).toLocaleDateString(),
-      STATUS_DISPLAY[app.status] || app.status,
+      STATUS_DISPLAY[app.status] ? t(STATUS_DISPLAY[app.status]) : app.status,
       app.status === "completed"
         ? app.finishedWithinBudget
-          ? "YES"
-          : "NO"
+          ? t("YES")
+          : t("NO")
         : "",
     ]);
 
@@ -447,7 +457,7 @@ export default function SpendPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   const th = (
     label: string,
@@ -481,9 +491,11 @@ export default function SpendPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Spend Projects</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Spend Projects")}</h1>
           <p className="text-gray-500 text-sm">
-            {apps.length} project{apps.length !== 1 ? "s" : ""}
+            {apps.length === 1
+              ? t("{n} project", { n: apps.length })
+              : t("{n} projects", { n: apps.length })}
           </p>
         </div>
         <div className="flex gap-2">
@@ -492,20 +504,20 @@ export default function SpendPage() {
               href="/spend/import"
               className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              Import from Excel
+              {t("Import from Excel")}
             </Link>
           )}
           <button
             onClick={handleCSVExport}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            Export CSV
+            {t("Export CSV")}
           </button>
           <Link
             href="/spend/new"
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            + New Application
+            {t("+ New Application")}
           </Link>
         </div>
       </div>
@@ -513,29 +525,29 @@ export default function SpendPage() {
       {/* Dashboard Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs text-gray-500">Total CAPEX {capexYear}</p>
+          <p className="text-xs text-gray-500">{t("Total CAPEX {year}", { year: capexYear })}</p>
           <p className="text-xl font-bold text-dark mt-1">
             R{capexBudget.toLocaleString()}
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs text-gray-500">Pending Projects</p>
+          <p className="text-xs text-gray-500">{t("Pending Projects")}</p>
           <p className="text-xl font-bold text-risk-low mt-1">{pendingCount}</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs text-gray-500">Total Pending Spend</p>
+          <p className="text-xs text-gray-500">{t("Total Pending Spend")}</p>
           <p className="text-xl font-bold text-risk-medium mt-1">
             R{totalPendingSpend.toLocaleString()}
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs text-gray-500">Total Approved Spend</p>
+          <p className="text-xs text-gray-500">{t("Total Approved Spend")}</p>
           <p className="text-xl font-bold text-emerald-600 mt-1">
             R{totalApprovedSpend.toLocaleString()}
           </p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs text-gray-500">CAPEX Remaining</p>
+          <p className="text-xs text-gray-500">{t("CAPEX Remaining")}</p>
           <p
             className={`text-xl font-bold mt-1 ${
               capexRemaining >= 0 ? "text-emerald-600" : "text-risk-high"
@@ -558,15 +570,15 @@ export default function SpendPage() {
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {f.label}
+            {t(f.label)}
           </button>
         ))}
         <button
           onClick={reset}
           className="ml-auto text-xs text-gray-400 hover:text-gray-600"
-          title="Put the column widths back to their defaults"
+          title={t("Put the column widths back to their defaults")}
         >
-          Reset columns
+          {t("Reset columns")}
         </button>
       </div>
 
@@ -578,21 +590,21 @@ export default function SpendPage() {
           <table className="w-full text-sm table-fixed border-separate border-spacing-0">
             <thead className="bg-gray-50">
               <tr>
-                {th("Project", "projectName", "left", true)}
-                {th("Est. Amount", "estimatedAmount")}
-                {th("Source", "sourceOfFunds")}
-                {th("Budgeted", "budgeted")}
-                {th("Quotes", "quotes")}
-                {th("Approvals", "approvals")}
-                {th("Notes", "notes")}
-                {th("Submitted By", "submittedByName")}
-                {th("Applicant", "applicant")}
-                {th("Custodian", "custodian")}
-                {th("Date", "submittedAt")}
-                {th("Status", "status")}
-                {th("Budget", "finishedWithinBudget")}
+                {th(t("Project"), "projectName", "left", true)}
+                {th(t("Est. Amount"), "estimatedAmount")}
+                {th(t("Source"), "sourceOfFunds")}
+                {th(t("Budgeted"), "budgeted")}
+                {th(t("Quotes"), "quotes")}
+                {th(t("Approvals"), "approvals")}
+                {th(t("Notes"), "notes")}
+                {th(t("Submitted By"), "submittedByName")}
+                {th(t("Applicant"), "applicant")}
+                {th(t("Custodian"), "custodian")}
+                {th(t("Date"), "submittedAt")}
+                {th(t("Status"), "status")}
+                {th(t("Budget"), "finishedWithinBudget")}
                 <SortableTh
-                  label="Actions"
+                  label={t("Actions")}
                   resizeKey="actions"
                   width={widths.actions}
                   onResize={setWidth}
@@ -635,7 +647,7 @@ export default function SpendPage() {
                       {app.sourceOfFunds || "-"}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
-                      {app.budgeted ? "Yes" : "No"}
+                      {app.budgeted ? t("Yes") : t("No")}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {app.quoteDetails?.length || 0}
@@ -648,9 +660,9 @@ export default function SpendPage() {
                           return (
                             <span
                               className="text-gray-400"
-                              title="This amount needs no approval, it is only logged"
+                              title={t("This amount needs no approval, it is only logged")}
                             >
-                              Logged
+                              {t("Logged")}
                             </span>
                           );
                         }
@@ -660,10 +672,10 @@ export default function SpendPage() {
                               className="text-risk-high font-medium"
                               title={
                                 app.approvalWarning ||
-                                "No approvers were resolved for this application"
+                                t("No approvers were resolved for this application")
                               }
                             >
-                              None set
+                              {t("None set")}
                             </span>
                           );
                         }
@@ -676,9 +688,12 @@ export default function SpendPage() {
                             }
                             title={
                               p.outstanding.length > 0
-                                ? "Waiting on: " +
-                                  p.outstanding.map((o) => o.name).join(", ")
-                                : "All approvals in"
+                                ? t("Waiting on: {names}", {
+                                    names: p.outstanding
+                                      .map((o) => o.name)
+                                      .join(", "),
+                                  })
+                                : t("All approvals in")
                             }
                           >
                             {p.approved}/{p.total}
@@ -686,8 +701,9 @@ export default function SpendPage() {
                               <span
                                 className="text-risk-medium ml-1"
                                 title={
-                                  p.responded.map((r) => r.name).join(", ") +
-                                  " asked a question"
+                                  t("{names} asked a question", {
+                                    names: p.responded.map((r) => r.name).join(", "),
+                                  })
                                 }
                               >
                                 ?
@@ -703,7 +719,7 @@ export default function SpendPage() {
                         <Link
                           href={`/spend/${app.id}`}
                           className="text-primary hover:underline font-medium"
-                          title="View the notes on this project"
+                          title={t("View the notes on this project")}
                         >
                           {app.notes.length}
                         </Link>
@@ -726,10 +742,10 @@ export default function SpendPage() {
                           }
                           className="w-full border border-transparent hover:border-gray-200 focus:border-primary rounded px-1 py-1 text-xs bg-transparent outline-none"
                         >
-                          <option value="">Same as applicant</option>
+                          <option value="">{t("Same as applicant")}</option>
                           {custodianMissing && (
                             <option value={custodian.userId}>
-                              {custodian.name || "Former user"}
+                              {custodian.name || t("Former user")}
                             </option>
                           )}
                           {users.map((u) => (
@@ -761,7 +777,7 @@ export default function SpendPage() {
                         >
                           {STATUS_ORDER.map((s) => (
                             <option key={s} value={s}>
-                              {STATUS_DISPLAY[s]}
+                              {t(STATUS_DISPLAY[s])}
                             </option>
                           ))}
                         </select>
@@ -772,7 +788,9 @@ export default function SpendPage() {
                             "bg-gray-100 text-gray-600"
                           }`}
                         >
-                          {STATUS_DISPLAY[app.status] || app.status}
+                          {STATUS_DISPLAY[app.status]
+                            ? t(STATUS_DISPLAY[app.status])
+                            : app.status}
                         </span>
                       )}
                     </td>
@@ -785,7 +803,7 @@ export default function SpendPage() {
                               : "bg-risk-high/10 text-risk-high"
                           }`}
                         >
-                          {app.finishedWithinBudget ? "YES" : "NO"}
+                          {app.finishedWithinBudget ? t("YES") : t("NO")}
                         </span>
                       ) : (
                         <span className="text-gray-300">-</span>
@@ -794,13 +812,13 @@ export default function SpendPage() {
                     <td className="px-4 py-3 text-right">
                       <RowActions
                         actions={[
-                          { label: "View", href: `/spend/${app.id}` },
+                          { label: t("View"), href: `/spend/${app.id}` },
                           ...(isAdmin &&
                           app.status !== "approved" &&
                           app.status !== "completed"
                             ? [
                                 {
-                                  label: "Edit",
+                                  label: t("Edit"),
                                   href: `/spend/${app.id}/edit`,
                                 },
                               ]
@@ -808,7 +826,7 @@ export default function SpendPage() {
                           ...(canRemind(app)
                             ? [
                                 {
-                                  label: "Remind approvers now",
+                                  label: t("Remind approvers now"),
                                   onClick: () => handleRemind(app),
                                 },
                               ]
@@ -816,7 +834,7 @@ export default function SpendPage() {
                           ...(canEditInline
                             ? [
                                 {
-                                  label: "Schedule reminders",
+                                  label: t("Schedule reminders"),
                                   onClick: () => setReminderFor(app),
                                 },
                               ]
@@ -824,7 +842,7 @@ export default function SpendPage() {
                           ...(canDelete
                             ? [
                                 {
-                                  label: "Delete",
+                                  label: t("Delete"),
                                   onClick: () => handleDelete(app),
                                   danger: true,
                                 },
@@ -842,7 +860,7 @@ export default function SpendPage() {
                     colSpan={14}
                     className="px-6 py-12 text-center text-gray-400"
                   >
-                    No spend projects found.
+                    {t("No spend projects found.")}
                   </td>
                 </tr>
               )}

@@ -1,5 +1,6 @@
 "use client";
 
+import TranslateContentButton from "@/components/TranslateContentButton";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
@@ -9,6 +10,7 @@ import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import FileUpload from "@/components/FileUpload";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 
 interface PolicyDetail {
   policy: {
@@ -44,6 +46,7 @@ interface PolicyDetail {
 }
 
 export default function PolicyDetailPage() {
+  const t = useT();
   const { session, loading } = useAuth("download_policies");
   const params = useParams();
   const policyId = params.id as string;
@@ -71,13 +74,13 @@ export default function PolicyDetailPage() {
         return;
       }
       if (res.status !== 404) {
-        setLoadError("This policy could not be loaded. Try again.");
+        setLoadError(t("This policy could not be loaded. Try again."));
         return;
       }
       if (attempt < 3) await new Promise((r) => setTimeout(r, 1500));
     }
     setLoadError(
-      "This policy is not in the repository. If you have just uploaded it, open Policies and press \"Rebuild list from storage\"."
+      t("This policy is not in the repository. If you have just uploaded it, open Policies and press \"Rebuild list from storage\".")
     );
   }, [policyId]);
 
@@ -91,11 +94,11 @@ export default function PolicyDetailPage() {
       method: "POST",
     });
     if (res.ok) {
-      setToast({ message: "Compliance check complete", type: "success" });
+      setToast({ message: t("Compliance check complete"), type: "success" });
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Check failed", type: "error" });
+      setToast({ message: err.error || t("Check failed"), type: "error" });
     }
     setChecking(false);
   };
@@ -106,7 +109,7 @@ export default function PolicyDetailPage() {
   const removeCheck = async (checkId: string) => {
     if (
       !confirm(
-        "Remove this compliance check? The policy goes back to the score from the check before it."
+        t("Remove this compliance check? The policy goes back to the score from the check before it.")
       )
     )
       return;
@@ -131,11 +134,11 @@ export default function PolicyDetailPage() {
             }
           : d
       );
-      setToast({ message: "Compliance check removed", type: "success" });
+      setToast({ message: t("Compliance check removed"), type: "success" });
     } else {
       const err = await res.json().catch(() => ({}));
       setToast({
-        message: err.error || "That check could not be removed.",
+        message: err.error || t("That check could not be removed."),
         type: "error",
       });
     }
@@ -153,12 +156,12 @@ export default function PolicyDetailPage() {
       body: formData,
     });
     if (res.ok) {
-      setToast({ message: "New version uploaded", type: "success" });
+      setToast({ message: t("New version uploaded"), type: "success" });
       setShowUpload(false);
       setNewVersionFile(null);
       fetchData();
     } else {
-      setToast({ message: "Upload failed", type: "error" });
+      setToast({ message: t("Upload failed"), type: "error" });
     }
     setUploading(false);
   };
@@ -172,20 +175,20 @@ export default function PolicyDetailPage() {
             onClick={fetchData}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            Try again
+            {t("Try again")}
           </button>
           <Link
             href="/policies"
             className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
           >
-            Back to Policies
+            {t("Back to Policies")}
           </Link>
         </div>
       </div>
     );
   }
 
-  if (loading || !data) return <div className="p-6">Loading...</div>;
+  if (loading || !data) return <div className="p-6">{t("Loading...")}</div>;
 
   const { policy, versions, checks } = data;
 
@@ -202,6 +205,9 @@ export default function PolicyDetailPage() {
           </span>
         </div>
         <div className="flex gap-2">
+          {session?.permissions.includes("download_policies") && (
+            <TranslateContentButton kind="policy" id={policy.id} />
+          )}
           {session?.permissions.includes("upload_policies") && (
             <>
               {/* A different policy altogether, not a new version of this one.
@@ -211,13 +217,13 @@ export default function PolicyDetailPage() {
                 href="/policies/upload"
                 className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
               >
-                + Load a New Policy
+                {t("+ Load a New Policy")}
               </Link>
               <button
                 onClick={() => setShowUpload(!showUpload)}
                 className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
               >
-                Upload New Version
+                {t("Upload New Version")}
               </button>
             </>
           )}
@@ -227,7 +233,7 @@ export default function PolicyDetailPage() {
               disabled={checking}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {checking ? "Checking..." : "Run Compliance Check"}
+              {checking ? t("Checking...") : t("Run Compliance Check")}
             </button>
           )}
         </div>
@@ -235,7 +241,7 @@ export default function PolicyDetailPage() {
 
       {showUpload && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 max-w-lg">
-          <h3 className="font-medium mb-3">Upload New Version</h3>
+          <h3 className="font-medium mb-3">{t("Upload New Version")}</h3>
           <FileUpload onChange={setNewVersionFile} value={newVersionFile} />
           <div className="flex gap-3 mt-4">
             <button
@@ -243,13 +249,13 @@ export default function PolicyDetailPage() {
               disabled={!newVersionFile || uploading}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {uploading ? "Uploading..." : "Upload"}
+              {uploading ? t("Uploading...") : t("Upload")}
             </button>
             <button
               onClick={() => { setShowUpload(false); setNewVersionFile(null); }}
               className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
             >
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         </div>
@@ -260,7 +266,7 @@ export default function PolicyDetailPage() {
         <div className="lg:col-span-1">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
-              VERSION HISTORY
+              {t("VERSION HISTORY")}
             </h3>
             {versions.map((v) => (
               <div
@@ -271,7 +277,7 @@ export default function PolicyDetailPage() {
                   <p className="text-sm font-medium">
                     v{v.version}
                     {v.version === policy.currentVersion && (
-                      <span className="ml-2 text-xs text-primary">(current)</span>
+                      <span className="ml-2 text-xs text-primary">{t("(current)")}</span>
                     )}
                   </p>
                   <p className="text-xs text-gray-400">
@@ -283,13 +289,13 @@ export default function PolicyDetailPage() {
               </div>
             ))}
             {versions.length === 0 && (
-              <p className="text-xs text-gray-400 italic">No versions</p>
+              <p className="text-xs text-gray-400 italic">{t("No versions")}</p>
             )}
           </div>
 
           {policy.lastCheckScore !== null && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-4 text-center">
-              <p className="text-sm text-gray-500 mb-2">Latest Score</p>
+              <p className="text-sm text-gray-500 mb-2">{t("Latest Score")}</p>
               <ComplianceScore score={policy.lastCheckScore} size="lg" />
               <div className="text-left">
                 <ScoreNote />
@@ -303,7 +309,7 @@ export default function PolicyDetailPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="p-4 border-b border-gray-100">
               <h3 className="font-medium text-sm text-gray-500">
-                COMPLIANCE CHECKS ({checks.length})
+                {t("COMPLIANCE CHECKS")} ({checks.length})
               </h3>
             </div>
             {checks.length > 0 ? (
@@ -325,11 +331,11 @@ export default function PolicyDetailPage() {
                       <ComplianceScore score={check.score} size="sm" />
                       <div>
                         <p className="text-sm font-medium">
-                          Score: {check.score}/100
+                          {t("Score: {score}/100", { score: check.score })}
                         </p>
                         <p className="text-xs text-gray-400">
                           {new Date(check.checkedAt).toLocaleString()} &middot;{" "}
-                          {check.risks.length} risks found
+                          {t("{count} risks found", { count: check.risks.length })}
                           {check.checkedByName
                             ? ` \u00b7 ${check.checkedByName}`
                             : ""}
@@ -356,10 +362,10 @@ export default function PolicyDetailPage() {
                     <button
                       onClick={() => removeCheck(check.id)}
                       disabled={removingCheck === check.id}
-                      title="Removes this result and puts the score back to the check before it"
+                      title={t("Removes this result and puts the score back to the check before it")}
                       className="px-6 py-4 text-xs font-medium text-gray-400 hover:text-red-600 disabled:opacity-50"
                     >
-                      {removingCheck === check.id ? "Removing..." : "Remove"}
+                      {removingCheck === check.id ? t("Removing...") : t("Remove")}
                     </button>
                   )}
                   </div>
@@ -385,16 +391,16 @@ export default function PolicyDetailPage() {
                               {risk.description}
                             </p>
                             <p className="text-xs text-gray-400 mt-2">
-                              Reference: {risk.guideline_reference}
+                              {t("Reference:")} {risk.guideline_reference}
                             </p>
                             <p className="text-xs text-primary mt-1">
-                              Suggestion: {risk.suggestion}
+                              {t("Suggestion:")} {risk.suggestion}
                             </p>
                           </div>
                         ))}
                         {check.risks.length === 0 && (
                           <p className="text-sm text-emerald-600">
-                            No compliance risks found.
+                            {t("No compliance risks found.")}
                           </p>
                         )}
                       </div>
@@ -404,8 +410,7 @@ export default function PolicyDetailPage() {
               ))
             ) : (
               <div className="px-6 py-12 text-center text-gray-400 text-sm">
-                No compliance checks run yet. Click &quot;Run Compliance
-                Check&quot; to analyze this policy.
+                {t("No compliance checks run yet. Click \"Run Compliance Check\" to analyze this policy.")}
               </div>
             )}
           </div>

@@ -9,6 +9,8 @@ import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
 import { useBranding } from "@/components/BrandingProvider";
+import { useT } from "@/components/I18nProvider";
+import type { T } from "@/lib/i18n/translate";
 
 interface PolicyOption {
   id: string;
@@ -45,21 +47,22 @@ interface CheckResult {
 // A function of the short name rather than a constant, because one label names
 // the school, and the school is now resolved per request rather than baked in
 // at build time.
-const statusMeta = (shortName: string): {
+const statusMeta = (shortName: string, t: T): {
   key: RiskStatus;
   label: string;
   active: string;
   text: string;
 }[] => [
-  { key: "needs_addressing", label: "Needs to be addressed", active: "bg-risk-high border-risk-high text-white", text: "text-risk-high" },
-  { key: "in_progress", label: "In progress", active: "bg-amber-500 border-amber-500 text-white", text: "text-amber-600" },
-  { key: "addressed", label: "Has been addressed in new policy", active: "bg-emerald-500 border-emerald-500 text-white", text: "text-emerald-600" },
-  { key: "not_an_issue", label: `Not an issue for ${shortName}`, active: "bg-gray-500 border-gray-500 text-white", text: "text-gray-600" },
+  { key: "needs_addressing", label: t("Needs to be addressed"), active: "bg-risk-high border-risk-high text-white", text: "text-risk-high" },
+  { key: "in_progress", label: t("In progress"), active: "bg-amber-500 border-amber-500 text-white", text: "text-amber-600" },
+  { key: "addressed", label: t("Has been addressed in new policy"), active: "bg-emerald-500 border-emerald-500 text-white", text: "text-emerald-600" },
+  { key: "not_an_issue", label: t("Not an issue for {shortName}", { shortName }), active: "bg-gray-500 border-gray-500 text-white", text: "text-gray-600" },
 ];
 
 export default function CompliancePage() {
+  const t = useT();
   const branding = useBranding();
-  const STATUS_META = statusMeta(branding.shortName);
+  const STATUS_META = statusMeta(branding.shortName, t);
   const { session, loading } = useAuth("check_compliance");
   const [mode, setMode] = useState<"upload" | "existing">("upload");
   const [policies, setPolicies] = useState<PolicyOption[]>([]);
@@ -124,7 +127,7 @@ export default function CompliancePage() {
         });
         setName(data.name);
       } else {
-        setToast({ message: "Could not load saved check.", type: "error" });
+        setToast({ message: t("Could not load saved check."), type: "error" });
       }
     })();
   }, [session]);
@@ -180,7 +183,7 @@ export default function CompliancePage() {
       body: JSON.stringify({ riskIndex: index, status: next }),
     });
     if (!res.ok) {
-      setToast({ message: "Could not save status. Please try again.", type: "error" });
+      setToast({ message: t("Could not save status. Please try again."), type: "error" });
       setResult((prev) =>
         prev
           ? { ...prev, risks: prev.risks.map((r, i) => (i === index ? { ...r, status: current } : r)) }
@@ -193,7 +196,7 @@ export default function CompliancePage() {
     if (!loadedCheck) return;
     const res = await authFetch(`/api/compliance/checks/${loadedCheck.id}/file`);
     if (!res.ok) {
-      setToast({ message: "Could not download document.", type: "error" });
+      setToast({ message: t("Could not download document."), type: "error" });
       return;
     }
     const blob = await res.blob();
@@ -227,7 +230,7 @@ export default function CompliancePage() {
           setWasReused(Boolean(data.duplicate));
           if (data.duplicate) {
             setToast({
-              message: "Showing the saved result for this policy. Use Check again for a fresh one.",
+              message: t("Showing the saved result for this policy. Use Check again for a fresh one."),
               type: "success",
             });
           }
@@ -243,7 +246,7 @@ export default function CompliancePage() {
           });
         } else {
           const err = await res.json();
-          setToast({ message: err.error || "Check failed", type: "error" });
+          setToast({ message: err.error || t("Check failed"), type: "error" });
         }
       } else if (mode === "upload" && file) {
         const formData = new FormData();
@@ -270,20 +273,20 @@ export default function CompliancePage() {
           setWasReused(Boolean(data.duplicate));
           if (data.duplicate) {
             setToast({
-              message: "Showing the saved result for this document. Use Check again for a fresh one.",
+              message: t("Showing the saved result for this document. Use Check again for a fresh one."),
               type: "success",
             });
           }
         } else if (contentType.includes("application/json")) {
           const err = await res.json();
-          setToast({ message: err.error || "Check failed", type: "error" });
+          setToast({ message: err.error || t("Check failed"), type: "error" });
         } else {
-          setToast({ message: `Server error (${res.status}). The check may have timed out — try a smaller document.`, type: "error" });
+          setToast({ message: t("Server error ({status}). The check may have timed out — try a smaller document.", { status: res.status }), type: "error" });
         }
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      setToast({ message: `Request failed: ${msg}`, type: "error" });
+      const msg = e instanceof Error ? e.message : t("Unknown error");
+      setToast({ message: t("Request failed: {msg}", { msg }), type: "error" });
     }
 
     setChecking(false);
@@ -312,20 +315,20 @@ export default function CompliancePage() {
       setPromoteOpen(false);
       fetchPolicies();
       setToast({
-        message: `Added to the policy register under ${data.category}. Its compliance score went with it.`,
+        message: t("Added to the policy register under {category}. Its compliance score went with it.", { category: data.category }),
         type: "success",
       });
     } else {
       const err = await res.json().catch(() => ({}));
       setToast({
-        message: err.error || "That document could not be added to the register.",
+        message: err.error || t("That document could not be added to the register."),
         type: "error",
       });
     }
     setPromoting(false);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -333,9 +336,9 @@ export default function CompliancePage() {
 
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Compliance Check</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Compliance Check")}</h1>
           <p className="text-gray-500 text-sm">
-            Analyze policies against GDE/DoE/BELA guidelines using AI
+            {t("Analyze policies against GDE/DoE/BELA guidelines using AI")}
           </p>
         </div>
         {result && (
@@ -346,7 +349,7 @@ export default function CompliancePage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Run New Check
+            {t("Run New Check")}
           </button>
         )}
       </div>
@@ -362,7 +365,7 @@ export default function CompliancePage() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              Upload File
+              {t("Upload File")}
             </button>
             <button
               onClick={() => setMode("existing")}
@@ -372,7 +375,7 @@ export default function CompliancePage() {
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              Select Existing
+              {t("Select Existing")}
             </button>
           </div>
 
@@ -380,33 +383,33 @@ export default function CompliancePage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Document Name
+                  {t("Document Name")}
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Financial Management Policy"
+                  placeholder={t("e.g. Financial Management Policy")}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 />
               </div>
               <FileUpload
                 onChange={pickFile}
                 value={file}
-                label="Upload policy to check"
+                label={t("Upload policy to check")}
               />
             </div>
           ) : (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Policy
+                {t("Select Policy")}
               </label>
               <select
                 value={selectedPolicy}
                 onChange={(e) => setSelectedPolicy(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               >
-                <option value="">-- Choose a policy --</option>
+                <option value="">{t("-- Choose a policy --")}</option>
                 {policies.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
@@ -423,18 +426,16 @@ export default function CompliancePage() {
             }
             className="mt-4 w-full bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
-            {checking ? "Analyzing..." : "Run Compliance Check"}
+            {checking ? t("Analyzing...") : t("Run Compliance Check")}
           </button>
 
           {checking && (
             <div className="mt-4 text-center">
               <div className="animate-pulse text-sm text-gray-500">
-                AI is searching for the latest regulations and analyzing the document...
+                {t("AI is searching for the latest regulations and analyzing the document...")}
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                This may take a minute. It is checking uploaded guidelines and
-                searching online for the latest GDE, DoE, SASA, and BELA Act
-                requirements.
+                {t("This may take a minute. It is checking uploaded guidelines and searching online for the latest GDE, DoE, SASA, and BELA Act requirements.")}
               </p>
             </div>
           )}
@@ -449,7 +450,7 @@ export default function CompliancePage() {
             {loadedCheck && (
               <div className="flex items-center justify-between gap-3 mb-4 pb-4 border-b border-gray-100">
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-400">Document</p>
+                  <p className="text-xs text-gray-400">{t("Document")}</p>
                   <p className="text-sm font-medium text-dark truncate">{loadedCheck.name}</p>
                 </div>
                 <button
@@ -459,7 +460,7 @@ export default function CompliancePage() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  Download
+                  {t("Download")}
                 </button>
               </div>
             )}
@@ -468,12 +469,12 @@ export default function CompliancePage() {
               <div className="mb-4 pb-4 border-b border-gray-100">
                 {loadedCheck.policyId ? (
                   <p className="text-xs text-gray-500">
-                    In the policy register.{" "}
+                    {t("In the policy register.")}{" "}
                     <Link
                       href={`/policies/${loadedCheck.policyId}`}
                       className="text-primary hover:underline"
                     >
-                      Open the policy
+                      {t("Open the policy")}
                     </Link>
                   </p>
                 ) : session?.permissions.includes("upload_policies") ? (
@@ -481,7 +482,7 @@ export default function CompliancePage() {
                     <div className="space-y-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Policy name
+                          {t("Policy name")}
                         </label>
                         <input
                           type="text"
@@ -492,7 +493,7 @@ export default function CompliancePage() {
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Category
+                          {t("Category")}
                         </label>
                         <select
                           value={promoteCategory}
@@ -512,21 +513,21 @@ export default function CompliancePage() {
                           disabled={promoting}
                           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                         >
-                          {promoting ? "Adding..." : "Add to Policies"}
+                          {promoting ? t("Adding...") : t("Add to Policies")}
                         </button>
                         <button
                           onClick={() => setPromoteOpen(false)}
                           disabled={promoting}
                           className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
                         >
-                          Cancel
+                          {t("Cancel")}
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs text-gray-500">
-                        This document is not in the policy register.
+                        {t("This document is not in the policy register.")}
                       </p>
                       <button
                         onClick={() => {
@@ -538,23 +539,23 @@ export default function CompliancePage() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        Add to Policies
+                        {t("Add to Policies")}
                       </button>
                     </div>
                   )
                 ) : (
                   <p className="text-xs text-gray-500">
-                    This document is not in the policy register.
+                    {t("This document is not in the policy register.")}
                   </p>
                 )}
               </div>
             )}
             <div className="text-center mb-2">
-              <p className="text-sm text-gray-500 mb-2">Compliance Score</p>
+              <p className="text-sm text-gray-500 mb-2">{t("Compliance Score")}</p>
               <ComplianceScore score={result.score} size="lg" />
               {wasReused && (
                 <p className="mt-2 text-xs text-gray-500">
-                  Saved result from an earlier check.
+                  {t("Saved result from an earlier check.")}
                 </p>
               )}
             </div>
@@ -569,7 +570,7 @@ export default function CompliancePage() {
                 }
                 className="mt-3 px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
               >
-                {checking ? "Checking..." : "Check again"}
+                {checking ? t("Checking...") : t("Check again")}
               </button>
             </div>
             <p className="text-sm text-gray-600 mb-4">{result.summary}</p>
@@ -588,7 +589,7 @@ export default function CompliancePage() {
             )}
 
             <h3 className="text-sm font-medium text-gray-500 mb-3">
-              RISKS ({result.risks.length})
+              {t("RISKS")} ({result.risks.length})
             </h3>
             <div className="space-y-3 max-h-96 overflow-y-auto">
               {result.risks.map((risk, i) => (
@@ -602,7 +603,7 @@ export default function CompliancePage() {
                   </div>
                   <p className="text-sm text-gray-600">{risk.description}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Ref: {risk.guideline_reference}
+                    {t("Ref:")} {risk.guideline_reference}
                   </p>
                   <p className="text-xs text-primary mt-1">
                     {risk.suggestion}
@@ -630,14 +631,14 @@ export default function CompliancePage() {
                 </div>
               ))}
               {result.risks.length === 0 && (
-                <p className="text-sm text-emerald-600">No risks found.</p>
+                <p className="text-sm text-emerald-600">{t("No risks found.")}</p>
               )}
             </div>
 
             {result.sources && result.sources.length > 0 && (
               <div className="mt-6 pt-4 border-t border-gray-100">
                 <h3 className="text-sm font-medium text-gray-500 mb-2">
-                  ONLINE SOURCES CONSULTED
+                  {t("ONLINE SOURCES CONSULTED")}
                 </h3>
                 <ul className="space-y-1">
                   {result.sources.map((source, i) => (

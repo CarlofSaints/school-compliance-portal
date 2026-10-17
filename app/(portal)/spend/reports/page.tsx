@@ -12,12 +12,14 @@ import {
 import type { SpendApplication } from "@/lib/spendData";
 import SortableTh from "@/components/SortableTh";
 import { useTableSort } from "@/lib/useTable";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 const PROGRESS_PILL: Record<string, string> = {
-  "Not Started": "bg-gray-100 text-gray-600",
-  "In Progress": "bg-amber-100 text-amber-700",
-  Complete: "bg-emerald-100 text-emerald-700",
-  Declined: "bg-red-100 text-red-700",
+  [tk("Not Started")]: "bg-gray-100 text-gray-600",
+  [tk("In Progress")]: "bg-amber-100 text-amber-700",
+  [tk("Complete")]: "bg-emerald-100 text-emerald-700",
+  [tk("Declined")]: "bg-red-100 text-red-700",
 };
 
 interface SpendSettings {
@@ -28,6 +30,7 @@ interface SpendSettings {
 
 export default function SpendReportsPage() {
   const { session, loading } = useAuth("view_all_spend");
+  const t = useT();
   const [report, setReport] = useState<SpendReport | null>(null);
   const [settings, setSettings] = useState<SpendSettings | null>(null);
   const [fetching, setFetching] = useState(true);
@@ -49,20 +52,24 @@ export default function SpendReportsPage() {
   const exportExcel = async (rows: ProjectRow[], year: number) => {
     const XLSX = await import("xlsx");
     const data = rows.map((p) => ({
-      Project: p.projectName,
-      Owner: p.owner,
-      "Total Requested": Math.round(p.requested),
-      "Quotes Submitted": p.quoteCount,
-      "Service Provider": p.selectedSupplier || "",
-      "Total Spend": Math.round(p.totalSpend),
-      "Spend vs Request %":
+      [t("Project")]: p.projectName,
+      [t("Owner")]: p.owner,
+      [t("Total Requested")]: Math.round(p.requested),
+      [t("Quotes Submitted")]: p.quoteCount,
+      [t("Service Provider")]: p.selectedSupplier || "",
+      [t("Total Spend")]: Math.round(p.totalSpend),
+      [t("Spend vs Request %")]:
         p.spendVsRequestPct === null ? "" : Math.round(p.spendVsRequestPct),
-      Sources: [...new Set(p.sources)].join(", "),
-      Progress: p.progress,
+      [t("Sources")]: [...new Set(p.sources)].join(", "),
+      [t("Progress")]: t(p.progress),
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Projects FY${year}`);
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      t("Projects FY{year}", { year })
+    );
     XLSX.writeFile(wb, `spend-projects-FY${year}.xlsx`);
   };
 
@@ -92,7 +99,7 @@ export default function SpendReportsPage() {
   }, [session, load]);
 
   if (loading || fetching || !report || !settings)
-    return <div className="p-6">Loading...</div>;
+    return <div className="p-6">{t("Loading...")}</div>;
 
   const { capex, bySource, byProject } = report;
 
@@ -109,9 +116,9 @@ export default function SpendReportsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Spend Reports</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Spend Reports")}</h1>
           <p className="text-gray-500 text-sm">
-            CAPEX budget vs. spend, funding sources, and per-project breakdown
+            {t("CAPEX budget vs. spend, funding sources, and per-project breakdown")}
             {" · "}
             {capex.year}
           </p>
@@ -120,28 +127,28 @@ export default function SpendReportsPage() {
           href="/admin/spend-settings"
           className="text-xs text-primary hover:text-primary-dark font-medium"
         >
-          Edit budget &rarr;
+          {t("Edit budget")} &rarr;
         </Link>
       </div>
 
       {/* CAPEX summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="CAPEX Budget" value={formatRand(capex.budget)} />
+        <SummaryCard label={t("CAPEX Budget")} value={formatRand(capex.budget)} />
         <SummaryCard
-          label="Committed"
+          label={t("Committed")}
           value={formatRand(capex.committed)}
-          sub={`${capex.pctCommitted.toFixed(0)}% of budget`}
+          sub={t("{pct}% of budget", { pct: capex.pctCommitted.toFixed(0) })}
           tone={capex.overCommitted ? "danger" : "default"}
         />
         <SummaryCard
-          label="Actual Spent"
+          label={t("Actual Spent")}
           value={formatRand(capex.actual)}
-          sub={`${capex.pctActual.toFixed(0)}% of budget`}
+          sub={t("{pct}% of budget", { pct: capex.pctActual.toFixed(0) })}
         />
         <SummaryCard
-          label="Remaining"
+          label={t("Remaining")}
           value={formatRand(capex.remainingVsCommitted)}
-          sub="after commitments"
+          sub={t("after commitments")}
           tone={capex.remainingVsCommitted < 0 ? "danger" : "success"}
         />
       </div>
@@ -149,23 +156,23 @@ export default function SpendReportsPage() {
       {/* CAPEX budget vs spend bars */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <h3 className="font-medium text-sm text-gray-500 mb-4">
-          CAPEX BUDGET vs SPEND
+          {t("CAPEX BUDGET vs SPEND")}
         </h3>
         <div className="space-y-4">
           <BudgetBar
-            label="Budget"
+            label={t("Budget")}
             amount={capex.budget}
             max={capexMax}
             color="bg-gray-300"
           />
           <BudgetBar
-            label="Committed (approved + completed)"
+            label={t("Committed (approved + completed)")}
             amount={capex.committed}
             max={capexMax}
             color={capex.overCommitted ? "bg-risk-high" : "bg-primary"}
           />
           <BudgetBar
-            label="Actual (completed)"
+            label={t("Actual (completed)")}
             amount={capex.actual}
             max={capexMax}
             color="bg-emerald-500"
@@ -173,14 +180,16 @@ export default function SpendReportsPage() {
         </div>
         {capex.requestedPipeline > 0 && (
           <p className="mt-4 text-xs text-gray-500">
-            + {formatRand(capex.requestedPipeline)} in CAPEX requests still
-            awaiting approval.
+            {t("+ {amount} in CAPEX requests still awaiting approval.", {
+              amount: formatRand(capex.requestedPipeline),
+            })}
           </p>
         )}
         {capex.overCommitted && (
           <p className="mt-2 text-xs font-medium text-risk-high">
-            Commitments exceed the CAPEX budget by{" "}
-            {formatRand(-capex.remainingVsCommitted)}.
+            {t("Commitments exceed the CAPEX budget by {amount}.", {
+              amount: formatRand(-capex.remainingVsCommitted),
+            })}
           </p>
         )}
       </div>
@@ -188,18 +197,18 @@ export default function SpendReportsPage() {
       {/* By funding source */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
         <h3 className="font-medium text-sm text-gray-500 mb-4">
-          BY FUNDING SOURCE
+          {t("BY FUNDING SOURCE")}
         </h3>
         {bySource.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">No spend recorded yet.</p>
+          <p className="text-sm text-gray-400 italic">{t("No spend recorded yet.")}</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-gray-500">
               <tr className="border-b border-gray-100">
-                <th className="py-2 font-medium">Source</th>
-                <th className="py-2 font-medium text-right">Requested</th>
-                <th className="py-2 font-medium text-right">Committed</th>
-                <th className="py-2 font-medium text-right">Actual</th>
+                <th className="py-2 font-medium">{t("Source")}</th>
+                <th className="py-2 font-medium text-right">{t("Requested")}</th>
+                <th className="py-2 font-medium text-right">{t("Committed")}</th>
+                <th className="py-2 font-medium text-right">{t("Actual")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -209,7 +218,7 @@ export default function SpendReportsPage() {
                     {s.source}
                     {s.source === "CAPEX" && (
                       <span className="ml-2 text-[10px] uppercase tracking-wide text-primary">
-                        budgeted
+                        {t("budgeted")}
                       </span>
                     )}
                   </td>
@@ -233,7 +242,7 @@ export default function SpendReportsPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-medium text-sm text-gray-500">
-            PROJECTS
+            {t("PROJECTS")}
           </h3>
           <button
             onClick={() => exportExcel(sortedProjects, capex.year)}
@@ -243,26 +252,26 @@ export default function SpendReportsPage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            Export to Excel
+            {t("Export to Excel")}
           </button>
         </div>
         {byProject.length === 0 ? (
           <p className="text-sm text-gray-400 italic">
-            No applications for FY {capex.year}.
+            {t("No applications for FY {year}.", { year: capex.year })}
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-left text-gray-500">
                 <tr className="border-b border-gray-100">
-                  <SortableTh label="Project" sortKey="projectName" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Owner" sortKey="owner" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Requested" sortKey="requested" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
-                  <SortableTh label="Quotes" sortKey="quoteCount" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="center" />
-                  <SortableTh label="Service Provider" sortKey="selectedSupplier" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
-                  <SortableTh label="Total Spend" sortKey="totalSpend" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
-                  <SortableTh label="Spend vs Req." sortKey="spendVsRequestPct" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
-                  <SortableTh label="Progress" sortKey="progress" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label={t("Project")} sortKey="projectName" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label={t("Owner")} sortKey="owner" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label={t("Requested")} sortKey="requested" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label={t("Quotes")} sortKey="quoteCount" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="center" />
+                  <SortableTh label={t("Service Provider")} sortKey="selectedSupplier" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
+                  <SortableTh label={t("Total Spend")} sortKey="totalSpend" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label={t("Spend vs Req.")} sortKey="spendVsRequestPct" activeKey={sortKey} dir={sortDir} onSort={toggleSort} align="right" />
+                  <SortableTh label={t("Progress")} sortKey="progress" activeKey={sortKey} dir={sortDir} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -322,7 +331,7 @@ export default function SpendReportsPage() {
                           PROGRESS_PILL[p.progress] || "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {p.progress}
+                        {t(p.progress)}
                       </span>
                     </td>
                   </tr>

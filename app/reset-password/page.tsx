@@ -4,8 +4,10 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AuthShell from "@/components/AuthShell";
+import { useT } from "@/components/I18nProvider";
 
 function ResetPasswordForm() {
+  const t = useT();
   const params = useSearchParams();
   const router = useRouter();
   const token = params.get("token") || "";
@@ -29,7 +31,7 @@ function ResetPasswordForm() {
     let cancelled = false;
     if (!token) {
       setLinkOk(false);
-      setLinkError("That link is missing its token. Please request a new one.");
+      setLinkError(t("That link is missing its token. Please request a new one."));
       return;
     }
     (async () => {
@@ -45,23 +47,24 @@ function ResetPasswordForm() {
       } catch {
         if (cancelled) return;
         setLinkOk(false);
-        setLinkError("We could not check that link. Please try again.");
+        setLinkError(t("We could not check that link. Please try again."));
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (password !== confirm) {
-      setError("The two passwords do not match.");
+      setError(t("The two passwords do not match."));
       return;
     }
     if (password.length < 6) {
-      setError("New password must be at least 6 characters.");
+      setError(t("New password must be at least 6 characters."));
       return;
     }
     setLoading(true);
@@ -73,7 +76,7 @@ function ResetPasswordForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not reset your password.");
+        setError(data.error || t("Could not reset your password."));
         return;
       }
       setDone(true);
@@ -81,7 +84,7 @@ function ResetPasswordForm() {
       // just chose is the one thing they should type once to be sure of.
       setTimeout(() => router.push("/login"), 2500);
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("Network error. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -89,15 +92,15 @@ function ResetPasswordForm() {
 
   if (done) {
     return (
-      <AuthShell title="Password changed">
+      <AuthShell title={t("Password changed")}>
         <div className="bg-green-50 text-green-800 px-4 py-3 rounded-lg mb-6 text-sm">
-          Your password has been changed. Taking you to the sign-in page.
+          {t("Your password has been changed. Taking you to the sign-in page.")}
         </div>
         <Link
           href="/login"
           className="block w-full text-center bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors"
         >
-          Sign in now
+          {t("Sign in now")}
         </Link>
       </AuthShell>
     );
@@ -105,15 +108,15 @@ function ResetPasswordForm() {
 
   if (linkOk === null) {
     return (
-      <AuthShell title="Checking your link">
-        <p className="text-sm text-gray-600">One moment...</p>
+      <AuthShell title={t("Checking your link")}>
+        <p className="text-sm text-gray-600">{t("One moment...")}</p>
       </AuthShell>
     );
   }
 
   if (!linkOk) {
     return (
-      <AuthShell title="This link cannot be used">
+      <AuthShell title={t("This link cannot be used")}>
         <div className="bg-red-50 text-risk-high px-4 py-3 rounded-lg mb-6 text-sm">
           {linkError}
         </div>
@@ -121,17 +124,17 @@ function ResetPasswordForm() {
           href="/forgot-password"
           className="block w-full text-center bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors"
         >
-          Send me a new link
+          {t("Send me a new link")}
         </Link>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell title="Choose a new password">
+    <AuthShell title={t("Choose a new password")}>
       {email && (
         <p className="text-sm text-gray-600 mb-6">
-          Setting a new password for <strong>{email}</strong>.
+          {t("Setting a new password for")} <strong>{email}</strong>.
         </p>
       )}
 
@@ -144,7 +147,7 @@ function ResetPasswordForm() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            New password
+            {t("New password")}
           </label>
           <div className="relative">
             <input
@@ -155,13 +158,13 @@ function ResetPasswordForm() {
               autoFocus
               minLength={6}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition pr-10"
-              placeholder="At least 6 characters"
+              placeholder={t("At least 6 characters")}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              aria-label={showPassword ? "Hide password" : "Show password"}
+              aria-label={showPassword ? t("Hide password") : t("Show password")}
             >
               {showPassword ? (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,7 +182,7 @@ function ResetPasswordForm() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Confirm new password
+            {t("Confirm new password")}
           </label>
           <input
             type={showPassword ? "text" : "password"}
@@ -188,7 +191,7 @@ function ResetPasswordForm() {
             required
             minLength={6}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-            placeholder="Type it again"
+            placeholder={t("Type it again")}
           />
         </div>
 
@@ -197,7 +200,7 @@ function ResetPasswordForm() {
           disabled={loading}
           className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Saving..." : "Save new password"}
+          {loading ? t("Saving...") : t("Save new password")}
         </button>
       </form>
     </AuthShell>
@@ -205,11 +208,12 @@ function ResetPasswordForm() {
 }
 
 export default function ResetPasswordPage() {
+  const t = useT();
   return (
     <Suspense
       fallback={
-        <AuthShell title="Checking your link">
-          <p className="text-sm text-gray-600">One moment...</p>
+        <AuthShell title={t("Checking your link")}>
+          <p className="text-sm text-gray-600">{t("One moment...")}</p>
         </AuthShell>
       }
     >

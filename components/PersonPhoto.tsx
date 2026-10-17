@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useT } from "@/components/I18nProvider";
 
 interface PersonPhotoProps {
   name: string;
@@ -51,6 +52,7 @@ export default function PersonPhoto({
   size = "md",
   className = "",
 }: PersonPhotoProps) {
+  const t = useT();
   // A record can point at a photo whose file is missing from storage. Falling
   // back to initials keeps that a slightly plain card rather than a broken
   // image icon in the middle of the directory.
@@ -65,7 +67,7 @@ export default function PersonPhoto({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={photoUrl}
-        alt={name || "Photo"}
+        alt={name || t("Photo")}
         className={`${shared} bg-gray-100`}
         onError={() => setFailed(true)}
       />
@@ -75,7 +77,7 @@ export default function PersonPhoto({
   return (
     <div
       className={`${shared} ${toneFor(name || "?")} flex items-center justify-center font-semibold ${text} select-none`}
-      aria-label={name || "No name"}
+      aria-label={name || t("No name")}
       title={name || undefined}
     >
       {initialsOf(name)}

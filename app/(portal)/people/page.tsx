@@ -6,6 +6,7 @@ import { GOVERNANCE_LABEL } from "@/lib/positions";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import PersonPhoto from "@/components/PersonPhoto";
 import { useBranding } from "@/components/BrandingProvider";
+import { useT } from "@/components/I18nProvider";
 
 interface DirectoryPerson {
   id: string;
@@ -25,6 +26,7 @@ interface TagRecord {
 }
 
 export default function PeopleDirectoryPage() {
+  const t = useT();
   const branding = useBranding();
   // Login only. This is the register as everybody sees it; editing it stays on
   // Admin > People behind manage_people.
@@ -92,18 +94,18 @@ export default function PeopleDirectoryPage() {
   const total = people.length;
   const shownCount = ordered.length;
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-dark">Our People</h1>
+        <h1 className="text-3xl font-bold text-dark">{t("Our People")}</h1>
         <p className="text-gray-500 text-sm mt-1">
           {branding.fullName} {GOVERNANCE_LABEL}
           {total > 0 && (
             <>
               {" "}
-              &middot; {total} {total === 1 ? "person" : "people"}
+              &middot; {total === 1 ? t("{count} person", { count: total }) : t("{count} people", { count: total })}
             </>
           )}
         </p>
@@ -129,7 +131,7 @@ export default function PeopleDirectoryPage() {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name or position"
+              placeholder={t("Search by name or position")}
               className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             />
           </div>
@@ -137,25 +139,25 @@ export default function PeopleDirectoryPage() {
       )}
 
       {!loaded ? (
-        <p className="text-sm text-gray-500">Loading the register...</p>
+        <p className="text-sm text-gray-500">{t("Loading the register...")}</p>
       ) : total === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
           <p className="text-gray-500 text-sm">
-            Nobody has been added to the register yet.
+            {t("Nobody has been added to the register yet.")}
           </p>
           {session?.permissions.includes("manage_people") && (
             <a
               href="/admin/people"
               className="inline-block mt-3 text-primary text-sm hover:underline"
             >
-              Add people in Admin &gt; People
+              {t("Add people in Admin > People")}
             </a>
           )}
         </div>
       ) : shownCount === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
           <p className="text-gray-500 text-sm">
-            Nobody matches &ldquo;{query}&rdquo;.
+            {t("Nobody matches “{query}”.", { query })}
           </p>
         </div>
       ) : (
@@ -174,7 +176,7 @@ export default function PeopleDirectoryPage() {
                 />
               </div>
               <p className="font-semibold text-dark leading-tight">
-                {person.name || "Unassigned"}
+                {person.name || t("Unassigned")}
               </p>
               <p className="text-xs text-primary font-medium mt-1">
                 {person.position}

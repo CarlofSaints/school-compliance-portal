@@ -7,6 +7,7 @@ import Toast from "@/components/Toast";
 import PersonPhoto from "@/components/PersonPhoto";
 import PhotoUpload from "@/components/PhotoUpload";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
+import { useT } from "@/components/I18nProvider";
 
 interface TagRecord {
   id: string;
@@ -33,6 +34,7 @@ interface UserOption {
 }
 
 export default function PeoplePage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_people");
   const [people, setPeople] = useState<PersonRecord[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -139,7 +141,7 @@ export default function PeoplePage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "The photo could not be saved.");
+        throw new Error(err.error || t("The photo could not be saved."));
       }
       const saved = await res.json().catch(() => null);
       return saved?.profilePic ?? null;
@@ -171,21 +173,21 @@ export default function PeoplePage() {
       if (res.ok) {
         try {
           await savePhoto(editPerson.id);
-          setToast({ message: "Person updated", type: "success" });
+          setToast({ message: t("Person updated"), type: "success" });
           setShowModal(false);
         } catch (err) {
           // The details saved; say so, rather than reporting a failure that
           // would have them enter everything again.
           setToast({
             message:
-              (err instanceof Error ? err.message : "The photo could not be saved.") +
-              " The other details were saved.",
+              (err instanceof Error ? err.message : t("The photo could not be saved.")) +
+              " " + t("The other details were saved."),
             type: "error",
           });
         }
         fetchData();
       } else {
-        setToast({ message: "That person could not be saved.", type: "error" });
+        setToast({ message: t("That person could not be saved."), type: "error" });
       }
     } else {
       // The id is made here so the photo can be stored under this person's own
@@ -201,7 +203,7 @@ export default function PeoplePage() {
           profilePic = (await savePhoto(newId)) || "";
         } catch (err) {
           photoProblem =
-            err instanceof Error ? err.message : "The photo could not be saved.";
+            err instanceof Error ? err.message : t("The photo could not be saved.");
         }
       }
 
@@ -216,30 +218,30 @@ export default function PeoplePage() {
             ? {
                 message:
                   photoProblem +
-                  " The person was added, so add the photo by editing them.",
+                  " " + t("The person was added, so add the photo by editing them."),
                 type: "error",
               }
-            : { message: "Person added", type: "success" }
+            : { message: t("Person added"), type: "success" }
         );
         setShowModal(false);
         fetchData();
       } else {
-        setToast({ message: "That person could not be added.", type: "error" });
+        setToast({ message: t("That person could not be added."), type: "error" });
       }
     }
     setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remove this person?")) return;
+    if (!confirm(t("Remove this person?"))) return;
     const res = await authFetch(`/api/people/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setToast({ message: "Person removed", type: "success" });
+      setToast({ message: t("Person removed"), type: "success" });
       fetchData();
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -247,14 +249,14 @@ export default function PeoplePage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">People & Positions</h1>
-          <p className="text-gray-500 text-sm">Manage {GOVERNANCE_LABEL} positions and linked users</p>
+          <h1 className="text-2xl font-bold text-dark">{t("People & Positions")}</h1>
+          <p className="text-gray-500 text-sm">{t("Manage {label} positions and linked users", { label: GOVERNANCE_LABEL })}</p>
         </div>
         <button
           onClick={openCreate}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          + Add Person
+          {t("+ Add Person")}
         </button>
       </div>
 
@@ -266,23 +268,23 @@ export default function PeoplePage() {
       {tags.length > 0 && (
         <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            {tags.map((t) => {
-              const count = people.filter((p) => p.name && p.tagIds?.includes(t.id)).length;
+            {tags.map((tg) => {
+              const count = people.filter((p) => p.name && p.tagIds?.includes(tg.id)).length;
               return (
                 <span
-                  key={t.id}
+                  key={tg.id}
                   className={`text-[11px] px-2 py-0.5 rounded-full ${
                     count === 0
                       ? "bg-amber-100 text-amber-800"
-                      : TAG_COLOR_CLASSES[t.color] || TAG_COLOR_CLASSES.slate
+                      : TAG_COLOR_CLASSES[tg.color] || TAG_COLOR_CLASSES.slate
                   }`}
                   title={
                     count === 0
-                      ? "Nobody on the People register carries this tag, so anything sent to it reaches nobody."
+                      ? t("Nobody on the People register carries this tag, so anything sent to it reaches nobody.")
                       : undefined
                   }
                 >
-                  {t.name} {count === 0 ? "· nobody" : `· ${count}`}
+                  {tg.name} {count === 0 ? t("· nobody") : `· ${count}`}
                 </span>
               );
             })}
@@ -290,14 +292,13 @@ export default function PeoplePage() {
               const untagged = people.filter((p) => p.name && !p.tagIds?.length).length;
               return untagged > 0 ? (
                 <span className="text-[11px] text-gray-400 italic">
-                  {untagged} {untagged === 1 ? "person has" : "people have"} no tags
+                  {untagged === 1 ? t("{count} person has no tags", { count: untagged }) : t("{count} people have no tags", { count: untagged })}
                 </span>
               ) : null;
             })()}
           </div>
           <p className="text-[11px] text-gray-400 mt-2">
-            A tag can also sit on a user who has a login. These counts are the People register
-            only.
+            {t("A tag can also sit on a user who has a login. These counts are the People register only.")}
           </p>
         </div>
       )}
@@ -318,9 +319,9 @@ export default function PeoplePage() {
                 {offList && (
                   <span
                     className="ml-2 text-[11px] font-normal px-2 py-0.5 rounded-full bg-amber-100 text-amber-800"
-                    title="This position is not on the People Types list. Add it back, or move these people to one that is."
+                    title={t("This position is not on the People Types list. Add it back, or move these people to one that is.")}
                   >
-                    not on the list
+                    {t("not on the list")}
                   </span>
                 )}
               </h3>
@@ -337,7 +338,7 @@ export default function PeoplePage() {
                         size="sm"
                       />
                       <div className="min-w-0">
-                      <p className="text-sm font-medium">{person.name || "Unassigned"}</p>
+                      <p className="text-sm font-medium">{person.name || t("Unassigned")}</p>
                       <p className="text-xs text-gray-400">{person.email}</p>
                       {person.phone && (
                         <p className="text-xs text-gray-400">{person.phone}</p>
@@ -364,9 +365,9 @@ export default function PeoplePage() {
                                       ? TAG_COLOR_CLASSES[tag.color] || TAG_COLOR_CLASSES.slate
                                       : "bg-amber-100 text-amber-800"
                                   }`}
-                                  title={tag ? undefined : "This tag no longer exists"}
+                                  title={tag ? undefined : t("This tag no longer exists")}
                                 >
-                                  {tag ? tag.name : "deleted tag"}
+                                  {tag ? tag.name : t("deleted tag")}
                                 </span>
                               );
                             })
@@ -376,7 +377,7 @@ export default function PeoplePage() {
                             // drawn, and untagged is exactly what needs finding:
                             // nothing reaches them and nothing asks them to
                             // approve.
-                            <span className="text-[11px] text-gray-400 italic">No tags</span>
+                            <span className="text-[11px] text-gray-400 italic">{t("No tags")}</span>
                           )}
                         </div>
                       )}
@@ -387,7 +388,7 @@ export default function PeoplePage() {
                         onClick={() => openEdit(person)}
                         className="text-primary text-xs hover:text-primary-dark"
                       >
-                        Edit
+                        {t("Edit")}
                       </button>
                       <button
                         onClick={() => handleDelete(person.id)}
@@ -399,7 +400,7 @@ export default function PeoplePage() {
                   </div>
                 ))
               ) : (
-                <p className="text-xs text-gray-400 italic">No one assigned</p>
+                <p className="text-xs text-gray-400 italic">{t("No one assigned")}</p>
               )}
             </div>
           );
@@ -410,11 +411,11 @@ export default function PeoplePage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-lg p-6">
             <h2 className="text-lg font-semibold mb-4">
-              {editPerson ? "Edit Person" : "Add Person"}
+              {editPerson ? t("Edit Person") : t("Add Person")}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Position")}</label>
                 <select
                   value={form.position}
                   required
@@ -423,7 +424,7 @@ export default function PeoplePage() {
                 >
                   {form.position === "" && (
                     <option value="" disabled>
-                      Choose a position
+                      {t("Choose a position")}
                     </option>
                   )}
                   {form.position !== "" &&
@@ -434,7 +435,7 @@ export default function PeoplePage() {
                       // Offered anyway, so opening the form does not silently
                       // reassign them to whichever position happens to be first.
                       <option value={form.position}>
-                        {form.position} (not on the list)
+                        {form.position} ({t("not on the list")})
                       </option>
                     )}
                   {positions.map((pos) => (
@@ -444,14 +445,14 @@ export default function PeoplePage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Link to User Account
+                  {t("Link to User Account")}
                 </label>
                 <select
                   value={form.userId}
                   onChange={(e) => handleUserSelect(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 >
-                  <option value="">-- No linked user --</option>
+                  <option value="">{t("-- No linked user --")}</option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name} {u.surname} ({u.email})
@@ -460,44 +461,43 @@ export default function PeoplePage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t("Tags")}</label>
                 {tags.length === 0 ? (
                   <p className="text-xs text-gray-400">
-                    No tags yet. Create them in Admin &gt; Tags.
+                    {t("No tags yet. Create them in Admin > Tags.")}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {tags.map((t) => {
-                      const on = form.tagIds.includes(t.id);
+                    {tags.map((tg) => {
+                      const on = form.tagIds.includes(tg.id);
                       return (
                         <button
-                          key={t.id}
+                          key={tg.id}
                           type="button"
                           onClick={() =>
                             setForm({
                               ...form,
                               tagIds: on
-                                ? form.tagIds.filter((x) => x !== t.id)
-                                : [...form.tagIds, t.id],
+                                ? form.tagIds.filter((x) => x !== tg.id)
+                                : [...form.tagIds, tg.id],
                             })
                           }
                           className={`px-3 py-1 rounded text-xs font-medium transition-all ${
-                            TAG_COLOR_CLASSES[t.color] || TAG_COLOR_CLASSES.slate
+                            TAG_COLOR_CLASSES[tg.color] || TAG_COLOR_CLASSES.slate
                           } ${on ? "ring-2 ring-primary" : "opacity-40 hover:opacity-70"}`}
                         >
-                          {t.name}
+                          {tg.name}
                         </button>
                       );
                     })}
                   </div>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
-                  Tags decide who has to approve a fund application. Someone
-                  without a login can be emailed but cannot click Approve.
+                  {t("Tags decide who has to approve a fund application. Someone without a login can be emailed but cannot click Approve.")}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
                 <input
                   type="text"
                   value={form.name}
@@ -506,7 +506,7 @@ export default function PeoplePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Email")}</label>
                 <input
                   type="email"
                   value={form.email}
@@ -515,7 +515,7 @@ export default function PeoplePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Phone")}</label>
                 <input
                   type="tel"
                   value={form.phone}
@@ -537,14 +537,14 @@ export default function PeoplePage() {
                   disabled={saving}
                   className="flex-1 bg-primary hover:bg-primary-dark text-white py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : editPerson ? "Save" : "Add Person"}
+                  {saving ? t("Saving...") : editPerson ? t("Save") : t("Add Person")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="px-6 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </form>

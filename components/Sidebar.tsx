@@ -5,6 +5,8 @@ import { useSessionValue, signOut } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
 import { useState } from "react";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 interface NavChild {
   label: string;
@@ -26,7 +28,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    label: "Dashboard",
+    label: tk("Dashboard"),
     href: "/dashboard",
     permission: "view_dashboard",
     icon: (
@@ -39,7 +41,7 @@ const navItems: NavItem[] = [
     // No permission: the register of who holds which governance position is
     // for everybody in the portal. Editing it stays on Admin > People behind
     // manage_people.
-    label: "People",
+    label: tk("People"),
     href: "/people",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,7 +54,7 @@ const navItems: NavItem[] = [
     // agreed to do is for everybody in the portal, and somebody who cannot see
     // their own action cannot act on it. Raising and editing is gated on the
     // page behind manage_action_items.
-    label: "Action Items",
+    label: tk("Action Items"),
     href: "/action-items",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -65,7 +67,7 @@ const navItems: NavItem[] = [
     // governing body agreed, and a member who cannot read them cannot do
     // their job. Creating and editing is gated on the page behind
     // manage_minutes.
-    label: "Meeting Minutes",
+    label: tk("Meeting Minutes"),
     href: "/minutes",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,7 +77,7 @@ const navItems: NavItem[] = [
   },
   {
     // No permission: the guide explains the portal to whoever is using it.
-    label: "Guide",
+    label: tk("Guide"),
     href: "/guide",
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +86,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Policies",
+    label: tk("Policies"),
     href: "/policies",
     permission: "download_policies",
     icon: (
@@ -94,7 +96,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Compliance",
+    label: tk("Compliance"),
     href: "/compliance",
     permission: "check_compliance",
     icon: (
@@ -103,12 +105,12 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { label: "Run Check", href: "/compliance", permission: "check_compliance" },
-      { label: "Guidelines", href: "/compliance/guidelines", permission: "manage_guidelines" },
+      { label: tk("Run Check"), href: "/compliance", permission: "check_compliance" },
+      { label: tk("Guidelines"), href: "/compliance/guidelines", permission: "manage_guidelines" },
     ],
   },
   {
-    label: "Documents",
+    label: tk("Documents"),
     href: "/documents",
     permission: "check_documents",
     icon: (
@@ -118,7 +120,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Spend",
+    label: tk("Spend"),
     href: "/spend",
     permission: "submit_spend",
     icon: (
@@ -127,12 +129,12 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { label: "Projects", href: "/spend", permission: "submit_spend" },
-      { label: "Reports", href: "/spend/reports", permission: "view_all_spend" },
+      { label: tk("Projects"), href: "/spend", permission: "submit_spend" },
+      { label: tk("Reports"), href: "/spend/reports", permission: "view_all_spend" },
     ],
   },
   {
-    label: "Admin",
+    label: tk("Admin"),
     href: "/admin/users",
     permission: "manage_users",
     icon: (
@@ -143,32 +145,32 @@ const navItems: NavItem[] = [
     ),
     children: [
       {
-        label: "Users",
+        label: tk("Users"),
         href: "/admin/users",
         permissions: ["view_users", "manage_users"],
       },
-      { label: "Roles", href: "/admin/roles", permission: "manage_roles" },
-      { label: "People & Positions", href: "/admin/people", permission: "manage_people" },
-      { label: "People Types", href: "/admin/positions", permission: "manage_people" },
-      { label: "Tags", href: "/admin/tags", permission: "manage_tags" },
-      { label: "Policy Categories", href: "/admin/policy-categories", permission: "manage_policies" },
+      { label: tk("Roles"), href: "/admin/roles", permission: "manage_roles" },
+      { label: tk("People & Positions"), href: "/admin/people", permission: "manage_people" },
+      { label: tk("People Types"), href: "/admin/positions", permission: "manage_people" },
+      { label: tk("Tags"), href: "/admin/tags", permission: "manage_tags" },
+      { label: tk("Policy Categories"), href: "/admin/policy-categories", permission: "manage_policies" },
       {
-        label: "Action Categories",
+        label: tk("Action Categories"),
         href: "/admin/action-categories",
         permissions: ["manage_action_items", "manage_people"],
       },
-      { label: "Approval Settings", href: "/admin/approval-settings", permission: "manage_approval_settings" },
-      { label: "Spend Settings", href: "/admin/spend-settings", permission: "manage_spend_settings" },
-      { label: "Minutes Admin", href: "/admin/minutes", permission: "manage_users" },
-      { label: "School Branding", href: "/admin/branding", permission: "manage_users" },
-      { label: "Weekly Update", href: "/admin/weekly-update", permission: "manage_users" },
+      { label: tk("Approval Settings"), href: "/admin/approval-settings", permission: "manage_approval_settings" },
+      { label: tk("Spend Settings"), href: "/admin/spend-settings", permission: "manage_spend_settings" },
+      { label: tk("Minutes Admin"), href: "/admin/minutes", permission: "manage_users" },
+      { label: tk("School Branding"), href: "/admin/branding", permission: "manage_users" },
+      { label: tk("Weekly Update"), href: "/admin/weekly-update", permission: "manage_users" },
       {
-        label: "Action Summary Email",
+        label: tk("Action Summary Email"),
         href: "/admin/action-summary",
         permissions: ["manage_action_items", "manage_people"],
       },
-      { label: "Activity Log", href: "/activity", permission: "manage_users" },
-      { label: "Backup Data", href: "/admin/backup", permission: "manage_roles" },
+      { label: tk("Activity Log"), href: "/activity", permission: "manage_users" },
+      { label: tk("Backup Data"), href: "/admin/backup", permission: "manage_roles" },
     ],
   },
 ];
@@ -177,6 +179,7 @@ export default function Sidebar() {
   const branding = useBranding();
   const pathname = usePathname();
   const router = useRouter();
+  const t = useT();
   // Read during render via a store subscription, not straight from
   // localStorage: the server has no localStorage, so a direct read renders an
   // empty sidebar on the server and a full one on the client - a hydration
@@ -266,12 +269,12 @@ export default function Sidebar() {
                     ? "bg-accent/20 text-accent border-r-2 border-accent"
                     : "text-gray-300 hover:bg-gray-800 hover:text-white"
                 }`}
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? t(item.label) : undefined}
               >
                 {item.icon}
                 {!collapsed && (
                   <>
-                    <span className="flex-1 text-left">{item.label}</span>
+                    <span className="flex-1 text-left">{t(item.label)}</span>
                     {hasChildren && (
                       <svg
                         className={`w-4 h-4 transition-transform ${
@@ -300,7 +303,7 @@ export default function Sidebar() {
                       }`}
                     >
                       <span className="w-5 h-5 flex items-center justify-center text-xs">-</span>
-                      {child.label}
+                      {t(child.label)}
                     </button>
                   ))}
                 </div>
@@ -328,7 +331,7 @@ export default function Sidebar() {
               <button
                 onClick={() => router.push("/account")}
                 className="text-gray-400 hover:text-white p-1"
-                title="Account"
+                title={t("Account")}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -337,7 +340,7 @@ export default function Sidebar() {
               <button
                 onClick={handleLogout}
                 className="text-gray-400 hover:text-red-400 p-1"
-                title="Logout"
+                title={t("Logout")}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -349,7 +352,7 @@ export default function Sidebar() {
           <button
             onClick={handleLogout}
             className="text-gray-400 hover:text-red-400 p-1 w-full flex justify-center"
-            title="Logout"
+            title={t("Logout")}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

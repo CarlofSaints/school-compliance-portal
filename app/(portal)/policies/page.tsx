@@ -7,6 +7,8 @@ import ComplianceScore from "@/components/ComplianceScore";
 import ScoreNote from "@/components/ScoreNote";
 import Link from "next/link";
 import { categoryOptions } from "@/lib/policyCategories";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 // Reads the name the server gave the file back out of Content-Disposition,
 // preferring the RFC 6266 filename* the download route sends, since that is
@@ -67,12 +69,13 @@ interface DuplicateReport {
 }
 
 const KIND_LABEL: Record<DuplicateGroup["kind"], string> = {
-  "identical-file": "Identical file",
-  "identical-content": "Identical wording",
-  "near-identical": "Nearly identical",
+  "identical-file": tk("Identical file"),
+  "identical-content": tk("Identical wording"),
+  "near-identical": tk("Nearly identical"),
 };
 
 export default function PoliciesPage() {
+  const t = useT();
   const { session, loading } = useAuth("download_policies");
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
   const [filtered, setFiltered] = useState<PolicyRecord[]>([]);
@@ -139,7 +142,7 @@ export default function PoliciesPage() {
 
     if (!res.ok) {
       apply(previous);
-      setNotice("That category could not be saved. It has been put back.");
+      setNotice(t("That category could not be saved. It has been put back."));
     }
     setSavingCategory(null);
   };
@@ -156,7 +159,7 @@ export default function PoliciesPage() {
       const res = await authFetch(`/api/policies/${policy.id}/download`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setNotice(err.error || "That policy could not be downloaded.");
+        setNotice(err.error || t("That policy could not be downloaded."));
         return;
       }
       const blob = await res.blob();
@@ -192,7 +195,7 @@ export default function PoliciesPage() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         setNotice(
-          `${policy.name}: ${err.error || "the compliance check could not be run."}`
+          `${policy.name}: ${err.error || t("the compliance check could not be run.")}`
         );
         return;
       }
@@ -215,12 +218,12 @@ export default function PoliciesPage() {
 
       const risks = (check.risks || []).length;
       setNotice(
-        `${policy.name} scored ${check.score} out of 100. ${risks} ${
-          risks === 1 ? "risk was" : "risks were"
-        } found, open the policy to read them.`
+        risks === 1
+          ? t("{name} scored {score} out of 100. {count} risk was found, open the policy to read them.", { name: policy.name, score: check.score, count: risks })
+          : t("{name} scored {score} out of 100. {count} risks were found, open the policy to read them.", { name: policy.name, score: check.score, count: risks })
       );
     } catch {
-      setNotice(`${policy.name}: the compliance check could not be run.`);
+      setNotice(`${policy.name}: ${t("the compliance check could not be run.")}`);
     } finally {
       setCheckingIds((ids) => {
         const next = new Set(ids);
@@ -241,9 +244,10 @@ export default function PoliciesPage() {
     if (res.ok) {
       const result = await res.json();
       const secured = result.backfilled
-        ? ` ${result.backfilled} existing ${
-            result.backfilled === 1 ? "policy is" : "policies are"
-          } now stored so they can be restored in full if the list ever loses them.`
+        ? " " +
+          (result.backfilled === 1
+            ? t("{n} existing policy is now stored so it can be restored in full if the list ever loses it.", { n: result.backfilled })
+            : t("{n} existing policies are now stored so they can be restored in full if the list ever loses them.", { n: result.backfilled }))
         : "";
       // Only a policy restored from a filename needs its details checked; one
       // restored from its own stored copy came back complete.
@@ -252,22 +256,18 @@ export default function PoliciesPage() {
       );
       setNotice(
         result.recovered === 0
-          ? `Nothing missing. Every policy in storage is already listed.${secured}`
-          : `Recovered ${result.recovered} ${
-              result.recovered === 1 ? "policy" : "policies"
-            }: ${result.policies
-              .map((p: { name: string }) => p.name)
-              .join(", ")}.${
-              needsCheck.length
-                ? ` Check the name and category on ${needsCheck
-                    .map((p: { name: string }) => p.name)
-                    .join(", ")}, rebuilt from the filename.`
-                : ""
-            }${secured}`
+          ? t("Nothing missing. Every policy in storage is already listed.") + secured
+          : (result.recovered === 1
+              ? t("Recovered {n} policy: {names}.", { n: result.recovered, names: result.policies.map((p: { name: string }) => p.name).join(", ") })
+              : t("Recovered {n} policies: {names}.", { n: result.recovered, names: result.policies.map((p: { name: string }) => p.name).join(", ") })) +
+            (needsCheck.length
+              ? " " + t("Check the name and category on {names}, rebuilt from the filename.", { names: needsCheck.map((p: { name: string }) => p.name).join(", ") })
+              : "") +
+            secured
       );
       fetchPolicies();
     } else {
-      setNotice("Could not rebuild the list. Try again.");
+      setNotice(t("Could not rebuild the list. Try again."));
     }
     setRepairing(false);
   };
@@ -302,7 +302,7 @@ export default function PoliciesPage() {
       setDupes(await res.json());
     } else {
       const err = await res.json().catch(() => ({}));
-      setNotice(err.error || "Could not check for duplicates.");
+      setNotice(err.error || t("Could not check for duplicates."));
     }
     setScanning(false);
   };
@@ -310,7 +310,7 @@ export default function PoliciesPage() {
   // Deletes one copy. The register is the thing being tidied, so the check
   // history that belongs to the copy being kept is untouched.
   const deleteDuplicate = async (id: string, name: string) => {
-    if (!window.confirm(`Remove "${name}" from the policy register? This cannot be undone.`)) return;
+    if (!window.confirm(t("Remove \"{name}\" from the policy register? This cannot be undone.", { name }))) return;
     setDeletingId(id);
     const res = await authFetch(`/api/policies/${id}`, { method: "DELETE" });
     if (res.ok) {
@@ -324,24 +324,24 @@ export default function PoliciesPage() {
             }
           : prev
       );
-      setNotice(`Removed "${name}" from the register.`);
+      setNotice(t("Removed \"{name}\" from the register.", { name }));
       fetchPolicies();
     } else {
       const err = await res.json().catch(() => ({}));
-      setNotice(err.error || "That policy could not be removed.");
+      setNotice(err.error || t("That policy could not be removed."));
     }
     setDeletingId(null);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Policies</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Policies")}</h1>
           <p className="text-gray-500 text-sm">
-            School policy repository ({policies.length} policies)
+            {t("School policy repository ({count} policies)", { count: policies.length })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -349,20 +349,20 @@ export default function PoliciesPage() {
             <button
               onClick={repairIndex}
               disabled={repairing}
-              title="Finds policies whose file is in storage but which are missing from this list, and puts them back"
+              title={t("Finds policies whose file is in storage but which are missing from this list, and puts them back")}
               className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
-              {repairing ? "Checking..." : "Rebuild list from storage"}
+              {repairing ? t("Checking...") : t("Rebuild list from storage")}
             </button>
           )}
           {session?.permissions.includes("manage_policies") && (
             <button
               onClick={scanForDuplicates}
               disabled={scanning}
-              title="Compares every policy in the register on its contents, ignoring file names, to find the same document filed more than once"
+              title={t("Compares every policy in the register on its contents, ignoring file names, to find the same document filed more than once")}
               className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
-              {scanning ? "Comparing documents..." : "Check for document duplicates"}
+              {scanning ? t("Comparing documents...") : t("Check for document duplicates")}
             </button>
           )}
           {session?.permissions.includes("upload_policies") && (
@@ -370,7 +370,7 @@ export default function PoliciesPage() {
               href="/policies/upload"
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              + Upload Policy
+              {t("+ Upload Policy")}
             </Link>
           )}
         </div>
@@ -390,11 +390,11 @@ export default function PoliciesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Policy</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Category</th>
-              <th className="text-center px-6 py-3 font-medium text-gray-500">Version</th>
-              <th className="text-center px-6 py-3 font-medium text-gray-500">Compliance</th>
-              <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Policy")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Category")}</th>
+              <th className="text-center px-6 py-3 font-medium text-gray-500">{t("Version")}</th>
+              <th className="text-center px-6 py-3 font-medium text-gray-500">{t("Compliance")}</th>
+              <th className="text-right px-6 py-3 font-medium text-gray-500">{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -421,7 +421,7 @@ export default function PoliciesPage() {
                     <select
                       value={policy.category}
                       disabled={savingCategory === policy.id}
-                      aria-label={`Category for ${policy.name}`}
+                      aria-label={t("Category for {name}", { name: policy.name })}
                       onChange={(e) =>
                         changeCategory(policy.id, e.target.value)
                       }
@@ -444,21 +444,19 @@ export default function PoliciesPage() {
                 </td>
                 <td className="px-6 py-4 flex justify-center">
                   {checkingIds.has(policy.id) ? (
-                    <span className="text-xs text-gray-400">Checking...</span>
+                    <span className="text-xs text-gray-400">{t("Checking...")}</span>
                   ) : policy.lastCheckScore !== null ? (
                     <span
                       title={
                         policy.lastCheckDate
-                          ? `Last checked ${new Date(
-                              policy.lastCheckDate
-                            ).toLocaleString()}`
+                          ? t("Last checked {date}", { date: new Date(policy.lastCheckDate).toLocaleString() })
                           : undefined
                       }
                     >
                       <ComplianceScore score={policy.lastCheckScore} size="sm" />
                     </span>
                   ) : (
-                    <span className="text-xs text-gray-400">Not checked</span>
+                    <span className="text-xs text-gray-400">{t("Not checked")}</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-right whitespace-nowrap">
@@ -466,10 +464,10 @@ export default function PoliciesPage() {
                     <button
                       onClick={() => runCheck(policy)}
                       disabled={checkingIds.has(policy.id)}
-                      title="Reads the current version and reports how well it meets the guidelines"
+                      title={t("Reads the current version and reports how well it meets the guidelines")}
                       className="text-primary hover:text-primary-dark text-xs font-medium mr-4 disabled:opacity-50"
                     >
-                      {checkingIds.has(policy.id) ? "Checking..." : "Run Check"}
+                      {checkingIds.has(policy.id) ? t("Checking...") : t("Run Check")}
                     </button>
                   )}
                   {session?.permissions.includes("download_policies") && (
@@ -478,14 +476,14 @@ export default function PoliciesPage() {
                       disabled={downloading === policy.id}
                       className="text-primary hover:text-primary-dark text-xs font-medium mr-4 disabled:opacity-50"
                     >
-                      {downloading === policy.id ? "Downloading..." : "Download"}
+                      {downloading === policy.id ? t("Downloading...") : t("Download")}
                     </button>
                   )}
                   <Link
                     href={`/policies/${policy.id}`}
                     className="text-primary hover:text-primary-dark text-xs font-medium"
                   >
-                    View
+                    {t("View")}
                   </Link>
                 </td>
               </tr>
@@ -497,8 +495,8 @@ export default function PoliciesPage() {
                   className="px-6 py-12 text-center text-gray-400"
                 >
                   {policies.length === 0
-                    ? "No policies uploaded yet."
-                    : "No policies match your search."}
+                    ? t("No policies uploaded yet.")
+                    : t("No policies match your search.")}
                 </td>
               </tr>
             )}
@@ -510,18 +508,20 @@ export default function PoliciesPage() {
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-dark">Duplicate documents</h2>
+              <h2 className="text-lg font-semibold text-dark">{t("Duplicate documents")}</h2>
               <p className="text-sm text-gray-500 mt-1">
                 {dupes.groups.length === 0
-                  ? `No duplicates found. ${dupes.scanned} policies compared.`
-                  : `${dupes.groups.length} set${dupes.groups.length === 1 ? "" : "s"} found across ${dupes.scanned} policies.`}
+                  ? t("No duplicates found. {scanned} policies compared.", { scanned: dupes.scanned })
+                  : dupes.groups.length === 1
+                    ? t("{count} set found across {scanned} policies.", { count: dupes.groups.length, scanned: dupes.scanned })
+                    : t("{count} sets found across {scanned} policies.", { count: dupes.groups.length, scanned: dupes.scanned })}
               </p>
             </div>
             <button
               onClick={() => setDupes(null)}
               className="shrink-0 text-sm text-gray-500 hover:text-gray-700"
             >
-              Close
+              {t("Close")}
             </button>
           </div>
 
@@ -529,12 +529,12 @@ export default function PoliciesPage() {
               could not be compared on wording. */}
           {dupes.note && (
             <p className="mt-3 text-xs text-gray-500">
-              {dupes.byteOnly} of {dupes.scanned} compared on the file only. {dupes.note}
+              {t("{byteOnly} of {scanned} compared on the file only.", { byteOnly: dupes.byteOnly, scanned: dupes.scanned })} {dupes.note}
             </p>
           )}
           {dupes.unreadable.length > 0 && (
             <p className="mt-2 text-xs text-gray-500">
-              {dupes.unreadable.length} could not be read at all:{" "}
+              {t("{count} could not be read at all:", { count: dupes.unreadable.length })}{" "}
               {dupes.unreadable.map((u) => u.name).join(", ")}.
             </p>
           )}
@@ -542,7 +542,7 @@ export default function PoliciesPage() {
           {dupes.groups.map((g, i) => (
             <div key={i} className="mt-5 border border-gray-200 rounded-lg overflow-hidden">
               <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-                <span className="text-sm font-medium text-dark">{KIND_LABEL[g.kind]}</span>
+                <span className="text-sm font-medium text-dark">{t(KIND_LABEL[g.kind])}</span>
                 <span className="text-xs text-gray-500 ml-2">{g.confidence}</span>
               </div>
               <ul className="divide-y divide-gray-100">
@@ -560,13 +560,13 @@ export default function PoliciesPage() {
                         <p className="text-xs text-gray-500 mt-0.5">
                           {pol.category} · {pol.filename} · {(pol.bytes / 1024).toFixed(0)} KB
                           {pol.lastCheckScore !== null
-                            ? ` · checked, scored ${pol.lastCheckScore}`
-                            : " · never checked"}
+                            ? " · " + t("checked, scored {score}", { score: pol.lastCheckScore })
+                            : " · " + t("never checked")}
                         </p>
                       </div>
                       {keep ? (
                         <span className="shrink-0 text-xs px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {pol.lastCheckScore !== null ? "Keep, it has the check" : "Keep, the original"}
+                          {pol.lastCheckScore !== null ? t("Keep, it has the check") : t("Keep, the original")}
                         </span>
                       ) : (
                         <button
@@ -574,7 +574,7 @@ export default function PoliciesPage() {
                           disabled={deletingId === pol.id}
                           className="shrink-0 text-xs px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                         >
-                          {deletingId === pol.id ? "Removing..." : "Remove this one"}
+                          {deletingId === pol.id ? t("Removing...") : t("Remove this one")}
                         </button>
                       )}
                     </li>

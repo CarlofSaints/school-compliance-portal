@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 
 interface Usage {
   people: string[];
@@ -15,6 +16,7 @@ interface Orphan extends Usage {
 }
 
 export default function PositionsPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_people");
   const [positions, setPositions] = useState<string[]>([]);
   const [usage, setUsage] = useState<Record<string, Usage>>({});
@@ -58,7 +60,7 @@ export default function PositionsPage() {
       await fetchData();
     } else {
       setToast({
-        message: (data as { error?: string }).error || "That did not work.",
+        message: (data as { error?: string }).error || t("That did not work."),
         type: "error",
       });
     }
@@ -76,7 +78,7 @@ export default function PositionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       },
-      () => `"${name}" added.`
+      () => t("\"{name}\" added.", { name })
     );
     if (ok) setAdding("");
   };
@@ -95,22 +97,25 @@ export default function PositionsPage() {
         body: JSON.stringify({ from, to }),
       },
       (d) =>
-        `Renamed to "${to}".` +
+        t("Renamed to \"{to}\".", { to }) +
         (typeof d.moved === "number" && d.moved > 0
-          ? ` ${d.moved} ${d.moved === 1 ? "person was" : "people were"} moved across.`
+          ? " " +
+            (d.moved === 1
+              ? t("{count} person was moved across.", { count: d.moved })
+              : t("{count} people were moved across.", { count: d.moved }))
           : "")
     );
     if (ok) setEditing(null);
   };
 
   const remove = async (name: string) => {
-    if (!confirm(`Remove "${name}" from the list of positions?`)) return;
+    if (!confirm(t("Remove \"{name}\" from the list of positions?", { name }))) return;
     await send(
       {
         url: `/api/settings/positions?name=${encodeURIComponent(name)}`,
         method: "DELETE",
       },
-      () => `"${name}" removed.`
+      () => t("\"{name}\" removed.", { name })
     );
   };
 
@@ -126,7 +131,7 @@ export default function PositionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order: next }),
       },
-      () => "Order saved."
+      () => t("Order saved.")
     );
   };
 
@@ -138,11 +143,11 @@ export default function PositionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       },
-      () => `"${name}" put back on the list.`
+      () => t("\"{name}\" put back on the list.", { name })
     );
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -151,16 +156,15 @@ export default function PositionsPage() {
       )}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-dark">People Types</h1>
+        <h1 className="text-2xl font-bold text-dark">{t("People Types")}</h1>
         <p className="text-gray-500 text-sm">
-          The {GOVERNANCE_LABEL} positions somebody on the register can hold. This
-          list also sets the order the People page reads in.
+          {t("The {label} positions somebody on the register can hold. This list also sets the order the People page reads in.", { label: GOVERNANCE_LABEL })}
         </p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6 max-w-2xl">
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Add a position
+          {t("Add a position")}
         </label>
         <div className="flex gap-2">
           <input
@@ -173,7 +177,7 @@ export default function PositionsPage() {
                 add();
               }
             }}
-            placeholder="e.g. Health and Safety Officer"
+            placeholder={t("e.g. Health and Safety Officer")}
             className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
           />
           <button
@@ -181,7 +185,7 @@ export default function PositionsPage() {
             disabled={busy || !adding.trim()}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           >
-            Add
+            {t("Add")}
           </button>
         </div>
       </div>
@@ -189,12 +193,10 @@ export default function PositionsPage() {
       {orphans.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 max-w-3xl">
           <p className="text-sm font-medium text-amber-900">
-            In use but not on the list
+            {t("In use but not on the list")}
           </p>
           <p className="text-xs text-amber-800 mt-1">
-            These positions are on somebody&rsquo;s record or in an approval, but
-            are not offered when adding a person. Put one back, or move the
-            people on it to a position that is on the list.
+            {t("These positions are on somebody’s record or in an approval, but are not offered when adding a person. Put one back, or move the people on it to a position that is on the list.")}
           </p>
           <div className="mt-3 space-y-2">
             {orphans.map((o) => (
@@ -203,7 +205,7 @@ export default function PositionsPage() {
                   {o.name}
                   <span className="text-amber-700 text-xs">
                     {" "}
-                    &middot; {o.people.length} on the register, {o.approvals.length} in approvals
+                    &middot; {t("{people} on the register, {approvals} in approvals", { people: o.people.length, approvals: o.approvals.length })}
                   </span>
                 </span>
                 <button
@@ -211,7 +213,7 @@ export default function PositionsPage() {
                   disabled={busy}
                   className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 transition-colors disabled:opacity-50"
                 >
-                  Put back
+                  {t("Put back")}
                 </button>
               </div>
             ))}
@@ -220,16 +222,16 @@ export default function PositionsPage() {
       )}
 
       {!loaded ? (
-        <p className="text-sm text-gray-500">Loading positions...</p>
+        <p className="text-sm text-gray-500">{t("Loading positions...")}</p>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden max-w-3xl">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr className="text-left text-gray-500">
-                <th className="px-4 py-3 font-medium w-16">Order</th>
-                <th className="px-4 py-3 font-medium">Position</th>
-                <th className="px-4 py-3 font-medium">In use</th>
-                <th className="px-4 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium w-16">{t("Order")}</th>
+                <th className="px-4 py-3 font-medium">{t("Position")}</th>
+                <th className="px-4 py-3 font-medium">{t("In use")}</th>
+                <th className="px-4 py-3 font-medium text-right">{t("Actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -238,9 +240,9 @@ export default function PositionsPage() {
                 const inApprovals = u.approvals.length > 0;
                 const held = u.people.length > 0;
                 const lockedReason = inApprovals
-                  ? "This position is part of the approval record on a fund application, so it cannot be renamed or removed."
+                  ? t("This position is part of the approval record on a fund application, so it cannot be renamed or removed.")
                   : held
-                  ? "Someone on the register holds this position. It can be renamed, and they move with it, but it cannot be removed."
+                  ? t("Someone on the register holds this position. It can be renamed, and they move with it, but it cannot be removed.")
                   : "";
 
                 return (
@@ -250,7 +252,7 @@ export default function PositionsPage() {
                         <button
                           onClick={() => move(i, -1)}
                           disabled={busy || i === 0}
-                          aria-label={`Move ${name} up`}
+                          aria-label={t("Move {name} up", { name })}
                           className="w-6 h-6 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-colors"
                         >
                           ↑
@@ -258,7 +260,7 @@ export default function PositionsPage() {
                         <button
                           onClick={() => move(i, 1)}
                           disabled={busy || i === positions.length - 1}
-                          aria-label={`Move ${name} down`}
+                          aria-label={t("Move {name} down", { name })}
                           className="w-6 h-6 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 transition-colors"
                         >
                           ↓
@@ -287,13 +289,13 @@ export default function PositionsPage() {
                             disabled={busy}
                             className="text-primary text-xs font-medium hover:underline disabled:opacity-50"
                           >
-                            Save
+                            {t("Save")}
                           </button>
                           <button
                             onClick={() => setEditing(null)}
                             className="text-gray-500 text-xs hover:underline"
                           >
-                            Cancel
+                            {t("Cancel")}
                           </button>
                         </div>
                       ) : (
@@ -302,7 +304,7 @@ export default function PositionsPage() {
                     </td>
                     <td className="px-4 py-3 text-gray-500">
                       {!held && !inApprovals ? (
-                        <span className="text-gray-300">Not used</span>
+                        <span className="text-gray-300">{t("Not used")}</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {held && (
@@ -310,7 +312,7 @@ export default function PositionsPage() {
                               className="text-[11px] px-2 py-0.5 rounded-full bg-sky-100 text-sky-700"
                               title={u.people.join(", ")}
                             >
-                              {u.people.length} on the register
+                              {t("{count} on the register", { count: u.people.length })}
                             </span>
                           )}
                           {inApprovals && (
@@ -320,7 +322,7 @@ export default function PositionsPage() {
                                 ...new Set(u.approvals.map((a) => a.projectName)),
                               ].join(", ")}
                             >
-                              {u.approvals.length} in approvals
+                              {t("{count} in approvals", { count: u.approvals.length })}
                             </span>
                           )}
                         </div>
@@ -338,7 +340,7 @@ export default function PositionsPage() {
                             title={inApprovals ? lockedReason : undefined}
                             className="text-primary text-xs font-medium hover:underline disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
                           >
-                            Rename
+                            {t("Rename")}
                           </button>
                           <button
                             onClick={() => remove(name)}
@@ -346,7 +348,7 @@ export default function PositionsPage() {
                             title={lockedReason || undefined}
                             className="ml-3 text-risk-high text-xs font-medium hover:underline disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
                           >
-                            Remove
+                            {t("Remove")}
                           </button>
                         </>
                       )}
@@ -360,15 +362,9 @@ export default function PositionsPage() {
       )}
 
       <div className="mt-6 max-w-3xl rounded-xl border border-gray-200 bg-white p-4">
-        <p className="text-sm font-medium text-dark">Why some cannot be changed</p>
+        <p className="text-sm font-medium text-dark">{t("Why some cannot be changed")}</p>
         <p className="text-xs text-gray-500 mt-1">
-          When a fund application is submitted, the people who have to approve it
-          are frozen onto the record, and each decision stores the position the
-          approver held at the time. Those are the school&rsquo;s record of who
-          authorised spending. A position that appears in one cannot be renamed
-          or removed, or the record would describe a role that no longer exists.
-          A position somebody merely holds can still be renamed, and they move
-          with it.
+          {t("When a fund application is submitted, the people who have to approve it are frozen onto the record, and each decision stores the position the approver held at the time. Those are the school’s record of who authorised spending. A position that appears in one cannot be renamed or removed, or the record would describe a role that no longer exists. A position somebody merely holds can still be renamed, and they move with it.")}
         </p>
       </div>
     </div>

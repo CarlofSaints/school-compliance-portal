@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
+import { useT } from "@/components/I18nProvider";
 import { STATUS_LABELS } from "@/lib/actionItems";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
 
@@ -26,6 +27,7 @@ export default function ActionProgressModal({
   onSaved,
   onError,
 }: Props) {
+  const t = useT();
   const [progress, setProgress] = useState(item.progress);
   const [status, setStatus] = useState<ActionStatus>(item.status);
   const [note, setNote] = useState("");
@@ -51,7 +53,7 @@ export default function ActionProgressModal({
     setSaving(false);
 
     if (!res.ok) {
-      const message = await apiErrorMessage(res, "Could not save that update");
+      const message = await apiErrorMessage(res, t("Could not save that update"));
       setError(message);
       onError(message);
       return;
@@ -59,7 +61,7 @@ export default function ActionProgressModal({
     // The saved record, not a refetch. A read straight after a write can still
     // serve the previous copy of the blob, which shows the row unchanged and
     // makes a save that worked look like one that did not.
-    onSaved(`${item.ref} updated`, await res.json());
+    onSaved(t("{ref} updated", { ref: item.ref }), await res.json());
   };
 
   return (
@@ -71,7 +73,7 @@ export default function ActionProgressModal({
     >
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-dark">Update progress</h2>
+          <h2 className="font-semibold text-dark">{t("Update progress")}</h2>
           <p className="text-xs text-gray-500 mt-1">
             {item.ref} · {item.title}
           </p>
@@ -80,7 +82,7 @@ export default function ActionProgressModal({
         <div className="p-6 space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              How far along is it? {progress}%
+              {t("How far along is it? {progress}%", { progress })}
             </label>
             <input
               type="range"
@@ -95,7 +97,7 @@ export default function ActionProgressModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status
+              {t("Status")}
             </label>
             <select
               value={status}
@@ -104,33 +106,32 @@ export default function ActionProgressModal({
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {STATUS_LABELS[s]}
+                  {t(STATUS_LABELS[s])}
                 </option>
               ))}
             </select>
             {status === "done" && (
               <p className="text-xs text-gray-400 mt-1">
-                Marking it done saves it at 100% and stops the reminders.
+                {t("Marking it done saves it at 100% and stops the reminders.")}
               </p>
             )}
             {status === "blocked" && (
               <p className="text-xs text-gray-400 mt-1">
-                Say what it is waiting on in the note, so the next meeting can
-                unblock it.
+                {t("Say what it is waiting on in the note, so the next meeting can unblock it.")}
               </p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              What has happened since last time?
+              {t("What has happened since last time?")}
             </label>
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
               maxLength={2000}
-              placeholder="e.g. Two quotes received, third promised by Friday."
+              placeholder={t("e.g. Two quotes received, third promised by Friday.")}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             />
           </div>
@@ -138,7 +139,7 @@ export default function ActionProgressModal({
           {item.updates.length > 0 && (
             <div className="border-t border-gray-100 pt-4">
               <p className="text-sm font-medium text-gray-700 mb-2">
-                Progress so far
+                {t("Progress so far")}
               </p>
               <ul className="space-y-2 max-h-48 overflow-y-auto">
                 {item.updates.map((u) => (
@@ -148,7 +149,7 @@ export default function ActionProgressModal({
                   >
                     <span className="block text-gray-500">
                       {new Date(u.at).toLocaleString()} · {u.byName} ·{" "}
-                      {u.progress}% · {STATUS_LABELS[u.status]}
+                      {u.progress}% · {t(STATUS_LABELS[u.status])}
                     </span>
                     {u.note && <span className="block mt-1">{u.note}</span>}
                   </li>
@@ -165,14 +166,14 @@ export default function ActionProgressModal({
             onClick={onClose}
             className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium"
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             onClick={save}
             disabled={saving}
             className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium"
           >
-            {saving ? "Saving..." : "Save update"}
+            {saving ? t("Saving...") : t("Save update")}
           </button>
         </div>
       </div>

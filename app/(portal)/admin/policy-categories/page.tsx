@@ -4,8 +4,10 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { REQUIRED_POLICY_CATEGORY } from "@/lib/policyCategories";
+import { useT } from "@/components/I18nProvider";
 
 export default function PolicyCategoriesPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_policies");
   const [categories, setCategories] = useState<string[]>([]);
   // How many policies sit in each category, so a category is never removed
@@ -72,7 +74,7 @@ export default function PolicyCategoriesPage() {
     const value = adding.trim();
     if (!value) return;
     if (categories.some((c) => c.toLowerCase() === value.toLowerCase())) {
-      setToast({ message: `"${value}" is already on the list`, type: "error" });
+      setToast({ message: t("\"{value}\" is already on the list", { value }), type: "error" });
       return;
     }
     setCategories((prev) => [...prev, value]);
@@ -92,13 +94,13 @@ export default function PolicyCategoriesPage() {
       const saved = await res.json();
       if (Array.isArray(saved)) setCategories(saved);
       setDirty(false);
-      setToast({ message: "Policy categories saved", type: "success" });
+      setToast({ message: t("Policy categories saved"), type: "success" });
     } else {
-      setToast({ message: "Could not save the categories", type: "error" });
+      setToast({ message: t("Could not save the categories"), type: "error" });
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -112,9 +114,9 @@ export default function PolicyCategoriesPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Policy Categories</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Policy Categories")}</h1>
           <p className="text-gray-500 text-sm">
-            How policies are filed in the repository
+            {t("How policies are filed in the repository")}
           </p>
         </div>
         <button
@@ -122,7 +124,7 @@ export default function PolicyCategoriesPage() {
           disabled={saving || !dirty}
           className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          {saving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
+          {saving ? t("Saving...") : dirty ? t("Save Changes") : t("Saved")}
         </button>
       </div>
 
@@ -143,22 +145,24 @@ export default function PolicyCategoriesPage() {
                 />
                 <span className="text-xs text-gray-400 w-28 text-right">
                   {inUse === 0
-                    ? "not used"
-                    : `${inUse} ${inUse === 1 ? "policy" : "policies"}`}
+                    ? t("not used")
+                    : inUse === 1
+                      ? t("{count} policy", { count: inUse })
+                      : t("{count} policies", { count: inUse })}
                 </span>
                 {required ? (
                   <span
                     className="text-xs text-gray-400 w-16 text-right"
-                    title="Used when a policy is uploaded without a category, so it cannot be removed"
+                    title={t("Used when a policy is uploaded without a category, so it cannot be removed")}
                   >
-                    required
+                    {t("required")}
                   </span>
                 ) : (
                   <button
                     onClick={() => remove(i)}
                     className="text-risk-high hover:text-red-700 text-xs font-medium w-16 text-right"
                   >
-                    Remove
+                    {t("Remove")}
                   </button>
                 )}
               </div>
@@ -170,7 +174,7 @@ export default function PolicyCategoriesPage() {
           <input
             type="text"
             value={adding}
-            placeholder="Add a category..."
+            placeholder={t("Add a category...")}
             onChange={(e) => setAdding(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -184,15 +188,12 @@ export default function PolicyCategoriesPage() {
             onClick={add}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            Add
+            {t("Add")}
           </button>
         </div>
 
         <p className="text-xs text-gray-400 mt-4">
-          Removing a category does not change the policies already filed under
-          it — they keep it, and it stays on their dropdown until you move them.
-          Renaming one here does not rename it on those policies either; change
-          them on the Policies page.
+          {t("Removing a category does not change the policies already filed under it — they keep it, and it stays on their dropdown until you move them. Renaming one here does not rename it on those policies either; change them on the Policies page.")}
         </p>
       </div>
     </div>

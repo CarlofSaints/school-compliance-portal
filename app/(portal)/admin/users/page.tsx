@@ -3,6 +3,7 @@
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 
 
@@ -47,6 +48,7 @@ interface PersonRecord {
 }
 
 export default function UsersPage() {
+  const t = useT();
   // Open to anyone who may view users; editing is gated separately below.
   const { session, loading } = useAuth(["view_users", "manage_users"]);
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -215,7 +217,7 @@ export default function UsersPage() {
     // would quietly file somebody as whatever happened to be first in the list.
     if (form.personId === NEW_PERSON && !form.position) {
       setToast({
-        message: "Choose the position this person holds on the register.",
+        message: t("Choose the position this person holds on the register."),
         type: "error",
       });
       return;
@@ -239,8 +241,8 @@ export default function UsersPage() {
         const linked = await linkPerson(editUser.id);
         setToast({
           message: linked
-            ? "User updated"
-            : "User updated, but the People link could not be saved",
+            ? t("User updated")
+            : t("User updated, but the People link could not be saved"),
           type: linked ? "success" : "error",
         });
         setShowModal(false);
@@ -250,7 +252,7 @@ export default function UsersPage() {
       }
     } else {
       if (!form.password) {
-        setToast({ message: "Password is required", type: "error" });
+        setToast({ message: t("Password is required"), type: "error" });
         return;
       }
       const res = await authFetch("/api/users", {
@@ -265,8 +267,8 @@ export default function UsersPage() {
           : true;
         setToast({
           message: linked
-            ? "User created"
-            : "User created, but the People link could not be saved",
+            ? t("User created")
+            : t("User created, but the People link could not be saved"),
           type: linked ? "success" : "error",
         });
         setShowModal(false);
@@ -278,10 +280,10 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this user?")) return;
+    if (!confirm(t("Delete this user?"))) return;
     const res = await authFetch(`/api/users/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setToast({ message: "User deleted", type: "success" });
+      setToast({ message: t("User deleted"), type: "success" });
       fetchData();
     }
   };
@@ -302,17 +304,17 @@ export default function UsersPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setToast({
-          message: data.error || "Could not send the email.",
+          message: data.error || t("Could not send the email."),
           type: "error",
         });
         return;
       }
       setToast({
-        message: `Sent to ${data.sentTo || user.email}. The link expires in ${data.expiresInMinutes ?? 60} minutes.`,
+        message: t("Sent to {email}. The link expires in {minutes} minutes.", { email: data.sentTo || user.email, minutes: data.expiresInMinutes ?? 60 }),
         type: "success",
       });
     } catch {
-      setToast({ message: "Could not send the email.", type: "error" });
+      setToast({ message: t("Could not send the email."), type: "error" });
     } finally {
       setSendingTo(null);
     }
@@ -327,23 +329,29 @@ export default function UsersPage() {
     if (res.ok) {
       const result = await res.json();
       const secured = result.backfilled
-        ? ` ${result.backfilled} existing ${result.backfilled === 1 ? "account is" : "accounts are"} now stored so they can be restored in full if the list ever loses them.`
+        ? " " +
+          (result.backfilled === 1
+            ? t("{count} existing account is now stored so it can be restored in full if the list ever loses it.", { count: result.backfilled })
+            : t("{count} existing accounts are now stored so they can be restored in full if the list ever loses them.", { count: result.backfilled }))
         : "";
       setNotice(
         result.count === 0
-          ? `Nothing missing. Every account in storage is already listed.${secured}`
-          : `Put back ${result.count} ${result.count === 1 ? "account" : "accounts"}: ${result.restored
+          ? t("Nothing missing. Every account in storage is already listed.") + secured
+          : (result.count === 1
+              ? t("Put back {count} account:", { count: result.count })
+              : t("Put back {count} accounts:", { count: result.count })) +
+            ` ${result.restored
               .map((u: { name: string; email: string }) => `${u.name} (${u.email})`)
               .join(", ")}.`
       );
       fetchData();
     } else {
-      setNotice("The user list could not be rebuilt.");
+      setNotice(t("The user list could not be rebuilt."));
     }
     setRepairing(false);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -351,11 +359,11 @@ export default function UsersPage() {
 
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Users</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Users")}</h1>
           <p className="text-gray-500 text-sm">
             {canManage
-              ? "Manage user accounts"
-              : "Who is on the portal, and what they are tagged as"}
+              ? t("Manage user accounts")
+              : t("Who is on the portal, and what they are tagged as")}
           </p>
         </div>
         {canManage && (
@@ -363,16 +371,16 @@ export default function UsersPage() {
             <button
               onClick={rebuildFromStorage}
               disabled={repairing}
-              title="Finds accounts that are in storage but missing from this list, and puts them back"
+              title={t("Finds accounts that are in storage but missing from this list, and puts them back")}
               className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
-              {repairing ? "Checking..." : "Rebuild list from storage"}
+              {repairing ? t("Checking...") : t("Rebuild list from storage")}
             </button>
             <button
               onClick={openCreate}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              + Add User
+              {t("+ Add User")}
             </button>
           </div>
         )}
@@ -388,13 +396,13 @@ export default function UsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Name</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Email</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Role</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Tags</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Person</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Status</th>
-              <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Name")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Email")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Role")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Tags")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Person")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Status")}</th>
+              <th className="text-right px-6 py-3 font-medium text-gray-500">{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -457,9 +465,9 @@ export default function UsersPage() {
                   </td>
                   <td className="px-6 py-4">
                     {user.forcePasswordChange ? (
-                      <span className="text-risk-medium text-xs">Never signed in</span>
+                      <span className="text-risk-medium text-xs">{t("Never signed in")}</span>
                     ) : (
-                      <span className="text-emerald-600 text-xs">Active</span>
+                      <span className="text-emerald-600 text-xs">{t("Active")}</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -473,27 +481,27 @@ export default function UsersPage() {
                           <button
                             onClick={() => resendLoginEmail(user)}
                             disabled={sendingTo === user.id}
-                            title={`Email ${user.email} a link to choose their own password`}
+                            title={t("Email {email} a link to choose their own password", { email: user.email })}
                             className="text-primary hover:text-primary-dark mr-3 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            {sendingTo === user.id ? "Sending..." : "Resend login email"}
+                            {sendingTo === user.id ? t("Sending...") : t("Resend login email")}
                           </button>
                         )}
                         <button
                           onClick={() => openEdit(user)}
                           className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
                         >
-                          Edit
+                          {t("Edit")}
                         </button>
                         <button
                           onClick={() => handleDelete(user.id)}
                           className="text-risk-high hover:text-red-700 text-xs font-medium"
                         >
-                          Delete
+                          {t("Delete")}
                         </button>
                       </>
                     ) : (
-                      <span className="text-gray-300 text-xs">View only</span>
+                      <span className="text-gray-300 text-xs">{t("View only")}</span>
                     )}
                   </td>
                 </tr>
@@ -502,7 +510,7 @@ export default function UsersPage() {
             {users.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
-                  No users yet.
+                  {t("No users yet.")}
                 </td>
               </tr>
             )}
@@ -515,7 +523,7 @@ export default function UsersPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100">
-              <h2 className="text-lg font-semibold">{editUser ? "Edit User" : "Create User"}</h2>
+              <h2 className="text-lg font-semibold">{editUser ? t("Edit User") : t("Create User")}</h2>
             </div>
             {/* This form creates an account for SOMEBODY ELSE, so the
                 browser's saved logins must not be offered here: Chrome will
@@ -529,7 +537,7 @@ export default function UsersPage() {
             >
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
                   <input
                     type="text"
                     value={form.name}
@@ -540,7 +548,7 @@ export default function UsersPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Surname</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t("Surname")}</label>
                   <input
                     type="text"
                     value={form.surname}
@@ -552,7 +560,7 @@ export default function UsersPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Email")}</label>
                 <input
                   type="email"
                   value={form.email}
@@ -564,7 +572,7 @@ export default function UsersPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password {editUser && "(leave blank to keep current)"}
+                  {t("Password")} {editUser && t("(leave blank to keep current)")}
                 </label>
                 <div className="relative">
                   <input
@@ -580,12 +588,12 @@ export default function UsersPage() {
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs"
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    {showPassword ? t("Hide") : t("Show")}
                   </button>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Role")}</label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
@@ -609,19 +617,18 @@ export default function UsersPage() {
                 </select>
                 {roles.length === 0 && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Changing the role needs the Manage Roles &amp; Permissions
-                    permission.
+                    {t("Changing the role needs the Manage Roles & Permissions permission.")}
                   </p>
                 )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags
+                  {t("Tags")}
                 </label>
                 {tags.length === 0 ? (
                   <p className="text-xs text-gray-400">
-                    No tags yet. Create them in Admin &gt; Tags.
+                    {t("No tags yet. Create them in Admin > Tags.")}
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
@@ -650,22 +657,22 @@ export default function UsersPage() {
                   </div>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
-                  Tags decide who has to approve a fund application.
+                  {t("Tags decide who has to approve a fund application.")}
                 </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Person
+                  {t("Person")}
                 </label>
                 <select
                   value={form.personId}
                   onChange={(e) => setForm({ ...form, personId: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 >
-                  <option value="">Not on the People register</option>
+                  <option value="">{t("Not on the People register")}</option>
                   {session?.permissions.includes("manage_people") && (
                     <option value={NEW_PERSON}>
-                      Add them to the People register
+                      {t("Add them to the People register")}
                     </option>
                   )}
                   {people.map((p) => {
@@ -681,7 +688,7 @@ export default function UsersPage() {
                         {p.position}
                         {p.name ? ` - ${p.name}` : ""}
                         {takenBy
-                          ? ` (already ${takenBy.name} ${takenBy.surname})`
+                          ? ` (${t("already")} ${takenBy.name} ${takenBy.surname})`
                           : ""}
                       </option>
                     );
@@ -690,7 +697,7 @@ export default function UsersPage() {
                 {form.personId === NEW_PERSON && (
                   <div className="mt-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Position on the register
+                      {t("Position on the register")}
                     </label>
                     <select
                       value={form.position}
@@ -699,7 +706,7 @@ export default function UsersPage() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                     >
-                      <option value="">Choose a position</option>
+                      <option value="">{t("Choose a position")}</option>
                       {positions.map((pos) => (
                         <option key={pos} value={pos}>
                           {pos}
@@ -710,8 +717,8 @@ export default function UsersPage() {
                 )}
                 <p className="text-xs text-gray-400 mt-1">
                   {form.personId === NEW_PERSON
-                    ? "The name and email typed above are used for the register entry, so there is nothing to type twice."
-                    : "Links this login to the People register. The same link can also be set from Admin > People."}
+                    ? t("The name and email typed above are used for the register entry, so there is nothing to type twice.")
+                    : t("Links this login to the People register. The same link can also be set from Admin > People.")}
                 </p>
               </div>
               <div className="flex items-center gap-4">
@@ -722,7 +729,7 @@ export default function UsersPage() {
                     onChange={(e) => setForm({ ...form, forcePasswordChange: e.target.checked })}
                     className="accent-primary"
                   />
-                  Force password change on login
+                  {t("Force password change on login")}
                 </label>
               </div>
               {!editUser && (
@@ -733,7 +740,7 @@ export default function UsersPage() {
                     onChange={(e) => setForm({ ...form, sendEmail: e.target.checked })}
                     className="accent-primary"
                   />
-                  Send welcome email with credentials
+                  {t("Send welcome email with credentials")}
                 </label>
               )}
               <div className="flex gap-3 pt-2">
@@ -741,14 +748,14 @@ export default function UsersPage() {
                   type="submit"
                   className="flex-1 bg-primary hover:bg-primary-dark text-white py-2 rounded-lg text-sm font-medium transition-colors"
                 >
-                  {editUser ? "Save Changes" : "Create User"}
+                  {editUser ? t("Save Changes") : t("Create User")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
                   className="px-6 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </form>

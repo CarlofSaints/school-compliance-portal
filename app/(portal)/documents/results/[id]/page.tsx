@@ -7,6 +7,7 @@ import ComplianceScore from "@/components/ComplianceScore";
 import ScoreNote from "@/components/ScoreNote";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 
 interface DocDetail {
   document: {
@@ -32,6 +33,7 @@ interface DocDetail {
 }
 
 export default function DocumentResultsPage() {
+  const t = useT();
   const { session, loading } = useAuth("check_documents");
   const params = useParams();
   const docId = params.id as string;
@@ -54,16 +56,16 @@ export default function DocumentResultsPage() {
       method: "POST",
     });
     if (res.ok) {
-      setToast({ message: "Check complete", type: "success" });
+      setToast({ message: t("Check complete"), type: "success" });
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Check failed", type: "error" });
+      setToast({ message: err.error || t("Check failed"), type: "error" });
     }
     setChecking(false);
   };
 
-  if (loading || !data) return <div className="p-6">Loading...</div>;
+  if (loading || !data) return <div className="p-6">{t("Loading...")}</div>;
 
   const { document: doc, checks } = data;
   const latestCheck = checks[0];
@@ -77,7 +79,7 @@ export default function DocumentResultsPage() {
           <h1 className="text-2xl font-bold text-dark">{doc.name}</h1>
           <p className="text-gray-500 text-sm mt-1">{doc.description}</p>
           <p className="text-xs text-gray-400 mt-1">
-            {doc.filename} &middot; Uploaded{" "}
+            {doc.filename} &middot; {t("Uploaded")}{" "}
             {new Date(doc.uploadedAt).toLocaleDateString()}
           </p>
         </div>
@@ -86,14 +88,14 @@ export default function DocumentResultsPage() {
           disabled={checking}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
         >
-          {checking ? "Checking..." : "Run Check"}
+          {checking ? t("Checking...") : t("Run Check")}
         </button>
       </div>
 
       {latestCheck && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <p className="text-sm text-gray-500 mb-2">Latest Score</p>
+            <p className="text-sm text-gray-500 mb-2">{t("Latest Score")}</p>
             <ComplianceScore score={latestCheck.score} size="lg" />
             <p className="text-xs text-gray-400 mt-2">
               {new Date(latestCheck.checkedAt).toLocaleString()}
@@ -106,7 +108,7 @@ export default function DocumentResultsPage() {
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <p className="text-sm text-gray-600 mb-4">{latestCheck.summary}</p>
             <h3 className="text-sm font-medium text-gray-500 mb-3">
-              RISKS ({latestCheck.risks.length})
+              {t("RISKS")} ({latestCheck.risks.length})
             </h3>
             <div className="space-y-3">
               {latestCheck.risks.map((risk, i) => (
@@ -117,7 +119,7 @@ export default function DocumentResultsPage() {
                   </div>
                   <p className="text-sm text-gray-600">{risk.description}</p>
                   <p className="text-xs text-gray-400 mt-1">
-                    Ref: {risk.guideline_reference}
+                    {t("Ref:")} {risk.guideline_reference}
                   </p>
                   <p className="text-xs text-primary mt-1">
                     {risk.suggestion}
@@ -125,7 +127,7 @@ export default function DocumentResultsPage() {
                 </div>
               ))}
               {latestCheck.risks.length === 0 && (
-                <p className="text-sm text-emerald-600">No risks found.</p>
+                <p className="text-sm text-emerald-600">{t("No risks found.")}</p>
               )}
             </div>
           </div>
@@ -134,7 +136,7 @@ export default function DocumentResultsPage() {
 
       {!latestCheck && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
-          No checks run yet. Click &quot;Run Check&quot; to analyze this document.
+          {t("No checks run yet. Click \"Run Check\" to analyze this document.")}
         </div>
       )}
     </div>

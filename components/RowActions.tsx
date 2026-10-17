@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useT } from "@/components/I18nProvider";
 
 export interface RowAction {
   label: string;
@@ -14,6 +15,7 @@ export interface RowAction {
 // native <details> does not close on Escape or on a click elsewhere, which
 // leaves menus hanging open all over a grid.
 export default function RowActions({ actions }: { actions: RowAction[] }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -51,7 +53,7 @@ export default function RowActions({ actions }: { actions: RowAction[] }) {
         aria-expanded={open}
         className="px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-100 text-xs font-medium"
       >
-        Actions ▾
+        {t("Actions")} ▾
       </button>
       {open && (
         <div
@@ -67,7 +69,7 @@ export default function RowActions({ actions }: { actions: RowAction[] }) {
                 className="block px-3 py-2 text-xs text-gray-700 hover:bg-gray-50"
                 onClick={() => setOpen(false)}
               >
-                {action.label}
+                {t(action.label)}
               </Link>
             ) : (
               <button
@@ -82,7 +84,7 @@ export default function RowActions({ actions }: { actions: RowAction[] }) {
                   action.danger ? "text-risk-high" : "text-gray-700"
                 }`}
               >
-                {action.label}
+                {t(action.label)}
               </button>
             )
           )}

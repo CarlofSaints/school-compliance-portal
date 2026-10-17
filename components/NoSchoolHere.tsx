@@ -7,23 +7,25 @@
 // hostnames infinite.
 //
 // Says plainly that there is no school here, and sends them somewhere useful.
-export default function NoSchoolHere({ hostname }: { hostname?: string }) {
+import { getT } from "@/lib/i18n/server";
+
+export default async function NoSchoolHere({ hostname }: { hostname?: string }) {
+  const t = await getT();
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="max-w-md w-full text-center">
-        <h1 className="text-2xl font-bold text-dark">No school at this address</h1>
+        <h1 className="text-2xl font-bold text-dark">{t("No school at this address")}</h1>
         <p className="text-gray-600 mt-3">
           {hostname ? (
             <>
-              Nothing is set up at <strong>{hostname}</strong> yet.
+              {t("Nothing is set up at")} <strong>{hostname}</strong> {t("yet.")}
             </>
           ) : (
-            <>Nothing is set up at this address yet.</>
+            <>{t("Nothing is set up at this address yet.")}</>
           )}
         </p>
         <p className="text-gray-500 mt-4 text-sm">
-          Check the address with whoever set up your school&apos;s portal. If you
-          are looking to set one up, you can start below.
+          {t("Check the address with whoever set up your school's portal. If you are looking to set one up, you can start below.")}
         </p>
         {/* 🔴 /start on THIS host, not the marketing site. Somebody who typed
             their school's address before it existed is one click from creating
@@ -33,14 +35,14 @@ export default function NoSchoolHere({ hostname }: { hostname?: string }) {
           href="/start"
           className="inline-block mt-8 bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg font-medium transition-colors"
         >
-          Set a school up
+          {t("Set a school up")}
         </a>
         <p className="mt-4 text-sm">
           <a
             href="https://schoolcompliance.co.za"
             className="text-gray-500 hover:underline"
           >
-            Or read about School Compliance first
+            {t("Or read about School Compliance first")}
           </a>
         </p>
       </div>

@@ -7,6 +7,9 @@ import DashboardCard from "@/components/DashboardCard";
 import ScoreNote from "@/components/ScoreNote";
 import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
+import type { T } from "@/lib/i18n/translate";
 import { pendingSpendCount } from "@/lib/spendReport";
 import {
   summarise,
@@ -43,20 +46,21 @@ interface CheckSummary {
 // A function of the short name, not a constant: one label names the school,
 // and that is resolved per request now rather than at build time.
 const dashStatusMeta = (
-  shortName: string
+  shortName: string,
+  t: T
 ): { key: keyof StatusCounts; label: string; text: string }[] => [
-  { key: "needs_addressing", label: "Needs to be addressed", text: "text-risk-high" },
-  { key: "in_progress", label: "In progress", text: "text-amber-600" },
-  { key: "addressed", label: "Addressed in new policy", text: "text-emerald-600" },
-  { key: "not_an_issue", label: `Not an issue for ${shortName}`, text: "text-gray-600" },
+  { key: "needs_addressing", label: t("Needs to be addressed"), text: "text-risk-high" },
+  { key: "in_progress", label: t("In progress"), text: "text-amber-600" },
+  { key: "addressed", label: t("Addressed in new policy"), text: "text-emerald-600" },
+  { key: "not_an_issue", label: t("Not an issue for {shortName}", { shortName }), text: "text-gray-600" },
 ];
 
 // Compact per-row pills for the grid's Status column.
 const STATUS_PILLS: { key: keyof StatusCounts; short: string; pill: string }[] = [
-  { key: "needs_addressing", short: "to address", pill: "bg-red-100 text-red-700" },
-  { key: "in_progress", short: "in progress", pill: "bg-amber-100 text-amber-700" },
-  { key: "addressed", short: "addressed", pill: "bg-emerald-100 text-emerald-700" },
-  { key: "not_an_issue", short: "not an issue", pill: "bg-gray-100 text-gray-600" },
+  { key: "needs_addressing", short: tk("to address"), pill: "bg-red-100 text-red-700" },
+  { key: "in_progress", short: tk("in progress"), pill: "bg-amber-100 text-amber-700" },
+  { key: "addressed", short: tk("addressed"), pill: "bg-emerald-100 text-emerald-700" },
+  { key: "not_an_issue", short: tk("not an issue"), pill: "bg-gray-100 text-gray-600" },
 ];
 
 const ACTION_TILES: {
@@ -64,15 +68,16 @@ const ACTION_TILES: {
   label: string;
   text: string;
 }[] = [
-  { key: "open", label: "Open actions", text: "text-dark" },
-  { key: "overdue", label: "Overdue", text: "text-risk-high" },
-  { key: "dueThisWeek", label: "Due in 7 days", text: "text-risk-medium" },
-  { key: "blocked", label: "Blocked", text: "text-risk-high" },
+  { key: "open", label: tk("Open actions"), text: "text-dark" },
+  { key: "overdue", label: tk("Overdue"), text: "text-risk-high" },
+  { key: "dueThisWeek", label: tk("Due in 7 days"), text: "text-risk-medium" },
+  { key: "blocked", label: tk("Blocked"), text: "text-risk-high" },
 ];
 
 export default function DashboardPage() {
+  const t = useT();
   const branding = useBranding();
-  const DASH_STATUS_META = dashStatusMeta(branding.shortName);
+  const DASH_STATUS_META = dashStatusMeta(branding.shortName, t);
   const { session, loading } = useAuth("view_dashboard");
   const [checks, setChecks] = useState<CheckSummary[]>([]);
   const [pendingSpend, setPendingSpend] = useState(0);
@@ -141,14 +146,14 @@ export default function DashboardPage() {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 5);
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
         <h1 className="text-2xl font-bold text-dark">
-          Welcome, {session?.name}
+          {t("Welcome,")} {session?.name}
         </h1>
         <p className="text-gray-500 text-sm">
           {branding.fullName} {branding.tagline}
@@ -159,9 +164,9 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <DashboardCard
-          title="Total Policies"
+          title={t("Total Policies")}
           value={totalPolicies}
-          subtitle="Uploaded to repository"
+          subtitle={t("Uploaded to repository")}
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -169,12 +174,12 @@ export default function DashboardPage() {
           }
         />
         <DashboardCard
-          title="Compliance Checks"
+          title={t("Compliance Checks")}
           value={totalChecks}
           subtitle={
             totalChecks === 0
-              ? "Total checks run"
-              : `${policyChecks} on policies, ${documentChecks} on other documents`
+              ? t("Total checks run")
+              : t("{policyChecks} on policies, {documentChecks} on other documents", { policyChecks, documentChecks })
           }
           color="bg-emerald-500"
           icon={
@@ -184,9 +189,9 @@ export default function DashboardPage() {
           }
         />
         <DashboardCard
-          title="Non-Compliant"
+          title={t("Non-Compliant")}
           value={nonCompliant}
-          subtitle="Checks with issues"
+          subtitle={t("Checks with issues")}
           color="bg-risk-high"
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,12 +200,12 @@ export default function DashboardPage() {
           }
         />
         <DashboardCard
-          title="Spend Pending"
+          title={t("Spend Pending")}
           value={pendingSpend}
           subtitle={
             financialYear
-              ? `Awaiting approval · FY ${financialYear}`
-              : "Awaiting approval"
+              ? t("Awaiting approval · FY {financialYear}", { financialYear })
+              : t("Awaiting approval")
           }
           color="bg-risk-low"
           icon={
@@ -213,21 +218,21 @@ export default function DashboardPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-dark">Action Items</h2>
+          <h2 className="text-lg font-semibold text-dark">{t("Action Items")}</h2>
           <Link
             href="/action-items"
             className="text-primary hover:underline text-sm"
           >
-            Open the register
+            {t("Open the register")}
           </Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {ACTION_TILES.map((t) => (
-            <div key={t.key} className="border border-gray-100 rounded-lg p-4">
-              <p className={`text-3xl font-bold ${t.text}`}>
-                {actionSummary[t.key]}
+          {ACTION_TILES.map((tile) => (
+            <div key={tile.key} className="border border-gray-100 rounded-lg p-4">
+              <p className={`text-3xl font-bold ${tile.text}`}>
+                {actionSummary[tile.key]}
               </p>
-              <p className="text-xs text-gray-500 mt-1">{t.label}</p>
+              <p className="text-xs text-gray-500 mt-1">{t(tile.label)}</p>
             </div>
           ))}
         </div>
@@ -246,7 +251,7 @@ export default function DashboardPage() {
                     <span className="text-dark">{a.title}</span>
                     <span className="block text-xs text-gray-400">
                       {a.assigneeNames.filter(Boolean).join(", ") ||
-                        "Nobody assigned"}
+                        t("Nobody assigned")}
                     </span>
                   </span>
                   <span
@@ -254,7 +259,7 @@ export default function DashboardPage() {
                       late ? "text-risk-high font-medium" : "text-gray-500"
                     }`}
                   >
-                    {a.dueDate ? duePhrase(a.dueDate, days) : "No ETA"}
+                    {a.dueDate ? duePhrase(a.dueDate, days) : t("No ETA")}
                   </span>
                 </li>
               );
@@ -262,18 +267,18 @@ export default function DashboardPage() {
           </ul>
         ) : (
           <p className="text-sm text-gray-500 mt-4">
-            Nothing open with a date on it.{" "}
+            {t("Nothing open with a date on it.")}{" "}
             <Link href="/action-items" className="text-primary hover:underline">
-              Raise an action
+              {t("Raise an action")}
             </Link>
-            {" "}to have it chased automatically.
+            {" "}{t("to have it chased automatically.")}
           </p>
         )}
       </div>
 
       {checks.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
-          <h2 className="text-lg font-semibold text-dark mb-4">Issues by Status</h2>
+          <h2 className="text-lg font-semibold text-dark mb-4">{t("Issues by Status")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {DASH_STATUS_META.map((s) => (
               <div key={s.key} className="border border-gray-100 rounded-lg p-4">
@@ -284,25 +289,27 @@ export default function DashboardPage() {
           </div>
           {statusTotals.unreviewed > 0 && (
             <p className="text-xs text-gray-400 mt-3">
-              {statusTotals.unreviewed} issue{statusTotals.unreviewed === 1 ? "" : "s"} not yet reviewed.
+              {statusTotals.unreviewed === 1
+                ? t("{count} issue not yet reviewed.", { count: statusTotals.unreviewed })
+                : t("{count} issues not yet reviewed.", { count: statusTotals.unreviewed })}
             </p>
           )}
         </div>
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
-        <h2 className="text-lg font-semibold text-dark mb-4">Compliance Checks</h2>
+        <h2 className="text-lg font-semibold text-dark mb-4">{t("Compliance Checks")}</h2>
         {checks.length === 0 ? (
           <p className="text-sm text-gray-500">
-            Nothing has been checked yet. Run a check from the{" "}
+            {t("Nothing has been checked yet. Run a check from the")}{" "}
             <Link href="/compliance" className="text-primary hover:underline">
-              Compliance Check
+              {t("Compliance Check")}
             </Link>{" "}
-            page, or straight from a row on the{" "}
+            {t("page, or straight from a row on the")}{" "}
             <Link href="/policies" className="text-primary hover:underline">
-              Policies
+              {t("Policies")}
             </Link>{" "}
-            page.
+            {t("page.")}
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -310,13 +317,13 @@ export default function DashboardPage() {
               <thead>
                 <tr className="text-left text-gray-400 border-b border-gray-100">
                   <th className="pb-2 font-medium w-10">#</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Document</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Policy</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Score</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Issues to fix</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Status</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Checked by</th>
-                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">Date</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Document")}</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Policy")}</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Score")}</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Issues to fix")}</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Status")}</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Checked by")}</th>
+                  <th className="pb-2 pr-4 font-medium whitespace-nowrap">{t("Date")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -340,9 +347,9 @@ export default function DashboardPage() {
                           {c.policyName}
                         </Link>
                       ) : c.policyId ? (
-                        <span className="text-gray-400">Policy deleted</span>
+                        <span className="text-gray-400">{t("Policy deleted")}</span>
                       ) : (
-                        <span className="text-gray-400">Not in the register</span>
+                        <span className="text-gray-400">{t("Not in the register")}</span>
                       )}
                     </td>
                     <td className="py-3 pr-4 align-top">
@@ -360,10 +367,10 @@ export default function DashboardPage() {
                     </td>
                     <td className="py-3 pr-4 align-top">
                       {c.issueCount === 0 ? (
-                        <span className="text-emerald-600">None</span>
+                        <span className="text-emerald-600">{t("None")}</span>
                       ) : (
                         <span className="text-gray-700">
-                          {c.issueCount} {c.issueCount === 1 ? "issue" : "issues"}
+                          {c.issueCount === 1 ? t("{count} issue", { count: c.issueCount }) : t("{count} issues", { count: c.issueCount })}
                         </span>
                       )}
                     </td>
@@ -378,13 +385,13 @@ export default function DashboardPage() {
                                 key={s.key}
                                 className={`text-[11px] px-1.5 py-0.5 rounded ${s.pill}`}
                               >
-                                {c.statusCounts[s.key]} {s.short}
+                                {c.statusCounts[s.key]} {t(s.short)}
                               </span>
                             ) : null
                           )}
                           {c.statusCounts.unreviewed > 0 && (
                             <span className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">
-                              {c.statusCounts.unreviewed} untagged
+                              {t("{count} untagged", { count: c.statusCounts.unreviewed })}
                             </span>
                           )}
                         </div>
@@ -406,7 +413,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-dark mb-4">Quick Actions</h2>
+        <h2 className="text-lg font-semibold text-dark mb-4">{t("Quick Actions")}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {session?.permissions.includes("upload_policies") && (
             <Link
@@ -414,10 +421,10 @@ export default function DashboardPage() {
               className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors group"
             >
               <h3 className="font-medium text-dark group-hover:text-primary">
-                Upload Policy
+                {t("Upload Policy")}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                Add a new policy to the repository
+                {t("Add a new policy to the repository")}
               </p>
             </Link>
           )}
@@ -427,10 +434,10 @@ export default function DashboardPage() {
               className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors group"
             >
               <h3 className="font-medium text-dark group-hover:text-primary">
-                Run Compliance Check
+                {t("Run Compliance Check")}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                Check a policy against guidelines
+                {t("Check a policy against guidelines")}
               </p>
             </Link>
           )}
@@ -440,10 +447,10 @@ export default function DashboardPage() {
               className="p-4 border border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors group"
             >
               <h3 className="font-medium text-dark group-hover:text-primary">
-                New Spend Application
+                {t("New Spend Application")}
               </h3>
               <p className="text-sm text-gray-500 mt-1">
-                Submit a spend request for approval
+                {t("Submit a spend request for approval")}
               </p>
             </Link>
           )}

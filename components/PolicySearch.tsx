@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useT } from "@/components/I18nProvider";
 
 interface PolicySearchProps {
   onSearch: (query: string) => void;
@@ -9,8 +10,9 @@ interface PolicySearchProps {
 
 export default function PolicySearch({
   onSearch,
-  placeholder = "Search policies...",
+  placeholder,
 }: PolicySearchProps) {
+  const t = useT();
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function PolicySearch({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t("Search policies...")}
         className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
       />
     </div>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
+import { useT } from "@/components/I18nProvider";
 import {
   ALL_RECIPIENTS,
   DEFAULT_ACTION_CATEGORIES,
@@ -72,6 +73,7 @@ export default function ActionItemForm({
   onSaved,
   onError,
 }: Props) {
+  const t = useT();
   const [title, setTitle] = useState(existing?.title || seed?.title || "");
   const [description, setDescription] = useState(
     existing?.description || seed?.description || ""
@@ -150,11 +152,11 @@ export default function ActionItemForm({
   const save = async () => {
     setError("");
     if (!title.trim()) {
-      setError("Give the action a name.");
+      setError(t("Give the action a name."));
       return;
     }
     if (remindOn && recipients.length === 0) {
-      setError("Choose at least one person for the reminders to go to.");
+      setError(t("Choose at least one person for the reminders to go to."));
       return;
     }
 
@@ -200,23 +202,24 @@ export default function ActionItemForm({
     setSaving(false);
 
     if (!res.ok) {
-      const message = await apiErrorMessage(res, "Could not save that action");
+      const message = await apiErrorMessage(res, t("Could not save that action"));
       setError(message);
       onError(message);
       return;
     }
 
     const saved = await res.json();
-    const emailed = saved.notified
-      ? `, ${saved.notified} notified by email`
-      : "";
     // The saved record goes back with the message, so the grid can show it
     // without a refetch. A read straight after a write can still serve the
     // previous copy of the blob.
     onSaved(
       existing
-        ? `${saved.ref} saved${emailed}`
-        : `${saved.ref} raised${emailed}`,
+        ? saved.notified
+          ? t("{ref} saved, {n} notified by email", { ref: saved.ref, n: saved.notified })
+          : t("{ref} saved", { ref: saved.ref })
+        : saved.notified
+          ? t("{ref} raised, {n} notified by email", { ref: saved.ref, n: saved.notified })
+          : t("{ref} raised", { ref: saved.ref }),
       saved
     );
   };
@@ -230,38 +233,38 @@ export default function ActionItemForm({
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
       <h2 className="font-semibold text-dark mb-4">
-        {existing ? `Edit ${existing.ref}` : "Raise an action"}
+        {existing ? t("Edit {ref}", { ref: existing.ref }) : t("Raise an action")}
       </h2>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
-            <label className={labelClass}>What has to be done</label>
+            <label className={labelClass}>{t("What has to be done")}</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
-              placeholder="e.g. Obtain three quotes for the hall roof"
+              placeholder={t("e.g. Obtain three quotes for the hall roof")}
               className={fieldClass}
             />
           </div>
 
           <div>
-            <label className={labelClass}>Detail</label>
+            <label className={labelClass}>{t("Detail")}</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
               maxLength={4000}
-              placeholder="What good looks like, and anything the person needs to know to start."
+              placeholder={t("What good looks like, and anything the person needs to know to start.")}
               className={`${fieldClass} resize-y`}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Category</label>
+              <label className={labelClass}>{t("Category")}</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
@@ -275,7 +278,7 @@ export default function ActionItemForm({
               </select>
             </div>
             <div>
-              <label className={labelClass}>Priority</label>
+              <label className={labelClass}>{t("Priority")}</label>
               <select
                 value={priority}
                 onChange={(e) =>
@@ -285,7 +288,7 @@ export default function ActionItemForm({
               >
                 {PRIORITIES.map((p) => (
                   <option key={p} value={p}>
-                    {PRIORITY_LABELS[p]}
+                    {t(PRIORITY_LABELS[p])}
                   </option>
                 ))}
               </select>
@@ -294,7 +297,7 @@ export default function ActionItemForm({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>ETA</label>
+              <label className={labelClass}>{t("ETA")}</label>
               <input
                 type="date"
                 value={dueDate}
@@ -302,11 +305,11 @@ export default function ActionItemForm({
                 className={fieldClass}
               />
               <p className="text-xs text-gray-400 mt-1">
-                An action with no ETA is never chased.
+                {t("An action with no ETA is never chased.")}
               </p>
             </div>
             <div>
-              <label className={labelClass}>Agreed at the meeting of</label>
+              <label className={labelClass}>{t("Agreed at the meeting of")}</label>
               <input
                 type="date"
                 value={meetingDate}
@@ -314,13 +317,13 @@ export default function ActionItemForm({
                 onChange={(e) => setMeetingDate(e.target.value)}
                 className={fieldClass}
               />
-              <p className="text-xs text-gray-400 mt-1">Optional.</p>
+              <p className="text-xs text-gray-400 mt-1">{t("Optional.")}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Status</label>
+              <label className={labelClass}>{t("Status")}</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as ActionStatus)}
@@ -328,13 +331,13 @@ export default function ActionItemForm({
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {STATUS_LABELS[s]}
+                    {t(STATUS_LABELS[s])}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className={labelClass}>Progress: {progress}%</label>
+              <label className={labelClass}>{t("Progress: {progress}%", { progress })}</label>
               <input
                 type="range"
                 min={0}
@@ -346,7 +349,7 @@ export default function ActionItemForm({
               />
               {status === "done" && (
                 <p className="text-xs text-gray-400 mt-1">
-                  A done action is saved at 100%.
+                  {t("A done action is saved at 100%.")}
                 </p>
               )}
             </div>
@@ -355,11 +358,10 @@ export default function ActionItemForm({
 
         <div className="space-y-4">
           <div>
-            <label className={labelClass}>Assigned to</label>
+            <label className={labelClass}>{t("Assigned to")}</label>
             {byPosition.length === 0 ? (
               <p className="text-sm text-gray-500 border border-gray-200 rounded-lg px-3 py-2">
-                Nobody is on the register yet. Add people under Admin, People
-                and Positions first.
+                {t("Nobody is on the register yet. Add people under Admin, People and Positions first.")}
               </p>
             ) : (
               <div className="border border-gray-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-gray-50">
@@ -378,7 +380,7 @@ export default function ActionItemForm({
                       {p.name || p.position}
                       <span className="block text-xs text-gray-400">
                         {p.position}
-                        {p.email ? ` · ${p.email}` : " · no email on file"}
+                        {p.email ? ` · ${p.email}` : ` · ${t("no email on file")}`}
                       </span>
                     </span>
                   </label>
@@ -386,8 +388,7 @@ export default function ActionItemForm({
               </div>
             )}
             <p className="text-xs text-gray-400 mt-1">
-              Somebody with no email on file can still carry an action, they
-              just cannot be reminded.
+              {t("Somebody with no email on file can still carry an action, they just cannot be reminded.")}
             </p>
           </div>
 
@@ -399,14 +400,14 @@ export default function ActionItemForm({
                 onChange={(e) => setRemindOn(e.target.checked)}
                 className="accent-primary"
               />
-              Chase this action by email
+              {t("Chase this action by email")}
             </label>
 
             {remindOn && (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelClass}>Days before the ETA</label>
+                    <label className={labelClass}>{t("Days before the ETA")}</label>
                     <input
                       type="number"
                       min={0}
@@ -418,7 +419,7 @@ export default function ActionItemForm({
                   </div>
                   <div>
                     <label className={labelClass}>
-                      Then every N days while late
+                      {t("Then every N days while late")}
                     </label>
                     <input
                       type="number"
@@ -431,7 +432,7 @@ export default function ActionItemForm({
                   </div>
                 </div>
                 <div>
-                  <p className={labelClass}>Reminders go to</p>
+                  <p className={labelClass}>{t("Reminders go to")}</p>
                   <div className="space-y-1">
                     {ALL_RECIPIENTS.map((r) => (
                       <label
@@ -444,16 +445,13 @@ export default function ActionItemForm({
                           onChange={() => toggleRecipient(r)}
                           className="accent-primary"
                         />
-                        {RECIPIENT_LABELS[r]}
+                        {t(RECIPIENT_LABELS[r])}
                       </label>
                     ))}
                   </div>
                 </div>
                 <p className="text-xs text-gray-400">
-                  A heads-up before the ETA, a nudge on the day, then a chase on
-                  that cycle until it is done. Set the repeat to 0 to stop after
-                  the day itself. Addresses are worked out when the reminder is
-                  sent, so a change of assignee is picked up automatically.
+                  {t("A heads-up before the ETA, a nudge on the day, then a chase on that cycle until it is done. Set the repeat to 0 to stop after the day itself. Addresses are worked out when the reminder is sent, so a change of assignee is picked up automatically.")}
                 </p>
               </>
             )}
@@ -467,11 +465,11 @@ export default function ActionItemForm({
               className="mt-1 accent-primary"
             />
             <span>
-              Email the people assigned now
+              {t("Email the people assigned now")}
               <span className="block text-xs text-gray-400">
                 {existing
-                  ? "Only anybody newly added to this action."
-                  : "So the first they hear of it is not a chase."}
+                  ? t("Only anybody newly added to this action.")
+                  : t("So the first they hear of it is not a chase.")}
               </span>
             </span>
           </label>
@@ -486,13 +484,13 @@ export default function ActionItemForm({
           disabled={saving}
           className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-6 py-2 rounded-lg text-sm font-medium"
         >
-          {saving ? "Saving..." : existing ? "Save changes" : "Raise the action"}
+          {saving ? t("Saving...") : existing ? t("Save changes") : t("Raise the action")}
         </button>
         <button
           onClick={onCancel}
           className="px-6 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
         >
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </div>

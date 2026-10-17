@@ -3,6 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, useRef } from "react";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 
 interface HandbookMeta {
   uploadedAt: string;
@@ -12,6 +13,7 @@ interface HandbookMeta {
 }
 
 export default function GuidePage() {
+  const t = useT();
   // Login only. The guide explains the portal to the people using it.
   const { session, loading } = useAuth();
   const [meta, setMeta] = useState<HandbookMeta | null>(null);
@@ -88,12 +90,12 @@ export default function GuidePage() {
     body.append("guide", file);
     const res = await authFetch("/api/handbook", { method: "POST", body });
     if (res.ok) {
-      setToast({ message: "The guide has been published.", type: "success" });
+      setToast({ message: t("The guide has been published."), type: "success" });
       await load();
     } else {
       const err = await res.json().catch(() => ({}));
       setToast({
-        message: err.error || "That guide could not be published.",
+        message: err.error || t("That guide could not be published."),
         type: "error",
       });
     }
@@ -101,7 +103,7 @@ export default function GuidePage() {
     setUploading(false);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-3rem)]">
@@ -111,13 +113,13 @@ export default function GuidePage() {
 
       <div className="flex items-start justify-between gap-4 mb-4 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-dark">{meta?.title || "Guide"}</h1>
+          <h1 className="text-2xl font-bold text-dark">{meta?.title || t("Guide")}</h1>
           <p className="text-gray-500 text-sm">
             {meta
-              ? `Published ${new Date(meta.uploadedAt).toLocaleDateString()} by ${meta.uploadedByName}`
+              ? t("Published {date} by {name}", { date: new Date(meta.uploadedAt).toLocaleDateString(), name: meta.uploadedByName })
               : standard
-                ? "The standard guide. Publish your own to replace it."
-                : "How to use the portal"}
+                ? t("The standard guide. Publish your own to replace it.")
+                : t("How to use the portal")}
           </p>
         </div>
         {canPublish && (
@@ -127,7 +129,7 @@ export default function GuidePage() {
               disabled={uploading}
               className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
-              {uploading ? "Publishing..." : meta ? "Replace the guide" : "Publish a guide"}
+              {uploading ? t("Publishing...") : meta ? t("Replace the guide") : t("Publish a guide")}
             </button>
             <input
               ref={fileRef}
@@ -141,14 +143,14 @@ export default function GuidePage() {
       </div>
 
       {state === "loading" && (
-        <p className="text-sm text-gray-500">Loading the guide...</p>
+        <p className="text-sm text-gray-500">{t("Loading the guide...")}</p>
       )}
 
       {state === "error" && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
-          <p className="text-sm text-gray-500">The guide could not be loaded.</p>
+          <p className="text-sm text-gray-500">{t("The guide could not be loaded.")}</p>
           <button onClick={load} className="mt-3 text-primary text-sm hover:underline">
-            Try again
+            {t("Try again")}
           </button>
         </div>
       )}
@@ -156,11 +158,11 @@ export default function GuidePage() {
       {state === "empty" && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
           <p className="text-sm text-gray-500">
-            No guide has been published yet.
+            {t("No guide has been published yet.")}
           </p>
           {canPublish && (
             <p className="text-xs text-gray-400 mt-2">
-              Use &ldquo;Publish a guide&rdquo; above to upload one.
+              {t("Use \u201cPublish a guide\u201d above to upload one.")}
             </p>
           )}
         </div>
@@ -180,7 +182,7 @@ export default function GuidePage() {
         // a way to act as a Super Admin. Without it the guide's own scripts
         // (contents, print button) still run, in an origin of their own.
         <iframe
-          title={meta?.title || "Guide"}
+          title={meta?.title || t("Guide")}
           src={docUrl ?? undefined}
           sandbox="allow-scripts allow-modals allow-popups"
           className="flex-1 w-full rounded-xl border border-gray-200 bg-white min-h-0"

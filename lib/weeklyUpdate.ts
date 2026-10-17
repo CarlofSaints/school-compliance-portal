@@ -13,6 +13,7 @@ import type { MinutesRecord } from "./minutesData";
 import { signingProgress, formatPeriod } from "./minutes";
 import type { SpendApplication } from "./spend";
 import { evaluateProgress } from "./approvalEngine";
+import { tk } from "./i18n/translate";
 
 export interface WeeklyUpdateSettings {
   /** Off until somebody turns it on. An email to every governor is not a
@@ -41,11 +42,11 @@ export const DEFAULT_WEEKLY_UPDATE: WeeklyUpdateSettings = {
 export const WEEKDAY_LABELS = [
   "Sunday",
   "Monday",
-  "Tuesday",
+  tk("Tuesday"),
   "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
+  tk("Thursday"),
+  tk("Friday"),
+  tk("Saturday"),
 ];
 
 /** A missed run may still send this many days late. Beyond that the numbers

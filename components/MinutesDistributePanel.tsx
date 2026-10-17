@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/useAuth";
 import type { MinutesDistributionNote } from "@/lib/minutes";
+import type { T } from "@/lib/i18n/translate";
+import { useT } from "@/components/I18nProvider";
 
 // ---------------------------------------------------------------------------
 // Sending the signed minutes to the whole governing body.
@@ -56,14 +58,17 @@ function when(iso: string): string {
 
 /** "Kevin James, Thandi Mokoena and 4 others" - the first few by name, because
  *  a count alone does not let anybody check the list is right. */
-function nameList(people: Recipient[], show = 4): string {
+function nameList(people: Recipient[], t: T, show = 4): string {
   const names = people.map((p) => p.name || p.email);
   if (names.length <= show) {
     if (names.length <= 1) return names[0] ?? "";
-    return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    return t("{list} and {last}", { list: names.slice(0, -1).join(", "), last: names[names.length - 1] });
   }
   const rest = names.length - show;
-  return `${names.slice(0, show).join(", ")} and ${rest} ${rest === 1 ? "other" : "others"}`;
+  const list = names.slice(0, show).join(", ");
+  return rest === 1
+    ? t("{list} and {n} other", { list, n: rest })
+    : t("{list} and {n} others", { list, n: rest });
 }
 
 export default function MinutesDistributePanel({
@@ -73,6 +78,7 @@ export default function MinutesDistributePanel({
   onChanged,
   onToast,
 }: Props) {
+  const t = useT();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -96,19 +102,21 @@ export default function MinutesDistributePanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        onToast(data.error || "Those minutes could not be sent.", "error");
+        onToast(data.error || t("Those minutes could not be sent."), "error");
         return;
       }
       const parts = [
-        `Sent to ${data.sent} ${data.sent === 1 ? "person" : "people"}.`,
+        data.sent === 1
+          ? t("Sent to {n} person.", { n: data.sent })
+          : t("Sent to {n} people.", { n: data.sent }),
       ];
       // Named, not counted. "3 failed" leaves a secretary with no idea who to
       // chase, which is the only useful thing to do about it.
       if (data.failed?.length) {
-        parts.push(`Could not reach ${data.failed.join(", ")}.`);
+        parts.push(t("Could not reach {names}.", { names: data.failed.join(", ") }));
       }
       if (data.withoutEmail?.length) {
-        parts.push(`No email address for ${data.withoutEmail.join(", ")}.`);
+        parts.push(t("No email address for {names}.", { names: data.withoutEmail.join(", ") }));
       }
       onToast(
         parts.join(" "),
@@ -128,11 +136,13 @@ export default function MinutesDistributePanel({
   const sends = distributions ?? [];
   const last = sends[sends.length - 1];
   const total = preview.to.length + preview.cc.length;
+  const count =
+    total === 1 ? t("{total} person", { total }) : t("{total} people", { total });
 
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <h2 className="text-sm font-semibold text-dark mb-1">
-        Send to the governing body
+        {t("Send to the governing body")}
       </h2>
 
       {preview.empty ? (
@@ -140,60 +150,86 @@ export default function MinutesDistributePanel({
            silently reaches nobody - the same rule the review round and
            signing follow. */
         <p className="text-sm text-gray-500">
-          Nobody is set up to receive {preview.audienceLabel.toLowerCase()}. Set
-          that tag under <span className="font-medium">Admin, Minutes Admin</span>,
-          and this becomes available.
+          {t("Nobody is set up to receive {audience}. Set that tag under", {
+            audience: t(preview.audienceLabel).toLowerCase(),
+          })}{" "}
+          <span className="font-medium">{t("Admin, Minutes Admin")}</span>
+          {t(", and this becomes available.")}
         </p>
       ) : (
         <>
           <p className="text-sm text-gray-500 mb-1">
-            {preview.audienceLabel}: {total}{" "}
-            {total === 1 ? "person" : "people"} — {nameList(preview.to)}
-            {preview.cc.length > 0 && `, copying ${nameList(preview.cc, 2)}`}.
+            {preview.cc.length > 0
+              ? t("{audience}: {count} — {names}, copying {cc}.", {
+                  audience: t(preview.audienceLabel),
+                  count,
+                  names: nameList(preview.to, t),
+                  cc: nameList(preview.cc, t, 2),
+                })
+              : t("{audience}: {count} — {names}.", {
+                  audience: t(preview.audienceLabel),
+                  count,
+                  names: nameList(preview.to, t),
+                })}
           </p>
 
           {/* Shown, never ignored. Somebody on the list with no address is a
               gap the secretary has to be able to see. */}
           {(preview.heldBack?.length ?? 0) > 0 && (
             <p className="text-sm text-amber-700 mb-1">
-              Not sent to {preview.heldBack!.join(", ")}: they are on the list but not allowed to
-              read these minutes (Admin, Minutes Admin, Who can read minutes).
+              {t("Not sent to {names}: they are on the list but not allowed to read these minutes (Admin, Minutes Admin, Who can read minutes).", { names: preview.heldBack!.join(", ") })}
             </p>
           )}
 
           {preview.withoutEmail.length > 0 && (
             <p className="text-sm text-amber-700 mb-1">
-              No email address for {preview.withoutEmail.join(", ")}, so they
-              will not receive it.
+              {t("No email address for {names}, so they will not receive it.", { names: preview.withoutEmail.join(", ") })}
             </p>
           )}
 
           <p className="text-xs text-gray-400 mb-4">
             {last ? (
               <>
-                Last sent {when(last.at)}
-                {last.by ? ` by ${last.by}` : " automatically, on the final signature"}
-                {" — "}
-                {last.sent} of {last.recipients} delivered
-                {last.failed.length > 0 && `, failed for ${last.failed.join(", ")}`}.
-                {(last.heldBack?.length ?? 0) > 0 &&
-                  ` Not sent to ${last.heldBack!.join(", ")}: outside who may read these minutes.`}
-                {sends.length > 1 && ` Sent ${sends.length} times in all.`}
+                {last.by
+                  ? t("Last sent {when} by {by} — {sent} of {total} delivered", {
+                      when: when(last.at),
+                      by: last.by,
+                      sent: last.sent,
+                      total: last.recipients,
+                    })
+                  : t("Last sent {when} automatically, on the final signature — {sent} of {total} delivered", {
+                      when: when(last.at),
+                      sent: last.sent,
+                      total: last.recipients,
+                    })}
+                {last.failed.length > 0 && t(", failed for {names}", { names: last.failed.join(", ") })}.
+                {(last.heldBack?.length ?? 0) > 0 && (
+                  <>
+                    {" "}
+                    {t("Not sent to {names}: outside who may read these minutes.", { names: last.heldBack!.join(", ") })}
+                  </>
+                )}
+                {sends.length > 1 && (
+                  <>
+                    {" "}
+                    {t("Sent {n} times in all.", { n: sends.length })}
+                  </>
+                )}
               </>
             ) : (
               /* 🔴 Absence is a value. A blank here would read as a panel that
                  had not loaded, and "not sent yet" is the whole reason to
                  look at this panel. */
-              <>These minutes have not been sent to the governing body yet.</>
+              <>{t("These minutes have not been sent to the governing body yet.")}</>
             )}
           </p>
 
           {confirming ? (
             <div className="rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-dark mb-3">
-                Email the signed minutes to {total}{" "}
-                {total === 1 ? "person" : "people"}
-                {last && " again"}?
+                {last
+                  ? t("Email the signed minutes to {count} again?", { count })
+                  : t("Email the signed minutes to {count}?", { count })}
               </p>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -201,14 +237,14 @@ export default function MinutesDistributePanel({
                   disabled={busy}
                   className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
                 >
-                  {busy ? "Sending..." : "Yes, send them"}
+                  {busy ? t("Sending...") : t("Yes, send them")}
                 </button>
                 <button
                   onClick={() => setConfirming(false)}
                   disabled={busy}
                   className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </div>
@@ -217,7 +253,7 @@ export default function MinutesDistributePanel({
               onClick={() => setConfirming(true)}
               className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors"
             >
-              {last ? "Send again" : "Send to the governing body"}
+              {last ? t("Send again") : t("Send to the governing body")}
             </button>
           )}
         </>

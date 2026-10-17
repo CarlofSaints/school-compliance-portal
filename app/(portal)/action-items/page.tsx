@@ -10,6 +10,8 @@ import ActionItemForm from "@/components/ActionItemForm";
 import ActionProgressModal from "@/components/ActionProgressModal";
 import { useTableSort, useColumnWidths } from "@/lib/useTable";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 import {
   PRIORITY_LABELS,
   PRIORITY_PILL,
@@ -57,15 +59,15 @@ const ADMIN_PERMISSIONS = ["manage_action_items", "manage_people"];
 // views are the combinations: my in-progress items, everything blocked,
 // overdue and not started. One exclusive row could not express any of those.
 const VIEW_FILTERS = [
-  { key: "open", label: "Open" },
-  { key: "mine", label: "Mine" },
-  { key: "overdue", label: "Overdue" },
-  { key: "week", label: "Due in 7 days" },
-  { key: "all", label: "All" },
+  { key: "open", label: tk("Open") },
+  { key: "mine", label: tk("Mine") },
+  { key: "overdue", label: tk("Overdue") },
+  { key: "week", label: tk("Due in 7 days") },
+  { key: "all", label: tk("All") },
 ];
 
 const STATUS_FILTERS: { key: ActionStatus | "any"; label: string }[] = [
-  { key: "any", label: "Any status" },
+  { key: "any", label: tk("Any status") },
   { key: "not_started", label: STATUS_LABELS.not_started },
   { key: "in_progress", label: STATUS_LABELS.in_progress },
   { key: "blocked", label: STATUS_LABELS.blocked },
@@ -120,6 +122,7 @@ function SummaryTile({
 }
 
 export default function ActionItemsPage() {
+  const t = useT();
   // No permission to read: who agreed to do what belongs to everybody in the
   // portal, the same way the People register does. Raising and editing is
   // gated below.
@@ -342,7 +345,7 @@ export default function ActionItemsPage() {
   // lands, which looks like a delete. Say where it went.
   const savedMessage = (message: string, saved: ActionItem) =>
     filter === "open" && isClosed(saved)
-      ? `${message}. It is now ${STATUS_LABELS[saved.status]}, so Open hides it. Click ${STATUS_LABELS[saved.status]} to see it`
+      ? t("{message}. It is now {status}, so Open hides it. Click {status} to see it", { message, status: t(STATUS_LABELS[saved.status]) })
       : message;
 
   const canUpdate = (item: ActionItem) =>
@@ -351,7 +354,7 @@ export default function ActionItemsPage() {
   const handleDelete = async (item: ActionItem) => {
     if (
       !confirm(
-        `Delete ${item.ref} "${item.title}"? The reference will not be reused.`
+        t("Delete {ref} \"{title}\"? The reference will not be reused.", { ref: item.ref, title: item.title })
       )
     ) {
       return;
@@ -361,18 +364,18 @@ export default function ActionItemsPage() {
     });
     if (res.ok) {
       setItems((prev) => prev.filter((i) => i.id !== item.id));
-      setToast({ message: `Deleted ${item.ref}`, type: "success" });
+      setToast({ message: t("Deleted {ref}", { ref: item.ref }), type: "success" });
     } else {
       setToast({
-        message: await apiErrorMessage(res, "Could not delete that action"),
+        message: await apiErrorMessage(res, t("Could not delete that action")),
         type: "error",
       });
     }
   };
 
   const handleRemindNow = async (item: ActionItem) => {
-    const who = item.assigneeNames.filter(Boolean).join(", ") || "nobody";
-    if (!confirm(`Send a reminder about ${item.ref} now, to ${who}?`)) return;
+    const who = item.assigneeNames.filter(Boolean).join(", ") || t("nobody");
+    if (!confirm(t("Send a reminder about {ref} now, to {who}?", { ref: item.ref, who }))) return;
 
     setBusyId(item.id);
     const res = await authFetch(`/api/action-items/${item.id}/remind`, {
@@ -391,7 +394,7 @@ export default function ActionItemsPage() {
       if (data.item) applySaved(data.item);
     } else {
       setToast({
-        message: await apiErrorMessage(res, "Could not send that reminder"),
+        message: await apiErrorMessage(res, t("Could not send that reminder")),
         type: "error",
       });
     }
@@ -441,7 +444,7 @@ export default function ActionItemsPage() {
     URL.revokeObjectURL(url);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   const th = (
     label: string,
@@ -481,10 +484,9 @@ export default function ActionItemsPage() {
 
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Action Items</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Action Items")}</h1>
           <p className="text-gray-500 text-sm">
-            What the {GOVERNANCE_LABEL} agreed to do, who is carrying it, and
-            where it stands
+            {t("What the {label} agreed to do, who is carrying it, and where it stands", { label: GOVERNANCE_LABEL })}
           </p>
         </div>
         <div className="flex gap-2">
@@ -492,7 +494,7 @@ export default function ActionItemsPage() {
             onClick={handleExport}
             className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
           >
-            Export to CSV
+            {t("Export to CSV")}
           </button>
           {canManage && (
             <button
@@ -502,38 +504,38 @@ export default function ActionItemsPage() {
               }}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              + Add an action
+              {t("+ Add an action")}
             </button>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <SummaryTile label="Open" value={summary.open} />
+        <SummaryTile label={t("Open")} value={summary.open} />
         <SummaryTile
-          label="Overdue"
+          label={t("Overdue")}
           value={summary.overdue}
           tone="text-risk-high"
         />
         <SummaryTile
-          label="Due in 7 days"
+          label={t("Due in 7 days")}
           value={summary.dueThisWeek}
           tone="text-risk-medium"
         />
         <SummaryTile
-          label="Blocked"
+          label={t("Blocked")}
           value={summary.blocked}
           tone="text-risk-high"
         />
         <SummaryTile
-          label="Done"
+          label={t("Done")}
           value={summary.done}
           tone="text-emerald-600"
         />
       </div>
 
       <div className="flex gap-2 mb-2 flex-wrap items-center">
-        <span className="text-xs text-gray-400 w-14 shrink-0">Show</span>
+        <span className="text-xs text-gray-400 w-14 shrink-0">{t("Show")}</span>
         {VIEW_FILTERS.map((f) => (
           <button
             key={f.key}
@@ -544,26 +546,26 @@ export default function ActionItemsPage() {
                 : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {f.label}
+            {t(f.label)}
           </button>
         ))}
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search actions"
+          placeholder={t("Search actions")}
           className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
         />
         <button
           onClick={reset}
           className="ml-auto text-xs text-gray-400 hover:text-gray-600"
-          title="Put the column widths back to their defaults"
+          title={t("Put the column widths back to their defaults")}
         >
-          Reset columns
+          {t("Reset columns")}
         </button>
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap items-center">
-        <span className="text-xs text-gray-400 w-14 shrink-0">Progress</span>
+        <span className="text-xs text-gray-400 w-14 shrink-0">{t("Progress")}</span>
         {STATUS_FILTERS.map((f) => {
           const count = statusCounts[f.key] || 0;
           const active = statusFilter === f.key;
@@ -582,7 +584,7 @@ export default function ActionItemsPage() {
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
-              {f.label}
+              {t(f.label)}
               <span className={active ? "ml-1.5 opacity-80" : "ml-1.5 text-gray-400"}>
                 {count}
               </span>
@@ -633,18 +635,18 @@ export default function ActionItemsPage() {
           <table className="w-full text-sm table-fixed border-separate border-spacing-0">
             <thead className="bg-gray-50">
               <tr>
-                {th("Ref", "ref", "left", true)}
-                {th("Action", "title", "left", true, refWidth)}
-                {th("Assigned to", "assignees")}
-                {th("Category", "category")}
-                {th("Priority", "priority")}
-                {th("ETA", "dueDate")}
-                {th("Progress", "progress")}
-                {th("Status", "status")}
-                {th("Last update", "lastUpdate")}
-                {th("Next reminder", "nextReminder")}
+                {th(t("Ref"), "ref", "left", true)}
+                {th(t("Action"), "title", "left", true, refWidth)}
+                {th(t("Assigned to"), "assignees")}
+                {th(t("Category"), "category")}
+                {th(t("Priority"), "priority")}
+                {th(t("ETA"), "dueDate")}
+                {th(t("Progress"), "progress")}
+                {th(t("Status"), "status")}
+                {th(t("Last update"), "lastUpdate")}
+                {th(t("Next reminder"), "nextReminder")}
                 <SortableTh
-                  label="Actions"
+                  label={t("Actions")}
                   resizeKey="actions"
                   width={widths.actions}
                   onResize={setWidth}
@@ -663,24 +665,24 @@ export default function ActionItemsPage() {
                 const actions = [];
                 if (canUpdate(item)) {
                   actions.push({
-                    label: "Update progress",
+                    label: t("Update progress"),
                     onClick: () => setProgressFor(item),
                   });
                 }
                 if (canManage) {
                   actions.push({
-                    label: "Edit",
+                    label: t("Edit"),
                     onClick: () => {
                       setEditing(item);
                       setShowForm(true);
                     },
                   });
                   actions.push({
-                    label: busyId === item.id ? "Sending..." : "Remind now",
+                    label: busyId === item.id ? t("Sending...") : t("Remind now"),
                     onClick: () => handleRemindNow(item),
                   });
                   actions.push({
-                    label: "Delete",
+                    label: t("Delete"),
                     danger: true,
                     onClick: () => handleDelete(item),
                   });
@@ -706,7 +708,7 @@ export default function ActionItemsPage() {
                       )}
                       {item.meetingDate && (
                         <p className="text-xs text-gray-400 mt-1">
-                          Raised at the meeting of {item.meetingDate}
+                          {t("Raised at the meeting of {date}", { date: item.meetingDate })}
                         </p>
                       )}
                       {/* Where it came from, linking back to the minute that
@@ -716,7 +718,7 @@ export default function ActionItemsPage() {
                           minutes. */}
                       {item.fromMinutes && (
                         <p className="text-xs text-gray-400 mt-1">
-                          From{" "}
+                          {t("From")}{" "}
                           <Link
                             href={`/minutes/${item.fromMinutes.minutesId}`}
                             className="text-primary hover:underline"
@@ -732,7 +734,7 @@ export default function ActionItemsPage() {
                     <td className="px-4 py-3 align-top text-gray-600">
                       {item.assigneeNames.filter(Boolean).join(", ") || (
                         <span className="text-risk-medium text-xs">
-                          Nobody assigned
+                          {t("Nobody assigned")}
                         </span>
                       )}
                     </td>
@@ -743,7 +745,7 @@ export default function ActionItemsPage() {
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_PILL[item.priority]}`}
                       >
-                        {PRIORITY_LABELS[item.priority]}
+                        {t(PRIORITY_LABELS[item.priority])}
                       </span>
                     </td>
                     <td className="px-4 py-3 align-top">
@@ -758,13 +760,13 @@ export default function ActionItemsPage() {
                             }`}
                           >
                             {isClosed(item)
-                              ? STATUS_LABELS[item.status]
+                              ? t(STATUS_LABELS[item.status])
                               : duePhrase(item.dueDate, daysLeft)}
                           </p>
                         </>
                       ) : (
                         <span className="text-xs text-gray-400">
-                          No date set
+                          {t("No date set")}
                         </span>
                       )}
                     </td>
@@ -772,7 +774,7 @@ export default function ActionItemsPage() {
                       <ProgressBar percent={item.progress} />
                       {item.progress === 100 && item.status !== "done" && (
                         <p className="text-xs text-amber-600 mt-1">
-                          Awaiting sign-off
+                          {t("Awaiting sign-off")}
                         </p>
                       )}
                     </td>
@@ -780,7 +782,7 @@ export default function ActionItemsPage() {
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_PILL[item.status]}`}
                       >
-                        {STATUS_LABELS[item.status]}
+                        {t(STATUS_LABELS[item.status])}
                       </span>
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-500">
@@ -799,7 +801,7 @@ export default function ActionItemsPage() {
                         </>
                       ) : (
                         <span className="text-gray-400">
-                          Nothing reported yet
+                          {t("Nothing reported yet")}
                         </span>
                       )}
                     </td>
@@ -809,17 +811,17 @@ export default function ActionItemsPage() {
                       ) : (
                         <span className="text-gray-400">
                           {isClosed(item)
-                            ? "Closed"
+                            ? t("Closed")
                             : item.reminder?.enabled === false
-                              ? "Reminders off"
+                              ? t("Reminders off")
                               : !item.dueDate
-                                ? "Needs an ETA"
-                                : "No further chase"}
+                                ? t("Needs an ETA")
+                                : t("No further chase")}
                         </span>
                       )}
                       {item.lastReminderResult && (
                         <span className="block text-gray-400 mt-0.5">
-                          Last: {item.lastReminderResult}
+                          {t("Last:")} {item.lastReminderResult}
                         </span>
                       )}
                     </td>
@@ -827,7 +829,7 @@ export default function ActionItemsPage() {
                       {actions.length > 0 ? (
                         <RowActions actions={actions} />
                       ) : (
-                        <span className="text-xs text-gray-300">View only</span>
+                        <span className="text-xs text-gray-300">{t("View only")}</span>
                       )}
                     </td>
                   </tr>
@@ -841,9 +843,9 @@ export default function ActionItemsPage() {
                   >
                     {items.length === 0
                       ? canManage
-                        ? "No actions yet. Add the first one from the button above."
-                        : "No actions have been raised yet."
-                      : "Nothing matches that filter."}
+                        ? t("No actions yet. Add the first one from the button above.")
+                        : t("No actions have been raised yet.")
+                      : t("Nothing matches that filter.")}
                   </td>
                 </tr>
               )}
@@ -856,16 +858,13 @@ export default function ActionItemsPage() {
         <div className="mt-4 text-xs text-gray-400">
           {lastRun ? (
             <>
-              Reminder run {new Date(lastRun.at).toLocaleString()}:{" "}
-              {lastRun.due} due, {lastRun.sent} sent
-              {lastRun.failed > 0 ? `, ${lastRun.failed} failed` : ""}. Chases go
-              out once a day.
+              {lastRun.failed > 0
+                ? t("Reminder run {date}: {due} due, {sent} sent, {failed} failed. Chases go out once a day.", { date: new Date(lastRun.at).toLocaleString(), due: lastRun.due, sent: lastRun.sent, failed: lastRun.failed })
+                : t("Reminder run {date}: {due} due, {sent} sent. Chases go out once a day.", { date: new Date(lastRun.at).toLocaleString(), due: lastRun.due, sent: lastRun.sent })}
             </>
           ) : (
             <>
-              The daily reminder job has not recorded a run yet. A cron that has
-              never fired and one that fires with nothing to send look the same
-              until it does.
+              {t("The daily reminder job has not recorded a run yet. A cron that has never fired and one that fires with nothing to send look the same until it does.")}
             </>
           )}
         </div>

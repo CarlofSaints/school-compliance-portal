@@ -6,6 +6,7 @@ import Toast from "@/components/Toast";
 import TemplateEditor from "@/components/TemplateEditor";
 import MinutesRecipientSettings from "@/components/MinutesRecipientSettings";
 import MinutesAccessSettings from "@/components/MinutesAccessSettings";
+import { useT } from "@/components/I18nProvider";
 import {
   MEETING_BODY_LABELS,
   STARTER_TEMPLATE,
@@ -28,6 +29,7 @@ function newId(): string {
 }
 
 export default function MinutesAdminPage() {
+  const t = useT();
   const { session, loading } = useAuth(["manage_minutes", "manage_users"]);
 
   const [templates, setTemplates] = useState<MinutesTemplate[]>([]);
@@ -43,14 +45,14 @@ export default function MinutesAdminPage() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const [t, p, pos] = await Promise.all([
+      const [tplRes, p, pos] = await Promise.all([
         authFetch("/api/minutes-templates"),
         authFetch("/api/people"),
         // no-store, the same as Admin, People: a position added a moment ago
         // in another tab must be offered here without a hard refresh.
         authFetch("/api/settings/positions", { cache: "no-store" }),
       ]);
-      if (t.ok) setTemplates(await t.json());
+      if (tplRes.ok) setTemplates(await tplRes.json());
       if (p.ok) {
         const rows = await p.json();
         setPeople(Array.isArray(rows) ? rows : rows.people || []);
@@ -83,38 +85,38 @@ export default function MinutesAdminPage() {
     updatedAt: "",
   });
 
-  const save = async (t: MinutesTemplate) => {
-    const isNew = !t.id;
+  const save = async (tpl: MinutesTemplate) => {
+    const isNew = !tpl.id;
     const res = await authFetch(
-      isNew ? "/api/minutes-templates" : `/api/minutes-templates/${t.id}`,
+      isNew ? "/api/minutes-templates" : `/api/minutes-templates/${tpl.id}`,
       {
         method: isNew ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: t.name,
-          body: t.body,
-          description: t.description,
-          sections: t.sections,
+          name: tpl.name,
+          body: tpl.body,
+          description: tpl.description,
+          sections: tpl.sections,
         }),
       }
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setToast({ message: data.error || "Could not save the template.", type: "error" });
+      setToast({ message: data.error || t("Could not save the template."), type: "error" });
       return;
     }
-    setToast({ message: `Saved "${data.name}".`, type: "success" });
+    setToast({ message: t("Saved \"{name}\".", { name: data.name }), type: "success" });
     setEditing(null);
     load();
   };
 
-  const remove = async (t: MinutesTemplate) => {
-    const res = await authFetch(`/api/minutes-templates/${t.id}`, { method: "DELETE" });
+  const remove = async (tpl: MinutesTemplate) => {
+    const res = await authFetch(`/api/minutes-templates/${tpl.id}`, { method: "DELETE" });
     if (!res.ok) {
-      setToast({ message: "Could not delete the template.", type: "error" });
+      setToast({ message: t("Could not delete the template."), type: "error" });
       return;
     }
-    setToast({ message: `Deleted "${t.name}".`, type: "success" });
+    setToast({ message: t("Deleted \"{name}\".", { name: tpl.name }), type: "success" });
     setEditing(null);
     load();
   };
@@ -127,10 +129,9 @@ export default function MinutesAdminPage() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Minutes admin</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Minutes admin")}</h1>
           <p className="text-gray-500 mt-1">
-            Build the templates your secretary starts from. Sections, who owns
-            them, and any wording that stays the same from meeting to meeting.
+            {t("Build the templates your secretary starts from. Sections, who owns them, and any wording that stays the same from meeting to meeting.")}
           </p>
         </div>
         {!editing && tab === "templates" && (
@@ -138,7 +139,7 @@ export default function MinutesAdminPage() {
             onClick={() => setEditing(blank())}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
           >
-            Create minutes template
+            {t("Create minutes template")}
           </button>
         )}
       </div>
@@ -146,9 +147,9 @@ export default function MinutesAdminPage() {
       {!editing && (
         <div className="flex gap-2 mb-5">
           {([
-            ["templates", "Templates"],
-            ["recipients", "Who receives minutes"],
-            ["access", "Who can read minutes"],
+            ["templates", t("Templates")],
+            ["recipients", t("Who receives minutes")],
+            ["access", t("Who can read minutes")],
           ] as const).map(([k, label]) => (
             <button
               key={k}
@@ -215,31 +216,31 @@ export default function MinutesAdminPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500">Template</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500 w-32">Meeting</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-500 w-28">Sections</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-500 w-24">Edit</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500">{t("Template")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500 w-32">{t("Meeting")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-500 w-28">{t("Sections")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-500 w-24">{t("Edit")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {templates.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50">
+                {templates.map((tpl) => (
+                  <tr key={tpl.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-dark">{t.name}</div>
-                      {t.description && (
-                        <div className="text-xs text-gray-400">{t.description}</div>
+                      <div className="font-medium text-dark">{tpl.name}</div>
+                      {tpl.description && (
+                        <div className="text-xs text-gray-400">{tpl.description}</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {t.body ? MEETING_BODY_LABELS[t.body] : "Any"}
+                      {tpl.body ? t(MEETING_BODY_LABELS[tpl.body]) : t("Any")}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{t.sections.length}</td>
+                    <td className="px-4 py-3 text-gray-600">{tpl.sections.length}</td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={() => setEditing(t)}
+                        onClick={() => setEditing(tpl)}
                         className="text-primary hover:text-primary-dark text-xs font-medium"
                       >
-                        Edit
+                        {t("Edit")}
                       </button>
                     </td>
                   </tr>
@@ -247,14 +248,14 @@ export default function MinutesAdminPage() {
                 {templates.length === 0 && !busy && (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                      No templates yet.
+                      {t("No templates yet.")}
                     </td>
                   </tr>
                 )}
                 {busy && (
                   <tr>
                     <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                      Loading...
+                      {t("Loading...")}
                     </td>
                   </tr>
                 )}
@@ -267,18 +268,16 @@ export default function MinutesAdminPage() {
             // template it can edit instead of wondering where sections came from.
             <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
               <p className="text-sm font-medium text-dark">
-                Start from a typical SGB agenda?
+                {t("Start from a typical SGB agenda?")}
               </p>
               <p className="text-sm text-gray-500 mt-1 mb-4">
-                Creates a template with {STARTER_TEMPLATE.length} sections,
-                including attendance and previous minutes sign off already
-                filled in. Change anything you like before saving.
+                {t("Creates a template with {count} sections, including attendance and previous minutes sign off already filled in. Change anything you like before saving.", { count: STARTER_TEMPLATE.length })}
               </p>
               <button
                 onClick={() => setEditing({ ...blank(STARTER_TEMPLATE), name: "SGB meeting" })}
                 className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
-                Use it as a starting point
+                {t("Use it as a starting point")}
               </button>
             </div>
           )}

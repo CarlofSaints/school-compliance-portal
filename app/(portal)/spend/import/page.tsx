@@ -17,6 +17,7 @@ import {
   type ImportField,
 } from "@/lib/spendImport";
 import { parseWorkbook } from "@/lib/spendImportSheet";
+import { useT } from "@/components/I18nProvider";
 
 interface ImportResult {
   created: number;
@@ -38,6 +39,7 @@ function columnLetter(index: number): string {
 
 export default function SpendImportPage() {
   const { session, loading } = useAuth("manage_spend_settings");
+  const t = useT();
 
   const [fileName, setFileName] = useState("");
   const [sheetNames, setSheetNames] = useState<string[]>([]);
@@ -110,7 +112,7 @@ export default function SpendImportPage() {
       selectSheet(first, parsed);
     } catch {
       setParseError(
-        "Could not read that file. Save it as .xlsx or .csv and try again."
+        t("Could not read that file. Save it as .xlsx or .csv and try again.")
       );
     }
   };
@@ -199,13 +201,13 @@ export default function SpendImportPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Import failed");
+        setError(data.error || t("Import failed"));
       } else {
         setResult(data);
         await loadContext();
       }
     } catch {
-      setError("Import failed. Check your connection and try again.");
+      setError(t("Import failed. Check your connection and try again."));
     } finally {
       setImporting(false);
     }
@@ -222,46 +224,45 @@ export default function SpendImportPage() {
       );
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not undo the import");
+        setError(data.error || t("Could not undo the import"));
       } else {
         setUndone(data.removed || 0);
         setResult(null);
         await loadContext();
       }
     } catch {
-      setError("Could not undo the import. Check your connection.");
+      setError(t("Could not undo the import. Check your connection."));
     } finally {
       setUndoing(false);
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-dark">
-            Import Projects from Excel
+            {t("Import Projects from Excel")}
           </h1>
           <p className="text-gray-500 text-sm">
-            Load an existing project list straight into Spend Applications.
+            {t("Load an existing project list straight into Spend Applications.")}
           </p>
         </div>
         <Link
           href="/spend"
           className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          Back to Applications
+          {t("Back to Applications")}
         </Link>
       </div>
 
       {/* Step 1: file */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
-        <h2 className="font-semibold text-dark mb-1">1. Choose your file</h2>
+        <h2 className="font-semibold text-dark mb-1">{t("1. Choose your file")}</h2>
         <p className="text-xs text-gray-500 mb-3">
-          Excel (.xlsx, .xls) or CSV. The file is read in your browser, so a big
-          list will not time out.
+          {t("Excel (.xlsx, .xls) or CSV. The file is read in your browser, so a big list will not time out.")}
         </p>
         <input
           type="file"
@@ -274,7 +275,7 @@ export default function SpendImportPage() {
         />
         {fileName && (
           <p className="text-xs text-gray-500 mt-2">
-            Loaded <span className="font-medium">{fileName}</span>
+            {t("Loaded")} <span className="font-medium">{fileName}</span>
           </p>
         )}
         {parseError && (
@@ -287,12 +288,12 @@ export default function SpendImportPage() {
           {/* Step 2: sheet + header row */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
             <h2 className="font-semibold text-dark mb-3">
-              2. Sheet and header row
+              {t("2. Sheet and header row")}
             </h2>
             <div className="flex flex-wrap gap-4 items-end">
               {sheetNames.length > 1 && (
                 <label className="text-xs text-gray-500">
-                  Sheet
+                  {t("Sheet")}
                   <select
                     value={activeSheet}
                     onChange={(e) => selectSheet(e.target.value)}
@@ -307,7 +308,7 @@ export default function SpendImportPage() {
                 </label>
               )}
               <label className="text-xs text-gray-500">
-                Header row (row number in Excel)
+                {t("Header row (row number in Excel)")}
                 <input
                   type="number"
                   min={1}
@@ -326,12 +327,12 @@ export default function SpendImportPage() {
               </label>
             </div>
             <p className="text-xs text-gray-500 mt-3">
-              Detected headers:{" "}
+              {t("Detected headers:")}{" "}
               <span className="text-dark">
                 {headers
                   .map((h) => String(h ?? "").trim())
                   .filter(Boolean)
-                  .join(", ") || "(none)"}
+                  .join(", ") || t("(none)")}
               </span>
             </p>
           </div>
@@ -339,17 +340,17 @@ export default function SpendImportPage() {
           {/* Step 3: mapping */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
             <h2 className="font-semibold text-dark mb-1">
-              3. Match your columns
+              {t("3. Match your columns")}
             </h2>
             <p className="text-xs text-gray-500 mb-3">
-              Guessed from the headers. Change anything that looks wrong.
+              {t("Guessed from the headers. Change anything that looks wrong.")}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {IMPORT_FIELDS.map((field) => (
                 <label key={field.key} className="text-xs text-gray-500">
-                  {field.label}
+                  {t(field.label)}
                   {field.required && (
-                    <span className="text-risk-high"> (required)</span>
+                    <span className="text-risk-high"> {t("(required)")}</span>
                   )}
                   <select
                     value={
@@ -371,11 +372,11 @@ export default function SpendImportPage() {
                     }}
                     className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-dark"
                   >
-                    <option value="">Not imported</option>
+                    <option value="">{t("Not imported")}</option>
                     {headers.map((h, i) => (
                       <option key={i} value={String(i)}>
                         {columnLetter(i)}:{" "}
-                        {String(h ?? "").trim() || "(blank header)"}
+                        {String(h ?? "").trim() || t("(blank header)")}
                       </option>
                     ))}
                   </select>
@@ -388,17 +389,14 @@ export default function SpendImportPage() {
           {custodians.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
               <h2 className="font-semibold text-dark mb-1">
-                4. Match custodians to users
+                {t("4. Match custodians to users")}
               </h2>
               <p className="text-xs text-gray-500 mb-3">
-                Each custodian becomes the applicant on their projects. Names
-                that match a portal user are filled in already; pick the rest.
+                {t("Each custodian becomes the applicant on their projects. Names that match a portal user are filled in already; pick the rest.")}
                 {unassignedCustodians.length > 0 && (
                   <span className="text-risk-medium">
                     {" "}
-                    {unassignedCustodians.length} still unassigned - those
-                    projects will be logged under you, with the custodian name
-                    kept in the description.
+                    {t("{n} still unassigned - those projects will be logged under you, with the custodian name kept in the description.", { n: unassignedCustodians.length })}
                   </span>
                 )}
               </p>
@@ -416,7 +414,7 @@ export default function SpendImportPage() {
                       }
                       className="block mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-dark"
                     >
-                      <option value="">Not assigned to a user</option>
+                      <option value="">{t("Not assigned to a user")}</option>
                       {users.map((u) => (
                         <option key={u.id} value={u.id}>
                           {u.name} {u.surname} ({u.email})
@@ -428,7 +426,7 @@ export default function SpendImportPage() {
               </div>
               {users.length === 0 && (
                 <p className="text-xs text-risk-medium mt-3">
-                  No portal users loaded, so custodians cannot be matched yet.
+                  {t("No portal users loaded, so custodians cannot be matched yet.")}
                 </p>
               )}
             </div>
@@ -436,10 +434,10 @@ export default function SpendImportPage() {
 
           {/* Step 5: options */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mb-4">
-            <h2 className="font-semibold text-dark mb-3">5. Import options</h2>
+            <h2 className="font-semibold text-dark mb-3">{t("5. Import options")}</h2>
             <div className="flex flex-wrap gap-6 items-start">
               <label className="text-xs text-gray-500">
-                Bring them in as
+                {t("Bring them in as")}
                 <select
                   value={importStatus}
                   onChange={(e) =>
@@ -447,8 +445,8 @@ export default function SpendImportPage() {
                   }
                   className="block mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-dark"
                 >
-                  <option value="pending">Applied (awaiting decision)</option>
-                  <option value="approved">Already approved</option>
+                  <option value="pending">{t("Applied (awaiting decision)")}</option>
+                  <option value="approved">{t("Already approved")}</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-600 mt-5">
@@ -457,7 +455,7 @@ export default function SpendImportPage() {
                   checked={markAllBudgeted}
                   onChange={(e) => setMarkAllBudgeted(e.target.checked)}
                 />
-                Mark every project as budgeted
+                {t("Mark every project as budgeted")}
               </label>
               <label className="flex items-center gap-2 text-sm text-gray-600 mt-5">
                 <input
@@ -465,13 +463,11 @@ export default function SpendImportPage() {
                   checked={amountsInThousands}
                   onChange={(e) => setAmountsInThousands(e.target.checked)}
                 />
-                Amounts are in thousands (multiply by 1000)
+                {t("Amounts are in thousands (multiply by 1000)")}
               </label>
             </div>
             <p className="text-xs text-gray-400 mt-3">
-              Amounts are read exactly as they appear in the sheet. Only tick
-              the thousands box if a cell reading 41 means R41 000. Check the
-              preview below before importing.
+              {t("Amounts are read exactly as they appear in the sheet. Only tick the thousands box if a cell reading 41 means R41 000. Check the preview below before importing.")}
             </p>
           </div>
 
@@ -479,14 +475,16 @@ export default function SpendImportPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-4">
             <div className="p-5 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-dark">6. Preview</h2>
+                <h2 className="font-semibold text-dark">{t("6. Preview")}</h2>
                 <p className="text-xs text-gray-500 mt-1">
-                  {importable.length} to import
+                  {t("{n} to import", { n: importable.length })}
                   {duplicates.length > 0 &&
-                    `, ${duplicates.length} already in the portal`}
-                  {broken.length > 0 && `, ${broken.length} with a problem`}
+                    ", " +
+                      t("{n} already in the portal", { n: duplicates.length })}
+                  {broken.length > 0 &&
+                    ", " + t("{n} with a problem", { n: broken.length })}
                   {". "}
-                  Total R
+                  {t("Total")} R
                   {importable
                     .reduce((sum, d) => sum + d.estimatedAmount, 0)
                     .toLocaleString()}
@@ -498,10 +496,10 @@ export default function SpendImportPage() {
                 className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 {importing
-                  ? "Importing..."
-                  : `Import ${importable.length} project${
-                      importable.length === 1 ? "" : "s"
-                    }`}
+                  ? t("Importing...")
+                  : importable.length === 1
+                    ? t("Import {n} project", { n: importable.length })
+                    : t("Import {n} projects", { n: importable.length })}
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -509,25 +507,25 @@ export default function SpendImportPage() {
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Row
+                      {t("Row")}
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Project
+                      {t("Project")}
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Custodian
+                      {t("Custodian")}
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Source
+                      {t("Source")}
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Amount
+                      {t("Amount")}
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Budgeted
+                      {t("Budgeted")}
                     </th>
                     <th className="text-left px-4 py-3 font-medium text-gray-500">
-                      Status
+                      {t("Status")}
                     </th>
                   </tr>
                 </thead>
@@ -545,7 +543,7 @@ export default function SpendImportPage() {
                           {d.rowNumber}
                         </td>
                         <td className="px-4 py-3 font-medium max-w-[220px] truncate">
-                          {d.projectName || "(blank)"}
+                          {d.projectName || t("(blank)")}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           {(() => {
@@ -555,7 +553,7 @@ export default function SpendImportPage() {
                               `${u.name} ${u.surname}`
                             ) : (
                               <span className="text-risk-medium">
-                                {d.custodian} (unassigned)
+                                {d.custodian} {t("(unassigned)")}
                               </span>
                             );
                           })()}
@@ -567,7 +565,7 @@ export default function SpendImportPage() {
                           R{d.estimatedAmount.toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          {d.budgeted ? "Yes" : "No"}
+                          {d.budgeted ? t("Yes") : t("No")}
                         </td>
                         <td className="px-4 py-3 text-xs">
                           {d.errors.length > 0 ? (
@@ -576,7 +574,7 @@ export default function SpendImportPage() {
                             </span>
                           ) : d.duplicate ? (
                             <span className="px-2 py-1 rounded bg-risk-medium/10 text-risk-medium font-medium">
-                              Already exists
+                              {t("Already exists")}
                             </span>
                           ) : d.warnings.length > 0 ? (
                             <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 font-medium">
@@ -584,7 +582,7 @@ export default function SpendImportPage() {
                             </span>
                           ) : (
                             <span className="px-2 py-1 rounded bg-emerald-100 text-emerald-700 font-medium">
-                              Ready
+                              {t("Ready")}
                             </span>
                           )}
                         </td>
@@ -597,7 +595,7 @@ export default function SpendImportPage() {
                         colSpan={7}
                         className="px-6 py-12 text-center text-gray-400"
                       >
-                        No rows found below the header row.
+                        {t("No rows found below the header row.")}
                       </td>
                     </tr>
                   )}
@@ -617,16 +615,19 @@ export default function SpendImportPage() {
       {result && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
           <h2 className="font-semibold text-dark mb-2">
-            Imported {result.created} project
-            {result.created === 1 ? "" : "s"}
+            {result.created === 1
+              ? t("Imported {n} project", { n: result.created })
+              : t("Imported {n} projects", { n: result.created })}
           </h2>
           {result.skipped.length > 0 && (
             <div className="text-sm text-gray-600 mb-3">
-              <p className="mb-1">Skipped {result.skipped.length}:</p>
+              <p className="mb-1">
+                {t("Skipped {n}:", { n: result.skipped.length })}
+              </p>
               <ul className="list-disc pl-5 text-xs text-gray-500">
                 {result.skipped.map((s, i) => (
                   <li key={i}>
-                    Row {s.rowNumber} {s.projectName && `"${s.projectName}"`} -{" "}
+                    {t("Row")} {s.rowNumber} {s.projectName && `"${s.projectName}"`} -{" "}
                     {s.reason}
                   </li>
                 ))}
@@ -638,27 +639,29 @@ export default function SpendImportPage() {
               href="/spend"
               className="inline-block bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              View Spend Applications
+              {t("View Spend Applications")}
             </Link>
             <button
               onClick={handleUndo}
               disabled={undoing}
               className="bg-gray-100 hover:bg-gray-200 disabled:text-gray-400 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              {undoing ? "Undoing..." : "Undo this import"}
+              {undoing ? t("Undoing...") : t("Undo this import")}
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-3">
-            Undo removes only the {result.created} project
-            {result.created === 1 ? "" : "s"} this import created. Anything
-            captured by hand is untouched.
+            {result.created === 1
+              ? t("Undo removes only the {n} project this import created. Anything captured by hand is untouched.", { n: result.created })
+              : t("Undo removes only the {n} projects this import created. Anything captured by hand is untouched.", { n: result.created })}
           </p>
         </div>
       )}
 
       {undone > 0 && !result && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-sm text-gray-600">
-          Import undone. Removed {undone} project{undone === 1 ? "" : "s"}.
+          {undone === 1
+            ? t("Import undone. Removed {n} project.", { n: undone })
+            : t("Import undone. Removed {n} projects.", { n: undone })}
         </div>
       )}
     </div>

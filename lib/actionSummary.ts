@@ -23,13 +23,14 @@ import {
   STATUS_RANK,
   PRIORITY_LABELS,
 } from "./actionItems";
+import { tk } from "./i18n/translate";
 
 export type SummaryFrequency = "weekdays" | "weekly" | "fortnightly" | "monthly";
 
 export const FREQUENCY_LABELS: Record<SummaryFrequency, string> = {
   weekdays: "Every weekday (Monday to Friday)",
   weekly: "Once a week",
-  fortnightly: "Every two weeks",
+  fortnightly: tk("Every two weeks"),
   monthly: "Once a month",
 };
 

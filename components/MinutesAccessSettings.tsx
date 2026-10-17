@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { ACCESS_BODIES, ACCESS_BODY_LABELS, type BodyAccess } from "@/lib/minutesAccessRules";
 import type { MeetingBody } from "@/lib/minutes";
+import { tk } from "@/lib/i18n/translate";
+import { useT } from "@/components/I18nProvider";
 
 // Who may READ each category of minutes. Set per category, never per set of
 // minutes (Carl: "per category, not every set of minutes, that would be
@@ -19,9 +21,9 @@ interface Shown extends BodyAccess {
 }
 
 const DEFAULT_NOTE: Record<MeetingBody, string> = {
-  sgb: "Everyone signed in, until you choose otherwise.",
-  fincom: "The people on the FINCOM minutes list (Who receives minutes), until you choose otherwise.",
-  other: "Everyone signed in, until you choose otherwise.",
+  sgb: tk("Everyone signed in, until you choose otherwise."),
+  fincom: tk("The people on the FINCOM minutes list (Who receives minutes), until you choose otherwise."),
+  other: tk("Everyone signed in, until you choose otherwise."),
 };
 
 export default function MinutesAccessSettings({
@@ -31,6 +33,7 @@ export default function MinutesAccessSettings({
   onSaved: (msg: string) => void;
   onError: (msg: string) => void;
 }) {
+  const t = useT();
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
   const [access, setAccess] = useState<Partial<Record<MeetingBody, Shown>>>({});
   const [draft, setDraft] = useState<Partial<Record<MeetingBody, BodyAccess>>>({});
@@ -58,7 +61,7 @@ export default function MinutesAccessSettings({
         // A failed load must never leave a form that saves defaults over the
         // school's real settings.
         setLoadFailed(true);
-        onErrorRef.current(await apiErrorMessage(res, "Could not load who can read minutes."));
+        onErrorRef.current(await apiErrorMessage(res, t("Could not load who can read minutes.")));
         return;
       }
       const data = await res.json();
@@ -108,21 +111,21 @@ export default function MinutesAccessSettings({
         ),
       });
       if (!res.ok) {
-        onError(await apiErrorMessage(res, "Could not save."));
+        onError(await apiErrorMessage(res, t("Could not save.")));
         return;
       }
-      onSaved("Saved who can read minutes.");
+      onSaved(t("Saved who can read minutes."));
       load();
     } finally {
       setSaving(false);
     }
   };
 
-  if (busy) return <div className="p-6 text-gray-400 text-sm">Loading...</div>;
+  if (busy) return <div className="p-6 text-gray-400 text-sm">{t("Loading...")}</div>;
   if (loadFailed) {
     return (
       <div className="p-6 text-sm text-red-600">
-        Could not load the current settings, so nothing can be changed here right now. Refresh to try again.
+        {t("Could not load the current settings, so nothing can be changed here right now. Refresh to try again.")}
       </div>
     );
   }
@@ -130,8 +133,7 @@ export default function MinutesAccessSettings({
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-500">
-        Choose who can read each kind of minutes. Minutes admins can always read everything, and
-        anyone asked to check or sign a set of minutes can always read that set.
+        {t("Choose who can read each kind of minutes. Minutes admins can always read everything, and anyone asked to check or sign a set of minutes can always read that set.")}
       </p>
 
       {ACCESS_BODIES.map((body) => {
@@ -141,26 +143,26 @@ export default function MinutesAccessSettings({
         return (
           <div key={body} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-semibold text-dark">{ACCESS_BODY_LABELS[body]}</h3>
+              <h3 className="font-semibold text-dark">{t(ACCESS_BODY_LABELS[body])}</h3>
               {touched[body] === "default" ? (
-                <span className="text-xs text-amber-700">Goes back to the default when you save.</span>
+                <span className="text-xs text-amber-700">{t("Goes back to the default when you save.")}</span>
               ) : shown?.isDefault && !touched[body] ? (
-                <span className="text-xs text-gray-400">Default: {DEFAULT_NOTE[body]}</span>
+                <span className="text-xs text-gray-400">{t("Default: {note}", { note: t(DEFAULT_NOTE[body]) })}</span>
               ) : (
                 <button
                   type="button"
                   onClick={() => backToDefault(body)}
                   className="text-xs text-primary hover:text-primary-dark"
                 >
-                  Use the default instead
+                  {t("Use the default instead")}
                 </button>
               )}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
               {([
-                ["everyone", "Everyone signed in"],
-                ["tags", "Only people with these tags"],
+                ["everyone", t("Everyone signed in")],
+                ["tags", t("Only people with these tags")],
               ] as const).map(([mode, label]) => (
                 <button
                   key={mode}
@@ -180,7 +182,7 @@ export default function MinutesAccessSettings({
             {d.mode === "tags" && (
               <div className="mt-3">
                 {tags.length === 0 ? (
-                  <p className="text-sm text-amber-700">No tags yet. Create them under Admin, Tags.</p>
+                  <p className="text-sm text-amber-700">{t("No tags yet. Create them under Admin, Tags.")}</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {tags.map((t) => (
@@ -205,8 +207,7 @@ export default function MinutesAccessSettings({
                 )}
                 {noTags && (
                   <p className="mt-2 text-sm text-amber-700">
-                    No tags chosen, so only minutes admins (and anyone asked to check or sign a set)
-                    can read these.
+                    {t("No tags chosen, so only minutes admins (and anyone asked to check or sign a set) can read these.")}
                   </p>
                 )}
               </div>
@@ -214,8 +215,8 @@ export default function MinutesAccessSettings({
 
             {shown && shown.mode === "tags" && (
               <p className="mt-3 text-xs text-gray-500">
-                Saved setting lets in:{" "}
-                {shown.readers.length ? shown.readers.join(", ") : <em>nobody beyond minutes admins</em>}
+                {t("Saved setting lets in:")}{" "}
+                {shown.readers.length ? shown.readers.join(", ") : <em>{t("nobody beyond minutes admins")}</em>}
               </p>
             )}
           </div>
@@ -228,7 +229,7 @@ export default function MinutesAccessSettings({
           disabled={saving || Object.keys(touched).length === 0}
           className="bg-primary hover:bg-primary-dark disabled:opacity-60 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
         >
-          {saving ? "Saving..." : "Save who can read minutes"}
+          {saving ? t("Saving...") : t("Save who can read minutes")}
         </button>
       </div>
     </div>
