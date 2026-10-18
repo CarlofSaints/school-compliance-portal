@@ -74,7 +74,6 @@ export default function MinutesSigningPanel({
   const open = status === "awaiting_signatures";
 
   async function post(path: string, payload?: unknown, ok?: string) {
-    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/${path}`, {
@@ -95,7 +94,10 @@ export default function MinutesSigningPanel({
     }
   }
 
+  // Only opening signing saves first: it freezes the text. Signing and
+  // resending a code happen once it is frozen, where a save is refused.
   async function openSigning() {
+    if (ensureSaved && !(await ensureSaved())) return;
     const data = await post("open-signing");
     if (!data) return;
     const parts = [
@@ -111,6 +113,7 @@ export default function MinutesSigningPanel({
 
 
   async function uploadSigned(file: File) {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const form = new FormData();

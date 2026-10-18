@@ -9,6 +9,7 @@ import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import { quickActionTitle } from "@/lib/minutesCapture";
+import { mergeUnsaved } from "@/lib/minutesAutosave";
 import DownloadLink from "@/components/DownloadLink";
 import MinutesReviewPanel from "@/components/MinutesReviewPanel";
 import MinutesSigningPanel from "@/components/MinutesSigningPanel";
@@ -54,6 +55,9 @@ interface MinutesDetail {
   signedAt?: string;
 }
 
+// Autosave retries after a failure: further apart each time, then every 30s.
+const RETRY_MS = [5000, 15000, 30000];
+
 export default function MinutesDetailPage() {
   const t = useT();
   const params = useParams<{ id: string }>();
@@ -80,14 +84,50 @@ export default function MinutesDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [actionsRefresh, setActionsRefresh] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Consecutive failed saves: drives the retry backoff and the "Not saved"
+  // note, so a failing autosave never turns into a stream of toasts.
+  const [saveFailures, setSaveFailures] = useState(0);
+  // Bumped when any save finishes, so the autosave timer re-arms even when
+  // nothing else on the page changed.
+  const [saveTick, setSaveTick] = useState(0);
+
+  // ONE rule for who may change what, used by the autosave and the page alike.
+  const locked = !!record && isLocked(record.status);
+  const editable = canManage && !!record && !locked;
+  // Out for signing: the text people are signing must not move under them.
+  // The Danger zone (delete) stays, as the way out if something is wrong.
+  const signingOpen = record?.status === "awaiting_signatures";
+  const textEditable = editable && !signingOpen;
+
+  // The record as it is right now, for callbacks that outlive a render (a
+  // reload, the unmount save). Written wherever the record is set.
+  const recordRef = useRef<MinutesDetail | null>(null);
+  const put = (r: MinutesDetail) => {
+    recordRef.current = r;
+    setRecord(r);
+  };
+  // Bumped on every edit. savedVersion is the edit the server last accepted,
+  // so "unsaved" is simply the two differing, whatever order saves and
+  // reloads finish in.
+  const editVersion = useRef(0);
+  const savedVersion = useRef(0);
+  const hasUnsaved = () => editVersion.current !== savedVersion.current;
+  const inFlight = useRef<Promise<boolean> | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${params.id}`);
       if (res.ok) {
-        setRecord(await res.json());
-        setDirty(false);
+        // Every panel reloads through here after it acts. Typing since the
+        // last save stays on screen and stays dirty: autosave then saves it,
+        // or, if the minutes are now locked, the page says it could not.
+        const server: MinutesDetail = await res.json();
+        const unsaved = editVersion.current !== savedVersion.current;
+        const next = mergeUnsaved(server, recordRef.current, unsaved);
+        recordRef.current = next;
+        setRecord(next);
+        setDirty(unsaved);
       } else {
         setToast({ message: t("Those minutes could not be found."), type: "error" });
       }
@@ -130,70 +170,137 @@ export default function MinutesDetailPage() {
     return true;
   };
 
-  // Bumped on every edit, so a save that finishes while someone is still
-  // typing does not put the older server copy back over the newer text.
-  const editVersion = useRef(0);
-  const savingNow = useRef(false);
+  // The server's refusal from the last failed save, for the toast a manual
+  // Save shows. Autosave failures stay quiet.
+  const lastSaveError = useRef<string | null>(null);
 
-  /** True when everything on screen is saved. */
-  const save = async (opts?: { quiet?: boolean }): Promise<boolean> => {
-    if (!record) return false;
-    if (savingNow.current) return false;
-    savingNow.current = true;
+  /** One PATCH of the text as it is now. True when the server took it, which
+   *  is not the same as clean: typing may have carried on meanwhile. */
+  const sendSave = async (): Promise<boolean> => {
+    const r = recordRef.current;
+    if (!r) return false;
     const version = editVersion.current;
     setSaving(true);
     try {
-      const res = await authFetch(`/api/minutes/${record.id}`, {
+      const res = await authFetch(`/api/minutes/${r.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: record.title,
-          body: record.body,
-          period: record.period,
-          sections: record.sections,
-        }),
+        body: JSON.stringify({ title: r.title, body: r.body, period: r.period, sections: r.sections }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setToast({ message: data.error || t("Could not save."), type: "error" });
+        lastSaveError.current = data.error || t("Could not save.");
+        setSaveFailures((n) => n + 1);
         return false;
       }
       // What came BACK, not a re-read: a read straight after a write can serve
-      // the previous copy and make a good save look like it failed. Only when
-      // nothing was typed meanwhile; otherwise the newer text stays and is
-      // saved next.
-      if (editVersion.current === version) {
-        setRecord(data);
-        setDirty(false);
-      }
-      if (!opts?.quiet) setToast({ message: t("Saved."), type: "success" });
-      return editVersion.current === version;
+      // the previous copy and make a good save look like it failed. Text typed
+      // while it was in flight stays and is saved next.
+      savedVersion.current = version;
+      const unsaved = hasUnsaved();
+      put(mergeUnsaved<MinutesDetail>(data, recordRef.current, unsaved));
+      setDirty(unsaved);
+      lastSaveError.current = null;
+      setSaveFailures(0);
+      return true;
     } catch {
-      setToast({ message: t("Could not save."), type: "error" });
+      lastSaveError.current = t("Could not save.");
+      setSaveFailures((n) => n + 1);
       return false;
     } finally {
-      savingNow.current = false;
       setSaving(false);
+      setSaveTick((n) => n + 1);
     }
   };
 
-  // Before anything that sends or signs: those act on the SAVED copy and then
-  // reload, so unsaved typing would be sent out missing and then wiped.
-  const ensureSaved = async (): Promise<boolean> => (dirty ? save({ quiet: true }) : true);
+  /** Saves once, after any save already running (which sent an older copy).
+   *  Nothing unsaved counts as success. */
+  const saveOnce = async (): Promise<boolean> => {
+    while (inFlight.current) await inFlight.current;
+    if (!hasUnsaved()) return true;
+    const p = sendSave();
+    inFlight.current = p;
+    try {
+      return await p;
+    } finally {
+      inFlight.current = null;
+    }
+  };
+
+  /** True only when everything on screen is saved. A few rounds, because
+   *  typing can carry on while a save is in flight. */
+  const saveUntilClean = async (): Promise<boolean> => {
+    for (let i = 0; i < 3; i++) {
+      if (!hasUnsaved()) return true;
+      if (!(await saveOnce())) return false;
+    }
+    return !hasUnsaved();
+  };
+
+  const saveNow = async () => {
+    if (await saveUntilClean()) setToast({ message: t("Saved."), type: "success" });
+    else if (lastSaveError.current) setToast({ message: lastSaveError.current, type: "error" });
+    // Otherwise the save worked but typing is still going on; autosave follows.
+  };
+
+  // Before anything that sends, reviews or signs: those act on the SAVED copy
+  // and then reload, so unsaved typing would be sent out missing.
+  const ensureSaved = async (): Promise<boolean> => {
+    // Locked text can never be saved, so refusing would only trap the user
+    // (no wet-ink upload, ever). The banner keeps that text on screen to copy.
+    if (!textEditable) return true;
+    if (await saveUntilClean()) return true;
+    setToast({ message: t("Your changes could not be saved, so nothing was sent."), type: "error" });
+    return false;
+  };
 
   // Autosave a few seconds after the last keystroke. Carl typed a whole set of
   // minutes, sent it for checking without pressing Save, and lost all of it.
-  const textEditableNow =
-    !!record && canManage && !isLocked(record.status) && record.status !== "awaiting_signatures";
+  // A failed save retries further apart each time, and re-arms off saveTick.
   useEffect(() => {
-    if (!dirty || !textEditableNow) return;
+    if (!dirty || !textEditable) return;
+    const delay = saveFailures === 0 ? 3000 : RETRY_MS[Math.min(saveFailures, RETRY_MS.length) - 1];
     const timer = setTimeout(() => {
-      void save({ quiet: true });
-    }, 3000);
+      void saveOnce();
+    }, delay);
     return () => clearTimeout(timer);
-    // save is recreated every render; the timer only needs the latest record.
+    // saveOnce is recreated every render but reads only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [record, dirty, textEditableNow]);
+  }, [record, dirty, textEditable, saveTick, saveFailures]);
+
+  // Leaving by the sidebar or any in-app link fires no beforeunload, so send
+  // what is unsaved on the way out. keepalive lets the request outlive the
+  // page, but caps the body at 64KB; past that a plain request is the best
+  // there is.
+  useEffect(
+    () => () => {
+      const r = recordRef.current;
+      if (!r || editVersion.current === savedVersion.current) return;
+      if (isLocked(r.status) || r.status === "awaiting_signatures") return;
+      const body = JSON.stringify({ title: r.title, body: r.body, period: r.period, sections: r.sections });
+      void fetch(`/api/minutes/${r.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body,
+        credentials: "same-origin",
+        keepalive: new TextEncoder().encode(body).length < 60_000,
+      }).catch(() => {});
+    },
+    []
+  );
+
+  // The in-page Back link saves first, and only leaves without saving if the
+  // user says so.
+  const back = async (e: React.MouseEvent) => {
+    if (!hasUnsaved()) return;
+    e.preventDefault();
+    if (
+      (await saveUntilClean()) ||
+      window.confirm(t("Your changes could not be saved. Leave this page anyway and lose them?"))
+    ) {
+      router.push("/minutes");
+    }
+  };
 
   // Closing the tab or reloading with unsaved typing asks first.
   useEffect(() => {
@@ -216,23 +323,19 @@ export default function MinutesDetailPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return data.error || t("Could not delete.");
+    savedVersion.current = editVersion.current; // gone: nothing left to save on the way out
     router.push("/minutes");
   };
 
   if (loading || !session) return null;
-  if (busy) return <div className="p-6 text-gray-400">{t("Loading...")}</div>;
+  // Only the first load: a reload after an action must not unmount the editor
+  // under someone who is typing.
+  if (busy && !record) return <div className="p-6 text-gray-400">{t("Loading...")}</div>;
   if (!record) return <div className="p-6 text-gray-400">{t("Not found.")}</div>;
-
-  const locked = isLocked(record.status);
-  const editable = canManage && !locked;
-  // Out for signing: the text people are signing must not move under them.
-  // The Danger zone (delete) stays, as the way out if something is wrong.
-  const signingOpen = record.status === "awaiting_signatures";
-  const textEditable = editable && !signingOpen;
 
   const patch = (u: Partial<MinutesDetail>) => {
     editVersion.current += 1;
-    setRecord((r) => (r ? { ...r, ...u } : r));
+    if (recordRef.current) put({ ...recordRef.current, ...u });
     setDirty(true);
   };
 
@@ -242,7 +345,7 @@ export default function MinutesDetailPage() {
         <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
 
-      <Link href="/minutes" className="text-sm text-gray-500 hover:text-primary">
+      <Link href="/minutes" onClick={back} className="text-sm text-gray-500 hover:text-primary">
         {t("Back to all minutes")}
       </Link>
 
@@ -255,7 +358,10 @@ export default function MinutesDetailPage() {
             {record.draftNumber > 0 && " · " + t("Draft {n}", { n: record.draftNumber })}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {textEditable && dirty && saveFailures > 0 && !saving && (
+            <span className="text-sm text-risk-high">{t("Not saved, retrying...")}</span>
+          )}
           <TranslateContentButton kind="minutes" id={record.id} />
           <DownloadLink
             href={`/api/minutes/${record.id}/docx`}
@@ -267,7 +373,7 @@ export default function MinutesDetailPage() {
           </DownloadLink>
           {textEditable && (
             <button
-              onClick={() => void save()}
+              onClick={() => void saveNow()}
               disabled={saving || !dirty}
               className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
             >
@@ -289,6 +395,12 @@ export default function MinutesDetailPage() {
               })
             : t("These minutes have been signed.")}{" "}
           {t("A signed record cannot be changed. If something needs correcting, record it in the next set of minutes.")}
+        </div>
+      )}
+
+      {canManage && dirty && !textEditable && (
+        <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-risk-high">
+          {t("These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.")}
         </div>
       )}
 

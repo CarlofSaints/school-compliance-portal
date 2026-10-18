@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Phetolelo ha e kgone ho etswa hona jwale.",
   "Translate into {language}": "Fetolela ho {language}",
   "Machine translation. The English is the official version.": "Phetolelo ya motjhine. Senyesemane ke sona sa semmuso.",
-  "Translating. A long document can take a minute or two…": "Ho a fetolelwa. Tokomane e telele e ka nka motsotso kapa e mmedi…"
+  "Translating. A long document can take a minute or two…": "Ho a fetolelwa. Tokomane e telele e ka nka motsotso kapa e mmedi…",
+  "Your changes could not be saved, so nothing was sent.": "Diphetoho tsa hao ha di a kgona ho bolokwa, kahoo ha ho letho le rometsweng.",
+  "Your changes could not be saved. Leave this page anyway and lose them?": "Diphetoho tsa hao ha di a kgona ho bolokwa. O tlohela leqephe lena le ha ho le jwalo mme o di lahlehelwa?",
+  "Not saved, retrying...": "Ha di a bolokwa, ho lekwa hape...",
+  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Metsotso ena e notlelitswe pele diphetoho tsa hao tsa morao tjena di bolokwa, kahoo diphetoho tseo ha di a kgona ho bolokwa. Di ntse di bontshwa ka tlase: kopitsa eng kapa eng eo o e hlokang pele o tlohela leqephe lena."
 }

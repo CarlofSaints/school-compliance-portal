@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Thanolo ga e kgone go dirwa jaanong.",
   "Translate into {language}": "Ranola ka {language}",
   "Machine translation. The English is the official version.": "Thanolo ya motšhine. Seesimane ke sone sa semmuso.",
-  "Translating. A long document can take a minute or two…": "Go a ranolwa. Tokomane e telele e ka tsaya motsotso kgotsa e mebedi…"
+  "Translating. A long document can take a minute or two…": "Go a ranolwa. Tokomane e telele e ka tsaya motsotso kgotsa e mebedi…",
+  "Your changes could not be saved, so nothing was sent.": "Diphetogo tsa gago ga di a kgona go bolokwa, ka jalo ga go sepe se se rometsweng.",
+  "Your changes could not be saved. Leave this page anyway and lose them?": "Diphetogo tsa gago ga di a kgona go bolokwa. A o tlogela tsebe e le fa go ntse jalo mme o di latlhegelwa?",
+  "Not saved, retrying...": "Ga di a bolokwa, go lekwa gape...",
+  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Metsotso e e notletswe pele diphetogo tsa gago tsa bosheng di bolokwa, ka jalo diphetogo tseo ga di a kgona go bolokwa. Di sa ntse di bontshiwa fa tlase: kopisa sengwe le sengwe se o se tlhokang pele o tlogela tsebe e."
 }

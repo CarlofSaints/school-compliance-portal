@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Uguqulelo alukwazanga ukwenziwa ngoku.",
   "Translate into {language}": "Guqulela kwi-{language}",
   "Machine translation. The English is the official version.": "Uguqulelo lomatshini. IsiNgesi yinguqulelo esemthethweni.",
-  "Translating. A long document can take a minute or two…": "Kuyaguqulelwa. Uxwebhu olude lunokuthatha umzuzu okanye emibini…"
+  "Translating. A long document can take a minute or two…": "Kuyaguqulelwa. Uxwebhu olude lunokuthatha umzuzu okanye emibini…",
+  "Your changes could not be saved, so nothing was sent.": "Utshintsho lwakho aluzange lugcinwe, ngoko akukho nto ithunyelweyo.",
+  "Your changes could not be saved. Leave this page anyway and lose them?": "Utshintsho lwakho aluzange lugcinwe. Uyalishiya eli phepha nangona kunjalo uze ulahlekelwe lulo?",
+  "Not saved, retrying...": "Akugcinwanga, kuyazanywa kwakhona...",
+  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Le mizuzu itshixiwe phambi kokuba utshintsho lwakho lwamva nje lugcinwe, ngoko olo tshintsho aluzange lugcinwe. Lusaboniswa ngezantsi: khuphela nantoni na oyifunayo phambi kokuba ushiye eli phepha."
 }

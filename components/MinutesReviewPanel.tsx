@@ -97,6 +97,7 @@ export default function MinutesReviewPanel({
   }
 
   async function respond(decision: "approved" | "changes_requested") {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/review`, {

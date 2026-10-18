@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Ukuhumusha akukwazanga ukwenziwa okwamanje.",
   "Translate into {language}": "Humushela ku-{language}",
   "Machine translation. The English is the official version.": "Ukuhumusha ngomshini. Okwesi-English yikho okusemthethweni.",
-  "Translating. A long document can take a minute or two…": "Kuyahumusha. Umbhalo omude ungathatha umzuzu noma emibili…"
+  "Translating. A long document can take a minute or two…": "Kuyahumusha. Umbhalo omude ungathatha umzuzu noma emibili…",
+  "Your changes could not be saved, so nothing was sent.": "Izinguquko zakho azikwazanga ukulondolozwa, ngakho akukho okuthunyelwe.",
+  "Your changes could not be saved. Leave this page anyway and lose them?": "Izinguquko zakho azikwazanga ukulondolozwa. Ushiye leli khasi noma kunjalo bese uyazilahlekelwa?",
+  "Not saved, retrying...": "Akulondolozwanga, kuyazanywa futhi...",
+  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Le mizuzu ikhiyiwe ngaphambi kokuthi izinguquko zakho zakamuva zilondolozwe, ngakho lezo zinguquko azikwazanga ukulondolozwa. Zisaboniswa ngezansi: kopisha noma yini oyidingayo ngaphambi kokuthi ushiye leli khasi."
 }
