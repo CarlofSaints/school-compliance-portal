@@ -1522,5 +1522,13 @@
   "Your changes could not be saved, so nothing was sent.": "Utshintsho lwakho aluzange lugcinwe, ngoko akukho nto ithunyelweyo.",
   "Your changes could not be saved. Leave this page anyway and lose them?": "Utshintsho lwakho aluzange lugcinwe. Uyalishiya eli phepha nangona kunjalo uze ulahlekelwe lulo?",
   "Not saved, retrying...": "Akugcinwanga, kuyazanywa kwakhona...",
-  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Le mizuzu itshixiwe phambi kokuba utshintsho lwakho lwamva nje lugcinwe, ngoko olo tshintsho aluzange lugcinwe. Lusaboniswa ngezantsi: khuphela nantoni na oyifunayo phambi kokuba ushiye eli phepha."
+  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Le mizuzu itshixiwe phambi kokuba utshintsho lwakho lwamva nje lugcinwe, ngoko olo tshintsho aluzange lugcinwe. Lusaboniswa ngezantsi: khuphela nantoni na oyifunayo phambi kokuba ushiye eli phepha.",
+  "You have unsaved changes from {time} on this device.": "Unotshintsho olungagcinwanga lwango-{time} kwesi sixhobo.",
+  "These minutes can no longer be edited, so they cannot be put back. Copy anything you need.": "Le mizuzu ayisakwazi ukuhlelwa, ngoko olu tshintsho alunakubuyiselwa. Khuphela nantoni na oyifunayo.",
+  "Restore them": "Lubuyisele",
+  "Copy": "Khuphela",
+  "Discard": "Lahla",
+  "Copied.": "Kukhutshelwe.",
+  "Could not copy. Select the text and copy it by hand.": "Ayikwazanga ukukhuphela. Khetha umbhalo uze uwukhuphele ngesandla.",
+  "Not saved: {error}": "Akugcinwanga: {error}"
 }

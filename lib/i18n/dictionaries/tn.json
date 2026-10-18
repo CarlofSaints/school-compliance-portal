@@ -1522,5 +1522,13 @@
   "Your changes could not be saved, so nothing was sent.": "Diphetogo tsa gago ga di a kgona go bolokwa, ka jalo ga go sepe se se rometsweng.",
   "Your changes could not be saved. Leave this page anyway and lose them?": "Diphetogo tsa gago ga di a kgona go bolokwa. A o tlogela tsebe e le fa go ntse jalo mme o di latlhegelwa?",
   "Not saved, retrying...": "Ga di a bolokwa, go lekwa gape...",
-  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Metsotso e e notletswe pele diphetogo tsa gago tsa bosheng di bolokwa, ka jalo diphetogo tseo ga di a kgona go bolokwa. Di sa ntse di bontshiwa fa tlase: kopisa sengwe le sengwe se o se tlhokang pele o tlogela tsebe e."
+  "These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.": "Metsotso e e notletswe pele diphetogo tsa gago tsa bosheng di bolokwa, ka jalo diphetogo tseo ga di a kgona go bolokwa. Di sa ntse di bontshiwa fa tlase: kopisa sengwe le sengwe se o se tlhokang pele o tlogela tsebe e.",
+  "You have unsaved changes from {time} on this device.": "O na le diphetogo tse di sa bolokwang tsa {time} mo sedirisiweng se.",
+  "These minutes can no longer be edited, so they cannot be put back. Copy anything you need.": "Metsotso e ga e sa kgone go fetolwa, ka jalo diphetogo ga di kgone go busediwa. Kopisa sengwe le sengwe se o se tlhokang.",
+  "Restore them": "Di busetse",
+  "Copy": "Kopisa",
+  "Discard": "Latlha",
+  "Copied.": "Go kopisitswe.",
+  "Could not copy. Select the text and copy it by hand.": "Ga go a kgonega go kopisa. Tlhopha mokwalo mme o o kopise ka seatla.",
+  "Not saved: {error}": "Ga di a bolokwa: {error}"
 }

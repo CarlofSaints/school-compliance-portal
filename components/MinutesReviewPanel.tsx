@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/useAuth";
+import type { SaveFirst } from "@/lib/minutesAutosave";
 import { useT } from "@/components/I18nProvider";
 import {
   canReview,
@@ -33,10 +34,8 @@ interface Props {
   myEmail: string;
   onChanged: () => void;
   onToast: (message: string, type: "success" | "error") => void;
-  /** Saves any unsaved typing first. Without it, sending used the last SAVED
-   *  copy and the reload afterwards wiped what was on screen (Carl lost a
-   *  whole set of minutes this way). False means do not send. */
-  ensureSaved?: () => Promise<boolean>;
+  /** Saves unsaved typing before acting on the saved copy (SaveFirst says why). */
+  ensureSaved?: SaveFirst;
 }
 
 export default function MinutesReviewPanel({
