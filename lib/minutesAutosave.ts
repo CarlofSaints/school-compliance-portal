@@ -11,6 +11,7 @@ import {
   formatPeriod,
   isLocked,
   MEETING_BODY_LABELS,
+  MINUTES_TEXT_FIELDS,
   type AttendanceStatus,
   type MeetingBody,
   type MeetingPeriod,
@@ -45,13 +46,23 @@ export interface MinutesText<P = unknown, S = unknown> {
 
 /** The one definition of "the text". */
 export function textOf<P, S>(r: MinutesText<P, S>): MinutesText<P, S> {
-  return { title: r.title, body: r.body, period: r.period, sections: r.sections };
+  const out: Record<string, unknown> = {};
+  for (const f of MINUTES_TEXT_FIELDS) out[f] = r[f];
+  return out as unknown as MinutesText<P, S>;
+}
+
+/** When the words were last changed. Minutes from before textUpdatedAt
+ *  existed fall back to updatedAt, the same on server and page, so the
+ *  conflict guard is on for them too (a little strict until their first save
+ *  sets the real thing). */
+export function textBase(r: { textUpdatedAt?: string; updatedAt?: string }): string | undefined {
+  return r.textUpdatedAt ?? r.updatedAt;
 }
 
 /** The save body: the text, and when the words it was edited from were last
  *  changed, so the server can refuse to save over somebody else's newer text. */
-export function savePayload(r: MinutesText & { textUpdatedAt?: string }) {
-  return { ...textOf(r), baseTextUpdatedAt: r.textUpdatedAt };
+export function savePayload(r: MinutesText & { textUpdatedAt?: string; updatedAt?: string }) {
+  return { ...textOf(r), baseTextUpdatedAt: textBase(r) };
 }
 
 // Empty means absent: the server drops false, "" and [] fields on save.
@@ -162,9 +173,9 @@ export function reconcile<
   if (isOlder(server.updatedAt, local.updatedAt)) return { record: local, stranded: null, conflict: null };
   if (!hasUnsaved) return { record: server, stranded: null, conflict: null };
   if (!isTextEditable(server.status)) return { record: server, stranded: textOf(local), conflict: null };
-  if (isOlder(local.textUpdatedAt, server.textUpdatedAt) && !sameText(local, server)) {
+  if (isOlder(textBase(local), textBase(server)) && !sameText(local, server)) {
     return {
-      record: { ...server, ...textOf(local), textUpdatedAt: local.textUpdatedAt },
+      record: { ...server, ...textOf(local), textUpdatedAt: textBase(local) },
       stranded: null,
       conflict: server,
     };
@@ -211,40 +222,9 @@ export interface MinutesDraft extends MinutesText {
   tabId?: string;
 }
 
-/** Per site, per person and per minutes: one browser can be signed in to
- *  more than one school, a shared computer has more than one secretary, and
- *  minutes ids are only unique within a school.
- *  "offered" holds a backup found when the page opened, apart from this
- *  visit's own, so typing on this visit can never overwrite or remove it. */
-export function backupKeys(host: string, userId: string, minutesId: string): { main: string; offered: string } {
-  return {
-    main: `minutes-draft:${host}:${userId}:${minutesId}`,
-    offered: `minutes-draft-offered:${host}:${userId}:${minutesId}`,
-  };
-}
+// The keys themselves, and which tab wrote what: lib/minutesBackupKeys.ts.
 
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
-
-/** On sign-out: this person's backups on this site go with them. */
-export function clearUserBackups(
-  store: (Pick<Storage, "key" | "removeItem"> & { readonly length: number }) | null,
-  host: string,
-  userId: string
-): void {
-  try {
-    if (!store) return;
-    const prefixes = [`minutes-draft:${host}:${userId}:`, `minutes-draft-offered:${host}:${userId}:`];
-    const mine: string[] = [];
-    for (let i = 0; i < store.length; i++) {
-      const k = store.key(i);
-      if (k && prefixes.some((p) => k.startsWith(p))) mine.push(k);
-    }
-    // Collected first: removing while walking the index skips keys.
-    mine.forEach((k) => store.removeItem(k));
-  } catch {
-    // Blocked storage holds nothing to clear.
-  }
-}
 
 /** Anything that is not a draft we wrote is ignored, never restored. */
 function asDraft(d: unknown): MinutesDraft | null {
@@ -332,6 +312,12 @@ export function mergeOffered(existing: MinutesDraft[], fresh: MinutesDraft | nul
 /** The saved minutes changed after the backup's edits began (someone else, or
  *  this person on another device), so restoring it would replace newer text. */
 // The WORDS changed, not any write: a review or a signature does not count.
-export function draftIsBehind(draft: MinutesDraft, server: { textUpdatedAt?: string }): boolean {
-  return isOlder(draft.baseUpdatedAt, server.textUpdatedAt);
+export function draftIsBehind(draft: MinutesDraft, server: { textUpdatedAt?: string; updatedAt?: string }): boolean {
+  return isOlder(draft.baseUpdatedAt, textBase(server));
+}
+
+/** A backup another tab wrote moments ago: that tab is probably still open
+ *  and typing, so its backup is left alone rather than offered here. */
+export function fromLiveTab(draft: MinutesDraft, tabId: string, now = Date.now(), windowMs = 30_000): boolean {
+  return !!draft.tabId && draft.tabId !== tabId && now - Date.parse(draft.editedAt) < windowMs;
 }

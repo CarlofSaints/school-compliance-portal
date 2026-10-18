@@ -88,6 +88,53 @@ async function main() {
   const noBase = await patch(m.id, { ...text("Old client, no base") });
   check("a save without a base (older page) still goes through", noBase.status, 200);
 
+  console.log("\nActivity log: one line per person per half hour of editing");
+  const { readActivity } = await import("../lib/activityLog");
+  const edits = async () =>
+    (await readActivity({ entity: "minutes", limit: 1000 })).entries.filter(
+      (e) => e.action === "minutes.updated" && e.entityId === m.id
+    ).length;
+  check("five saves with changed words so far, one log line", await edits(), 1);
+  const before = await getMinutes(m.id);
+  const noop = await patch(m.id, { ...text("Old client, no base"), baseTextUpdatedAt: before?.textUpdatedAt });
+  check("a save of identical words: ok", noop.status, 200);
+  check("and nothing written (updatedAt unchanged)", (await getMinutes(m.id))?.updatedAt, before?.updatedAt);
+
+  console.log("\nMinutes from before textUpdatedAt");
+  const legacy = await createMinutes({
+    title: "Legacy", body: "sgb", period: { kind: "month", year: 2026, month: 9 },
+    sections: [{ id: "s1", title: "Finance", body: "", order: 1 }], createdBy: "sec",
+  } as Parameters<typeof createMinutes>[0]);
+  // As stored before this change: no textUpdatedAt at all.
+  const { updateJson } = await import("../lib/controlData");
+  await updateJson<Record<string, unknown> | null>(`minutes/${legacy.id}/record.json`, null, (r) => {
+    const copy = { ...(r as Record<string, unknown>) };
+    delete copy.textUpdatedAt;
+    return copy;
+  });
+  const old = await getMinutes(legacy.id);
+  check("legacy record has no textUpdatedAt", old?.textUpdatedAt, undefined);
+  const lt = (body: string) => ({ title: "Legacy", body: "sgb", period: legacy.period, sections: [{ id: "s1", title: "Finance", body }] });
+  await new Promise((r) => setTimeout(r, 5));
+  const la = await patch(legacy.id, { ...lt("A on legacy"), baseTextUpdatedAt: old?.updatedAt });
+  const laBody = await la.json();
+  check("first save, based on updatedAt: saved, and textUpdatedAt now set", [la.status, typeof laBody.textUpdatedAt], [200, "string"]);
+  const lb = await patch(legacy.id, { ...lt("B on legacy"), baseTextUpdatedAt: old?.updatedAt });
+  check("a second editor from the same old updatedAt: refused as a conflict", [lb.status, (await lb.json()).conflict], [409, true]);
+  const legacy2 = await createMinutes({
+    title: "Legacy 2", body: "sgb", period: { kind: "month", year: 2026, month: 8 },
+    sections: [{ id: "s1", title: "Finance", body: "", order: 1 }], createdBy: "sec",
+  } as Parameters<typeof createMinutes>[0]);
+  await updateJson<Record<string, unknown> | null>(`minutes/${legacy2.id}/record.json`, null, (r) => {
+    const copy = { ...(r as Record<string, unknown>) };
+    delete copy.textUpdatedAt;
+    return copy;
+  });
+  const old2 = await getMinutes(legacy2.id);
+  await updateMinutes(legacy2.id, { draftNumber: 1 });
+  check("any write gives a legacy record textUpdatedAt = its old updatedAt",
+    (await getMinutes(legacy2.id))?.textUpdatedAt, old2?.updatedAt);
+
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);
 }

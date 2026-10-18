@@ -2,9 +2,10 @@
 //
 //   npx tsx scripts/check-minutes-autosave.ts
 
+import { backupKeys, clearUserBackups, otherTabsUnsaved } from "../lib/minutesBackupKeys";
 import {
-  backupKeys,
-  clearUserBackups,
+  fromLiveTab,
+  textBase,
   draftIsBehind,
   draftToOffer,
   hasUnsaved,
@@ -143,11 +144,37 @@ const all = new Map<string, string>([
 const listing = {
   get length() { return all.size; },
   key: (i: number) => [...all.keys()][i] ?? null,
+  getItem: (k: string) => all.get(k) ?? null,
   removeItem: (k: string) => void all.delete(k),
 };
 clearUserBackups(listing, "h", "u1");
 check("only this person's backups on this site go", [...all.keys()], ["minutes-draft:h:u2:m1", "minutes-draft:other:u1:m1", "hvps_session"]);
 clearUserBackups(null, "h", "u1");
+
+console.log("\nOther tabs");
+const nowMs = Date.parse("2026-10-18T10:00:00.000Z");
+const ago = (s: number) => new Date(nowMs - s * 1000).toISOString();
+all.clear();
+all.set("minutes-draft:h:u1:m1", JSON.stringify({ editedAt: ago(60), tabId: "other" }));
+all.set("minutes-draft:h:u1:m2", JSON.stringify({ editedAt: ago(60), tabId: "me" }));
+all.set("minutes-draft:h:u1:m3", JSON.stringify({ editedAt: ago(3600), tabId: "other" }));
+all.set("minutes-draft:h:u2:m1", JSON.stringify({ editedAt: ago(60), tabId: "other" }));
+check("sign-out finds only ANOTHER tab's recent backup for this person",
+  otherTabsUnsaved(listing, "h", "u1", "me", 5 * 60_000, nowMs), 1);
+check("another tab's backup from 10s ago: a live tab, left alone",
+  fromLiveTab({ ...draft, editedAt: ago(10), tabId: "other" }, "me", nowMs), true);
+check("from 2 minutes ago: offered", fromLiveTab({ ...draft, editedAt: ago(120), tabId: "other" }, "me", nowMs), false);
+check("this tab's own: never treated as another live tab", fromLiveTab({ ...draft, editedAt: ago(10), tabId: "me" }, "me", nowMs), false);
+
+console.log("\nMinutes from before textUpdatedAt");
+check("the base falls back to updatedAt", textBase({ updatedAt: "U" }), "U");
+check("and prefers textUpdatedAt", textBase({ updatedAt: "U", textUpdatedAt: "T" }), "T");
+const oldMine = { ...local, status: "draft" as MinutesStatus, updatedAt: "2026-10-18T09:00:00.000Z" };
+const oldTheirs = { ...server, status: "draft" as MinutesStatus, title: "Theirs", updatedAt: "2026-10-18T09:05:00.000Z" };
+const oldClash = reconcile(oldTheirs, oldMine, true);
+check("legacy minutes: newer words from someone else are still a conflict", oldClash.conflict, oldTheirs);
+check("and the save stays based on MY old base, so the server refuses it", savePayload(oldClash.record).baseTextUpdatedAt, oldMine.updatedAt);
+check("legacy backup behind the server's updatedAt", draftIsBehind({ ...draft, baseUpdatedAt: oldMine.updatedAt }, oldTheirs), true);
 
 console.log("\nSame words, as the save route rebuilds them");
 const att = {

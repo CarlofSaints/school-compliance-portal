@@ -7,7 +7,12 @@ import {
   deleteMinutes,
   MinutesLockedError,
   MinutesConflictError,
+  textFieldsChanged,
 } from "@/lib/minutesData";
+import { textBase } from "@/lib/minutesAutosave";
+
+// One "Edited minutes" log line per person per set of minutes per half hour.
+const EDIT_LOG_WINDOW_MS = 30 * 60_000;
 import {
   checkPeriod,
   isLocked,
@@ -153,18 +158,29 @@ export async function PATCH(
     // against the copy being written over, so two people editing at once
     // cannot both "win": the second is told and shown the first one's text.
     // Reviews and signatures do not move textUpdatedAt, so they never count.
+    // Older records have none yet: textBase falls back to updatedAt, as the
+    // page does. A save with no base at all (a page still running older code)
+    // is taken as before.
     const base = typeof body.baseTextUpdatedAt === "string" ? body.baseTextUpdatedAt : undefined;
+    let logIt = false;
     const saved = await updateMinutes(id, (current) => {
-      if (base && current.textUpdatedAt && current.textUpdatedAt > base) {
+      const currentBase = textBase(current);
+      if (base && currentBase && currentBase > base) {
         throw new MinutesConflictError(current);
       }
-      return updates;
+      // Logged only when the words changed, and not again for the same
+      // person within the window. Decided on the copy being written, inside
+      // the same atomic write as the marker.
+      const last = current.lastEditLogged;
+      const recent = last?.by === session.id && Date.now() - Date.parse(last.at) < EDIT_LOG_WINDOW_MS;
+      logIt = textFieldsChanged(current, updates) && !recent;
+      return logIt ? { ...updates, lastEditLogged: { by: session.id, at: new Date().toISOString() } } : updates;
     });
     if (!saved) {
       return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
     }
 
-    await recordActivity({
+    if (logIt) await recordActivity({
       ...actorFrom(req, session),
       action: "minutes.updated",
       entity: "minutes",

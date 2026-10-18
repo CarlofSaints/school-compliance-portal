@@ -3,7 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { SessionPayload } from "./roles";
-import { clearUserBackups } from "./minutesAutosave";
+import { clearUserBackups, otherTabsUnsaved, SIGNED_OUT_KEY, TAB_ID } from "./minutesBackupKeys";
 
 const SESSION_KEY = "hvps_session";
 
@@ -103,19 +103,34 @@ export function onBeforeSignOut(fn: () => Promise<boolean>): () => void {
   };
 }
 
+/** Runs in THIS tab when the person signs out in another one: a last try at
+ *  saving open work before this tab's backups are cleared. */
+const signedOutElsewhereHooks = new Set<() => Promise<void>>();
+export function onSignedOutElsewhere(fn: () => Promise<void>): () => void {
+  signedOutElsewhereHooks.add(fn);
+  return () => {
+    signedOutElsewhereHooks.delete(fn);
+  };
+}
+
 // Signing out in one tab tells the others (the storage event fires only in
-// OTHER tabs), so they stop backing up typing the person chose to leave.
-const SIGNED_OUT_KEY = "minutes-signed-out";
+// OTHER tabs). Each tries one save of open work first: the cookie may not be
+// gone yet, and if it is, that save's 401 simply goes to sign-in. Then it
+// stops backing up and clears, as the person chose to leave.
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === SIGNED_OUT_KEY && e.newValue) {
-      signingOut = true;
-      try {
-        const { userId } = JSON.parse(e.newValue) as { userId?: string };
-        if (userId) clearUserBackups(window.localStorage, window.location.host, userId);
-      } catch {
-        // A marker we cannot read still stops this tab backing up.
-      }
+      const marker = e.newValue;
+      void (async () => {
+        for (const hook of [...signedOutElsewhereHooks]) await hook().catch(() => {});
+        signingOut = true;
+        try {
+          const { userId } = JSON.parse(marker) as { userId?: string };
+          if (userId) clearUserBackups(window.localStorage, window.location.host, userId);
+        } catch {
+          // A marker we cannot read still stops this tab backing up.
+        }
+      })();
     } else if (e.key === SESSION_KEY && e.newValue) {
       // Signed in again in another tab.
       signingOut = false;
@@ -144,11 +159,25 @@ export function clearSession(): void {
 
 /** Signs out: the server clears the cookie, this clears the drawn copy. The
  *  local copy goes even if the call fails, so the page never looks signed in
- *  after the person asked to leave. False when a page cancelled it. */
-export async function signOut(): Promise<boolean> {
-  // Pages with unsaved work get one go at saving it first, and may cancel.
+ *  after the person asked to leave. False when it was cancelled.
+ *  confirmOtherTabs is asked when another open tab has recent unsaved minutes
+ *  typing (the caller words the question, in the person's language). */
+export async function signOut(opts: { confirmOtherTabs?: () => boolean } = {}): Promise<boolean> {
+  // Pages with unsaved work in THIS tab get one go at saving it, and may cancel.
   for (const hook of [...beforeSignOutHooks]) {
     if (!(await hook().catch(() => true))) return false;
+  }
+  // Another tab's: it gets its own try at saving when it hears of the
+  // sign-out, but cannot ask, so ask here.
+  const who = getSession();
+  if (who && opts.confirmOtherTabs) {
+    let others = 0;
+    try {
+      others = otherTabsUnsaved(window.localStorage, window.location.host, who.id, TAB_ID, 5 * 60_000);
+    } catch {
+      // Storage blocked: no backups to find.
+    }
+    if (others > 0 && !opts.confirmOtherTabs()) return false;
   }
   // 🔴 From here signing out DISCARDS any unsaved minutes typing left: the
   // backups belong to this person, and on a shared computer the next one in

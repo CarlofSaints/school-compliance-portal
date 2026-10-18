@@ -10,15 +10,17 @@ import {
   isRedirectingToSignIn,
   isSigningOut,
   onBeforeSignOut,
+  onSignedOutElsewhere,
   onSignInRedirect,
 } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import { quickActionTitle } from "@/lib/minutesCapture";
+import { backupKeys, TAB_ID } from "@/lib/minutesBackupKeys";
 import {
-  backupKeys,
   draftIsBehind,
+  fromLiveTab,
   draftToOffer,
   hasUnsaved,
   isTextEditable,
@@ -31,6 +33,7 @@ import {
   plainText,
   saveFailureKind,
   savePayload,
+  textBase,
   textOf,
   writeDraft,
   writeOffered,
@@ -94,11 +97,6 @@ function localStore(): Storage | null {
   }
 }
 type BackupKeys = ReturnType<typeof backupKeys>;
-// Which tab wrote a backup: a save here only ever clears this tab's own.
-const TAB_ID =
-  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random()}`;
 /** The local backup of unsaved typing (lib/minutesAutosave.ts says why). */
 function backUp(keys: BackupKeys | null, r: MinutesDetail) {
   // Signing out discards on purpose: never write a backup back behind it.
@@ -106,7 +104,7 @@ function backUp(keys: BackupKeys | null, r: MinutesDetail) {
   writeDraft(localStore(), keys.main, {
     ...textOf(r),
     editedAt: new Date().toISOString(),
-    baseUpdatedAt: r.textUpdatedAt,
+    baseUpdatedAt: textBase(r),
     tabId: TAB_ID,
   });
 }
@@ -236,10 +234,14 @@ export default function MinutesDetailPage() {
           // from this visit's own slot, so nothing typed now can overwrite or
           // remove it. Only Restore (once saved) or Discard lets one go.
           const store = localStore();
-          const fresh = draftToOffer(readDraft(store, keys.main), server);
+          // Another tab's backup from moments ago belongs to a tab that is
+          // probably still open: left where it is, not offered here.
+          const main = readDraft(store, keys.main);
+          const live = !!main && fromLiveTab(main, TAB_ID);
+          const fresh = live ? null : draftToOffer(main, server);
           const list = mergeOffered(readOffered(store, keys.offered), fresh, server);
           writeOffered(store, keys.offered, list);
-          if (!fresh || readOffered(store, keys.offered).some((d) => d.editedAt === fresh.editedAt)) {
+          if (!live && (!fresh || readOffered(store, keys.offered).some((d) => d.editedAt === fresh.editedAt))) {
             removeDraft(store, keys.main);
           }
           setOffered(
@@ -313,12 +315,15 @@ export default function MinutesDetailPage() {
    *  autosave, Save, save-before-acting and leaving alike. True when the
    *  server took it, which is not the same as clean: typing may have carried
    *  on meanwhile. keepalive is for a tab that is closing. */
-  const sendSave = async (opts: { keepalive?: boolean } = {}): Promise<boolean> => {
+  const sendSave = async (opts: { keepalive?: boolean; noBase?: boolean } = {}): Promise<boolean> => {
     const r = recordRef.current;
     if (!r) return false;
     const version = versions.current.edit;
     const sentAt = new Date().toISOString();
-    const body = JSON.stringify(savePayload(r));
+    // noBase: the tab is closing while a save is still out, so this one's base
+    // would be refused as soon as that lands. Its text is newer than what is
+    // in flight, so it goes without one, as an older page's save does.
+    const body = JSON.stringify(opts.noBase ? textOf(r) : savePayload(r));
     // keepalive requests share a 64KB budget; past that the backup has to do.
     if (opts.keepalive && new TextEncoder().encode(body).length >= 64_000) return false;
     setSaving(true);
@@ -381,8 +386,9 @@ export default function MinutesDetailPage() {
       setSaveRefused(null);
       return true;
     } catch {
-      // Network: worth retrying.
+      // Network: worth retrying, on our own backoff (no Retry-After came).
       lastSaveError.current = t("Could not save.");
+      retryAfter.current = null;
       setSaveFailures((n) => n + 1);
       return false;
     } finally {
@@ -455,19 +461,39 @@ export default function MinutesDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [record, dirty, textEditable, saveFailures, saveRefused, conflict]);
 
-  // Signing out with unsaved typing: one try at saving it (up to 5 seconds),
-  // and only if that fails, ask. Staying cancels the sign-out.
+  // Signing out with unsaved typing: one try at saving it, and only if that
+  // fails, ask. Staying cancels the sign-out. 5 seconds, or up to 15 while a
+  // save is still on its way; and the sign-out never goes ahead (which
+  // clears the cookie) with a save still in flight.
   useEffect(
     () =>
       onBeforeSignOut(async () => {
         const r = recordRef.current;
         if (!r || !hasUnsaved(versions.current) || !isTextEditable(r.status)) return true;
-        const result = await Promise.race([
-          saveUntilClean(),
-          new Promise<"failed">((done) => setTimeout(() => done("failed"), 5000)),
-        ]);
+        const attempt = saveUntilClean();
+        const within = (ms: number) =>
+          Promise.race([attempt, new Promise<"timeout">((done) => setTimeout(() => done("timeout"), ms))]);
+        let result = await within(5000);
+        if (result === "timeout" && inFlight.current) result = await within(10_000);
         if (result === "clean") return true;
-        return window.confirm(t("You have unsaved minutes. Sign out and lose them?"));
+        const leave = window.confirm(t("You have unsaved minutes. Sign out and lose them?"));
+        if (leave) await inFlight.current?.catch(() => false);
+        return leave;
+      }),
+    // Registered once; saveUntilClean reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  // Signed out in another tab: one last try at saving (5 seconds) before
+  // this tab's backups are cleared. If the cookie is already gone the save's
+  // 401 sends this tab to sign-in.
+  useEffect(
+    () =>
+      onSignedOutElsewhere(async () => {
+        const r = recordRef.current;
+        if (!r || !hasUnsaved(versions.current) || !isTextEditable(r.status)) return;
+        await Promise.race([saveUntilClean(), new Promise((done) => setTimeout(done, 5000))]);
       }),
     // Registered once; saveUntilClean reads only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -518,7 +544,11 @@ export default function MinutesDetailPage() {
       const r = recordRef.current;
       if (r) {
         backUp(keysRef.current, r);
-        if (isTextEditable(r.status) && !isRedirectingToSignIn()) void saveOnce({ keepalive: true });
+        // Sent at once, not queued: the tab may be gone before a save in
+        // flight comes back.
+        if (isTextEditable(r.status) && !isRedirectingToSignIn() && hasUnsaved(versions.current)) {
+          void sendSave({ keepalive: true, noBase: !!inFlight.current });
+        }
       }
       if (isRedirectingToSignIn()) return;
       e.preventDefault();
@@ -637,7 +667,7 @@ export default function MinutesDetailPage() {
     // Kept as an offered backup as well, in case the copy did not take.
     const keys = keysRef.current;
     const store = localStore();
-    const kept = { ...textOf(mine), editedAt: new Date().toISOString(), baseUpdatedAt: mine.textUpdatedAt, tabId: TAB_ID };
+    const kept = { ...textOf(mine), editedAt: new Date().toISOString(), baseUpdatedAt: textBase(mine), tabId: TAB_ID };
     if (keys) writeOffered(store, keys.offered, mergeOffered(readOffered(store, keys.offered), kept, conflict));
     setOffered((prev) => [{ id: kept.editedAt, draft: kept, editedAt: kept.editedAt, reason: "device" }, ...prev]);
     forgetUnsaved();

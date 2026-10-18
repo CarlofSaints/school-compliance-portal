@@ -10,7 +10,8 @@ import type {
   MinutesDistributionNote,
   Signatory,
 } from "./minutes";
-import { isLocked } from "./minutes";
+import { isLocked, MINUTES_TEXT_FIELDS } from "./minutes";
+import { sameText } from "./minutesAutosave";
 
 // ---------------------------------------------------------------------------
 // Storage for meeting minutes.
@@ -100,6 +101,10 @@ export interface MinutesRecord {
    *  sends back the one its text was based on, so a save cannot quietly wipe
    *  somebody else's newer text. Missing on records from before it existed. */
   textUpdatedAt?: string;
+  /** Who last had an "Edited minutes" line written to the activity log, and
+   *  when. Autosave saves every few seconds, so the log takes one line per
+   *  person per half hour of editing rather than one per save. */
+  lastEditLogged?: { by: string; at: string };
   /** Set once every signatory has signed. Nothing may change after this. */
   signedAt?: string;
 }
@@ -138,7 +143,7 @@ export class MinutesLockedError extends Error {
 // these may change, whoever is writing: the store is the rule, the PATCH
 // route's check is the courtesy. Signatures, status and distribution still
 // move, because that is how signing itself proceeds.
-const SIGNED_CONTENT_FIELDS = ["title", "body", "period", "sections", "original"] as const;
+const SIGNED_CONTENT_FIELDS = [...MINUTES_TEXT_FIELDS, "original"] as const;
 
 const SIGNING_FREEZE_MESSAGE =
   "These minutes are out for signing, so the text cannot change. Delete them and start again, or record the correction in the next set of minutes.";
@@ -193,7 +198,11 @@ export class MinutesConflictError extends Error {
   }
 }
 
-const TEXT_FIELDS = ["title", "body", "period", "sections"] as const;
+/** Whether applying updates would change the minutes' words. */
+export function textFieldsChanged(existing: MinutesRecord, updates: Partial<MinutesRecord>): boolean {
+  if (!MINUTES_TEXT_FIELDS.some((f) => f in updates && updates[f] !== undefined)) return false;
+  return !sameText(existing, { ...existing, ...updates });
+}
 
 export async function updateMinutes(
   id: string,
@@ -217,12 +226,18 @@ export async function updateMinutes(
     ) {
       throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
     }
+    // Nothing different at all (autosave sends every text field every time):
+    // no write, so the store and the activity log are not churned.
+    const keys = Object.keys(updates) as (keyof typeof updates)[];
+    if (keys.every((k) => updates[k] === undefined || JSON.stringify(updates[k]) === JSON.stringify(existing[k]))) {
+      saved = existing;
+      return NO_CHANGE;
+    }
     const now = new Date().toISOString();
-    // Only a real change to the words counts: autosave sends every text field
-    // every time, and a save of the same words must not look like an edit.
-    const textChanged = TEXT_FIELDS.some(
-      (f) => f in updates && updates[f] !== undefined && JSON.stringify(updates[f]) !== JSON.stringify(existing[f])
-    );
+    // Only a real change to the WORDS moves textUpdatedAt, compared the way
+    // the editor compares them (trimmed, ids and order ignored), so a review,
+    // a signature or a re-save of the same words does not.
+    const textChanged = textFieldsChanged(existing, updates);
     saved = {
       ...existing,
       ...updates,
@@ -230,7 +245,9 @@ export async function updateMinutes(
       createdAt: existing.createdAt,
       createdBy: existing.createdBy,
       updatedAt: now,
-      textUpdatedAt: textChanged ? now : existing.textUpdatedAt,
+      // Older records get one on their first write: their updatedAt, which
+      // is what the page has been using as the base for them.
+      textUpdatedAt: textChanged ? now : (existing.textUpdatedAt ?? existing.updatedAt),
     };
     return saved;
   });
