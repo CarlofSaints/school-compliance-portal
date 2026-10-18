@@ -1,7 +1,7 @@
 "use client";
 
 import TranslateContentButton from "@/components/TranslateContentButton";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth, authFetch } from "@/lib/useAuth";
@@ -130,8 +130,17 @@ export default function MinutesDetailPage() {
     return true;
   };
 
-  const save = async () => {
-    if (!record) return;
+  // Bumped on every edit, so a save that finishes while someone is still
+  // typing does not put the older server copy back over the newer text.
+  const editVersion = useRef(0);
+  const savingNow = useRef(false);
+
+  /** True when everything on screen is saved. */
+  const save = async (opts?: { quiet?: boolean }): Promise<boolean> => {
+    if (!record) return false;
+    if (savingNow.current) return false;
+    savingNow.current = true;
+    const version = editVersion.current;
     setSaving(true);
     try {
       const res = await authFetch(`/api/minutes/${record.id}`, {
@@ -147,19 +156,55 @@ export default function MinutesDetailPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setToast({ message: data.error || t("Could not save."), type: "error" });
-        return;
+        return false;
       }
       // What came BACK, not a re-read: a read straight after a write can serve
-      // the previous copy and make a good save look like it failed.
-      setRecord(data);
-      setDirty(false);
-      setToast({ message: t("Saved."), type: "success" });
+      // the previous copy and make a good save look like it failed. Only when
+      // nothing was typed meanwhile; otherwise the newer text stays and is
+      // saved next.
+      if (editVersion.current === version) {
+        setRecord(data);
+        setDirty(false);
+      }
+      if (!opts?.quiet) setToast({ message: t("Saved."), type: "success" });
+      return editVersion.current === version;
     } catch {
       setToast({ message: t("Could not save."), type: "error" });
+      return false;
     } finally {
+      savingNow.current = false;
       setSaving(false);
     }
   };
+
+  // Before anything that sends or signs: those act on the SAVED copy and then
+  // reload, so unsaved typing would be sent out missing and then wiped.
+  const ensureSaved = async (): Promise<boolean> => (dirty ? save({ quiet: true }) : true);
+
+  // Autosave a few seconds after the last keystroke. Carl typed a whole set of
+  // minutes, sent it for checking without pressing Save, and lost all of it.
+  const textEditableNow =
+    !!record && canManage && !isLocked(record.status) && record.status !== "awaiting_signatures";
+  useEffect(() => {
+    if (!dirty || !textEditableNow) return;
+    const timer = setTimeout(() => {
+      void save({ quiet: true });
+    }, 3000);
+    return () => clearTimeout(timer);
+    // save is recreated every render; the timer only needs the latest record.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [record, dirty, textEditableNow]);
+
+  // Closing the tab or reloading with unsaved typing asks first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   // Returns an error message to keep the dialog open, per DangerConfirmModal.
   const remove = async (typed: string) => {
@@ -186,6 +231,7 @@ export default function MinutesDetailPage() {
   const textEditable = editable && !signingOpen;
 
   const patch = (u: Partial<MinutesDetail>) => {
+    editVersion.current += 1;
     setRecord((r) => (r ? { ...r, ...u } : r));
     setDirty(true);
   };
@@ -221,7 +267,7 @@ export default function MinutesDetailPage() {
           </DownloadLink>
           {textEditable && (
             <button
-              onClick={save}
+              onClick={() => void save()}
               disabled={saving || !dirty}
               className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
             >
@@ -318,6 +364,7 @@ export default function MinutesDetailPage() {
         myEmail={session.email}
         onChanged={load}
         onToast={(message, type) => setToast({ message, type })}
+        ensureSaved={ensureSaved}
       />
 
       {/* 🔴 Above signing, and NOT gated on the minutes being editable.
@@ -338,6 +385,7 @@ export default function MinutesDetailPage() {
         canManage={canManage}
         onChanged={load}
         onToast={(message, type) => setToast({ message, type })}
+        ensureSaved={ensureSaved}
       />
 
       <MinutesReviewPanel
@@ -350,6 +398,7 @@ export default function MinutesDetailPage() {
         myEmail={session.email}
         onChanged={load}
         onToast={(message, type) => setToast({ message, type })}
+        ensureSaved={ensureSaved}
       />
 
       {record.reviews.length > 0 && (

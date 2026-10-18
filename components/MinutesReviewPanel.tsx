@@ -33,6 +33,10 @@ interface Props {
   myEmail: string;
   onChanged: () => void;
   onToast: (message: string, type: "success" | "error") => void;
+  /** Saves any unsaved typing first. Without it, sending used the last SAVED
+   *  copy and the reload afterwards wiped what was on screen (Carl lost a
+   *  whole set of minutes this way). False means do not send. */
+  ensureSaved?: () => Promise<boolean>;
 }
 
 export default function MinutesReviewPanel({
@@ -45,6 +49,7 @@ export default function MinutesReviewPanel({
   myEmail,
   onChanged,
   onToast,
+  ensureSaved,
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -62,6 +67,7 @@ export default function MinutesReviewPanel({
     .slice(-1)[0];
 
   async function send() {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/send-for-review`, { method: "POST" });

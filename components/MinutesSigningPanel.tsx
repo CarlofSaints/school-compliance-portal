@@ -36,6 +36,10 @@ interface Props {
   myEmail: string;
   onChanged: () => void;
   onToast: (message: string, type: "success" | "error") => void;
+  /** Saves any unsaved typing first. Without it, sending used the last SAVED
+   *  copy and the reload afterwards wiped what was on screen (Carl lost a
+   *  whole set of minutes this way). False means do not send. */
+  ensureSaved?: () => Promise<boolean>;
 }
 
 function when(iso: string): string {
@@ -59,6 +63,7 @@ export default function MinutesSigningPanel({
   myEmail,
   onChanged,
   onToast,
+  ensureSaved,
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -69,6 +74,7 @@ export default function MinutesSigningPanel({
   const open = status === "awaiting_signatures";
 
   async function post(path: string, payload?: unknown, ok?: string) {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/${path}`, {
