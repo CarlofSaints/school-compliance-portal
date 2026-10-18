@@ -1540,5 +1540,6 @@
   "Use theirs (copy mine first)": "Sebedisa ya bona (kopitsa ya ka pele)",
   "Copy mine": "Kopitsa ya ka",
   "Overwrite with mine": "Ngola hodima ka ya ka",
-  "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "O na le metsotso e sa bolokwang e butsweng thebeng e nngwe. O a tswa le ha ho le jwalo mme o e lahlehelwa?"
+  "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "O na le metsotso e sa bolokwang e butsweng thebeng e nngwe. O a tswa le ha ho le jwalo mme o e lahlehelwa?",
+  "Last edited by {name} at {time}": "E fetotswe la ho qetela ke {name} ka {time}"
 }

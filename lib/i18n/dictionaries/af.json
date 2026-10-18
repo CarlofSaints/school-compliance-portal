@@ -1540,5 +1540,6 @@
   "Use theirs (copy mine first)": "Gebruik hulle s’n (kopieer myne eers)",
   "Copy mine": "Kopieer myne",
   "Overwrite with mine": "Oorskryf met myne",
-  "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "U het ongestoorde notule oop in ’n ander oortjie. Teken in elk geval uit en verloor dit?"
+  "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "U het ongestoorde notule oop in ’n ander oortjie. Teken in elk geval uit en verloor dit?",
+  "Last edited by {name} at {time}": "Laas gewysig deur {name} om {time}"
 }

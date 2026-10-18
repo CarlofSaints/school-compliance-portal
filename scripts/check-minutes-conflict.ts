@@ -74,6 +74,9 @@ async function main() {
   check("second save from the OLD base: refused 409", second.status, 409);
   check("marked as a conflict, carrying their record", [secondBody.conflict, secondBody.current?.sections?.[0]?.body], [true, "Tab A's words"]);
   check("tab A's words are still what is stored", (await getMinutes(m.id))?.sections[0].body, "Tab A's words");
+  const retry = await patch(m.id, { ...text("Tab A's words"), baseTextUpdatedAt: base });
+  check("a retry of tab A's save from the old base (its first try landed): accepted, no conflict", retry.status, 200);
+  check("who last edited is on the record", (await getMinutes(m.id))?.lastEditedBy?.name, "Sam Secretary");
 
   const same = await patch(m.id, { ...text("Tab A's words"), baseTextUpdatedAt: firstBody.textUpdatedAt });
   const sameBody = await same.json();
@@ -88,7 +91,7 @@ async function main() {
   const noBase = await patch(m.id, { ...text("Old client, no base") });
   check("a save without a base (older page) still goes through", noBase.status, 200);
 
-  console.log("\nActivity log: one line per person per half hour of editing");
+  console.log("\nActivity log: one line per person per 5 minutes of editing");
   const { readActivity } = await import("../lib/activityLog");
   const edits = async () =>
     (await readActivity({ entity: "minutes", limit: 1000 })).entries.filter(

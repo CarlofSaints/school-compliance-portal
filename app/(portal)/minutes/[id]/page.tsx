@@ -17,7 +17,7 @@ import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import { quickActionTitle } from "@/lib/minutesCapture";
-import { backupKeys, TAB_ID } from "@/lib/minutesBackupKeys";
+import { backupKeys, keysWith, TAB_ID } from "@/lib/minutesBackupKeys";
 import {
   draftIsBehind,
   fromLiveTab,
@@ -25,12 +25,14 @@ import {
   hasUnsaved,
   isTextEditable,
   mergeOffered,
+  mergeTypingOverSave,
   readDraft,
   readOffered,
   reconcile,
   removeDraft,
   retryDelayMs,
   plainText,
+  sameText,
   saveFailureKind,
   savePayload,
   textBase,
@@ -86,6 +88,8 @@ interface MinutesDetail {
   signedAt?: string;
   updatedAt?: string;
   textUpdatedAt?: string;
+  lastEditedAt?: string;
+  lastEditedBy?: { id: string; name: string };
 }
 
 // localStorage can throw on access (private mode, blocked site data).
@@ -180,6 +184,7 @@ export default function MinutesDetailPage() {
   const versions = useRef<EditVersions>({ edit: 0, saved: 0 });
   const inFlight = useRef<Promise<boolean> | null>(null);
   const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Set once the signed-in person and the minutes are known (first load).
   const keysRef = useRef<BackupKeys | null>(null);
   // Restored backups (their editedAt) are only let go of once their text is saved.
@@ -193,9 +198,15 @@ export default function MinutesDetailPage() {
     setDirty(false);
     if (backupTimer.current) clearTimeout(backupTimer.current);
     backupTimer.current = null;
-    if (keysRef.current) {
-      removeDraft(localStore(), keysRef.current.main);
-      if (opts.offered) removeDraft(localStore(), keysRef.current.offered);
+    const keys = keysRef.current;
+    const store = localStore();
+    if (keys) {
+      removeDraft(store, keys.main);
+      if (opts.offered) {
+        removeDraft(store, keys.offered);
+        // Gone for every tab too: no backup of deleted minutes is left to offer.
+        if (store) keysWith(store, [keys.tabsPrefix]).forEach((k) => removeDraft(store, k));
+      }
     }
   };
 
@@ -234,15 +245,20 @@ export default function MinutesDetailPage() {
           // from this visit's own slot, so nothing typed now can overwrite or
           // remove it. Only Restore (once saved) or Discard lets one go.
           const store = localStore();
-          // Another tab's backup from moments ago belongs to a tab that is
-          // probably still open: left where it is, not offered here.
-          const main = readDraft(store, keys.main);
-          const live = !!main && fromLiveTab(main, TAB_ID);
-          const fresh = live ? null : draftToOffer(main, server);
-          const list = mergeOffered(readOffered(store, keys.offered), fresh, server);
+          // Every tab's backup of these minutes. One written moments ago
+          // belongs to a tab that is probably still open: left where it is.
+          const found = (store ? keysWith(store, [keys.tabsPrefix]) : []).flatMap((k) => {
+            const d = readDraft(store, k);
+            return d && !fromLiveTab(d, TAB_ID) ? [{ k, d }] : [];
+          });
+          let list = readOffered(store, keys.offered);
+          for (const { d } of found) list = mergeOffered(list, draftToOffer(d, server), server);
           writeOffered(store, keys.offered, list);
-          if (!live && (!fresh || readOffered(store, keys.offered).some((d) => d.editedAt === fresh.editedAt))) {
-            removeDraft(store, keys.main);
+          // A tab's key goes once what it held is safely in the offered list,
+          // or the server already has those words.
+          const stored = readOffered(store, keys.offered);
+          for (const { k, d } of found) {
+            if (!draftToOffer(d, server) || stored.some((o) => o.editedAt === d.editedAt)) removeDraft(store, k);
           }
           setOffered(
             list.map((d) => ({
@@ -315,15 +331,13 @@ export default function MinutesDetailPage() {
    *  autosave, Save, save-before-acting and leaving alike. True when the
    *  server took it, which is not the same as clean: typing may have carried
    *  on meanwhile. keepalive is for a tab that is closing. */
-  const sendSave = async (opts: { keepalive?: boolean; noBase?: boolean } = {}): Promise<boolean> => {
+  const sendSave = async (opts: { keepalive?: boolean } = {}): Promise<boolean> => {
     const r = recordRef.current;
     if (!r) return false;
     const version = versions.current.edit;
     const sentAt = new Date().toISOString();
-    // noBase: the tab is closing while a save is still out, so this one's base
-    // would be refused as soon as that lands. Its text is newer than what is
-    // in flight, so it goes without one, as an older page's save does.
-    const body = JSON.stringify(opts.noBase ? textOf(r) : savePayload(r));
+    const sent = textOf(r);
+    const body = JSON.stringify(savePayload(r));
     // keepalive requests share a 64KB budget; past that the backup has to do.
     if (opts.keepalive && new TextEncoder().encode(body).length >= 64_000) return false;
     setSaving(true);
@@ -335,7 +349,14 @@ export default function MinutesDetailPage() {
         keepalive: opts.keepalive,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      // "Conflict" with exactly our words is not one: our own earlier save (a
+      // retry whose first try landed) already put them there.
+      const saved: MinutesDetail | null = res.ok
+        ? data
+        : data.conflict && data.current && sameText(data.current, sent)
+          ? data.current
+          : null;
+      if (!saved) {
         lastSaveError.current = data.error || t("Could not save.");
         const kind = saveFailureKind(res.status);
         if (data.conflict && data.current) {
@@ -362,10 +383,11 @@ export default function MinutesDetailPage() {
       // while it was in flight stays and is saved next.
       versions.current.saved = version;
       const unsaved = hasUnsaved(versions.current);
-      // Our own save: its textUpdatedAt is the new base, and any typing since
-      // goes on top of it.
+      // Our own save: its textUpdatedAt is the new base. Typing since goes on
+      // top, but only what changed since this save went out, so the server's
+      // section ids and the Apologies section it added are kept.
       const now = recordRef.current;
-      put(unsaved && now ? { ...data, ...textOf(now) } : data);
+      put(unsaved && now ? mergeTypingOverSave(saved, sent, textOf(now)) : saved);
       setDirty(unsaved);
       const keys = keysRef.current;
       if (!unsaved && keys) {
@@ -456,6 +478,7 @@ export default function MinutesDetailPage() {
     const timer = setTimeout(() => {
       void saveOnce();
     }, delay);
+    autosaveTimer.current = timer;
     return () => clearTimeout(timer);
     // saveOnce is recreated every render but reads only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -522,6 +545,9 @@ export default function MinutesDetailPage() {
   // The in-page Back link saves first, and only leaves without saving if the
   // user says so.
   const back = async (e: React.MouseEvent) => {
+    // A new tab or window (ctrl, cmd, shift, middle click) leaves this page as
+    // it is, so the browser handles those.
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (!hasUnsaved(versions.current)) return;
     e.preventDefault();
     // behind: the rest goes with the save on the way out.
@@ -545,9 +571,19 @@ export default function MinutesDetailPage() {
       if (r) {
         backUp(keysRef.current, r);
         // Sent at once, not queued: the tab may be gone before a save in
-        // flight comes back.
+        // flight comes back. With the current base: if that earlier save lands
+        // first, the server takes this one only if the words match, and
+        // otherwise the backup has them. If the person chooses to stay, the
+        // timer is cancelled and later saves queue behind this one as usual.
         if (isTextEditable(r.status) && !isRedirectingToSignIn() && hasUnsaved(versions.current)) {
-          void sendSave({ keepalive: true, noBase: !!inFlight.current });
+          if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+          const p = sendSave({ keepalive: true });
+          if (!inFlight.current) {
+            inFlight.current = p;
+            void p.finally(() => {
+              if (inFlight.current === p) inFlight.current = null;
+            });
+          }
         }
       }
       if (isRedirectingToSignIn()) return;
@@ -703,6 +739,19 @@ export default function MinutesDetailPage() {
             {t(MINUTES_STATUS_LABELS[record.status])}
             {record.draftNumber > 0 && " · " + t("Draft {n}", { n: record.draftNumber })}
           </p>
+          {record.lastEditedBy && record.lastEditedAt && (
+            <p className="text-xs text-gray-400 mt-1">
+              {t("Last edited by {name} at {time}", {
+                name: record.lastEditedBy.name,
+                time: new Date(record.lastEditedAt).toLocaleString("en-ZA", {
+                  day: "numeric",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              })}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {textEditable && dirty && !saving && (saveRefused || saveFailures > 0) && (

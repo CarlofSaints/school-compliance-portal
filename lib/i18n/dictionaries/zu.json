@@ -1540,5 +1540,6 @@
   "Use theirs (copy mine first)": "Sebenzisa eyabo (kopisha eyami kuqala)",
   "Copy mine": "Kopisha eyami",
   "Overwrite with mine": "Bhala phezu kwayo ngeyami",
-  "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "Unemizuzu engalondolozwanga evulekile kwenye ithebhu. Uphume noma kunjalo bese uyilahlekelwa?"
+  "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "Unemizuzu engalondolozwanga evulekile kwenye ithebhu. Uphume noma kunjalo bese uyilahlekelwa?",
+  "Last edited by {name} at {time}": "Kugcine ukuhlelwa ngu-{name} ngo-{time}"
 }

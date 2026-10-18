@@ -93,13 +93,14 @@ function stable(v: unknown): string {
 function normalText(t: MinutesText): string {
   const sections = Array.isArray(t.sections)
     ? (t.sections as Record<string, unknown>[])
-        .filter((s) => !(s?.kind === "apologies" && !String(s.body ?? "").trim()))
+        .filter((s) => !(s?.kind === "apologies" && !String(s.body ?? "")))
         .map((s) => {
           const kind = s?.kind === "attendance" || s?.kind === "apologies" ? s.kind : undefined;
           // Not id or order: the server assigns those.
           return {
             title: String(s?.title ?? "").trim(),
-            body: String(s?.body ?? "").trim(),
+            // Exactly, not trimmed: the route stores bodies as typed.
+            body: String(s?.body ?? ""),
             numberingStartsHere: s?.numberingStartsHere || undefined,
             personIds: s?.personIds,
             responsible: String(s?.responsible ?? "").trim() || undefined,
@@ -181,6 +182,41 @@ export function reconcile<
     };
   }
   return { record: { ...server, ...textOf(local) }, stranded: null, conflict: null };
+}
+
+type Section = { id?: string } & Record<string, unknown>;
+
+/**
+ * A save came back while the person kept typing. The server's copy is the
+ * truth for what it did (section ids, the Apologies section it added); only
+ * what was changed on screen SINCE the save went out goes on top, field by
+ * field and section by section (matched by id). A section deleted since stays
+ * deleted; one the server added is kept at its place.
+ */
+export function mergeTypingOverSave<T extends MinutesText>(saved: T, sent: MinutesText, now: MinutesText): T {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const out = { ...saved } as T & Record<string, unknown>;
+  for (const f of ["title", "body", "period"] as const) {
+    if (!same(now[f], sent[f])) (out as Record<string, unknown>)[f] = now[f];
+  }
+  const savedSecs = (Array.isArray(saved.sections) ? saved.sections : []) as Section[];
+  const sentSecs = (Array.isArray(sent.sections) ? sent.sections : []) as Section[];
+  const nowSecs = (Array.isArray(now.sections) ? now.sections : []) as Section[];
+  if (same(nowSecs, sentSecs)) return out;
+  const savedById = new Map(savedSecs.map((s) => [s.id, s]));
+  const sentById = new Map(sentSecs.map((s) => [s.id, s]));
+  const nowIds = new Set(nowSecs.map((s) => s.id));
+  // The person's order, each section the server's copy unless it changed since.
+  const merged: Section[] = nowSecs.map((s) => {
+    const fromServer = s.id ? savedById.get(s.id) : undefined;
+    return fromServer && same(s, sentById.get(s.id)) ? fromServer : s;
+  });
+  // Sections the server added (never sent, not on screen) go back where it put them.
+  savedSecs.forEach((s, i) => {
+    if (!sentById.has(s.id) && !nowIds.has(s.id)) merged.splice(Math.min(i, merged.length), 0, s);
+  });
+  out.sections = merged as unknown as T["sections"];
+  return out;
 }
 
 /** The text as plain words, for a person to read and copy: everything the

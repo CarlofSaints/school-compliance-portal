@@ -11,6 +11,7 @@ import {
   hasUnsaved,
   isTextEditable,
   mergeOffered,
+  mergeTypingOverSave,
   readDraft,
   plainText,
   readOffered,
@@ -96,8 +97,12 @@ check("title, meeting, attendance with status, responsible: all there",
   ["SGB meeting", "Chair: Ms Dube", "Clerk: Mr Nel ([Apology])", "Get quotes.", "[Responsible]: Mr Nel"].every((x) => copyable.includes(x)), true);
 
 console.log("\nLocal backup");
-check("keys are per site, per person and per minutes", backupKeys("hvps.example", "u7", "m1"),
-  { main: "minutes-draft:hvps.example:u7:m1", offered: "minutes-draft-offered:hvps.example:u7:m1" });
+check("keys are per site, per person, per minutes and per tab", backupKeys("hvps.example", "u7", "m1", "tab9"), {
+  main: "minutes-draft:hvps.example:u7:m1:tab9",
+  tabsPrefix: "minutes-draft:hvps.example:u7:m1:",
+  offered: "minutes-draft-offered:hvps.example:u7:m1",
+});
+check("two tabs on the same minutes: two keys", backupKeys("h", "u", "m", "a").main !== backupKeys("h", "u", "m", "b").main, true);
 const mem = new Map<string, string>();
 const store = {
   getItem: (k: string) => mem.get(k) ?? null,
@@ -125,6 +130,30 @@ const saved = {
   ],
 };
 check("trim, ids, order numbers, key order, empty Apologies: the same", sameText(typed, saved), true);
+check("a body differing only in trailing space is a change (the route keeps bodies as typed)",
+  sameText(typed, { ...saved, sections: [{ ...saved.sections[0], body: "Fees up. " }, saved.sections[1]] }), false);
+
+console.log("\nTyping carried on during a save");
+const sentT = {
+  title: "T", body: "sgb", period: { y: 1 },
+  sections: [{ id: "a", title: "A", body: "one" }, { id: "b", title: "B", body: "two" }, { id: "c", title: "C", body: "three" }],
+};
+const savedT = {
+  ...sentT, textUpdatedAt: "new",
+  sections: [
+    { id: "a", title: "A", body: "one", order: 1 }, { id: "b", title: "B", body: "two", order: 2 },
+    { id: "c", title: "C", body: "three", order: 3 }, { id: "ap", title: "Apologies", body: "", order: 4, kind: "apologies" },
+  ],
+};
+const nowT = { ...sentT, title: "T2", sections: [{ id: "a", title: "A", body: "one" }, { id: "b", title: "B", body: "two, more" }] };
+const mergedT = mergeTypingOverSave(savedT, sentT, nowT);
+check("a field changed since the save: mine", mergedT.title, "T2");
+check("unchanged sections: the server's copy (with order)", mergedT.sections[0], savedT.sections[0]);
+check("a section changed since: mine", mergedT.sections[1], nowT.sections[1]);
+check("a section deleted since: stays deleted", mergedT.sections.some((s) => s.id === "c"), false);
+check("the section the server added: kept", mergedT.sections.some((s) => s.id === "ap"), true);
+check("the new base comes from the save", mergedT.textUpdatedAt, "new");
+check("nothing changed in sections since: exactly the server's", mergeTypingOverSave(savedT, sentT, { ...sentT, title: "x" }).sections, savedT.sections);
 check("a real change to a word: different", sameText(typed, { ...saved, sections: [{ ...saved.sections[0], body: "Fees down." }] }), false);
 check("an Apologies section with names in it counts",
   sameText(typed, { ...saved, sections: [saved.sections[0], { ...saved.sections[1], body: "Ms Dube" }] }), false);
@@ -159,8 +188,8 @@ all.set("minutes-draft:h:u1:m1", JSON.stringify({ editedAt: ago(60), tabId: "oth
 all.set("minutes-draft:h:u1:m2", JSON.stringify({ editedAt: ago(60), tabId: "me" }));
 all.set("minutes-draft:h:u1:m3", JSON.stringify({ editedAt: ago(3600), tabId: "other" }));
 all.set("minutes-draft:h:u2:m1", JSON.stringify({ editedAt: ago(60), tabId: "other" }));
-check("sign-out finds only ANOTHER tab's recent backup for this person",
-  otherTabsUnsaved(listing, "h", "u1", "me", 5 * 60_000, nowMs), 1);
+check("sign-out counts ANOTHER tab's backups for this person, of any age",
+  otherTabsUnsaved(listing, "h", "u1", "me"), 2);
 check("another tab's backup from 10s ago: a live tab, left alone",
   fromLiveTab({ ...draft, editedAt: ago(10), tabId: "other" }, "me", nowMs), true);
 check("from 2 minutes ago: offered", fromLiveTab({ ...draft, editedAt: ago(120), tabId: "other" }, "me", nowMs), false);

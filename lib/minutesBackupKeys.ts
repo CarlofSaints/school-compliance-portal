@@ -9,21 +9,26 @@ export const TAB_ID =
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random()}`;
 
-/** Per site, per person and per minutes: one browser can be signed in to
- *  more than one school, a shared computer has more than one secretary, and
- *  minutes ids are only unique within a school.
- *  "offered" holds backups found when the page opened, apart from this
+/** Per site, per person, per minutes and per tab: one browser can be signed
+ *  in to more than one school, a shared computer has more than one
+ *  secretary, minutes ids are only unique within a school, and two tabs on
+ *  the same minutes must not overwrite each other's backup.
+ *  main: this tab's own backup. tabsPrefix: every tab's backup of these
+ *  minutes. offered: backups found when the page opened, apart from this
  *  visit's own, so typing on this visit can never overwrite or remove them. */
-export function backupKeys(host: string, userId: string, minutesId: string): { main: string; offered: string } {
-  return {
-    main: `minutes-draft:${host}:${userId}:${minutesId}`,
-    offered: `minutes-draft-offered:${host}:${userId}:${minutesId}`,
-  };
+export function backupKeys(
+  host: string,
+  userId: string,
+  minutesId: string,
+  tabId: string = TAB_ID
+): { main: string; tabsPrefix: string; offered: string } {
+  const tabsPrefix = `minutes-draft:${host}:${userId}:${minutesId}:`;
+  return { main: tabsPrefix + tabId, tabsPrefix, offered: `minutes-draft-offered:${host}:${userId}:${minutesId}` };
 }
 
 type Listing = (Pick<Storage, "key" | "getItem" | "removeItem"> & { readonly length: number }) | null;
 
-function keysWith(store: NonNullable<Listing>, prefixes: string[]): string[] {
+export function keysWith(store: NonNullable<Listing>, prefixes: string[]): string[] {
   const out: string[] = [];
   // Collected first: removing while walking the index skips keys.
   for (let i = 0; i < store.length; i++) {
@@ -45,22 +50,16 @@ export function clearUserBackups(store: Listing, host: string, userId: string): 
   }
 }
 
-/** How many of this person's current backups were written by ANOTHER tab
- *  within the window: typing that may still be open, and unsaved, there. */
-export function otherTabsUnsaved(
-  store: Listing,
-  host: string,
-  userId: string,
-  tabId: string,
-  windowMs: number,
-  now = Date.now()
-): number {
+/** How many of this person's backups were written by ANOTHER tab, of any
+ *  age: typing that may still be open, and unsaved, there, and that signing
+ *  out would clear. */
+export function otherTabsUnsaved(store: Listing, host: string, userId: string, tabId: string): number {
   try {
     if (!store) return 0;
     return keysWith(store, [`minutes-draft:${host}:${userId}:`]).filter((k) => {
       try {
-        const d = JSON.parse(store.getItem(k) || "null") as { editedAt?: string; tabId?: string } | null;
-        return !!d && d.tabId !== tabId && !!d.editedAt && now - Date.parse(d.editedAt) < windowMs;
+        const d = JSON.parse(store.getItem(k) || "null") as { tabId?: string } | null;
+        return !!d && d.tabId !== tabId;
       } catch {
         return false;
       }

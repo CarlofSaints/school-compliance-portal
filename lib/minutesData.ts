@@ -11,7 +11,7 @@ import type {
   Signatory,
 } from "./minutes";
 import { isLocked, MINUTES_TEXT_FIELDS } from "./minutes";
-import { sameText } from "./minutesAutosave";
+import { sameText, textBase } from "./minutesAutosave";
 
 // ---------------------------------------------------------------------------
 // Storage for meeting minutes.
@@ -103,8 +103,12 @@ export interface MinutesRecord {
   textUpdatedAt?: string;
   /** Who last had an "Edited minutes" line written to the activity log, and
    *  when. Autosave saves every few seconds, so the log takes one line per
-   *  person per half hour of editing rather than one per save. */
+   *  person per few minutes of editing rather than one per save. */
   lastEditLogged?: { by: string; at: string };
+  /** The latest change to the words, by whom: on every such save, so the
+   *  page can say who last edited even inside a log window. */
+  lastEditedAt?: string;
+  lastEditedBy?: { id: string; name: string };
   /** Set once every signatory has signed. Nothing may change after this. */
   signedAt?: string;
 }
@@ -204,9 +208,22 @@ export function textFieldsChanged(existing: MinutesRecord, updates: Partial<Minu
   return !sameText(existing, { ...existing, ...updates });
 }
 
+/** For a save of the words (the editor's PATCH). In: who is editing, the base
+ *  their text was edited from, and the activity log window. Out, after the
+ *  call: whether the words changed and whether to write a log line, worked
+ *  out once, on the copy actually written. */
+export interface TextSaveInfo {
+  editedBy?: { id: string; name: string };
+  baseTextUpdatedAt?: string;
+  logWindowMs?: number;
+  textChanged?: boolean;
+  logIt?: boolean;
+}
+
 export async function updateMinutes(
   id: string,
-  change: MinutesChange
+  change: MinutesChange,
+  info?: TextSaveInfo
 ): Promise<MinutesRecord | null> {
   let saved: MinutesRecord | null = null;
   // 🔴 Through updateJson: the write only lands if nobody else wrote since
@@ -226,6 +243,23 @@ export async function updateMinutes(
     ) {
       throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
     }
+    // Only a real change to the WORDS counts, compared the way the editor
+    // compares them (ids, order numbers, key order ignored), so a review, a
+    // signature or a re-save of the same words does not.
+    const textChanged = textFieldsChanged(existing, updates);
+    if (info) {
+      info.textChanged = textChanged;
+      info.logIt = false;
+    }
+    // 🔴 Somebody else changed the words after this editor's copy was read.
+    // Inside the atomic update, against the copy being written over. The
+    // same words as stored are never a conflict: that is a retry whose first
+    // try landed, or two people typing the same thing.
+    const base = info?.baseTextUpdatedAt;
+    const currentBase = textBase(existing);
+    if (textChanged && base && currentBase && currentBase > base) {
+      throw new MinutesConflictError(existing);
+    }
     // Nothing different at all (autosave sends every text field every time):
     // no write, so the store and the activity log are not churned.
     const keys = Object.keys(updates) as (keyof typeof updates)[];
@@ -234,13 +268,22 @@ export async function updateMinutes(
       return NO_CHANGE;
     }
     const now = new Date().toISOString();
-    // Only a real change to the WORDS moves textUpdatedAt, compared the way
-    // the editor compares them (trimmed, ids and order ignored), so a review,
-    // a signature or a re-save of the same words does not.
-    const textChanged = textFieldsChanged(existing, updates);
+    const marks: Partial<MinutesRecord> = {};
+    if (textChanged && info?.editedBy) {
+      marks.lastEditedAt = now;
+      marks.lastEditedBy = info.editedBy;
+      const last = existing.lastEditLogged;
+      const recent =
+        last?.by === info.editedBy.id && Date.now() - Date.parse(last.at) < (info.logWindowMs ?? 0);
+      if (!recent) {
+        marks.lastEditLogged = { by: info.editedBy.id, at: now };
+        info.logIt = true;
+      }
+    }
     saved = {
       ...existing,
       ...updates,
+      ...marks,
       id: existing.id,
       createdAt: existing.createdAt,
       createdBy: existing.createdBy,

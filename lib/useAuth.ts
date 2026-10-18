@@ -167,13 +167,13 @@ export async function signOut(opts: { confirmOtherTabs?: () => boolean } = {}): 
   for (const hook of [...beforeSignOutHooks]) {
     if (!(await hook().catch(() => true))) return false;
   }
-  // Another tab's: it gets its own try at saving when it hears of the
-  // sign-out, but cannot ask, so ask here.
+  // Another tab's (or one closed with typing left in it): it gets its own try
+  // at saving when it hears of the sign-out, but cannot ask, so ask here.
   const who = getSession();
   if (who && opts.confirmOtherTabs) {
     let others = 0;
     try {
-      others = otherTabsUnsaved(window.localStorage, window.location.host, who.id, TAB_ID, 5 * 60_000);
+      others = otherTabsUnsaved(window.localStorage, window.location.host, who.id, TAB_ID);
     } catch {
       // Storage blocked: no backups to find.
     }

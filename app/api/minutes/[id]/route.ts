@@ -7,12 +7,8 @@ import {
   deleteMinutes,
   MinutesLockedError,
   MinutesConflictError,
-  textFieldsChanged,
+  type TextSaveInfo,
 } from "@/lib/minutesData";
-import { textBase } from "@/lib/minutesAutosave";
-
-// One "Edited minutes" log line per person per set of minutes per half hour.
-const EDIT_LOG_WINDOW_MS = 30 * 60_000;
 import {
   checkPeriod,
   isLocked,
@@ -25,6 +21,9 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
 const CAN_MANAGE = ["manage_minutes", "manage_users"];
+
+// One "Edited minutes" log line per person per set of minutes per 5 minutes.
+const EDIT_LOG_WINDOW_MS = 5 * 60_000;
 
 export async function GET(
   req: NextRequest,
@@ -161,26 +160,19 @@ export async function PATCH(
     // Older records have none yet: textBase falls back to updatedAt, as the
     // page does. A save with no base at all (a page still running older code)
     // is taken as before.
-    const base = typeof body.baseTextUpdatedAt === "string" ? body.baseTextUpdatedAt : undefined;
-    let logIt = false;
-    const saved = await updateMinutes(id, (current) => {
-      const currentBase = textBase(current);
-      if (base && currentBase && currentBase > base) {
-        throw new MinutesConflictError(current);
-      }
-      // Logged only when the words changed, and not again for the same
-      // person within the window. Decided on the copy being written, inside
-      // the same atomic write as the marker.
-      const last = current.lastEditLogged;
-      const recent = last?.by === session.id && Date.now() - Date.parse(last.at) < EDIT_LOG_WINDOW_MS;
-      logIt = textFieldsChanged(current, updates) && !recent;
-      return logIt ? { ...updates, lastEditLogged: { by: session.id, at: new Date().toISOString() } } : updates;
-    });
+    // The check, the "last edited by" stamp and the log marker all happen in
+    // updateMinutes, on the copy being written.
+    const info: TextSaveInfo = {
+      baseTextUpdatedAt: typeof body.baseTextUpdatedAt === "string" ? body.baseTextUpdatedAt : undefined,
+      editedBy: { id: session.id, name: `${session.name} ${session.surname}`.trim() },
+      logWindowMs: EDIT_LOG_WINDOW_MS,
+    };
+    const saved = await updateMinutes(id, updates, info);
     if (!saved) {
       return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
     }
 
-    if (logIt) await recordActivity({
+    if (info.logIt) await recordActivity({
       ...actorFrom(req, session),
       action: "minutes.updated",
       entity: "minutes",
