@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import type { ActivityEntry, ActivityEntity } from "@/lib/activityLog";
 import DownloadLink from "@/components/DownloadLink";
@@ -30,6 +30,7 @@ const ENTITY_LABELS: Record<ActivityEntity | "all", string> = {
   compliance: tk("Compliance checks"),
   branding: tk("Branding"),
   auth: tk("Sign in"),
+  password: tk("Password changes"),
   system: tk("System"),
 };
 
@@ -83,8 +84,12 @@ export default function ActivityPage() {
   // A failed export must say so. Silent is what makes a dead button hard to report.
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  // Only the newest request may set the grid: a slow answer for a filter or
+  // month that is no longer selected must not overwrite the current one.
+  const latest = useRef(0);
   const load = useCallback(async () => {
     if (!session) return;
+    const mine = ++latest.current;
     setBusy(true);
     try {
       const qs = new URLSearchParams();
@@ -95,8 +100,9 @@ export default function ActivityPage() {
       qs.set("offset", String(page * PAGE_SIZE));
 
       const res = await authFetch(`/api/activity?${qs}`);
-      if (!res.ok) return;
+      if (!res.ok || mine !== latest.current) return;
       const data = await res.json();
+      if (mine !== latest.current) return;
       setEntries(data.entries || []);
       setTotal(data.total || 0);
       setMonths(data.availableMonths || []);
@@ -109,7 +115,7 @@ export default function ActivityPage() {
       const thisMonth = new Date().toISOString().slice(0, 7);
       if (month && avail.length && !avail.includes(month) && month !== thisMonth) setMonth(avail[0]);
     } finally {
-      setBusy(false);
+      if (mine === latest.current) setBusy(false);
     }
   }, [session, month, entity, search, page]);
 
@@ -211,8 +217,10 @@ export default function ActivityPage() {
 
       <p className="text-xs text-gray-400 mb-2">
         {entity === "auth"
-          ? t("Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.")
-          : t("Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.")}
+          ? t("Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are under Password changes in the filter.")
+          : entity === "all" && search.trim()
+            ? t("Sign-ins and sign-outs are included in these search results.")
+            : t("Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab.")}
       </p>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
@@ -234,7 +242,7 @@ export default function ActivityPage() {
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
                   {search || entity !== "all"
                     ? t("Nothing matches those filters this month.")
-                    : t("Nothing recorded this month yet.")}
+                    : t("No other activity this month. Sign-ins are under the Sign in filter.")}
                 </td>
               </tr>
             )}

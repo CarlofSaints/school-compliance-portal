@@ -6,6 +6,7 @@ import { tenantScope } from "@/lib/tenantContext";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom, afterResponse } from "@/lib/activityActor";
 import { deviceOf } from "@/lib/signinLog";
+import { ipOf } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   const session = await requireLogin(req);
@@ -47,13 +48,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (updated) {
-      const actor = actorFrom(req, session);
+      const actor = { ...actorFrom(req, session), ip: ipOf(req) };
       const device = deviceOf(req.headers.get("user-agent"));
       await afterResponse(() =>
         recordActivity({
           ...actor,
           action: "auth.password_changed",
-          entity: "auth",
+          entity: "password",
           entityId: session.id,
           summary: "Changed their password",
           detail: { device },

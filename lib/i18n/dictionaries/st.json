@@ -112,7 +112,6 @@
   "What happened": "Se etsahetseng",
   "Type": "Mofuta",
   "Nothing matches those filters this month.": "Ha ho letho le tshwanang le difefe tseo kgweding ena.",
-  "Nothing recorded this month yet.": "Ha ho letho le so rekotweng kgweding ena.",
   "{total} entries. Page {page} of {pages}.": "Direkoto tse {total}. Leqephe {page} ho {pages}.",
   "Newer": "E ntjha",
   "Older": "E kgale",
@@ -1533,6 +1532,9 @@
   "Unknown address": "Aterese e sa tsejweng",
   "Unknown connection": "Kgokahano e sa tsejweng",
   "1 person has never signed in.": "Motho a le mong ha a so ka a kena.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Ho kena, ho kena ho hlolehileng le ho tswa ha ho thathamiswe mona: kgetha Kena sefeng, kapa o bule thebe ya Ho kena. Diphetoho le ho setwa botjha ha diphasewete di thathamisitswe mona.",
-  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Ho kena, ho kena ho hlolehileng le ho tswa feela. Diphetoho le ho setwa botjha ha diphasewete di thathamisitswe tlasa Tsohle."
+  "Password changes": "Diphetoho tsa diphasewete",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are under Password changes in the filter.": "Ho kena, ho kena ho hlolehileng le ho tswa feela. Diphetoho le ho setwa botjha ha diphasewete di tlasa Diphetoho tsa diphasewete sefeng.",
+  "Sign-ins and sign-outs are included in these search results.": "Ho kena le ho tswa ho kenyelleditswe diphethong tsena tsa patlo.",
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab.": "Ho kena, ho kena ho hlolehileng le ho tswa ha ho thathamiswe mona: kgetha Kena sefeng, kapa o bule thebe ya Ho kena.",
+  "No other activity this month. Sign-ins are under the Sign in filter.": "Ha ho mosebetsi o mong kgweding ena. Ho kena ho tlasa sefe sa Kena."
 }

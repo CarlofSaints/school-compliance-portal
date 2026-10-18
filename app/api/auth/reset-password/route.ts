@@ -85,12 +85,12 @@ export async function POST(req: NextRequest) {
     }
 
     // After the reply, so a logging problem can never fail the request.
-    const actor = actorFromUser(req, updated);
+    const actor = { ...actorFromUser(req, updated), ip: ipOf(req) };
     await afterResponse(() =>
       recordActivity({
         ...actor,
         action: "auth.password_reset",
-        entity: "auth",
+        entity: "password",
         entityId: updated.id,
         summary: "Set a new password from an emailed reset link",
         detail: { device: deviceOf(req.headers.get("user-agent")) },

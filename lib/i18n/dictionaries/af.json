@@ -112,7 +112,6 @@
   "What happened": "Wat gebeur het",
   "Type": "Tipe",
   "Nothing matches those filters this month.": "Niks pas hierdie maand by daardie filters nie.",
-  "Nothing recorded this month yet.": "Nog niks hierdie maand aangeteken nie.",
   "{total} entries. Page {page} of {pages}.": "{total} inskrywings. Bladsy {page} van {pages}.",
   "Newer": "Nuwer",
   "Older": "Ouer",
@@ -1533,6 +1532,9 @@
   "Unknown address": "Onbekende adres",
   "Unknown connection": "Onbekende verbinding",
   "1 person has never signed in.": "1 persoon het nog nooit aangemeld nie.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Aanmeldings, mislukte aanmeldings en afmeldings word nie hier gelys nie: kies Meld aan in die filter, of maak die Aanmeldings-oortjie oop. Wagwoordveranderings en -herstellings word hier gelys.",
-  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Slegs aanmeldings, mislukte aanmeldings en afmeldings. Wagwoordveranderings en -herstellings word onder Alles gelys."
+  "Password changes": "Wagwoordveranderings",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are under Password changes in the filter.": "Slegs aanmeldings, mislukte aanmeldings en afmeldings. Wagwoordveranderings en -herstellings is onder Wagwoordveranderings in die filter.",
+  "Sign-ins and sign-outs are included in these search results.": "Aanmeldings en afmeldings is by hierdie soekresultate ingesluit.",
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab.": "Aanmeldings, mislukte aanmeldings en afmeldings word nie hier gelys nie: kies Meld aan in die filter, of maak die Aanmeldings-oortjie oop.",
+  "No other activity this month. Sign-ins are under the Sign in filter.": "Geen ander aktiwiteit hierdie maand nie. Aanmeldings is onder die Meld aan-filter."
 }

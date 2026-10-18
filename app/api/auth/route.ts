@@ -57,8 +57,10 @@ export async function POST(req: NextRequest) {
     // once the reply has gone: every sign-in and every wrong password for a
     // real account; ONE entry per connection per window for unknown
     // addresses; ONE entry when a connection is blocked or an account locks.
-    // Attempts on an already-locked account only add to that user's failed
-    // count in the tally, so a flood cannot fill the log.
+    // Attempts on an already-locked account write NOTHING (no lookup, no
+    // tally): the one "Account locked" entry covers them, a bot gets no
+    // storage work per request, and a right password typed during the lock
+    // is not miscounted as a wrong one.
     // Logged as the address the limiter counted, so an investigator sees
     // the one that was actually counted or locked.
     const ip = ipOf(req);
@@ -92,15 +94,7 @@ export async function POST(req: NextRequest) {
     }
     const account = String(email).trim().toLowerCase();
     const locked = await peek(LIMITS.loginAccount, account);
-    if (!locked.ok) {
-      // Looked up after the reply, so a locked real account answers exactly
-      // as fast as a locked unknown address.
-      await afterResponse(async () => {
-        const u = await getUserByEmail(email);
-        if (u) await countSignIn(u, "failed", ip, device);
-      });
-      return tooMany(LIMITS.loginAccount, locked);
-    }
+    if (!locked.ok) return tooMany(LIMITS.loginAccount, locked);
 
     const user = await getUserByEmail(email);
     if (!user) {

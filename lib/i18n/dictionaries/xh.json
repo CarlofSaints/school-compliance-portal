@@ -112,7 +112,6 @@
   "What happened": "Okwenzekileyo",
   "Type": "Uhlobo",
   "Nothing matches those filters this month.": "Akukho nto ihambelana nezo zihluzi kule nyanga.",
-  "Nothing recorded this month yet.": "Akukabikho nto ibhaliweyo kule nyanga.",
   "{total} entries. Page {page} of {pages}.": "Amangeniso ali-{total}. Iphepha {page} kwali-{pages}.",
   "Newer": "Entsha ngakumbi",
   "Older": "Endala ngakumbi",
@@ -1533,6 +1532,9 @@
   "Unknown address": "Idilesi engaziwayo",
   "Unknown connection": "Unxibelelwano olungaziwayo",
   "1 person has never signed in.": "Umntu omnye akakaze angene.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Ukungena, ukungena okungaphumelelanga nokuphuma akudweliswanga apha: khetha u-Ngena kwisihluzi, okanye uvule ithebhu ethi Ukungena. Utshintsho nokusetwa ngokutsha kweepassword kudweliswe apha.",
-  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Ukungena, ukungena okungaphumelelanga nokuphuma kuphela. Utshintsho nokusetwa ngokutsha kweepassword kudweliswe phantsi kwe-Yonke into."
+  "Password changes": "Utshintsho lweepassword",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are under Password changes in the filter.": "Ukungena, ukungena okungaphumelelanga nokuphuma kuphela. Utshintsho nokusetwa ngokutsha kweepassword kuphantsi kwe-Utshintsho lweepassword kwisihluzi.",
+  "Sign-ins and sign-outs are included in these search results.": "Ukungena nokuphuma kubandakanyiwe kwezi ziphumo zokukhangela.",
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab.": "Ukungena, ukungena okungaphumelelanga nokuphuma akudweliswanga apha: khetha u-Ngena kwisihluzi, okanye uvule ithebhu ethi Ukungena.",
+  "No other activity this month. Sign-ins are under the Sign in filter.": "Akukho msebenzi umbi kule nyanga. Ukungena kuphantsi kwesihluzi esithi Ngena."
 }

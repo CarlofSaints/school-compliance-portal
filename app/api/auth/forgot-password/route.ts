@@ -69,12 +69,12 @@ export async function POST(req: NextRequest) {
     // After the reply, so a logging problem can never fail the request. (Not
     // a timing measure here: sending the email already makes a real account
     // answer slower than an unknown address.)
-    const actor = actorFromUser(req, user);
+    const actor = { ...actorFromUser(req, user), ip: ipOf(req) };
     await afterResponse(() =>
       recordActivity({
         ...actor,
         action: "auth.password_reset_requested",
-        entity: "auth",
+        entity: "password",
         entityId: user.id,
         summary: "Asked for a password reset link",
         detail: { device: deviceOf(req.headers.get("user-agent")) },

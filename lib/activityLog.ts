@@ -44,6 +44,7 @@ export type ActivityEntity =
   | "compliance"
   | "branding"
   | "auth"
+  | "password"
   | "system";
 
 export interface ActivityEntry {
@@ -140,6 +141,12 @@ export async function activityMonths(folders: string[] = ["activity"]): Promise<
 }
 
 /** One partition's month, newest first. */
+// Password events were briefly written as entity "auth": read them as
+// "password", so they never turn up under the Sign in filter.
+function normalise(e: ActivityEntry): ActivityEntry {
+  return e.entity === "auth" && e.action.startsWith("auth.password") ? { ...e, entity: "password" } : e;
+}
+
 async function readMonth(folder: string, month: string): Promise<ActivityEntry[]> {
   const files = await listFiles(`${folder}/${month}`);
   // The pathname starts with the ISO timestamp, so this is chronological.
@@ -148,7 +155,7 @@ async function readMonth(folder: string, month: string): Promise<ActivityEntry[]
   const loaded = await Promise.all(
     ordered.map((name) => readJsonTolerant<ActivityEntry | null>(`${folder}/${month}/${name}`, null))
   );
-  return loaded.filter((e): e is ActivityEntry => e !== null);
+  return loaded.filter((e): e is ActivityEntry => e !== null).map(normalise);
 }
 
 /**

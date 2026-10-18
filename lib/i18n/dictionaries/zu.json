@@ -112,7 +112,6 @@
   "What happened": "Kwenzekeni",
   "Type": "Uhlobo",
   "Nothing matches those filters this month.": "Akukho okufana nalezo zihlungi kule nyanga.",
-  "Nothing recorded this month yet.": "Akukho okurekhodiwe kule nyanga okwamanje.",
   "{total} entries. Page {page} of {pages}.": "Okufakiwe okungu-{total}. Ikhasi {page} kwangu-{pages}.",
   "Newer": "Okusha",
   "Older": "Okudala",
@@ -1533,6 +1532,9 @@
   "Unknown address": "Ikheli elingaziwa",
   "Unknown connection": "Uxhumano olungaziwa",
   "1 person has never signed in.": "Umuntu oyedwa akakaze angene ngemvume.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Ukungena, ukungena okwehlulekile nokuphuma akubhalwe lapha: khetha u-Ngena ngemvume kusihlungi, noma uvule ithebhu ethi Ukungena ngemvume. Ukushintshwa nokusethwa kabusha kwamaphasiwedi kubhalwe lapha.",
-  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Ukungena, ukungena okwehlulekile nokuphuma kuphela. Ukushintshwa nokusethwa kabusha kwamaphasiwedi kubhalwe ngaphansi kuka-Konke."
+  "Password changes": "Ukushintshwa kwamaphasiwedi",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are under Password changes in the filter.": "Ukungena, ukungena okwehlulekile nokuphuma kuphela. Ukushintshwa nokusethwa kabusha kwamaphasiwedi kungaphansi kuka-Ukushintshwa kwamaphasiwedi kusihlungi.",
+  "Sign-ins and sign-outs are included in these search results.": "Ukungena nokuphuma kufakiwe kule miphumela yosesho.",
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab.": "Ukungena, ukungena okwehlulekile nokuphuma akubhalwe lapha: khetha u-Ngena ngemvume kusihlungi, noma uvule ithebhu ethi Ukungena ngemvume.",
+  "No other activity this month. Sign-ins are under the Sign in filter.": "Awukho omunye umsebenzi kule nyanga. Ukungena kungaphansi kwesihlungi esithi Ngena ngemvume."
 }

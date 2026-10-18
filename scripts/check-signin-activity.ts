@@ -221,7 +221,8 @@ async function main() {
   const hhmm = new Date(Date.parse(lockedUntil) + 2 * 3600000).toISOString().slice(11, 16);
   check(/^Account locked until \d\d:\d\d SAST after 5 wrong passwords$/.test(locks[0]?.summary || "") && locks[0]?.summary.includes(hhmm), "lock entry gives the real reset time in SAST", locks[0]?.summary);
   check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "admin").length === 5, "each of the 5 known-user wrong passwords is logged");
-  check(total((await readSignInStats()).admin?.failedDays) === 7, `the 2 attempts while locked still count in the tally (7 failed, got ${total((await readSignInStats()).admin?.failedDays)}), with no extra log lines`);
+  check(total((await readSignInStats()).admin?.failedDays) === 5, `attempts while locked write nothing: tally stays at 5 failed (got ${total((await readSignInStats()).admin?.failedDays)})`);
+  check(lastQueued === 0, "and the last attempt during the lock queued no write at all");
 
   console.log("\nIP limit: blocked attempts log at most once per window");
   const flood = "10.9.9.9";
@@ -248,7 +249,7 @@ async function main() {
   check((await authEntries()).some((e) => e.action === "auth.sign_out" && e.actorId === "member"), "auth.sign_out names the user");
 
   console.log("\nPassword change");
-  res = await changePw.POST(req("POST", "/api/auth/change-password", { as: member, json: { currentPassword: "pw-member-SECRET", newPassword: "new-pw-SECRET-2" } }));
+  res = await changePw.POST(req("POST", "/api/auth/change-password", { as: member, ip: "10.0.0.80", fwd: "203.0.113.80", json: { currentPassword: "pw-member-SECRET", newPassword: "new-pw-SECRET-2" } }));
   check((await flushAfterResponse()) === 1, "change-password logs through afterResponse");
   check(res.status === 200, `change-password HTTP ${res.status}`);
   check((await readActivity({ limit: 10000 })).entries.some((e) => e.action === "auth.password_changed" && e.actorId === "member"), "auth.password_changed logged (main log)");
@@ -260,12 +261,23 @@ async function main() {
   const def = await readActivity({ limit: 10000 });
   const partitioned = ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"];
   check(def.entries.some((e) => e.entity === "spend") && def.entries.every((e) => !partitioned.includes(e.action)), `the default view has no sign-in/out entries (${def.entries.length})`);
-  check(def.entries.some((e) => e.action === "auth.password_changed"), "password changes stay in the main log");
+  const pwc = def.entries.find((e) => e.action === "auth.password_changed");
+  check(!!pwc, "password changes stay in the main log");
+  check(pwc?.entity === "password" && pwc?.ip === "10.0.0.80", `password events have entity "password" and the limiter's IP (ipOf) (${pwc?.entity}, ${pwc?.ip})`);
+  // An older entry written as entity "auth" with a password action.
+  await recordActivity({ actorName: "Old", action: "auth.password_reset", entity: "auth", summary: "Set a new password" });
+  const pwView = await readActivity({ entity: "password", limit: 10000 });
+  check(pwView.entries.some((e) => e.action === "auth.password_changed") && pwView.entries.some((e) => e.action === "auth.password_reset" && e.entity === "password"), "the Password changes filter shows them, old 'auth' ones read as 'password'");
   const authView = await readActivity({ entity: "auth", limit: 10000 });
   check(authView.entries.some((e) => e.action === "auth.sign_in") && authView.entries.every((e) => partitioned.includes(e.action)), "the Sign in filter shows only sign-in/out entries (activity-auth/ only)");
   check(!authView.entries.some((e) => e.action === "auth.password_changed"), "password events are not in the Sign in filter (they are under Everything)");
   check((await readActivity({ actorId: "member", limit: 10000 })).entries.some((e) => e.action === "auth.sign_in"), "one person's trail on the default view includes their sign-ins");
   check((await readActivity({ search: "Signed in", limit: 10000 })).entries.some((e) => e.action === "auth.sign_in"), "a search on the default view includes sign-ins");
+  // listFolders straight, not through activityMonths' YYYY-MM filter, so a
+  // bad strip of the tenant prefix or trailing slash cannot hide.
+  const { listFolders } = await import("../lib/controlData");
+  const rawFolders = await listFolders("activity-auth");
+  check(rawFolders.length > 0 && rawFolders.every((f) => /^\d{4}-\d{2}$/.test(f)), `listFolders returns bare month names (${rawFolders.join(", ")})`);
   const folded0 = blob.__foldedCalls();
   check((await activityMonths()).length === 1 && blob.__foldedCalls() > folded0, "activityMonths uses a folder-only listing (one month, no stray folder)");
   // A sign-in in a month with nothing else in it.
