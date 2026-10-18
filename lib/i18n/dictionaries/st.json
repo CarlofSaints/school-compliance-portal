@@ -1518,5 +1518,14 @@
   "The translation could not be done just now.": "Phetolelo ha e kgone ho etswa hona jwale.",
   "Translate into {language}": "Fetolela ho {language}",
   "Machine translation. The English is the official version.": "Phetolelo ya motjhine. Senyesemane ke sona sa semmuso.",
-  "Translating. A long document can take a minute or two…": "Ho a fetolelwa. Tokomane e telele e ka nka motsotso kapa e mmedi…"
+  "Translating. A long document can take a minute or two…": "Ho a fetolelwa. Tokomane e telele e ka nka motsotso kapa e mmedi…",
+  "Sign-ins": "Ho kena",
+  "The sign-ins could not be loaded. Please refresh to try again.": "Ho kena ha ho a kgona ho laelwa. Ka kopo nchafatsa mme o leke hape.",
+  "Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.": "Ho kena ho balwa ho tloha ka letsatsi leo pono ena e kentsweng ka lona. Ho kena ha pele ha ho a kenyelletswa.",
+  "{count} people have never signed in.": "Batho ba {count} ha ba so ka ba kena.",
+  "Last sign-in": "Ho kena ha ho qetela",
+  "Last 7 days": "Matsatsi a 7 a fetileng",
+  "Last 30 days": "Matsatsi a 30 a fetileng",
+  "Wrong passwords (30 days)": "Diphasewete tse fosahetseng (matsatsi a 30)",
+  "(removed)": "(e tlositswe)"
 }

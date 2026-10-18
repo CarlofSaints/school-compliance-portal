@@ -67,6 +67,8 @@ export interface LimitResult {
   remaining: number;
   /** Seconds until the window resets. */
   retryAfter: number;
+  /** Hits in this window, when counted. count === max + 1 is the FIRST refusal. */
+  count?: number;
 }
 
 function decide(limit: Limit, b: Bucket, now: number): LimitResult {
@@ -75,6 +77,7 @@ function decide(limit: Limit, b: Bucket, now: number): LimitResult {
     ok: b.count <= limit.max,
     remaining: Math.max(0, limit.max - b.count),
     retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+    count: b.count,
   };
 }
 

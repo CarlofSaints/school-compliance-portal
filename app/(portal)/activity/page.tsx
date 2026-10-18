@@ -7,6 +7,9 @@ import DownloadLink from "@/components/DownloadLink";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
+import type { SignInRow } from "@/lib/signinLog";
+import SortableTh from "@/components/SortableTh";
+import { useTableSort } from "@/lib/useTable";
 
 // The school's own audit trail. Carl sees the same thing per school from the
 // admin portal, deliberately: a school that can be shown its own record trusts
@@ -77,6 +80,7 @@ export default function ActivityPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(true);
+  const [view, setView] = useState<"log" | "signins">("log");
   const [open, setOpen] = useState<string | null>(null);
   // A failed export must say so. Silent is what makes a dead button hard to report.
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -132,15 +136,38 @@ export default function ActivityPage() {
             {t("Every action taken in this portal, who took it and when. Kept as a record for audits.")}
           </p>
         </div>
-        <DownloadLink
+        {view === "log" && <DownloadLink
           href={`/api/activity?format=csv&month=${month}`}
           filename={`activity-${month}.csv`}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
           onError={(message) => setToast({ message, type: "error" })}
         >
           {t("Export this month")}
-        </DownloadLink>
+        </DownloadLink>}
       </div>
+
+      <div className="flex gap-2 mb-4">
+        {([
+          ["log", t("Activity log")],
+          ["signins", t("Sign-ins")],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+              view === k
+                ? "bg-primary text-white border-primary"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "signins" && <SignInsView />}
+
+      {view === "log" && <>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-wrap gap-3">
         <select
@@ -235,7 +262,103 @@ export default function ActivityPage() {
           </div>
         </div>
       )}
+      </>}
     </div>
+  );
+}
+
+// Who signs in and how often. One row per user, from the monthly tallies
+// (lib/signinLog.ts); every single sign-in is also in the log tab.
+function SignInsView() {
+  const t = useT();
+  const [rows, setRows] = useState<SignInRow[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const { sortKey, sortDir, toggle, sort } = useTableSort<SignInRow>("lastAt", "desc");
+
+  useEffect(() => {
+    let live = true;
+    authFetch("/api/activity/signins")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (live) setRows(data.rows || []);
+      })
+      .catch(() => {
+        if (live) setFailed(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (failed) {
+    return <p className="text-risk-high text-sm">{t("The sign-ins could not be loaded. Please refresh to try again.")}</p>;
+  }
+  if (!rows) return <p className="text-gray-400 text-sm">{t("Loading...")}</p>;
+
+  const never = rows.filter((r) => r.never).length;
+  const sorted = sort(rows, (r, k) => r[k as keyof SignInRow]);
+  const th = (label: string, key: string, firstDir: "asc" | "desc" = "desc", align: "left" | "right" = "right") => (
+    <SortableTh label={label} sortKey={key} activeKey={sortKey} dir={sortDir} onSort={(k) => toggle(k, firstDir)} align={align} />
+  );
+
+  return (
+    <>
+      <p className="text-sm text-gray-500 mb-3">
+        {t("Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.")}
+        {never > 0 && (
+          <span className="ml-2 text-risk-medium">{t("{count} people have never signed in.", { count: never })}</span>
+        )}
+      </p>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              {th(tk("Who"), "name", "asc", "left")}
+              {th(tk("Last sign-in"), "lastAt", "desc", "left")}
+              {th(tk("Last 7 days"), "last7")}
+              {th(tk("Last 30 days"), "last30")}
+              {th(tk("Wrong passwords (30 days)"), "failed30")}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map((r) => (
+              <tr key={r.userId}>
+                <td className="px-4 py-3">
+                  <div className="text-dark">
+                    {r.name}
+                    {r.removed && <span className="ml-2 text-xs text-gray-400">{t("(removed)")}</span>}
+                  </div>
+                  <div className="text-xs text-gray-400">{r.email}</div>
+                </td>
+                <td className="px-4 py-3">
+                  {r.lastAt ? (
+                    <>
+                      <div className="text-gray-700 whitespace-nowrap">{whenLabel(r.lastAt)}</div>
+                      <div className="text-xs text-gray-400">
+                        {[r.lastDevice, r.lastIp].filter(Boolean).join(" · ")}
+                      </div>
+                    </>
+                  ) : r.never ? (
+                    <span className="text-risk-medium text-xs">{t("Never signed in")}</span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">{r.last7}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{r.last30}</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${r.failed30 > 0 ? "text-risk-high" : ""}`}>{r.failed30}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">{t("No users yet.")}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

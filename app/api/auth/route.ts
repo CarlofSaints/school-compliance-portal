@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LIMITS, enforce, peek, hit, clear, tooMany, ipOf } from "@/lib/rateLimit";
-import { getUserByEmail, verifyPassword } from "@/lib/userData";
-import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
+import { LIMITS, peek, hit, clear, tooMany, ipOf } from "@/lib/rateLimit";
+import { getUserByEmail, verifyPassword, type User } from "@/lib/userData";
+import { getRoleById, resolveRolePermissions, getSessionFromRequest } from "@/lib/rolesData";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFrom } from "@/lib/activityActor";
+import { countSignIn, deviceOf } from "@/lib/signinLog";
 import { SessionPayload } from "@/lib/roles";
 import {
   SESSION_COOKIE,
@@ -37,18 +40,55 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Every attempt goes in the activity log (never the password). Awaited:
+    // a write left running when the function returns is simply dropped.
+    const ip = ipOf(req);
+    const device = deviceOf(req.headers.get("user-agent"));
+    // What was typed, for an address with no account. Capped: it is input.
+    const typed = String(email).trim().slice(0, 120);
+    const actorOf = (u: User) => ({
+      actorId: u.id,
+      actorName: `${u.name} ${u.surname}`.trim() || u.email,
+      actorEmail: u.email,
+      ip,
+    });
+
     // Rate limits: every attempt counts against the connection; WRONG
     // passwords count against the address, whether or not it has an account,
     // so the lock cannot be used to find out which addresses exist.
-    const limited = await enforce([[LIMITS.loginIp, ipOf(req)]]);
-    if (limited) return limited;
+    const ipHit = await hit(LIMITS.loginIp, ip);
+    if (!ipHit.ok) {
+      // Only the FIRST refusal in a window is logged, so a bot hammering the
+      // form cannot flood the log.
+      if (ipHit.count === LIMITS.loginIp.max + 1) {
+        await recordActivity({
+          actorName: typed || "Unknown",
+          ip,
+          action: "auth.sign_in_blocked",
+          entity: "auth",
+          summary: "Sign-in refused: too many attempts from this connection",
+          detail: { reason: "too_many_from_ip", typedEmail: typed, device },
+        });
+      }
+      return tooMany(LIMITS.loginIp, ipHit);
+    }
     const account = String(email).trim().toLowerCase();
     const locked = await peek(LIMITS.loginAccount, account);
     if (!locked.ok) return tooMany(LIMITS.loginAccount, locked);
 
     const user = await getUserByEmail(email);
     if (!user) {
-      await hit(LIMITS.loginAccount, account);
+      await Promise.all([
+        hit(LIMITS.loginAccount, account),
+        recordActivity({
+          actorName: typed,
+          ip,
+          action: "auth.sign_in_failed",
+          entity: "auth",
+          summary: "Failed sign-in: no account for this address",
+          detail: { reason: "unknown_email", typedEmail: typed, device },
+        }),
+      ]);
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -57,7 +97,29 @@ export async function POST(req: NextRequest) {
 
     const valid = await verifyPassword(user, password);
     if (!valid) {
-      await hit(LIMITS.loginAccount, account);
+      const [accountHit] = await Promise.all([
+        hit(LIMITS.loginAccount, account),
+        recordActivity({
+          ...actorOf(user),
+          action: "auth.sign_in_failed",
+          entity: "auth",
+          entityId: user.id,
+          summary: "Failed sign-in: wrong password",
+          detail: { reason: "wrong_password", device },
+        }),
+        countSignIn(user, "failed", ip, device),
+      ]);
+      // The wrong password that locks the account, logged once per lock.
+      if (accountHit.count === LIMITS.loginAccount.max) {
+        await recordActivity({
+          ...actorOf(user),
+          action: "auth.sign_in_blocked",
+          entity: "auth",
+          entityId: user.id,
+          summary: `Account locked for ${LIMITS.loginAccount.windowSec / 60} minutes after ${LIMITS.loginAccount.max} wrong passwords`,
+          detail: { reason: "account_locked", device },
+        });
+      }
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
@@ -79,6 +141,18 @@ export async function POST(req: NextRequest) {
 
     // The cookie IS the sign-in now. `session` in the body is only what the
     // pages draw (name, menu); the server never believes it.
+    await Promise.all([
+      recordActivity({
+        ...actorOf(user),
+        action: "auth.sign_in",
+        entity: "auth",
+        entityId: user.id,
+        summary: "Signed in",
+        detail: { device },
+      }),
+      countSignIn(user, "ok", ip, device),
+    ]);
+
     const { key: tenantKey } = await tenantScope();
     const res = NextResponse.json({
       session,
@@ -104,6 +178,19 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   if (!fromThisSite(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  // Who is leaving, if anybody. A failed lookup must never block signing out.
+  const session = await getSessionFromRequest(req).catch(() => null);
+  if (session) {
+    await recordActivity({
+      ...actorFrom(req, session),
+      ip: ipOf(req),
+      action: "auth.sign_out",
+      entity: "auth",
+      entityId: session.id,
+      summary: "Signed out",
+      detail: { device: deviceOf(req.headers.get("user-agent")) },
+    });
   }
   const res = NextResponse.json({ success: true });
   res.cookies.set(SESSION_COOKIE, "", {

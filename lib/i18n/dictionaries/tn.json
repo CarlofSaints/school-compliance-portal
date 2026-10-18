@@ -1518,5 +1518,14 @@
   "The translation could not be done just now.": "Thanolo ga e kgone go dirwa jaanong.",
   "Translate into {language}": "Ranola ka {language}",
   "Machine translation. The English is the official version.": "Thanolo ya motšhine. Seesimane ke sone sa semmuso.",
-  "Translating. A long document can take a minute or two…": "Go a ranolwa. Tokomane e telele e ka tsaya motsotso kgotsa e mebedi…"
+  "Translating. A long document can take a minute or two…": "Go a ranolwa. Tokomane e telele e ka tsaya motsotso kgotsa e mebedi…",
+  "Sign-ins": "Go tsena",
+  "The sign-ins could not be loaded. Please refresh to try again.": "Go tsena ga go a kgona go bulwa. Tsweetswee simolola sesha mme o leke gape.",
+  "Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.": "Go tsena go balwa go simolola ka letsatsi le pono e e okeditsweng ka lone. Go tsena ga pele ga go a akarediwa.",
+  "{count} people have never signed in.": "Batho ba le {count} ga ba ise ba tsene.",
+  "Last sign-in": "Go tsena ga bofelo",
+  "Last 7 days": "Malatsi a le 7 a a fetileng",
+  "Last 30 days": "Malatsi a le 30 a a fetileng",
+  "Wrong passwords (30 days)": "Diphasewete tse di phoso (malatsi a le 30)",
+  "(removed)": "(e tlositswe)"
 }

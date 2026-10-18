@@ -1518,5 +1518,14 @@
   "The translation could not be done just now.": "Die vertaling kon nie nou gedoen word nie.",
   "Translate into {language}": "Vertaal na {language}",
   "Machine translation. The English is the official version.": "Masjienvertaling. Die Engelse weergawe is die amptelike een.",
-  "Translating. A long document can take a minute or two…": "Besig om te vertaal. 'n Lang dokument kan 'n minuut of twee neem…"
+  "Translating. A long document can take a minute or two…": "Besig om te vertaal. 'n Lang dokument kan 'n minuut of twee neem…",
+  "Sign-ins": "Aanmeldings",
+  "The sign-ins could not be loaded. Please refresh to try again.": "Die aanmeldings kon nie gelaai word nie. Verfris asseblief en probeer weer.",
+  "Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.": "Aanmeldings word getel vanaf die dag waarop hierdie aansig bygevoeg is. Vroeër aanmeldings is nie ingesluit nie.",
+  "{count} people have never signed in.": "{count} mense het nog nooit aangemeld nie.",
+  "Last sign-in": "Laaste aanmelding",
+  "Last 7 days": "Laaste 7 dae",
+  "Last 30 days": "Laaste 30 dae",
+  "Wrong passwords (30 days)": "Verkeerde wagwoorde (30 dae)",
+  "(removed)": "(verwyder)"
 }

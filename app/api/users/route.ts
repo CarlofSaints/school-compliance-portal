@@ -8,6 +8,7 @@ import {
   roleExists,
 } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
+import { readSignInSummaries, lastSignIns } from "@/lib/signinLog";
 import { sendWelcomeEmail } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
 
@@ -19,12 +20,14 @@ export async function GET(req: NextRequest) {
   ]);
   if (session instanceof NextResponse) return session;
 
-  const [users, roles] = await Promise.all([getUsers(), getRoles()]);
+  const [users, roles, summaries] = await Promise.all([getUsers(), getRoles(), readSignInSummaries()]);
+  const lastAt = lastSignIns(summaries);
   // The role NAME is included so a read-only viewer, who cannot call
   // /api/roles, still sees "SGB Admin" rather than a raw role id.
   const safe = users.map(({ password, ...u }) => ({
     ...u,
     roleName: roles.find((r) => r.id === u.role)?.name || u.role,
+    lastSignInAt: lastAt[u.id] || null,
   }));
   return NextResponse.json(safe);
 }

@@ -1518,5 +1518,14 @@
   "The translation could not be done just now.": "Uguqulelo alukwazanga ukwenziwa ngoku.",
   "Translate into {language}": "Guqulela kwi-{language}",
   "Machine translation. The English is the official version.": "Uguqulelo lomatshini. IsiNgesi yinguqulelo esemthethweni.",
-  "Translating. A long document can take a minute or two…": "Kuyaguqulelwa. Uxwebhu olude lunokuthatha umzuzu okanye emibini…"
+  "Translating. A long document can take a minute or two…": "Kuyaguqulelwa. Uxwebhu olude lunokuthatha umzuzu okanye emibini…",
+  "Sign-ins": "Ukungena",
+  "The sign-ins could not be loaded. Please refresh to try again.": "Ukungena akukwazanga ukulayishwa. Nceda uhlaziye uze uzame kwakhona.",
+  "Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.": "Ukungena kubalwa ukususela kumhla lo mbono wongezwa ngawo. Ukungena kwangaphambili akubandakanywanga.",
+  "{count} people have never signed in.": "Abantu abangu-{count} abakaze bangene.",
+  "Last sign-in": "Ukungena kokugqibela",
+  "Last 7 days": "Iintsuku ezi-7 ezidlulileyo",
+  "Last 30 days": "Iintsuku ezingama-30 ezidlulileyo",
+  "Wrong passwords (30 days)": "Iipassword ezingachanekanga (iintsuku ezingama-30)",
+  "(removed)": "(isusiwe)"
 }

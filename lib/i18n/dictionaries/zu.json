@@ -1518,5 +1518,14 @@
   "The translation could not be done just now.": "Ukuhumusha akukwazanga ukwenziwa okwamanje.",
   "Translate into {language}": "Humushela ku-{language}",
   "Machine translation. The English is the official version.": "Ukuhumusha ngomshini. Okwesi-English yikho okusemthethweni.",
-  "Translating. A long document can take a minute or two…": "Kuyahumusha. Umbhalo omude ungathatha umzuzu noma emibili…"
+  "Translating. A long document can take a minute or two…": "Kuyahumusha. Umbhalo omude ungathatha umzuzu noma emibili…",
+  "Sign-ins": "Ukungena ngemvume",
+  "The sign-ins could not be loaded. Please refresh to try again.": "Ukungena ngemvume akukwazanga ukulayishwa. Sicela uvuselele bese uzama futhi.",
+  "Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.": "Ukungena ngemvume kubalwa kusukela ngosuku lokwengezwa kwalo mbono. Ukungena kwangaphambili akufakiwe.",
+  "{count} people have never signed in.": "Abantu abangu-{count} abakaze bangene ngemvume.",
+  "Last sign-in": "Ukungena kokugcina",
+  "Last 7 days": "Izinsuku ezi-7 ezedlule",
+  "Last 30 days": "Izinsuku ezingu-30 ezedlule",
+  "Wrong passwords (30 days)": "Amaphasiwedi angalungile (izinsuku ezingu-30)",
+  "(removed)": "(isusiwe)"
 }

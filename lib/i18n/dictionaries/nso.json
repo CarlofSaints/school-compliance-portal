@@ -1518,5 +1518,14 @@
   "The translation could not be done just now.": "Phetolelo ga e kgone go dirwa gona bjale.",
   "Translate into {language}": "Fetolela go {language}",
   "Machine translation. The English is the official version.": "Phetolelo ya motšhene. Seisemane ke sona sa semmušo.",
-  "Translating. A long document can take a minute or two…": "Go a fetolelwa. Tokumente ye telele e ka tšea motsotso goba e mebedi…"
+  "Translating. A long document can take a minute or two…": "Go a fetolelwa. Tokumente ye telele e ka tšea motsotso goba e mebedi…",
+  "Sign-ins": "Go tsena",
+  "The sign-ins could not be loaded. Please refresh to try again.": "Go tsena ga go a kgona go laišwa. Hle mpshafatša gomme o leke gape.",
+  "Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.": "Go tsena go balwa go tloga ka letšatši leo pono ye e okeditšwego ka lona. Go tsena ga pele ga go a akaretšwa.",
+  "{count} people have never signed in.": "Batho ba {count} ga se ba ka ba tsena.",
+  "Last sign-in": "Go tsena ga mafelelo",
+  "Last 7 days": "Matšatši a 7 a go feta",
+  "Last 30 days": "Matšatši a 30 a go feta",
+  "Wrong passwords (30 days)": "Mantšu a sephiri a fošagetšego (matšatši a 30)",
+  "(removed)": "(e tlošitšwe)"
 }
