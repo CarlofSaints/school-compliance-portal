@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/useAuth";
+import type { SaveFirst } from "@/lib/minutesAutosave";
 import type { MinutesDistributionNote } from "@/lib/minutes";
 import type { T } from "@/lib/i18n/translate";
 import { useT } from "@/components/I18nProvider";
@@ -44,6 +45,8 @@ interface Props {
   canManage: boolean;
   onChanged: () => void;
   onToast: (message: string, type: "success" | "error") => void;
+  /** Saves unsaved typing before acting on the saved copy (SaveFirst says why). */
+  ensureSaved?: SaveFirst;
 }
 
 function when(iso: string): string {
@@ -77,6 +80,7 @@ export default function MinutesDistributePanel({
   canManage,
   onChanged,
   onToast,
+  ensureSaved,
 }: Props) {
   const t = useT();
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -93,6 +97,7 @@ export default function MinutesDistributePanel({
   }, [canManage, load]);
 
   async function send() {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/distribute`, {

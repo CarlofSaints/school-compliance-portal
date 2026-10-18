@@ -10,7 +10,8 @@ import type {
   MinutesDistributionNote,
   Signatory,
 } from "./minutes";
-import { isLocked } from "./minutes";
+import { isLocked, MINUTES_TEXT_FIELDS } from "./minutes";
+import { sameText, textBase } from "./minutesAutosave";
 
 // ---------------------------------------------------------------------------
 // Storage for meeting minutes.
@@ -95,6 +96,19 @@ export interface MinutesRecord {
   createdAt: string;
   createdBy: string;
   updatedAt: string;
+  /** When the WORDS last changed (title, meeting, period, sections), not any
+   *  write: reviews and signatures move updatedAt but not this. The editor
+   *  sends back the one its text was based on, so a save cannot quietly wipe
+   *  somebody else's newer text. Missing on records from before it existed. */
+  textUpdatedAt?: string;
+  /** Who last had an "Edited minutes" line written to the activity log, and
+   *  when. Autosave saves every few seconds, so the log takes one line per
+   *  person per few minutes of editing rather than one per save. */
+  lastEditLogged?: { by: string; at: string };
+  /** The latest change to the words, by whom: on every such save, so the
+   *  page can say who last edited even inside a log window. */
+  lastEditedAt?: string;
+  lastEditedBy?: { id: string; name: string };
   /** Set once every signatory has signed. Nothing may change after this. */
   signedAt?: string;
 }
@@ -133,7 +147,7 @@ export class MinutesLockedError extends Error {
 // these may change, whoever is writing: the store is the rule, the PATCH
 // route's check is the courtesy. Signatures, status and distribution still
 // move, because that is how signing itself proceeds.
-const SIGNED_CONTENT_FIELDS = ["title", "body", "period", "sections", "original"] as const;
+const SIGNED_CONTENT_FIELDS = [...MINUTES_TEXT_FIELDS, "original"] as const;
 
 const SIGNING_FREEZE_MESSAGE =
   "These minutes are out for signing, so the text cannot change. Delete them and start again, or record the correction in the next set of minutes.";
@@ -154,6 +168,7 @@ export async function createMinutes(
     draftNumber: 0,
     createdAt: now,
     updatedAt: now,
+    textUpdatedAt: now,
   };
   await writeJson(recordPath(record.id), record);
   return record;
@@ -178,9 +193,37 @@ export type MinutesChange =
 /** Thrown from inside a change to abandon it without writing. */
 export class MinutesChangeRefused extends Error {}
 
+/** The words were changed by somebody else after the editor's copy was read.
+ *  Carries the record as it is now, so the editor can show both. */
+export class MinutesConflictError extends Error {
+  constructor(readonly current: MinutesRecord) {
+    super("Someone else saved changes to these minutes while you were editing.");
+    this.name = "MinutesConflictError";
+  }
+}
+
+/** Whether applying updates would change the minutes' words. */
+export function textFieldsChanged(existing: MinutesRecord, updates: Partial<MinutesRecord>): boolean {
+  if (!MINUTES_TEXT_FIELDS.some((f) => f in updates && updates[f] !== undefined)) return false;
+  return !sameText(existing, { ...existing, ...updates });
+}
+
+/** For a save of the words (the editor's PATCH). In: who is editing, the base
+ *  their text was edited from, and the activity log window. Out, after the
+ *  call: whether the words changed and whether to write a log line, worked
+ *  out once, on the copy actually written. */
+export interface TextSaveInfo {
+  editedBy?: { id: string; name: string };
+  baseTextUpdatedAt?: string;
+  logWindowMs?: number;
+  textChanged?: boolean;
+  logIt?: boolean;
+}
+
 export async function updateMinutes(
   id: string,
-  change: MinutesChange
+  change: MinutesChange,
+  info?: TextSaveInfo
 ): Promise<MinutesRecord | null> {
   let saved: MinutesRecord | null = null;
   // 🔴 Through updateJson: the write only lands if nobody else wrote since
@@ -200,13 +243,54 @@ export async function updateMinutes(
     ) {
       throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
     }
+    // Only a real change to the WORDS counts, compared the way the editor
+    // compares them (ids, order numbers, key order ignored), so a review, a
+    // signature or a re-save of the same words does not.
+    const textChanged = textFieldsChanged(existing, updates);
+    if (info) {
+      info.textChanged = textChanged;
+      info.logIt = false;
+    }
+    // 🔴 Somebody else changed the words after this editor's copy was read.
+    // Inside the atomic update, against the copy being written over. The
+    // same words as stored are never a conflict: that is a retry whose first
+    // try landed, or two people typing the same thing.
+    const base = info?.baseTextUpdatedAt;
+    const currentBase = textBase(existing);
+    if (textChanged && base && currentBase && currentBase > base) {
+      throw new MinutesConflictError(existing);
+    }
+    // Nothing different at all (autosave sends every text field every time):
+    // no write, so the store and the activity log are not churned.
+    const keys = Object.keys(updates) as (keyof typeof updates)[];
+    if (keys.every((k) => updates[k] === undefined || JSON.stringify(updates[k]) === JSON.stringify(existing[k]))) {
+      saved = existing;
+      return NO_CHANGE;
+    }
+    const now = new Date().toISOString();
+    const marks: Partial<MinutesRecord> = {};
+    if (textChanged && info?.editedBy) {
+      marks.lastEditedAt = now;
+      marks.lastEditedBy = info.editedBy;
+      const last = existing.lastEditLogged;
+      const recent =
+        last?.by === info.editedBy.id && Date.now() - Date.parse(last.at) < (info.logWindowMs ?? 0);
+      if (!recent) {
+        marks.lastEditLogged = { by: info.editedBy.id, at: now };
+        info.logIt = true;
+      }
+    }
     saved = {
       ...existing,
       ...updates,
+      ...marks,
       id: existing.id,
       createdAt: existing.createdAt,
       createdBy: existing.createdBy,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
+      // Older records get one on their first write: their updatedAt, which
+      // is what the page has been using as the base for them.
+      textUpdatedAt: textChanged ? now : (existing.textUpdatedAt ?? existing.updatedAt),
     };
     return saved;
   });

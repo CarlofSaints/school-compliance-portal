@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/useAuth";
+import type { SaveFirst } from "@/lib/minutesAutosave";
 import DownloadLink from "@/components/DownloadLink";
 import { useT } from "@/components/I18nProvider";
 import {
@@ -36,6 +37,8 @@ interface Props {
   myEmail: string;
   onChanged: () => void;
   onToast: (message: string, type: "success" | "error") => void;
+  /** Saves unsaved typing before acting on the saved copy (SaveFirst says why). */
+  ensureSaved?: SaveFirst;
 }
 
 function when(iso: string): string {
@@ -59,6 +62,7 @@ export default function MinutesSigningPanel({
   myEmail,
   onChanged,
   onToast,
+  ensureSaved,
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -89,7 +93,10 @@ export default function MinutesSigningPanel({
     }
   }
 
+  // Only opening signing saves first: it freezes the text. Signing and
+  // resending a code happen once it is frozen, where a save is refused.
   async function openSigning() {
+    if (ensureSaved && !(await ensureSaved())) return;
     const data = await post("open-signing");
     if (!data) return;
     const parts = [
@@ -105,6 +112,7 @@ export default function MinutesSigningPanel({
 
 
   async function uploadSigned(file: File) {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const form = new FormData();

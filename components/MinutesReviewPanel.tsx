@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/useAuth";
+import type { SaveFirst } from "@/lib/minutesAutosave";
 import { useT } from "@/components/I18nProvider";
 import {
   canReview,
@@ -33,6 +34,8 @@ interface Props {
   myEmail: string;
   onChanged: () => void;
   onToast: (message: string, type: "success" | "error") => void;
+  /** Saves unsaved typing before acting on the saved copy (SaveFirst says why). */
+  ensureSaved?: SaveFirst;
 }
 
 export default function MinutesReviewPanel({
@@ -45,6 +48,7 @@ export default function MinutesReviewPanel({
   myEmail,
   onChanged,
   onToast,
+  ensureSaved,
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -62,6 +66,7 @@ export default function MinutesReviewPanel({
     .slice(-1)[0];
 
   async function send() {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/send-for-review`, { method: "POST" });
@@ -91,6 +96,7 @@ export default function MinutesReviewPanel({
   }
 
   async function respond(decision: "approved" | "changes_requested") {
+    if (ensureSaved && !(await ensureSaved())) return;
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${id}/review`, {
