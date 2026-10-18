@@ -20,8 +20,8 @@ import { LOCALES, type Locale } from "./i18n/locales";
 // current school, so one school's translations and credits never reach another.
 // ---------------------------------------------------------------------------
 
-export const PAGES_PER_CREDIT = 10;
-export const CREDIT_PACK = { credits: 10, rand: 100 };
+import { PAGES_PER_CREDIT } from "./creditPack";
+export { CREDIT_PACK, PAGES_PER_CREDIT } from "./creditPack";
 
 /** A long document costs more: one credit per started block of 10 pages. */
 export function creditsFor(pages: number): number {

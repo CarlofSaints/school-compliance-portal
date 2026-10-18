@@ -4,14 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
+import { CREDIT_PACK, MAX_PACKS } from "@/lib/creditPack";
 
 // Where the greyed Translate button sends people: the school's credit
 // balance, how to load more, and who may spend them. Loading is by EFT for
 // now (PayFast is not set up yet): the school orders here, is invoiced, and
 // School Compliance adds the credits once paid (lib/creditRequests.ts).
-const PACK_CREDITS = 10;
-const PACK_RAND = 100;
-const MAX_PACKS = 20;
+const PACK_CREDITS = CREDIT_PACK.credits;
+const PACK_RAND = CREDIT_PACK.rand;
 
 export default function TranslationCreditsPage() {
   const t = useT();

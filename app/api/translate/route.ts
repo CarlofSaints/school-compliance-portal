@@ -138,6 +138,9 @@ export async function POST(req: NextRequest) {
   const doc = await resolveDoc(session, body.kind, body.id);
   if (doc instanceof NextResponse) return doc;
   const locale = await getLocale();
+  if (locale === "en") {
+    return NextResponse.json({ error: "Pick a language other than English first." }, { status: 400 });
+  }
 
   const stored = await storedTranslation(doc.kind, doc.id, locale, doc.sourceHash);
   if (stored) return NextResponse.json(stored);

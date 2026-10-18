@@ -1,6 +1,8 @@
 import { createHash, randomBytes, timingSafeEqual } from "crypto";
-import { readJson, writeJson, updateJson, listFiles, NO_CHANGE } from "./controlData";
-import { addCredits, CREDIT_PACK } from "./contentTranslation";
+import { readJson, writeJson, updateJson, listFiles, deleteFile, NO_CHANGE } from "./controlData";
+import { addCredits } from "./contentTranslation";
+import { CREDIT_PACK } from "./creditPack";
+export { MAX_PACKS } from "./creditPack";
 
 // ---------------------------------------------------------------------------
 // Buying translation credits by EFT, the same way schools already buy the
@@ -16,7 +18,6 @@ import { addCredits, CREDIT_PACK } from "./contentTranslation";
 // 🔴 Nothing is added on request. A request is a promise to pay.
 // ---------------------------------------------------------------------------
 
-export const MAX_PACKS = 20;
 // Payment can take a school finance office a while.
 const LINK_DAYS = 90;
 
@@ -115,7 +116,15 @@ export async function approveCreditRequest(
   }
 }
 
-/** Requests still waiting for payment, newest first, for the credits page. */
+/** Takes back a request whose order email never went out: nobody holds its
+ *  link, so it could only ever sit there unapprovable. */
+export async function withdrawCreditRequest(id: string): Promise<void> {
+  await deleteFile(path(id));
+}
+
+/** Requests still waiting for payment, newest first, for the credits page.
+ *  shortcut: reads every request ever made; fine for a few orders a year per
+ *  school, move approved ones to their own folder if that ever grows. */
 export async function pendingCreditRequests(): Promise<Omit<CreditRequest, "tokenHash">[]> {
   const names = (await listFiles("translations/credit-requests")).filter((n) => n.endsWith(".json"));
   const all = await Promise.all(

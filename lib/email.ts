@@ -532,9 +532,6 @@ async function sendEmail(
   }
 }
 
-// Whether a provider is actually wired up. sendEmail() deliberately returns
-// true and logs when RESEND_API_KEY is absent, which is fine for a one-off
-// action but would make the reminder cron report sends that never happened.
 // ---------------------------------------------------------------------------
 // Translation credits bought by EFT (lib/creditRequests.ts).
 // ---------------------------------------------------------------------------
@@ -608,6 +605,9 @@ export async function sendCreditsAddedEmail(
   return sendEmail(b.fromEmail, to, `${credits} translation credits added`, emailShell(b, "Translation credits added", body), b.replyTo);
 }
 
+// Whether a provider is actually wired up. sendEmail() deliberately returns
+// true and logs when RESEND_API_KEY is absent, which is fine for a one-off
+// action but would make the reminder cron report sends that never happened.
 export function isEmailConfigured(): boolean {
   return resend !== null;
 }

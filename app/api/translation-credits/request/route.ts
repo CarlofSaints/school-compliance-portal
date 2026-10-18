@@ -3,8 +3,8 @@ import { requirePermission } from "@/lib/rolesData";
 import { getUserById } from "@/lib/userData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { recordActivity } from "@/lib/activityLog";
-import { createCreditRequest, MAX_PACKS } from "@/lib/creditRequests";
-import { sendCreditOrderEmail, sendCreditOrderConfirmationEmail } from "@/lib/email";
+import { createCreditRequest, withdrawCreditRequest, MAX_PACKS } from "@/lib/creditRequests";
+import { isEmailConfigured, sendCreditOrderEmail, sendCreditOrderConfirmationEmail } from "@/lib/email";
 
 // { packs, reference } -> an EFT order for translation credits. Nothing is
 // added here: School Compliance invoices, and adds the credits from the link
@@ -30,6 +30,14 @@ export async function POST(req: NextRequest) {
 
   const limited = await enforce([[LIMITS.creditRequestUser, session.id]]);
   if (limited) return limited;
+  // The approve link only ever exists in the order email; with no email
+  // provider it would go to a log and the order could never be completed.
+  if (!isEmailConfigured()) {
+    return NextResponse.json(
+      { error: "Ordering credits is not available just now. Please contact School Compliance." },
+      { status: 503 }
+    );
+  }
 
   const user = await getUserById(session.id);
   const requestedBy = {
@@ -42,8 +50,9 @@ export async function POST(req: NextRequest) {
   // This school's own address, so the link opens the store the request is in
   // (the shared app serves many schools from one deployment).
   const approveUrl = `${req.nextUrl.origin}/credits-approve?id=${encodeURIComponent(request.id)}&token=${encodeURIComponent(token)}`;
-  const sent = await sendCreditOrderEmail({ ...request, approveUrl });
+  const sent = await sendCreditOrderEmail({ ...request, approveUrl }).catch(() => false);
   if (!sent) {
+    await withdrawCreditRequest(request.id).catch((e) => console.error("[credits] could not withdraw", request.id, e));
     return NextResponse.json(
       { error: "Your request could not be sent just now. Please try again in a moment." },
       { status: 502 }
