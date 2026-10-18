@@ -5,7 +5,17 @@
 // Carl typed a whole set of minutes, pressed "Send for checking" without
 // saving, and lost all of it to the reload afterwards.
 
-import { cleanAttendees, isLocked, type MinutesStatus } from "./minutes";
+import {
+  ATTENDANCE_STATUS_LABELS,
+  cleanAttendees,
+  formatPeriod,
+  isLocked,
+  MEETING_BODY_LABELS,
+  type AttendanceStatus,
+  type MeetingBody,
+  type MeetingPeriod,
+  type MinutesStatus,
+} from "./minutes";
 
 /** Given to the panels that act on the SAVED copy (send, review, sign,
  *  distribute): saves any unsaved typing first. False means do not act;
@@ -33,9 +43,15 @@ export interface MinutesText<P = unknown, S = unknown> {
   sections: S;
 }
 
-/** The save payload, and the one definition of "the text". */
+/** The one definition of "the text". */
 export function textOf<P, S>(r: MinutesText<P, S>): MinutesText<P, S> {
   return { title: r.title, body: r.body, period: r.period, sections: r.sections };
+}
+
+/** The save body: the text, and when the words it was edited from were last
+ *  changed, so the server can refuse to save over somebody else's newer text. */
+export function savePayload(r: MinutesText & { textUpdatedAt?: string }) {
+  return { ...textOf(r), baseTextUpdatedAt: r.textUpdatedAt };
 }
 
 // Empty means absent: the server drops false, "" and [] fields on save.
@@ -124,23 +140,61 @@ export function isTextEditable(status: MinutesStatus): boolean {
 
 /**
  * What the page shows after a reload, given typing newer than the last good
- * save (hasUnsaved). Still editable: the server's workflow state with the
- * local text, which autosave then saves. No longer editable: the SERVER text,
- * because that is the document that was sent or signed, and the local text
- * comes back separately as "stranded" so the page can show it to copy.
+ * save (hasUnsaved).
+ * - Still editable: the server's workflow state with the local text, which
+ *   autosave then saves.
+ * - No longer editable: the SERVER text, because that is the document that
+ *   was sent or signed; the local text comes back as "stranded" to copy.
+ * - Somebody else changed the words meanwhile: never laid over silently. The
+ *   local text stays on screen, still based on the OLD words (so the server
+ *   keeps refusing it), and "conflict" carries their record to choose from.
  */
-export function reconcile<T extends MinutesText & { status: MinutesStatus; updatedAt?: string }>(
+export function reconcile<
+  T extends MinutesText & { status: MinutesStatus; updatedAt?: string; textUpdatedAt?: string }
+>(
   server: T,
   local: T | null,
   hasUnsaved: boolean
-): { record: T; stranded: MinutesText | null } {
-  if (!local) return { record: server, stranded: null };
+): { record: T; stranded: MinutesText | null; conflict: T | null } {
+  if (!local) return { record: server, stranded: null, conflict: null };
   // A read straight after a write can serve the copy from BEFORE it. What is
   // on screen came from a newer answer, so it wins, text and status alike.
-  if (isOlder(server.updatedAt, local.updatedAt)) return { record: local, stranded: null };
-  if (!hasUnsaved) return { record: server, stranded: null };
-  if (!isTextEditable(server.status)) return { record: server, stranded: textOf(local) };
-  return { record: { ...server, ...textOf(local) }, stranded: null };
+  if (isOlder(server.updatedAt, local.updatedAt)) return { record: local, stranded: null, conflict: null };
+  if (!hasUnsaved) return { record: server, stranded: null, conflict: null };
+  if (!isTextEditable(server.status)) return { record: server, stranded: textOf(local), conflict: null };
+  if (isOlder(local.textUpdatedAt, server.textUpdatedAt) && !sameText(local, server)) {
+    return {
+      record: { ...server, ...textOf(local), textUpdatedAt: local.textUpdatedAt },
+      stranded: null,
+      conflict: server,
+    };
+  }
+  return { record: { ...server, ...textOf(local) }, stranded: null, conflict: null };
+}
+
+/** The text as plain words, for a person to read and copy: everything the
+ *  minute-taker typed, attendance (with who sent apologies), who is
+ *  responsible. tr translates a label. */
+export function plainText(d: MinutesText, tr: (s: string) => string): string {
+  let period = "";
+  try {
+    period = formatPeriod(d.period as MeetingPeriod);
+  } catch {
+    // A malformed backup still shows its words.
+  }
+  const meeting = MEETING_BODY_LABELS[d.body as MeetingBody];
+  const sections = (Array.isArray(d.sections) ? (d.sections as Record<string, unknown>[]) : []).map((s) => {
+    const lines = [String(s.title ?? ""), String(s.body ?? "")];
+    for (const a of cleanAttendees(s.attendees) ?? []) {
+      const status = a.status ? ` (${tr(ATTENDANCE_STATUS_LABELS[a.status as AttendanceStatus])})` : "";
+      lines.push(`${[a.position, a.name].filter(Boolean).join(": ")}${status}`);
+    }
+    const responsible = String(s.responsible ?? "").trim();
+    if (responsible) lines.push(`${tr("Responsible")}: ${responsible}`);
+    return lines.filter(Boolean).join("\n");
+  });
+  const heading = [meeting ? tr(meeting) : d.body, period].filter(Boolean).join(" · ");
+  return [d.title, heading, "", sections.join("\n\n")].join("\n");
 }
 
 // ---- Local backup -----------------------------------------------------------
@@ -150,8 +204,11 @@ export function reconcile<T extends MinutesText & { status: MinutesStatus; updat
 
 export interface MinutesDraft extends MinutesText {
   editedAt: string;
-  /** The server's updatedAt the edits were made on top of. */
+  /** The server's textUpdatedAt the edits were made on top of. */
   baseUpdatedAt?: string;
+  /** The tab that wrote it: a save in one tab only clears its own backup,
+   *  never another tab's. */
+  tabId?: string;
 }
 
 /** Per site, per person and per minutes: one browser can be signed in to
@@ -274,6 +331,7 @@ export function mergeOffered(existing: MinutesDraft[], fresh: MinutesDraft | nul
 
 /** The saved minutes changed after the backup's edits began (someone else, or
  *  this person on another device), so restoring it would replace newer text. */
-export function draftIsBehind(draft: MinutesDraft, server: { updatedAt?: string }): boolean {
-  return isOlder(draft.baseUpdatedAt, server.updatedAt);
+// The WORDS changed, not any write: a review or a signature does not count.
+export function draftIsBehind(draft: MinutesDraft, server: { textUpdatedAt?: string }): boolean {
+  return isOlder(draft.baseUpdatedAt, server.textUpdatedAt);
 }

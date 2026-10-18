@@ -1532,5 +1532,12 @@
   "Could not copy. Select the text and copy it by hand.": "Kon nie kopieer nie. Kies die teks en kopieer dit self.",
   "Not saved: {error}": "Nie gestoor nie: {error}",
   "This replaces the newer saved text with the backup. Restore it anyway?": "Dit vervang die nuwer gestoorde teks met die rugsteun. Herstel dit in elk geval?",
-  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Hierdie notule is verander sedert hierdie rugsteun gemaak is, deur iemand anders of op ’n ander toestel. Om dit te herstel sal die nuwer gestoorde teks vervang."
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Hierdie notule is verander sedert hierdie rugsteun gemaak is, deur iemand anders of op ’n ander toestel. Om dit te herstel sal die nuwer gestoorde teks vervang.",
+  "You have unsaved minutes. Sign out and lose them?": "U het ongestoorde notule. Teken uit en verloor dit?",
+  "This replaces their saved changes with yours. Overwrite them?": "Dit vervang hulle gestoorde veranderinge met joune. Oorskryf dit?",
+  "Someone else saved changes to these minutes while you were editing.": "Iemand anders het veranderinge aan hierdie notule gestoor terwyl u besig was om te wysig.",
+  "Your version is in the editor below. Theirs:": "U weergawe is in die redigeerder hieronder. Hulle s’n:",
+  "Use theirs (copy mine first)": "Gebruik hulle s’n (kopieer myne eers)",
+  "Copy mine": "Kopieer myne",
+  "Overwrite with mine": "Oorskryf met myne"
 }

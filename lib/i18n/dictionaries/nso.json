@@ -1532,5 +1532,12 @@
   "Could not copy. Select the text and copy it by hand.": "Go paletšwe go kopiša. Kgetha sengwalwa gomme o se kopiše ka seatla.",
   "Not saved: {error}": "Ga se tša bolokwa: {error}",
   "This replaces the newer saved text with the backup. Restore it anyway?": "Se se tšea legato la sengwalwa se seswa se se bolokilwego ka khopi ya polokelo. O e bušetša le ge go le bjalo?",
-  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso ye e fetotšwe go tloga ge khopi ye ya polokelo e dirwa, ke motho yo mongwe goba sedirišweng se sengwe. Go e bušetša go tla tšea legato la sengwalwa se seswa se se bolokilwego."
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso ye e fetotšwe go tloga ge khopi ye ya polokelo e dirwa, ke motho yo mongwe goba sedirišweng se sengwe. Go e bušetša go tla tšea legato la sengwalwa se seswa se se bolokilwego.",
+  "You have unsaved minutes. Sign out and lose them?": "O na le metsotso ye e sa bolokwago. O a tšwa gomme o e lahlegelwa?",
+  "This replaces their saved changes with yours. Overwrite them?": "Se se tšea legato la diphetogo tša bona tše di bolokilwego ka tša gago. O di ngwala godimo?",
+  "Someone else saved changes to these minutes while you were editing.": "Motho yo mongwe o bolokile diphetogo metsotsong ye ge o be o e fetola.",
+  "Your version is in the editor below. Theirs:": "Phetolelo ya gago e ka go morulaganyi ka fase. Ya bona:",
+  "Use theirs (copy mine first)": "Diriša ya bona (kopiša ya ka pele)",
+  "Copy mine": "Kopiša ya ka",
+  "Overwrite with mine": "Ngwala godimo ka ya ka"
 }

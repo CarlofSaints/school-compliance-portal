@@ -1532,5 +1532,12 @@
   "Could not copy. Select the text and copy it by hand.": "Ga go a kgonega go kopisa. Tlhopha mokwalo mme o o kopise ka seatla.",
   "Not saved: {error}": "Ga di a bolokwa: {error}",
   "This replaces the newer saved text with the backup. Restore it anyway?": "Se se emisetsa mokwalo o mosha o o bolokilweng ka khopi ya polokelo. A o e busetsa le fa go ntse jalo?",
-  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso e fetotswe fa e sale khopi e ya polokelo e dirwa, ke mongwe gongwe mo sedirisiweng se sengwe. Go e busetsa go tla emisetsa mokwalo o mosha o o bolokilweng."
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso e fetotswe fa e sale khopi e ya polokelo e dirwa, ke mongwe gongwe mo sedirisiweng se sengwe. Go e busetsa go tla emisetsa mokwalo o mosha o o bolokilweng.",
+  "You have unsaved minutes. Sign out and lose them?": "O na le metsotso e e sa bolokwang. A o tswa mme o e latlhegelwa?",
+  "This replaces their saved changes with yours. Overwrite them?": "Se se emisetsa diphetogo tsa bone tse di bolokilweng ka tsa gago. A o di kwala godimo?",
+  "Someone else saved changes to these minutes while you were editing.": "Mongwe o bolokile diphetogo mo metsotsong e fa o ne o e fetola.",
+  "Your version is in the editor below. Theirs:": "Thanolo ya gago e mo morulaganyi fa tlase. Ya bone:",
+  "Use theirs (copy mine first)": "Dirisa ya bone (kopisa ya me pele)",
+  "Copy mine": "Kopisa ya me",
+  "Overwrite with mine": "Kwala godimo ka ya me"
 }

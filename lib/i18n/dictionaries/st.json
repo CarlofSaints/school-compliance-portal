@@ -1532,5 +1532,12 @@
   "Could not copy. Select the text and copy it by hand.": "Ha e a kgona ho kopitsa. Kgetha mongolo mme o o kopitse ka letsoho.",
   "Not saved: {error}": "Ha di a bolokwa: {error}",
   "This replaces the newer saved text with the backup. Restore it anyway?": "Sena se nkela mongolo o motjha o bolokilweng sebaka ka khopi ya polokelo. O e kgutlisa le ha ho le jwalo?",
-  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso ena e fetotswe ho tloha ha khopi ena ya polokelo e etswa, ke motho e mong kapa sesebedisweng se seng. Ho e kgutlisa ho tla nkela mongolo o motjha o bolokilweng sebaka."
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso ena e fetotswe ho tloha ha khopi ena ya polokelo e etswa, ke motho e mong kapa sesebedisweng se seng. Ho e kgutlisa ho tla nkela mongolo o motjha o bolokilweng sebaka.",
+  "You have unsaved minutes. Sign out and lose them?": "O na le metsotso e sa bolokwang. O a tswa mme o e lahlehelwa?",
+  "This replaces their saved changes with yours. Overwrite them?": "Sena se nkela diphetoho tsa bona tse bolokilweng sebaka ka tsa hao. O di ngola hodima?",
+  "Someone else saved changes to these minutes while you were editing.": "Motho e mong o bolokile diphetoho metsotsong ena ha o ntse o e fetola.",
+  "Your version is in the editor below. Theirs:": "Phetolelo ya hao e ho morualanyi ka tlase. Ya bona:",
+  "Use theirs (copy mine first)": "Sebedisa ya bona (kopitsa ya ka pele)",
+  "Copy mine": "Kopitsa ya ka",
+  "Overwrite with mine": "Ngola hodima ka ya ka"
 }

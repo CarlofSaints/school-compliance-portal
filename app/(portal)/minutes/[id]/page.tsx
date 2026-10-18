@@ -4,7 +4,14 @@ import TranslateContentButton from "@/components/TranslateContentButton";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth, authFetch, isRedirectingToSignIn, isSigningOut, onSignInRedirect } from "@/lib/useAuth";
+import {
+  useAuth,
+  authFetch,
+  isRedirectingToSignIn,
+  isSigningOut,
+  onBeforeSignOut,
+  onSignInRedirect,
+} from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
@@ -21,7 +28,9 @@ import {
   reconcile,
   removeDraft,
   retryDelayMs,
+  plainText,
   saveFailureKind,
+  savePayload,
   textOf,
   writeDraft,
   writeOffered,
@@ -73,6 +82,7 @@ interface MinutesDetail {
   createdBy: string;
   signedAt?: string;
   updatedAt?: string;
+  textUpdatedAt?: string;
 }
 
 // localStorage can throw on access (private mode, blocked site data).
@@ -84,6 +94,11 @@ function localStore(): Storage | null {
   }
 }
 type BackupKeys = ReturnType<typeof backupKeys>;
+// Which tab wrote a backup: a save here only ever clears this tab's own.
+const TAB_ID =
+  typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random()}`;
 /** The local backup of unsaved typing (lib/minutesAutosave.ts says why). */
 function backUp(keys: BackupKeys | null, r: MinutesDetail) {
   // Signing out discards on purpose: never write a backup back behind it.
@@ -91,7 +106,8 @@ function backUp(keys: BackupKeys | null, r: MinutesDetail) {
   writeDraft(localStore(), keys.main, {
     ...textOf(r),
     editedAt: new Date().toISOString(),
-    baseUpdatedAt: r.updatedAt,
+    baseUpdatedAt: r.textUpdatedAt,
+    tabId: TAB_ID,
   });
 }
 
@@ -144,6 +160,9 @@ export default function MinutesDetailPage() {
   // this device (newest first), or typing the server would no longer take
   // because the minutes were locked meanwhile. Each can be restored or copied.
   const [offered, setOffered] = useState<OfferedItem[]>([]);
+  // Somebody else saved different words while this person was typing: their
+  // record, shown beside the choice of whose text to keep. Autosave waits.
+  const [conflict, setConflict] = useState<MinutesDetail | null>(null);
 
   // ONE rule for who may change what, used by the autosave and the page alike.
   const locked = !!record && isLocked(record.status);
@@ -156,27 +175,30 @@ export default function MinutesDetailPage() {
   // The record as it is right now, for callbacks that outlive a render (a
   // reload, the unmount save). Written wherever the record is set.
   const recordRef = useRef<MinutesDetail | null>(null);
-  const put = (r: MinutesDetail) => {
+  const put = useCallback((r: MinutesDetail) => {
     recordRef.current = r;
     setRecord(r);
-  };
+  }, []);
   const versions = useRef<EditVersions>({ edit: 0, saved: 0 });
   const inFlight = useRef<Promise<boolean> | null>(null);
   const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Set once the signed-in person and the minutes are known (first load).
   const keysRef = useRef<BackupKeys | null>(null);
-  // A restored backup (its editedAt) is only let go of once its text is saved.
-  const restoredOffer = useRef<string | null>(null);
+  // Restored backups (their editedAt) are only let go of once their text is saved.
+  const restoredOffers = useRef<Set<string>>(new Set());
   // The server's Retry-After on the last transient failure, if it sent one.
   const retryAfter = useRef<string | null>(null);
-  /** Nothing left to save or back up: the minutes are gone, or the user chose
-   *  to lose the changes. */
-  const forgetUnsaved = () => {
+  /** Nothing left to save or back up: the user chose to lose the changes, or
+   *  (with offered) the minutes are gone, so older backups of them go too. */
+  const forgetUnsaved = (opts: { offered?: boolean } = {}) => {
     versions.current.saved = versions.current.edit;
     setDirty(false);
     if (backupTimer.current) clearTimeout(backupTimer.current);
     backupTimer.current = null;
-    if (keysRef.current) removeDraft(localStore(), keysRef.current.main);
+    if (keysRef.current) {
+      removeDraft(localStore(), keysRef.current.main);
+      if (opts.offered) removeDraft(localStore(), keysRef.current.offered);
+    }
   };
 
   const userId = session?.id;
@@ -192,9 +214,14 @@ export default function MinutesDetailPage() {
         const keys = keysRef.current;
         // Every panel reloads through here after it acts. Typing since the
         // last save stays on screen and stays dirty, and autosave saves it.
-        const { record: next, stranded } = reconcile(server, local, hasUnsaved(versions.current));
-        recordRef.current = next;
-        setRecord(next);
+        const { record: next, stranded, conflict: theirs } = reconcile(server, local, hasUnsaved(versions.current));
+        put(next);
+        // Somebody else changed the words meanwhile: keep the typing, back it
+        // up, and let the person choose rather than overwrite either side.
+        if (theirs) {
+          if (local) backUp(keys, local);
+          setConflict(theirs);
+        }
         if (stranded) {
           // Locked meanwhile: the editor shows what was sent or signed, and
           // the typing moves to the banner (and stays in the backup) to copy.
@@ -231,7 +258,7 @@ export default function MinutesDetailPage() {
     } finally {
       setBusy(false);
     }
-  }, [params.id, userId]);
+  }, [params.id, userId, put]);
 
   useEffect(() => {
     if (session) load();
@@ -291,7 +318,7 @@ export default function MinutesDetailPage() {
     if (!r) return false;
     const version = versions.current.edit;
     const sentAt = new Date().toISOString();
-    const body = JSON.stringify(textOf(r));
+    const body = JSON.stringify(savePayload(r));
     // keepalive requests share a 64KB budget; past that the backup has to do.
     if (opts.keepalive && new TextEncoder().encode(body).length >= 64_000) return false;
     setSaving(true);
@@ -306,7 +333,13 @@ export default function MinutesDetailPage() {
       if (!res.ok) {
         lastSaveError.current = data.error || t("Could not save.");
         const kind = saveFailureKind(res.status);
-        if (kind === "transient") {
+        if (data.conflict && data.current) {
+          // Somebody else saved different words first. Autosave stops; the
+          // typing stays on screen and in the backup until the person chooses.
+          backUp(keysRef.current, recordRef.current ?? r);
+          setConflict(data.current);
+          setSaveRefused(lastSaveError.current);
+        } else if (kind === "transient") {
           retryAfter.current = res.headers.get("Retry-After");
           setSaveFailures((n) => n + 1);
         } else {
@@ -324,7 +357,10 @@ export default function MinutesDetailPage() {
       // while it was in flight stays and is saved next.
       versions.current.saved = version;
       const unsaved = hasUnsaved(versions.current);
-      put(reconcile<MinutesDetail>(data, recordRef.current, unsaved).record);
+      // Our own save: its textUpdatedAt is the new base, and any typing since
+      // goes on top of it.
+      const now = recordRef.current;
+      put(unsaved && now ? { ...data, ...textOf(now) } : data);
       setDirty(unsaved);
       const keys = keysRef.current;
       if (!unsaved && keys) {
@@ -332,11 +368,11 @@ export default function MinutesDetailPage() {
         // than it. One written after (the minutes opened again since, say) stays.
         const store = localStore();
         const d = readDraft(store, keys.main);
-        if (d && d.editedAt <= sentAt) removeDraft(store, keys.main);
-        if (restoredOffer.current) {
-          const gone = restoredOffer.current;
-          writeOffered(store, keys.offered, readOffered(store, keys.offered).filter((o) => o.editedAt !== gone));
-          restoredOffer.current = null;
+        if (d && d.tabId === TAB_ID && d.editedAt <= sentAt) removeDraft(store, keys.main);
+        const gone = restoredOffers.current;
+        if (gone.size) {
+          writeOffered(store, keys.offered, readOffered(store, keys.offered).filter((o) => !gone.has(o.editedAt)));
+          gone.clear();
         }
       }
       lastSaveError.current = null;
@@ -359,6 +395,8 @@ export default function MinutesDetailPage() {
   const saveOnce = async (opts: { keepalive?: boolean } = {}): Promise<boolean> => {
     while (inFlight.current) await inFlight.current;
     if (!hasUnsaved(versions.current)) return true;
+    // Signing out: anything left is discarded on purpose, so nothing more goes out.
+    if (isSigningOut()) return false;
     const p = sendSave(opts);
     inFlight.current = p;
     try {
@@ -368,20 +406,22 @@ export default function MinutesDetailPage() {
     }
   };
 
-  /** True only when everything on screen is saved. A few rounds, because
-   *  typing can carry on while a save is in flight. */
-  const saveUntilClean = async (): Promise<boolean> => {
+  /** A few rounds, because typing can carry on while a save is in flight.
+   *  clean: everything on screen is saved. behind: every save worked but the
+   *  person is still typing (autosave picks up the rest). failed: a save failed. */
+  const saveUntilClean = async (): Promise<"clean" | "behind" | "failed"> => {
     for (let i = 0; i < 3; i++) {
-      if (!hasUnsaved(versions.current)) return true;
-      if (!(await saveOnce())) return false;
+      if (!hasUnsaved(versions.current)) return "clean";
+      if (!(await saveOnce())) return "failed";
     }
-    return !hasUnsaved(versions.current);
+    return hasUnsaved(versions.current) ? "behind" : "clean";
   };
 
   const saveNow = async () => {
-    if (await saveUntilClean()) setToast({ message: t("Saved."), type: "success" });
-    else if (lastSaveError.current) setToast({ message: lastSaveError.current, type: "error" });
-    // Otherwise the save worked but typing is still going on; autosave follows.
+    const result = await saveUntilClean();
+    if (result === "clean") setToast({ message: t("Saved."), type: "success" });
+    else if (result === "failed" && lastSaveError.current) setToast({ message: lastSaveError.current, type: "error" });
+    // behind: saved, but typing is still going on; autosave follows.
   };
 
   // Before anything that sends, reviews or signs: those act on the SAVED copy
@@ -391,8 +431,12 @@ export default function MinutesDetailPage() {
     // trap the user (no wet-ink upload, ever). Any typing it stranded is in
     // the banner and the backup.
     if (!textEditable) return true;
-    if (await saveUntilClean()) return true;
-    setToast({ message: t("Your changes could not be saved, so nothing was sent."), type: "error" });
+    // behind is fine: what was typed up to now is saved, and is what is sent.
+    if ((await saveUntilClean()) !== "failed") return true;
+    setToast({
+      message: [t("Your changes could not be saved, so nothing was sent."), lastSaveError.current].filter(Boolean).join(" "),
+      type: "error",
+    });
     return false;
   };
 
@@ -401,7 +445,7 @@ export default function MinutesDetailPage() {
   // A failed save retries further apart each time: saveFailures changes on
   // every failure and record on every success, so the timer always re-arms.
   useEffect(() => {
-    if (!dirty || !textEditable || saveRefused) return;
+    if (!dirty || !textEditable || saveRefused || conflict) return;
     const delay = saveFailures === 0 ? 3000 : retryDelayMs(saveFailures, retryAfter.current);
     const timer = setTimeout(() => {
       void saveOnce();
@@ -409,7 +453,26 @@ export default function MinutesDetailPage() {
     return () => clearTimeout(timer);
     // saveOnce is recreated every render but reads only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [record, dirty, textEditable, saveFailures, saveRefused]);
+  }, [record, dirty, textEditable, saveFailures, saveRefused, conflict]);
+
+  // Signing out with unsaved typing: one try at saving it (up to 5 seconds),
+  // and only if that fails, ask. Staying cancels the sign-out.
+  useEffect(
+    () =>
+      onBeforeSignOut(async () => {
+        const r = recordRef.current;
+        if (!r || !hasUnsaved(versions.current) || !isTextEditable(r.status)) return true;
+        const result = await Promise.race([
+          saveUntilClean(),
+          new Promise<"failed">((done) => setTimeout(() => done("failed"), 5000)),
+        ]);
+        if (result === "clean") return true;
+        return window.confirm(t("You have unsaved minutes. Sign out and lose them?"));
+      }),
+    // Registered once; saveUntilClean reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // Leaving by the sidebar or any in-app link fires no beforeunload. Back up
   // and save on the way out, through the same queue as autosave so it waits
@@ -435,7 +498,8 @@ export default function MinutesDetailPage() {
   const back = async (e: React.MouseEvent) => {
     if (!hasUnsaved(versions.current)) return;
     e.preventDefault();
-    if (await saveUntilClean()) {
+    // behind: the rest goes with the save on the way out.
+    if ((await saveUntilClean()) !== "failed") {
       router.push("/minutes");
     } else if (window.confirm(t("Your changes could not be saved. Leave this page anyway and lose them?"))) {
       forgetUnsaved();
@@ -476,7 +540,7 @@ export default function MinutesDetailPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return data.error || t("Could not delete.");
-    forgetUnsaved();
+    forgetUnsaved({ offered: true });
     router.push("/minutes");
   };
 
@@ -507,7 +571,7 @@ export default function MinutesDetailPage() {
     if (item.behind && !window.confirm(t("This replaces the newer saved text with the backup. Restore it anyway?"))) {
       return;
     }
-    if (item.reason === "device" && item.editedAt) restoredOffer.current = item.editedAt;
+    if (item.reason === "device" && item.editedAt) restoredOffers.current.add(item.editedAt);
     patch(textOf(item.draft) as Partial<MinutesDetail>);
     setOffered((prev) => prev.filter((o) => o.id !== item.id));
   };
@@ -524,8 +588,11 @@ export default function MinutesDetailPage() {
   // The clipboard API is missing on plain http and in some browsers; the old
   // execCommand route still works there. Failing both, select the text so a
   // Ctrl+C is all that is left to do.
-  const copyOffered = async (text: string, boxId: string) => {
-    const copied = () => setToast({ message: t("Copied."), type: "success" });
+  const copyText = async (text: string, boxId: string): Promise<boolean> => {
+    const copied = () => {
+      setToast({ message: t("Copied."), type: "success" });
+      return true;
+    };
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -549,7 +616,7 @@ export default function MinutesDetailPage() {
       // Fall through to selecting the text.
     }
     setToast({ message: t("Could not copy. Select the text and copy it by hand."), type: "error" });
-    const box = document.getElementById(boxId);
+    const box = boxId ? document.getElementById(boxId) : null;
     const selection = window.getSelection();
     if (box && selection) {
       const range = document.createRange();
@@ -557,20 +624,35 @@ export default function MinutesDetailPage() {
       selection.removeAllRanges();
       selection.addRange(range);
     }
+    return false;
   };
   // The unsaved text as plain words, to read and copy.
-  const offeredText = (d: MinutesText) => {
-    let period = "";
-    try {
-      period = formatPeriod(d.period as MeetingPeriod);
-    } catch {
-      // A malformed backup still shows its words.
-    }
-    const meeting = MEETING_BODY_LABELS[d.body as MeetingBody];
-    const sections = (d.sections as MinutesSection[])
-      .map((s) => [s.title, s.body].filter(Boolean).join("\n"))
-      .join("\n\n");
-    return [d.title, [meeting ? t(meeting) : d.body, period].filter(Boolean).join(" · "), "", sections].join("\n");
+  const offeredText = (d: MinutesText) => plainText(d, t);
+
+  // The three ways out of a conflict. None loses anybody's words.
+  const keepTheirs = async () => {
+    if (!conflict || !recordRef.current) return;
+    const mine = recordRef.current;
+    await copyText(offeredText(mine), "");
+    // Kept as an offered backup as well, in case the copy did not take.
+    const keys = keysRef.current;
+    const store = localStore();
+    const kept = { ...textOf(mine), editedAt: new Date().toISOString(), baseUpdatedAt: mine.textUpdatedAt, tabId: TAB_ID };
+    if (keys) writeOffered(store, keys.offered, mergeOffered(readOffered(store, keys.offered), kept, conflict));
+    setOffered((prev) => [{ id: kept.editedAt, draft: kept, editedAt: kept.editedAt, reason: "device" }, ...prev]);
+    forgetUnsaved();
+    put(conflict);
+    setConflict(null);
+    setSaveRefused(null);
+  };
+  const overwriteWithMine = () => {
+    if (!conflict || !recordRef.current) return;
+    if (!window.confirm(t("This replaces their saved changes with yours. Overwrite them?"))) return;
+    // Their record with my words, based on THEIR text now, so the save goes through.
+    put({ ...conflict, ...textOf(recordRef.current) } as MinutesDetail);
+    setConflict(null);
+    setSaveRefused(null);
+    void saveOnce();
   };
 
   return (
@@ -634,6 +716,39 @@ export default function MinutesDetailPage() {
         </div>
       )}
 
+      {conflict && canManage && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-risk-high">
+          <p className="font-medium">{t("Someone else saved changes to these minutes while you were editing.")}</p>
+          <p className="mt-1 text-gray-700">{t("Your version is in the editor below. Theirs:")}</p>
+          <pre
+            id="conflict-theirs"
+            className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-red-200 bg-white p-3 font-sans text-gray-700"
+          >
+            {offeredText(conflict)}
+          </pre>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => void keepTheirs()}
+              className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+            >
+              {t("Use theirs (copy mine first)")}
+            </button>
+            <button
+              onClick={() => record && void copyText(offeredText(record), "")}
+              className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm text-gray-700 transition-colors"
+            >
+              {t("Copy mine")}
+            </button>
+            <button
+              onClick={overwriteWithMine}
+              className="px-4 py-2 rounded-lg border border-red-200 bg-white hover:bg-red-50 text-sm transition-colors"
+            >
+              {t("Overwrite with mine")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {canManage &&
         offered.map((item, i) => (
           <div key={item.id} className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -666,7 +781,7 @@ export default function MinutesDetailPage() {
                 </button>
               )}
               <button
-                onClick={() => void copyOffered(offeredText(item.draft), `offered-${i}`)}
+                onClick={() => void copyText(offeredText(item.draft), `offered-${i}`)}
                 className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm transition-colors"
               >
                 {t("Copy")}

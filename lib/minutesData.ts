@@ -95,6 +95,11 @@ export interface MinutesRecord {
   createdAt: string;
   createdBy: string;
   updatedAt: string;
+  /** When the WORDS last changed (title, meeting, period, sections), not any
+   *  write: reviews and signatures move updatedAt but not this. The editor
+   *  sends back the one its text was based on, so a save cannot quietly wipe
+   *  somebody else's newer text. Missing on records from before it existed. */
+  textUpdatedAt?: string;
   /** Set once every signatory has signed. Nothing may change after this. */
   signedAt?: string;
 }
@@ -154,6 +159,7 @@ export async function createMinutes(
     draftNumber: 0,
     createdAt: now,
     updatedAt: now,
+    textUpdatedAt: now,
   };
   await writeJson(recordPath(record.id), record);
   return record;
@@ -178,6 +184,17 @@ export type MinutesChange =
 /** Thrown from inside a change to abandon it without writing. */
 export class MinutesChangeRefused extends Error {}
 
+/** The words were changed by somebody else after the editor's copy was read.
+ *  Carries the record as it is now, so the editor can show both. */
+export class MinutesConflictError extends Error {
+  constructor(readonly current: MinutesRecord) {
+    super("Someone else saved changes to these minutes while you were editing.");
+    this.name = "MinutesConflictError";
+  }
+}
+
+const TEXT_FIELDS = ["title", "body", "period", "sections"] as const;
+
 export async function updateMinutes(
   id: string,
   change: MinutesChange
@@ -200,13 +217,20 @@ export async function updateMinutes(
     ) {
       throw new MinutesLockedError(id, SIGNING_FREEZE_MESSAGE);
     }
+    const now = new Date().toISOString();
+    // Only a real change to the words counts: autosave sends every text field
+    // every time, and a save of the same words must not look like an edit.
+    const textChanged = TEXT_FIELDS.some(
+      (f) => f in updates && updates[f] !== undefined && JSON.stringify(updates[f]) !== JSON.stringify(existing[f])
+    );
     saved = {
       ...existing,
       ...updates,
       id: existing.id,
       createdAt: existing.createdAt,
       createdBy: existing.createdBy,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
+      textUpdatedAt: textChanged ? now : existing.textUpdatedAt,
     };
     return saved;
   });

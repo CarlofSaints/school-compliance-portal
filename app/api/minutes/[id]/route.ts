@@ -6,6 +6,7 @@ import {
   updateMinutes,
   deleteMinutes,
   MinutesLockedError,
+  MinutesConflictError,
 } from "@/lib/minutesData";
 import {
   checkPeriod,
@@ -148,7 +149,17 @@ export async function PATCH(
         : rebuilt;
     }
 
-    const saved = await updateMinutes(id, updates);
+    // 🔴 The words the editor started from. Checked INSIDE the atomic update,
+    // against the copy being written over, so two people editing at once
+    // cannot both "win": the second is told and shown the first one's text.
+    // Reviews and signatures do not move textUpdatedAt, so they never count.
+    const base = typeof body.baseTextUpdatedAt === "string" ? body.baseTextUpdatedAt : undefined;
+    const saved = await updateMinutes(id, (current) => {
+      if (base && current.textUpdatedAt && current.textUpdatedAt > base) {
+        throw new MinutesConflictError(current);
+      }
+      return updates;
+    });
     if (!saved) {
       return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
     }
@@ -170,6 +181,17 @@ export async function PATCH(
   } catch (err) {
     if (err instanceof MinutesLockedError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    if (err instanceof MinutesConflictError) {
+      const hash = documentHash(err.current);
+      return NextResponse.json(
+        {
+          error: err.message,
+          conflict: true,
+          current: { ...err.current, documentHash: hash, documentRef: shortHash(hash) },
+        },
+        { status: 409 }
+      );
     }
     console.error("[minutes] Update failed:", err);
     return NextResponse.json({ error: "Could not save." }, { status: 500 });

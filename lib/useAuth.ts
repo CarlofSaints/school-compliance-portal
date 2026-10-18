@@ -93,6 +93,36 @@ export function onSignInRedirect(fn: () => void): () => void {
   };
 }
 
+/** Asked before signing out; false cancels it. A page with unsaved work
+ *  tries to save it, and asks the person if that fails. */
+const beforeSignOutHooks = new Set<() => Promise<boolean>>();
+export function onBeforeSignOut(fn: () => Promise<boolean>): () => void {
+  beforeSignOutHooks.add(fn);
+  return () => {
+    beforeSignOutHooks.delete(fn);
+  };
+}
+
+// Signing out in one tab tells the others (the storage event fires only in
+// OTHER tabs), so they stop backing up typing the person chose to leave.
+const SIGNED_OUT_KEY = "minutes-signed-out";
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === SIGNED_OUT_KEY && e.newValue) {
+      signingOut = true;
+      try {
+        const { userId } = JSON.parse(e.newValue) as { userId?: string };
+        if (userId) clearUserBackups(window.localStorage, window.location.host, userId);
+      } catch {
+        // A marker we cannot read still stops this tab backing up.
+      }
+    } else if (e.key === SESSION_KEY && e.newValue) {
+      // Signed in again in another tab.
+      signingOut = false;
+    }
+  });
+}
+
 export function setSession(payload: SessionPayload): void {
   signingOut = false;
   redirectingToSignIn = false;
@@ -114,18 +144,24 @@ export function clearSession(): void {
 
 /** Signs out: the server clears the cookie, this clears the drawn copy. The
  *  local copy goes even if the call fails, so the page never looks signed in
- *  after the person asked to leave. */
-export async function signOut(): Promise<void> {
-  // 🔴 Signing out DISCARDS unsaved minutes typing, on purpose: the backups
-  // belong to this person, and on a shared computer the next one in must not
-  // find them. Flagged BEFORE clearing, so a page being torn down neither
-  // writes its backup again nor sends a save. (Not on a 401: there the backup
-  // is what brings the typing back after signing in again.)
+ *  after the person asked to leave. False when a page cancelled it. */
+export async function signOut(): Promise<boolean> {
+  // Pages with unsaved work get one go at saving it first, and may cancel.
+  for (const hook of [...beforeSignOutHooks]) {
+    if (!(await hook().catch(() => true))) return false;
+  }
+  // 🔴 From here signing out DISCARDS any unsaved minutes typing left: the
+  // backups belong to this person, and on a shared computer the next one in
+  // must not find them. Flagged BEFORE clearing and before the cookie goes,
+  // so a page being torn down neither writes its backup again nor sends a
+  // save. (Not on a 401: there the backup is what brings the typing back
+  // after signing in again.)
   signingOut = true;
   const me = getSession();
   if (me) {
     try {
       clearUserBackups(window.localStorage, window.location.host, me.id);
+      window.localStorage.setItem(SIGNED_OUT_KEY, JSON.stringify({ userId: me.id, at: new Date().toISOString() }));
     } catch {
       // Storage blocked: nothing was backed up.
     }
@@ -137,6 +173,7 @@ export async function signOut(): Promise<void> {
     // sign-in page, which is what was asked for.
   }
   clearSession();
+  return true;
 }
 
 // Shown instead of the API's raw "Unauthorized", which reads like "you lack

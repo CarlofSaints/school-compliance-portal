@@ -1532,5 +1532,12 @@
   "Could not copy. Select the text and copy it by hand.": "Akukwazanga ukukopisha. Khetha umbhalo bese uwukopisha ngesandla.",
   "Not saved: {error}": "Akulondolozwanga: {error}",
   "This replaces the newer saved text with the backup. Restore it anyway?": "Lokhu kufaka isipele esikhundleni sombhalo omusha olondoloziwe. Usibuyisele noma kunjalo?",
-  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Le mizuzu ishintshiwe selokhu kwenziwa lesi sipele, ngomunye umuntu noma kwenye idivayisi. Ukusibuyisela kuzofaka esikhundleni sombhalo omusha olondoloziwe."
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Le mizuzu ishintshiwe selokhu kwenziwa lesi sipele, ngomunye umuntu noma kwenye idivayisi. Ukusibuyisela kuzofaka esikhundleni sombhalo omusha olondoloziwe.",
+  "You have unsaved minutes. Sign out and lose them?": "Unemizuzu engalondolozwanga. Uphume bese uyilahlekelwa?",
+  "This replaces their saved changes with yours. Overwrite them?": "Lokhu kufaka izinguquko zakho esikhundleni sezabo ezilondoloziwe. Uzibhale phezu kwazo?",
+  "Someone else saved changes to these minutes while you were editing.": "Omunye umuntu ulondoloze izinguquko kule mizuzu ngesikhathi uyihlela.",
+  "Your version is in the editor below. Theirs:": "Inguqulo yakho isesihleli ngezansi. Eyabo:",
+  "Use theirs (copy mine first)": "Sebenzisa eyabo (kopisha eyami kuqala)",
+  "Copy mine": "Kopisha eyami",
+  "Overwrite with mine": "Bhala phezu kwayo ngeyami"
 }

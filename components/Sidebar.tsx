@@ -210,8 +210,8 @@ export default function Sidebar() {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    router.push("/login");
+    // A page with unsaved work may cancel (its person chose to stay).
+    if (await signOut()) router.push("/login");
   };
 
   return (

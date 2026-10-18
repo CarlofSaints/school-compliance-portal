@@ -11,7 +11,9 @@ import {
   isTextEditable,
   mergeOffered,
   readDraft,
+  plainText,
   readOffered,
+  savePayload,
   reconcile,
   removeDraft,
   retryDelayMs,
@@ -44,8 +46,8 @@ check("same versions: saved", hasUnsaved({ edit: 3, saved: 3 }), false);
 check("an edit after the last save: unsaved", hasUnsaved({ edit: 4, saved: 3 }), true);
 
 console.log("\nReload over typing");
-check("nothing unsaved: the server copy, whole", reconcile(server, local, false), { record: server, stranded: null });
-check("first load (no local copy): the server copy", reconcile(server, null, true), { record: server, stranded: null });
+check("nothing unsaved: the server copy, whole", reconcile(server, local, false), { record: server, stranded: null, conflict: null });
+check("first load (no local copy): the server copy", reconcile(server, null, true), { record: server, stranded: null, conflict: null });
 const merged = reconcile(server, local, true);
 check("still editable: the typed text stays", textOf(merged.record), textOf(local));
 check("still editable: workflow state comes from the server",
@@ -59,11 +61,38 @@ for (const status of ["awaiting_signatures", "signed", "archived"] as MinutesSta
 const newer = { ...local, updatedAt: "2026-10-18T10:00:05.000Z" };
 const staleRead = { ...server, updatedAt: "2026-10-18T10:00:00.000Z" };
 check("stale read (older than what is on screen): the screen stays, text and status",
-  reconcile(staleRead, newer, false), { record: newer, stranded: null });
+  reconcile(staleRead, newer, false), { record: newer, stranded: null, conflict: null });
 check("stale read with typing: the screen stays", reconcile(staleRead, newer, true).record, newer);
 check("newer read: taken as normal", reconcile({ ...server, updatedAt: "2026-10-18T10:00:09.000Z" }, newer, false).record.title, "Old");
 check("no timestamps: never treated as stale", reconcile(server, local, false).record, server);
 check("draft and in_review are editable", [isTextEditable("draft"), isTextEditable("in_review")], [true, true]);
+
+console.log("\nSomebody else changed the words meanwhile");
+const mine = { ...local, status: "draft" as MinutesStatus, textUpdatedAt: "2026-10-18T09:00:00.000Z", updatedAt: "2026-10-18T09:00:00.000Z" };
+const theirs = { ...server, status: "draft" as MinutesStatus, title: "Their title", textUpdatedAt: "2026-10-18T09:05:00.000Z", updatedAt: "2026-10-18T09:05:00.000Z" };
+const clash = reconcile(theirs, mine, true);
+check("their newer words are never laid over silently: conflict carries theirs", clash.conflict, theirs);
+check("my typing stays on screen", textOf(clash.record), textOf(mine));
+check("still based on the OLD words, so the server keeps refusing it", clash.record.textUpdatedAt, mine.textUpdatedAt);
+check("a review or signature (updatedAt moves, words do not): no conflict",
+  reconcile({ ...theirs, ...textOf(server), textUpdatedAt: mine.textUpdatedAt }, mine, true).conflict, null);
+check("they saved the very same words: no conflict", reconcile({ ...theirs, ...textOf(mine) }, mine, true).conflict, null);
+check("nothing unsaved here: simply take theirs", reconcile(theirs, mine, false), { record: theirs, stranded: null, conflict: null });
+check("the save body carries the base it was edited from", savePayload(mine).baseTextUpdatedAt, mine.textUpdatedAt);
+
+console.log("\nPlain text to copy");
+const copyable = plainText(
+  {
+    title: "SGB meeting", body: "sgb", period: { kind: "month", year: 2026, month: 10 },
+    sections: [
+      { title: "Present", body: "", kind: "attendance", attendees: [{ position: "Chair", name: "Ms Dube" }, { position: "Clerk", name: "Mr Nel", status: "apology" }] },
+      { title: "Fence", body: "Get quotes.", responsible: "Mr Nel" },
+    ],
+  },
+  (s) => `[${s}]`
+);
+check("title, meeting, attendance with status, responsible: all there",
+  ["SGB meeting", "Chair: Ms Dube", "Clerk: Mr Nel ([Apology])", "Get quotes.", "[Responsible]: Mr Nel"].every((x) => copyable.includes(x)), true);
 
 console.log("\nLocal backup");
 check("keys are per site, per person and per minutes", backupKeys("hvps.example", "u7", "m1"),
@@ -102,9 +131,9 @@ check("so saved text raises no banner", draftToOffer({ ...typed, editedAt: "t" }
 
 console.log("\nBackup made before the minutes changed");
 const base = { ...draft, baseUpdatedAt: "2026-10-18T09:00:00.000Z" };
-check("server saved again after the backup's base: behind", draftIsBehind(base, { updatedAt: "2026-10-18T09:30:00.000Z" }), true);
-check("server unchanged since: not behind", draftIsBehind(base, { updatedAt: "2026-10-18T09:00:00.000Z" }), false);
-check("no base recorded: not behind", draftIsBehind({ ...draft, baseUpdatedAt: undefined }, { updatedAt: "z" }), false);
+check("server saved again after the backup's base: behind", draftIsBehind(base, { textUpdatedAt: "2026-10-18T09:30:00.000Z" }), true);
+check("server unchanged since: not behind", draftIsBehind(base, { textUpdatedAt: "2026-10-18T09:00:00.000Z" }), false);
+check("no base recorded: not behind", draftIsBehind({ ...draft, baseUpdatedAt: undefined }, { textUpdatedAt: "z" }), false);
 
 console.log("\nSign-out");
 const all = new Map<string, string>([
