@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { tk, type T } from "./i18n/translate";
+import { addDays } from "./actionItems";
 
 export const DAY_START_MINUTE = 0;
 export const DAY_END_MINUTE = 24 * 60;
@@ -79,15 +80,8 @@ function keyToUtc(key: string): Date {
   return new Date(Date.UTC(p.y, p.m - 1, p.d));
 }
 
-function toDateKey(utc: Date): string {
-  return dateKey(utc.getUTCFullYear(), utc.getUTCMonth() + 1, utc.getUTCDate());
-}
-
-export function addDays(key: string, days: number): string {
-  const d = keyToUtc(key);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toDateKey(d);
-}
+// The portal's one day-arithmetic helper (lib/actionItems.ts), not a second copy.
+export { addDays } from "./actionItems";
 
 /** 0 = Monday ... 6 = Sunday. */
 export function weekdayIndex(key: string): number {

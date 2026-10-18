@@ -14,6 +14,7 @@ import {
 import {
   bookingsDueForReminder,
   claimReminder,
+  lapseStartedRequests,
   finishReminder,
   holderLabel,
   holders,
@@ -189,6 +190,20 @@ export async function notifyRequestOutcome(
   return ok;
 }
 
+/** Lapses unanswerable requests on meetings that have started, and tells each
+ *  requester. Run from the daily cron. */
+export async function runRequestLapses(now: Date = new Date()): Promise<{ lapsed: number; failed: number; detail: string[] }> {
+  let lapsed = 0;
+  let failed = 0;
+  const detail: string[] = [];
+  for (const { withdrawn, room } of await lapseStartedRequests(now)) {
+    lapsed += withdrawn.length;
+    failed += await notifyWithdrawn(withdrawn, room);
+    detail.push(`Room ${room.name}: ${withdrawn.length} unanswered request(s) lapsed, the meeting had started`);
+  }
+  return { lapsed, failed, detail };
+}
+
 /** The day-before reminder, run from the daily cron. Claimed before sending so
  *  overlapping runs cannot double-send; handed back if nothing was delivered,
  *  so a re-run the same day tries again. */
@@ -199,7 +214,8 @@ export async function runRoomBookingReminders(now: Date = new Date()): Promise<{
   const detail: string[] = [];
   for (const { booking, room } of due) {
     const stamp = now.toISOString();
-    if (!(await claimReminder(booking, stamp, null))) {
+    // Claimed against the stamp it has now: none, or a stale one from a run that died.
+    if (!(await claimReminder(booking, stamp, booking.reminderSentAt ?? null))) {
       detail.push(`Room ${room.name} "${booking.title}": already reminded by another run`);
       continue;
     }

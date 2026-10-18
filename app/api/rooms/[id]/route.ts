@@ -19,10 +19,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: "Room not found" }, { status: 404 });
   const body = await req.json().catch(() => null);
-  const parsed = parseRoomInput(body);
-  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const active = (body as { active?: unknown })?.active;
   if (active !== undefined && typeof active !== "boolean") return NextResponse.json({ error: "Invalid active flag" }, { status: 400 });
+  // { active } alone retires or brings back without touching anything else.
+  const onlyActive = !!body && typeof body === "object" && Object.keys(body).length === 1 && active !== undefined;
+  const parsed = onlyActive ? ({ ok: true, value: {} } as const) : parseRoomInput(body);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   if (active === false) {
     const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
     if (limited) return limited;

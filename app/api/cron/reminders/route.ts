@@ -21,7 +21,7 @@ import {
   getActionSummarySettings,
   sendActionSummary,
 } from "@/lib/actionSummaryData";
-import { runRoomBookingReminders } from "@/lib/roomBookingNotify";
+import { runRequestLapses, runRoomBookingReminders } from "@/lib/roomBookingNotify";
 
 export const maxDuration = 300;
 
@@ -239,6 +239,15 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     failed++;
     detail.push(`Room booking reminders failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  try {
+    const lapses = await runRequestLapses(now);
+    sent += lapses.lapsed - lapses.failed;
+    failed += lapses.failed;
+    detail.push(...lapses.detail);
+  } catch (err) {
+    failed++;
+    detail.push(`Room request lapses failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const run = {

@@ -42,6 +42,11 @@ export async function POST(req: NextRequest) {
 
   const parsed = parseBookingInput(await req.json().catch(() => null));
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  // Booking for someone else emails them too: that counts against the email limit.
+  if (parsed.value.bookedForId && parsed.value.bookedForId !== session.id) {
+    const mailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+    if (mailLimited) return mailLimited;
+  }
   const actor = actorOf(session);
   const result = await createBooking(actor, parsed.value);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });

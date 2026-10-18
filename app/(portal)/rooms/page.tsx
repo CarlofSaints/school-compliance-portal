@@ -86,7 +86,8 @@ export default function RoomsPage() {
       ? t("Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.", { name: r.name })
       : t("Bring \"{name}\" back for booking?", { name: r.name });
     if (!confirm(msg)) return;
-    const ok = await send(`/api/rooms/${r.id}`, "PUT", { name: r.name, capacity: r.capacity, color: r.color, notes: r.notes, active: !r.active });
+    // Only the flag: sending the whole row could overwrite another manager's edit.
+    const ok = await send(`/api/rooms/${r.id}`, "PUT", { active: !r.active });
     if (ok) {
       if (ok.cancelledCount > 0) setToast({ message: cancelledNotice(ok), type: ok.emailFailed ? "error" : "success" });
       fetchRooms();

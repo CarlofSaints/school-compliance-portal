@@ -354,7 +354,12 @@ export async function getRoom(id: string): Promise<Room | null> {
  *  storage hiccup can never hard-delete a room that has history. */
 export async function roomHasBookings(roomId: string): Promise<boolean> {
   try {
-    return (await listFilesStrict(`rooms/bookings/${roomId}`)).length > 0;
+    // A month file emptied by an undone write is no history; stop at the first
+    // that holds anything (usually the first file read).
+    for (const m of await listFilesStrict(`rooms/bookings/${roomId}`)) {
+      if ((await readJson<RoomBooking[]>(`rooms/bookings/${roomId}/${m}`, [])).length > 0) return true;
+    }
+    return false;
   } catch (err) {
     console.error(`[rooms] could not list bookings for ${roomId}, treating as booked:`, err);
     return true;
@@ -390,7 +395,7 @@ export async function cancelRoomFutureBookings(roomId: string, byName: string, n
 export async function saveRoom(
   actor: Actor,
   id: string | null,
-  input: RoomInput & { active?: boolean }
+  input: (RoomInput | Partial<RoomInput>) & { active?: boolean }
 ): Promise<Outcome<{ room: Room; cancelled: RoomBooking[] }>> {
   if (!canManageRooms(actor)) return fail(403, "Forbidden");
   let result: Outcome<Room> = fail(404, "That room is no longer in the list");
@@ -398,12 +403,17 @@ export async function saveRoom(
   await updateJson<Room[]>(ROOMS_PATH, [], (rooms) => {
     retiredNow = false;
     const now = new Date().toISOString();
-    if (rooms.some((r) => r.id !== id && r.name.toLowerCase() === input.name.toLowerCase())) {
+    if (input.name !== undefined && rooms.some((r) => r.id !== id && r.name.toLowerCase() === input.name!.toLowerCase())) {
       result = fail(409, "A room with that name already exists");
       return NO_CHANGE;
     }
     if (id === null) {
-      const room: Room = { id: crypto.randomUUID(), ...input, active: true, createdAt: now, updatedAt: now };
+      const full = input as RoomInput;
+      if (full.name === undefined || full.capacity === undefined) {
+        result = fail(400, "A new room needs a name and a capacity");
+        return NO_CHANGE;
+      }
+      const room: Room = { id: crypto.randomUUID(), name: full.name, capacity: full.capacity, color: full.color, notes: full.notes, active: true, createdAt: now, updatedAt: now };
       result = { ok: true, value: room };
       return [...rooms, room];
     }
@@ -412,7 +422,10 @@ export async function saveRoom(
       result = fail(404, "That room is no longer in the list");
       return NO_CHANGE;
     }
-    const room = { ...rooms[idx], ...input, active: input.active ?? rooms[idx].active, updatedAt: now };
+    // Only the fields sent: a retire sends just `active`, so it cannot undo
+    // another manager's edit of the name or capacity made a moment before.
+    const sent = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined)) as Partial<Room>;
+    const room = { ...rooms[idx], ...sent, active: input.active ?? rooms[idx].active, updatedAt: now };
     // Any explicit retire, not only the first: cancelling is idempotent, so a
     // retry after a failed cancel finishes the job.
     retiredNow = !room.active && input.active === false;
@@ -505,11 +518,16 @@ function clashMessage(roomName: string, slotDate: string, clash: RoomBooking, mo
 }
 
 /** Whether a user still exists and still holds book_rooms. */
-async function userCanBook(userId: string): Promise<boolean> {
+async function userPermissions(userId: string): Promise<string[] | null> {
   const u = await getUserById(userId);
-  if (!u) return false;
+  if (!u) return null;
   const role = (await getRoles()).find((r) => r.id === u.role);
-  return resolveRolePermissions(u.role, role).includes("book_rooms");
+  return resolveRolePermissions(u.role, role);
+}
+
+/** Whether a user still exists and still holds book_rooms. */
+async function userCanBook(userId: string): Promise<boolean> {
+  return (await userPermissions(userId))?.includes("book_rooms") ?? false;
 }
 
 async function resolveBookedFor(bookedForId: string, ownerId: string, stored?: RoomBooking) {
@@ -521,6 +539,10 @@ async function resolveBookedFor(bookedForId: string, ownerId: string, stored?: R
   }
   const u = await getUserById(bookedForId);
   if (!u) return { ok: false as const };
+  // They become a holder (reminders, answering requests), so they must be
+  // able to book, or manage rooms. Same rule as handing a room over on approve.
+  const perms = (await userPermissions(u.id)) ?? [];
+  if (!perms.includes("book_rooms") && !perms.includes("manage_rooms")) return { ok: false as const };
   return { ok: true as const, person: { id: u.id, name: displayName(u), email: u.email } };
 }
 
@@ -756,7 +778,7 @@ export async function updateBooking(
       } else {
         // Anything that landed on the old copy in between (a request, a
         // reminder stamp) is carried over to the new one.
-        if (current !== before) {
+        if (current.updatedAt !== before.updatedAt) {
           const merged = apply(current);
           await updateJson<RoomBooking[]>(toFile, [], (list) => {
             const mine = list.find((b) => b.id === id);
@@ -835,13 +857,23 @@ export async function cancelBooking(
   date: string,
   id: string,
   scope: "one" | "series",
-  nowAt: Date = new Date()
+  nowAt: Date = new Date(),
+  beforeWrite?: (willEmail: boolean) => Promise<boolean>
 ): Promise<Outcome<{ booking: RoomBooking; count: number; skipped: number; cancelled: RoomBooking[]; withdrawn: Withdrawal[] }>> {
   const booking = await findBooking(roomId, date, id);
   if (!booking) return fail(404, "That booking no longer exists");
   if (!isHolder(booking, actor.id) && !canManageRooms(actor)) return fail(403, "Only the people holding this room can cancel it");
   if (booking.status !== "confirmed") return fail(400, "That booking is already cancelled");
   if (hasEnded(booking.date, booking.endMinute, nowAt)) return fail(400, ENDED);
+  if (beforeWrite) {
+    // A series may touch other people's occurrences and their requesters; a
+    // single one emails if someone else holds it or someone is waiting on it.
+    const willEmail =
+      (scope === "series" && !!booking.seriesId) ||
+      holders(booking).some((h) => h.email.toLowerCase() !== actor.email.toLowerCase()) ||
+      booking.requests.some((r) => r.status === "pending");
+    if (!(await beforeWrite(willEmail))) return fail(429, "Too many emails");
+  }
 
   const now = new Date().toISOString();
   const mayCancel = (b: RoomBooking) => isHolder(b, actor.id) || canManageRooms(actor);
@@ -954,7 +986,7 @@ export async function requestRoom(
   // One live request per person per SERIES, not per occurrence: asking for
   // each of 52 weekly meetings would be 52 emails to the same holder.
   const token = crypto.randomUUID();
-  if (booking.seriesId && !(await claimSeriesAsk(booking.seriesId, actor.id, token))) {
+  if (booking.seriesId && !(await claimSeriesAsk(booking.seriesId, actor.id, token, nowAt.getTime()))) {
     return fail(409, "You've already asked for a meeting in this series. Waiting on their reply.");
   }
 
@@ -1018,13 +1050,14 @@ export const SERIES_ASK_GRACE_MS = 2 * 60_000;
 
 /** "pending": a live ask. "over": answered or withdrawn. "missing": not found
  *  (not written yet, or the ask failed). */
-async function askState(token: string): Promise<"pending" | "over" | "missing"> {
+async function askState(token: string, now: Date = new Date()): Promise<"pending" | "over" | "missing"> {
   const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
   if (!ptr) return "missing";
   const b = (await readMonth(ptr.roomId, ptr.month)).find((x) => x.id === ptr.bookingId);
   const req = b?.requests.find((r) => r.token === token);
   if (!b || !req) return "missing";
-  return b.status === "confirmed" && req.status === "pending" ? "pending" : "over";
+  // A meeting that has started can no longer be handed over, so its unanswered ask is over too.
+  return b.status === "confirmed" && req.status === "pending" && !isPast(b.date, b.startMinute, now) ? "pending" : "over";
 }
 
 /** 🔴 Taken over ONLY when its request is definitely not pending: answered
@@ -1035,7 +1068,7 @@ async function claimSeriesAsk(seriesId: string, userId: string, token: string, n
   await updateJson<SeriesAsk | null>(seriesAskPath(seriesId, userId), null, async (cur) => {
     claimed = false;
     if (cur?.token) {
-      const state = await askState(cur.token);
+      const state = await askState(cur.token, new Date(now));
       if (state === "pending") return NO_CHANGE;
       if (state === "missing" && now - (cur.at ?? 0) < SERIES_ASK_GRACE_MS) return NO_CHANGE;
     }
@@ -1212,9 +1245,43 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
   const lists = await Promise.all(rooms.flatMap((room) => months.map(async (m) => ({ room, list: await readMonth(room.id, m) }))));
   for (const { room, list } of lists) {
     for (const b of list) {
-      if (b.status !== "confirmed" || b.reminderSentAt) continue;
+      if (b.status !== "confirmed") continue;
+      // Done once every holder has it. A claim with no finish after
+      // REMINDER_CLAIM_STALE_MS is a run that died mid-send: due again, and
+      // only the holders not yet reminded are sent it.
+      const reached = new Set((b.remindedEmails ?? []).map((e) => e.toLowerCase()));
+      if (holders(b).every((h) => reached.has(h.email.toLowerCase()))) continue;
+      if (b.reminderSentAt && now.getTime() - Date.parse(b.reminderSentAt) < REMINDER_CLAIM_STALE_MS) continue;
       const until = startsAtMs(b.date, b.startMinute) - now.getTime();
       if (until > 0 && until <= REMIND_WINDOW_MS) out.push({ booking: b, room });
+    }
+  }
+  return out;
+}
+
+/** A reminder claim this old without its finish is a run that died. */
+export const REMINDER_CLAIM_STALE_MS = 15 * 60_000;
+
+/** Pending requests on meetings that have started can never be answered:
+ *  lapse them (one atomic write per month file), for the cron to email. */
+export async function lapseStartedRequests(now: Date = new Date()): Promise<{ withdrawn: Withdrawal[]; room: Room }[]> {
+  const today = sastToday(now);
+  const months = [...new Set([addDays(today, -31), today].map(monthOf))];
+  const out: { withdrawn: Withdrawal[]; room: Room }[] = [];
+  for (const room of await getRooms()) {
+    for (const m of months) {
+      let hit: Withdrawal[] = [];
+      await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (list) => {
+        hit = [];
+        const stamp = new Date().toISOString();
+        const next = list.map((b) => {
+          if (b.status !== "confirmed" || !b.requests.some((r) => r.status === "pending") || !isPast(b.date, b.startMinute, now)) return b;
+          hit.push(...pendingWithdrawals(b, "lapsed"));
+          return touch(b, { requests: withdrawAll(b, stamp) });
+        });
+        return hit.length ? next : NO_CHANGE;
+      });
+      if (hit.length) out.push({ withdrawn: hit, room });
     }
   }
   return out;

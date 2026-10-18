@@ -281,7 +281,10 @@ async function main() {
     const res = (await realList(o)) as { blobs: unknown[] };
     const prefix = (o as { prefix?: string }).prefix || "";
     if (prefix.includes(`rooms/bookings/${barn.id}`) && ++calls === 2) {
-      return { ...res, blobs: [{ pathname: `${prefix}2027-12.json` }], hasMore: false };
+      // A real booking lands in between (a create that read the room as active).
+      const sneak = { ...(raced[0] as Booking), id: "barn-sneak", roomId: barn.id, date: "2027-12-06" };
+      await writeJson(`rooms/bookings/${barn.id}/2027-12.json`, [sneak]);
+      return (await realList(o)) as { blobs: unknown[] };
     }
     return res;
   };
@@ -848,6 +851,77 @@ async function main() {
   const w9stop = await D.updateBooking(erinA, w9b.id, w9b.date, inp(S6.id, w9b.date, 600, 660, { title: "W9 renamed", bookedForId: "cara" }), new Date(), async (w) => (seen.push(w), false));
   check("W9 willEmail false for a rename, true for a new holder", seen, [false, true]);
   check("W9 refused by the limit: nothing written", [status(w9stop), (await D.findBooking(S6.id, w9b.date, w9b.id))?.bookedForId], [429, null]);
+
+  // ======================= seventh review =======================
+  const { runRequestLapses } = await import("../lib/roomBookingNotify");
+  const S7 = await mkRoom("Hall Seven");
+  const early7 = new Date("2029-05-01T00:00:00Z");
+
+  // G1 an unanswered ask on a meeting that has started no longer blocks the series, and the cron lapses it
+  const g1 = await D.createBooking(erinA, inp(S7.id, "2029-05-07", 600, 660, { recurrence: weekly(2) }), early7);
+  if (!g1.ok) throw new Error("create failed");
+  const [g11, g12] = g1.value.bookings;
+  const g1ask = await D.requestRoom(bob, S7.id, g11.date, g11.id, { title: "x", message: "y", attendeeCount: 1 }, early7);
+  check("G1 first ask in the series", status(g1ask), "ok");
+  const started = new Date("2029-05-07T09:00:00Z"); // 11:00 SAST, the first meeting is under way
+  check("G1 once that meeting started, the series is free to ask again", status(await D.requestRoom(bob, S7.id, g12.date, g12.id, { title: "x", message: "y", attendeeCount: 1 }, started)), "ok");
+  outbox.length = 0;
+  const lap = await runRequestLapses(started);
+  check("G1 the cron lapses the unanswered ask on the started meeting", [lap.lapsed, (await D.findBooking(S7.id, g11.date, g11.id))?.requests[0].status], [1, "withdrawn"]);
+  check("G1 and emails the requester", mailTo("bob@example.test", "has lapsed"), 1);
+
+  // G2 create and cancel say when they will email
+  check("G2 create route applies the email limit when booking for someone else", readFileSync("app/api/bookings/route.ts", "utf8").includes("LIMITS.emailSendUser"), true);
+  const g2 = await D.createBooking(erinA, inp(S7.id, "2029-06-04", 600, 660, { recurrence: weekly(2) }), early7);
+  const g2one = await D.createBooking(erinA, inp(S7.id, "2029-06-05", 600, 660), early7);
+  if (!g2.ok || !g2one.ok) throw new Error("create failed");
+  const flags: boolean[] = [];
+  await D.cancelBooking(erinA, S7.id, g2one.value.bookings[0].date, g2one.value.bookings[0].id, "one", early7, async (w) => (flags.push(w), true));
+  const g2stop = await D.cancelBooking(erinA, S7.id, g2.value.bookings[0].date, g2.value.bookings[0].id, "series", early7, async (w) => (flags.push(w), false));
+  check("G2 own single cancel: no email; series cancel: email", flags, [false, true]);
+  check("G2 refused by the limit: nothing cancelled", [status(g2stop), (await D.findBooking(S7.id, g2.value.bookings[0].date, g2.value.bookings[0].id))?.status], [429, "confirmed"]);
+
+  // G3 the person it is for must be able to book (or manage rooms)
+  check("G3 booking for someone who cannot book refused", status(await D.createBooking(erinA, inp(S7.id, "2029-06-11", 600, 660, { bookedForId: "gone" }), early7)), 400);
+  check("G3 booking for a room manager allowed", status(await D.createBooking(erinA, inp(S7.id, "2029-06-12", 600, 660, { bookedForId: "mia" }), early7)), "ok");
+
+  // G4 a reminder claim that never finished goes stale and the booking is due again
+  const g4 = await D.createBooking(erinA, inp(S7.id, "2029-06-20", 600, 660, { bookedForId: "cara" }), early7);
+  if (!g4.ok) throw new Error("create failed");
+  const g4b = g4.value.bookings[0];
+  const g4run = new Date("2029-06-19T05:00:00Z");
+  await D.claimReminder(g4b, new Date(g4run.getTime() - 5 * 60_000).toISOString(), null);
+  check("G4 a claim 5 minutes old still holds", (await D.bookingsDueForReminder(g4run)).some((x) => x.booking.id === g4b.id), false);
+  const later20 = new Date(g4run.getTime() + 15 * 60_000);
+  check("G4 after 20 minutes with no finish it is stale: due again", (await D.bookingsDueForReminder(later20)).some((x) => x.booking.id === g4b.id), true);
+  outbox.length = 0;
+  await runRem(later20);
+  check("G4 the stale one is sent, to both holders", [mailTo("erin@example.test", "Hall Seven"), mailTo("cara@example.test", "Hall Seven")], [1, 1]);
+
+  // G5 a cross-month move carries over a request that landed on the old copy
+  const g5 = await D.createBooking(erinA, inp(S7.id, "2029-07-02", 600, 660), early7);
+  if (!g5.ok) throw new Error("create failed");
+  const g5b = g5.value.bookings[0];
+  const lateAsk5 = { token: "late-ask-5", requesterId: "bob", requesterName: "bob Tester", requesterEmail: "bob@example.test", title: "Bob", message: "y", attendeeCount: 1, status: "pending", createdAt: "x", holderIds: ["erin"] };
+  const undo5 = injectOnSecondRead(`${S7.id}/2029-07.json`, (b) => ({ ...b, requests: [...b.requests, lateAsk5 as Booking["requests"][number]], updatedAt: new Date(Date.parse(b.updatedAt) + 5).toISOString() }), g5b.id);
+  const g5e = await D.updateBooking(erinA, g5b.id, g5b.date, inp(S7.id, "2029-08-06", 600, 660), early7);
+  undo5();
+  const g5now = await D.findBooking(S7.id, "2029-08-06", g5b.id);
+  check("G5 the move carries the late request over (withdrawn, the slot moved)", [status(g5e), g5now?.requests.map((q) => [q.token, q.status])], ["ok", [["late-ask-5", "withdrawn"]]]);
+
+  // G6 an emptied month file is not "bookings on record"
+  const g6room = await mkRoom("Empty Six");
+  await writeJson(`rooms/bookings/${g6room.id}/2029-09.json`, []);
+  check("G6 empty month file does not count", await D.roomHasBookings(g6room.id), false);
+  const g6del = await D.deleteRoom(admin, g6room.id);
+  check("G6 so the room really deletes", [g6del.ok && g6del.value.retired, await D.getRoom(g6room.id)], [false, null]);
+
+  // G7 retire sends only the flag and keeps another manager's edit
+  const g7 = await mkRoom("Rename Me");
+  await D.saveRoom(miaA, g7.id, { name: "Renamed by Mia", capacity: 12, color: "#0d9488", notes: "" });
+  const g7r = await D.saveRoom(admin, g7.id, { active: false });
+  check("G7 retire with only the flag keeps the new name", g7r.ok && [g7r.value.room.name, g7r.value.room.active], ["Renamed by Mia", false]);
+  check("G7 the rooms page sends only the flag", readFileSync("app/(portal)/rooms/page.tsx", "utf8").includes('"PUT", { active: !r.active }'), true);
 
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

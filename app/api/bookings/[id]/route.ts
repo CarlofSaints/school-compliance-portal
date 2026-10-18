@@ -88,7 +88,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (scope !== "one" && scope !== "series") return NextResponse.json({ error: "Invalid scope" }, { status: 400 });
 
   const actor = actorOf(session);
-  const result = await cancelBooking(actor, roomId, date, id, scope);
+  // cancelBooking says, before writing, whether this cancel will email (a
+  // series, someone else's booking, or waiting requesters).
+  let cancelLimited: NextResponse | null = null;
+  const result = await cancelBooking(actor, roomId, date, id, scope, new Date(), async (willEmail) => {
+    if (willEmail) cancelLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+    return !cancelLimited;
+  });
+  if (cancelLimited) return cancelLimited;
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   const { booking, count, skipped, cancelled, withdrawn } = result.value;
   await recordActivity({
