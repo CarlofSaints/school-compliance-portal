@@ -3,7 +3,8 @@
 import { useAuth, authFetch, updateSession, getSession, setSession } from "@/lib/useAuth";
 import Link from "next/link";
 import { useState, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { safeNextPath } from "@/lib/nextPath";
 import Toast from "@/components/Toast";
 import PhotoUpload from "@/components/PhotoUpload";
 import { useT } from "@/components/I18nProvider";
@@ -19,6 +20,9 @@ function AccountContent() {
   const { session, loading } = useAuth();
   const searchParams = useSearchParams();
   const forceChange = searchParams.get("changePassword") === "1";
+  // Where an emailed link was heading before the forced password change.
+  const next = forceChange ? safeNextPath(searchParams.get("next")) : null;
+  const router = useRouter();
 
   const [name, setName] = useState(session?.name || "");
   const [surname, setSurname] = useState(session?.surname || "");
@@ -169,6 +173,7 @@ function AccountContent() {
       // Re-read session to clear forcePasswordChange state
       const s = getSession();
       if (s) setSession(s);
+      if (next) router.push(next);
     } else {
       const data = await res.json();
       setToast({ message: data.error || t("Failed"), type: "error" });

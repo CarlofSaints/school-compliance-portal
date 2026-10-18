@@ -6,6 +6,7 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import {
   actorOf,
   cancelBooking,
+  getRoom,
   holderLabel,
   isDate,
   isHolder,
@@ -14,7 +15,10 @@ import {
   updateBooking,
 } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
-import { notifyHandover } from "@/lib/roomBookingNotify";
+import { notifyCancelledByOther, notifyHandover, notifyWithdrawn } from "@/lib/roomBookingNotify";
+
+// A series cancel can email many people, paced.
+export const maxDuration = 300;
 
 // `currentDate` and `roomId` only say WHERE the booking is stored. Whether the
 // caller may touch it is decided from the stored record: a holder, or
@@ -35,7 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const actor = actorOf(session);
   const result = await updateBooking(actor, id, currentDate, { ...parsed.value, recurrence: { ...parsed.value.recurrence, frequency: "none" } });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  const { before, after, room, holderChanged } = result.value;
+  const { before, after, room, holderChanged, withdrawn } = result.value;
 
   await recordActivity({
     ...actorFrom(req, session),
@@ -49,7 +53,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   });
 
   const emailed = holderChanged ? await notifyHandover(before, after, room, actor) : true;
-  return NextResponse.json({ ok: true, emailFailed: !emailed });
+  // Anyone who had asked for the old slot is told it moved.
+  const lapsedFailed = await notifyWithdrawn(withdrawn, room);
+  return NextResponse.json({ ok: true, emailFailed: !emailed || lapsedFailed > 0 });
 }
 
 // DELETE /api/bookings/<id>?room=<roomId>&date=<its date>&scope=one|series
@@ -69,7 +75,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const actor = actorOf(session);
   const result = await cancelBooking(actor, roomId, date, id, scope);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  const { booking, count, skipped } = result.value;
+  const { booking, count, skipped, cancelled, withdrawn } = result.value;
   await recordActivity({
     ...actorFrom(req, session),
     action: scope === "series" ? "booking.series_cancelled" : "booking.cancelled",
@@ -80,5 +86,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       (skipped ? ` (${skipped} held by someone else left alone)` : "") +
       (isHolder(booking, actor.id) ? "" : ` (held by ${holderLabel(booking)})`),
   });
-  return NextResponse.json({ ok: true, count, skipped });
+  // A room manager cancelling someone else's booking tells its holders (the
+  // person it was for included), and every requester waiting on it is told.
+  const room = await getRoom(roomId);
+  const failed = (room ? await notifyCancelledByOther(cancelled, room, actor) : 0) + (await notifyWithdrawn(withdrawn, room));
+  return NextResponse.json({ ok: true, count, skipped, emailFailed: failed > 0 });
 }

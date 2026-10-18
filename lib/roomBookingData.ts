@@ -62,6 +62,26 @@ export interface RoomRequest {
   declineReason?: string;
   createdAt: string;
   respondedAt?: string;
+  /** Who held the booking WHEN ASKED. Access to the request link and the
+   *  page's wording come from these, not from the booking as it is now: after
+   *  an approve the requester holds it and the old holder does not. */
+  holderIds?: string[];
+  holderName?: string;
+}
+
+/** Why a pending request stopped being answerable. The requester is emailed. */
+export type WithdrawReason = "cancelled" | "moved" | "given_away" | "lapsed" | "room_retired";
+
+export interface Withdrawal {
+  /** The booking as it was before the change. */
+  booking: RoomBooking;
+  request: RoomRequest;
+  reason: WithdrawReason;
+}
+
+/** The pending requests on a booking, as withdrawals. */
+export function pendingWithdrawals(b: RoomBooking, reason: WithdrawReason, keep?: (r: RoomRequest) => boolean): Withdrawal[] {
+  return b.requests.filter((r) => r.status === "pending" && !keep?.(r)).map((request) => ({ booking: b, request, reason }));
 }
 
 export interface RoomBooking {
@@ -111,7 +131,7 @@ export function actorOf(s: SessionPayload): Actor {
 
 export type Outcome<V = undefined> =
   | { ok: true; value: V; notice?: string }
-  | { ok: false; status: number; error: string };
+  | { ok: false; status: number; error: string; withdrawn?: Withdrawal[] };
 
 const ENDED = "That booking has already ended, so it stays as the record.";
 const STARTED = "That meeting has already started, so it can no longer be handed over.";
@@ -539,6 +559,8 @@ export interface EditResult {
   after: RoomBooking;
   room: Room;
   holderChanged: boolean;
+  /** Requests for the old slot, withdrawn because it moved. */
+  withdrawn: Withdrawal[];
 }
 
 /** Changes ONE occurrence: title, date, times, headcount, who it is for. The
@@ -582,7 +604,7 @@ export async function updateBooking(
     reminderSentAt: moved || holderChanged ? null : before.reminderSentAt,
     // Somebody who asked for the OLD slot did not ask for this one.
     requests: moved
-      ? before.requests.map((r) => (r.status === "pending" ? { ...r, status: "withdrawn" as const, respondedAt: now } : r))
+      ? withdrawAll(before, now)
       : before.requests,
     updatedAt: now,
   };
@@ -654,13 +676,14 @@ export async function updateBooking(
     const e = error as { status: number; error: string };
     return fail(e.status, e.error);
   }
-  return { ok: true, value: { before, after, room, holderChanged } };
+  return { ok: true, value: { before, after, room, holderChanged, withdrawn: moved ? pendingWithdrawals(before, "moved") : [] } };
 }
 
 // --- Cancel ----------------------------------------------------------------------
 
-const withdrawAll = (b: RoomBooking, now: string): RoomRequest[] =>
-  b.requests.map((r) => (r.status === "pending" ? { ...r, status: "withdrawn" as const, respondedAt: now } : r));
+/** Withdraws a booking's pending requests, except any the keep filter says to leave. */
+const withdrawAll = (b: RoomBooking, now: string, keep?: (r: RoomRequest) => boolean): RoomRequest[] =>
+  b.requests.map((r) => (r.status === "pending" && !keep?.(r) ? { ...r, status: "withdrawn" as const, respondedAt: now } : r));
 
 /** "one" cancels this occurrence. "series" cancels this one and every later
  *  confirmed occurrence still in the series; ended ones are left as the record.
@@ -677,7 +700,7 @@ export async function cancelBooking(
   id: string,
   scope: "one" | "series",
   nowAt: Date = new Date()
-): Promise<Outcome<{ booking: RoomBooking; count: number; skipped: number }>> {
+): Promise<Outcome<{ booking: RoomBooking; count: number; skipped: number; cancelled: RoomBooking[]; withdrawn: Withdrawal[] }>> {
   const booking = await findBooking(roomId, date, id);
   if (!booking) return fail(404, "That booking no longer exists");
   if (!isHolder(booking, actor.id) && !canManageRooms(actor)) return fail(403, "Only the people holding this room can cancel it");
@@ -696,6 +719,8 @@ export async function cancelBooking(
   });
   let count = 0;
   let skipped = 0;
+  /** As they were before cancelling, for the emails. */
+  const cancelled: RoomBooking[] = [];
 
   if (scope === "series" && booking.seriesId) {
     const from = booking.date;
@@ -706,9 +731,11 @@ export async function cancelBooking(
     for (const m of months) {
       let n = 0;
       let k = 0;
+      let hit: RoomBooking[] = [];
       await updateJson<RoomBooking[]>(fileFor(roomId, m), [], (list) => {
         n = 0;
         k = 0;
+        hit = [];
         const next = list.map((b) => {
           if (b.seriesId !== booking.seriesId || b.status !== "confirmed" || b.date < from) return b;
           if (hasEnded(b.date, b.endMinute, nowAt)) return b;
@@ -717,12 +744,14 @@ export async function cancelBooking(
             return b;
           }
           n++;
+          hit.push(b);
           return cancel(b);
         });
         return n === 0 ? NO_CHANGE : next;
       });
       count += n;
       skipped += k;
+      cancelled.push(...hit);
     }
     if (count === 0) return fail(403, "Only the people holding this room can cancel it");
   } else {
@@ -741,6 +770,8 @@ export async function cancelBooking(
         return NO_CHANGE;
       }
       count = 1;
+      cancelled.length = 0;
+      cancelled.push(cur);
       return list.map((b) => (b.id === id ? cancel(b) : b));
     });
     if (error) {
@@ -748,7 +779,7 @@ export async function cancelBooking(
       return fail(e.status, e.error);
     }
   }
-  return { ok: true, value: { booking, count, skipped } };
+  return { ok: true, value: { booking, count, skipped, cancelled, withdrawn: cancelled.flatMap((b) => pendingWithdrawals(b, "cancelled")) } };
 }
 
 // --- Ask the holder for the room --------------------------------------------------
@@ -801,6 +832,8 @@ export async function requestRoom(
     ...input,
     status: "pending",
     createdAt: new Date().toISOString(),
+    holderIds: [booking.bookedById, ...(booking.bookedForId ? [booking.bookedForId] : [])],
+    holderName: holderLabel(booking),
   };
   let error: { status: number; error: string } | null = null;
   let live: RoomBooking = booking;
@@ -834,6 +867,13 @@ export interface RequestView {
   request: RoomRequest;
   room: Room | null;
   canAnswer: boolean;
+  viewerRole: "holder" | "requester" | "manager";
+}
+
+/** Who may answer: whoever holds the booking now, or a room manager who is
+ *  not the one asking (nobody approves their own request). */
+function mayAnswer(actor: Actor, b: RoomBooking, req: RoomRequest): boolean {
+  return isHolder(b, actor.id) || (canManageRooms(actor) && req.requesterId !== actor.id);
 }
 
 /** The request behind an emailed link. The token only NAMES it: the reader
@@ -845,9 +885,15 @@ export async function getRequestView(actor: Actor, token: string): Promise<Outco
   const booking = (await readMonth(ptr.roomId, ptr.month)).find((b) => b.id === ptr.bookingId);
   const request = booking?.requests.find((r) => r.token === token);
   if (!booking || !request) return fail(404, "That request no longer exists");
-  const canAnswer = isHolder(booking, actor.id) || canManageRooms(actor);
-  if (!canAnswer && request.requesterId !== actor.id) return fail(403, "Only the people holding this room can answer this");
-  return { ok: true, value: { booking, request, room: await getRoom(ptr.roomId), canAnswer } };
+  // Access and wording come from who held it WHEN ASKED (recorded on the
+  // request), so the old holder can still open their link after an approve,
+  // and the requester, who now holds it, still reads as the requester.
+  const isRequester = request.requesterId === actor.id;
+  const wasHolder = (request.holderIds ?? []).includes(actor.id) || isHolder(booking, actor.id);
+  if (!isRequester && !wasHolder && !canManageRooms(actor)) return fail(403, "Only the people holding this room can answer this");
+  const canAnswer = request.status === "pending" && mayAnswer(actor, booking, request);
+  const viewerRole = isRequester ? "requester" : wasHolder ? "holder" : "manager";
+  return { ok: true, value: { booking, request, room: await getRoom(ptr.roomId), canAnswer, viewerRole } };
 }
 
 /** The holder's answer. Approving hands the slot over IN PLACE: same room and
@@ -858,7 +904,7 @@ export async function respondToRequest(
   decision: "approve" | "decline",
   reason: string,
   nowAt: Date = new Date()
-): Promise<Outcome<{ before: RoomBooking; after: RoomBooking; request: RoomRequest; room: Room | null }>> {
+): Promise<Outcome<{ before: RoomBooking; after: RoomBooking; request: RoomRequest; room: Room | null; onBehalf: boolean; withdrawn: Withdrawal[] }>> {
   if (decision === "decline" && !reason.trim()) return fail(400, "Please say why. They'll only see the reason you give.");
   if (!isId(token)) return fail(404, "That request no longer exists");
   const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
@@ -868,16 +914,24 @@ export async function respondToRequest(
   let before: RoomBooking | null = null;
   let after: RoomBooking | null = null;
   let answered: RoomRequest | null = null;
+  let withdrawn: Withdrawal[] = [];
+  let lapsed: Withdrawal[] = [];
+  let onBehalf = false;
   await updateJson<RoomBooking[]>(fileFor(ptr.roomId, ptr.month), [], (list) => {
     error = null;
+    withdrawn = [];
+    lapsed = [];
     const cur = list.find((b) => b.id === ptr.bookingId);
     const req = cur?.requests.find((r) => r.token === token);
     if (!cur || !req) {
       error = { status: 404, error: "That request no longer exists" };
       return NO_CHANGE;
     }
-    if (!isHolder(cur, actor.id) && !canManageRooms(actor)) {
-      error = { status: 403, error: "Only the people holding this room can answer this" };
+    if (!mayAnswer(actor, cur, req)) {
+      error = {
+        status: 403,
+        error: req.requesterId === actor.id ? "You can't answer your own request" : "Only the people holding this room can answer this",
+      };
       return NO_CHANGE;
     }
     if (req.status !== "pending") {
@@ -893,18 +947,18 @@ export async function respondToRequest(
     // Declining is still allowed, it changes nothing.
     if (decision === "approve" && isPast(cur.date, cur.startMinute, nowAt)) {
       error = { status: 409, error: "That meeting time has already passed, so the request has lapsed." };
-      return list.map((b) =>
-        b.id === cur.id
-          ? { ...b, requests: b.requests.map((r) => (r.token === token ? { ...r, status: "withdrawn" as const, respondedAt: now } : r)), updatedAt: now }
-          : b
-      );
+      lapsed = pendingWithdrawals(cur, "lapsed", (r) => r.token !== token);
+      return list.map((b) => (b.id === cur.id ? { ...b, requests: withdrawAll(b, now, (r) => r.token !== token), updatedAt: now } : b));
     }
     answered = decision === "approve"
       ? { ...req, status: "approved", respondedAt: now }
       : { ...req, status: "declined", declineReason: reason.trim().slice(0, 1000), respondedAt: now };
-    const requests = cur.requests.map((r) =>
-      r.token === token ? answered! : decision === "approve" && r.status === "pending" ? { ...r, status: "withdrawn" as const, respondedAt: now } : r
+    // Approving gives the slot away, so every other pending ask for it lapses.
+    const requests = (decision === "approve" ? withdrawAll(cur, now, (r) => r.token === token) : cur.requests).map((r) =>
+      r.token === token ? answered! : r
     );
+    withdrawn = decision === "approve" ? pendingWithdrawals(cur, "given_away", (r) => r.token === token) : [];
+    onBehalf = !isHolder(cur, actor.id);
     before = cur;
     after =
       decision === "approve"
@@ -933,9 +987,9 @@ export async function respondToRequest(
   });
   if (error) {
     const e = error as { status: number; error: string };
-    return fail(e.status, e.error);
+    return { ...fail(e.status, e.error), withdrawn: lapsed };
   }
-  return { ok: true, value: { before: before!, after: after!, request: answered!, room: await getRoom(ptr.roomId) } };
+  return { ok: true, value: { before: before!, after: after!, request: answered!, room: await getRoom(ptr.roomId), onBehalf, withdrawn } };
 }
 
 // --- Day-before reminders ----------------------------------------------------------

@@ -6,6 +6,9 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import { actorOf, deleteRoom, getRoom, isId, parseRoomInput, saveRoom } from "@/lib/roomBookingData";
 import { notifyRoomRetired } from "@/lib/roomBookingNotify";
 
+// Retiring a room emails every holder (one each) and every waiting requester, paced.
+export const maxDuration = 300;
+
 // Retiring a room (here, or by deleting one with history) cancels its upcoming
 // bookings and emails their holders, so nobody turns up to a room that is gone.
 

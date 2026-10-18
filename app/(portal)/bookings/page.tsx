@@ -20,6 +20,7 @@ import {
   durationLabel,
   expandRecurrence,
   labelToMinute,
+  endMinuteFromLabel,
   longDateLabel,
   minuteLabel,
   parseDateKey,
@@ -208,9 +209,7 @@ function BookingForm({
   const [busy, setBusy] = useState(false);
 
   const startMin = labelToMinute(start) ?? 0;
-  const rawEnd = labelToMinute(end);
-  // 00:00 as an END time means midnight at the end of the day.
-  const endMin = rawEnd === 0 && startMin > 0 ? DAY_END_MINUTE : rawEnd ?? startMin;
+  const endMin = endMinuteFromLabel(end, startMin) ?? startMin;
   const endsBeforeItStarts = endMin <= startMin;
   const tooShort = !endsBeforeItStarts && endMin - startMin < MIN_DURATION;
   const tooMany = attendeeCount > room.capacity;
@@ -470,10 +469,17 @@ export default function BookingsPage() {
     const res = await authFetch(`/api/bookings?room=${encodeURIComponent(roomKey)}&week=${monday}`);
     return res.ok ? res.json() : null;
   }, [roomKey, monday]);
-  const loadWeek = () => fetchWeek().then((b) => b && setBookings(b));
+  // Only the newest fetch may land: flicking quickly between rooms or weeks
+  // must not let a slow, older answer paint the wrong week.
+  const fetchSeq = useRef(0);
+  const loadWeek = () => {
+    const mine = ++fetchSeq.current;
+    return fetchWeek().then((b) => b && mine === fetchSeq.current && setBookings(b));
+  };
 
   useEffect(() => {
-    fetchWeek().then((b) => b && setBookings(b));
+    const mine = ++fetchSeq.current;
+    fetchWeek().then((b) => b && mine === fetchSeq.current && setBookings(b));
   }, [fetchWeek]);
 
   const done = (message: string, error = false) => {

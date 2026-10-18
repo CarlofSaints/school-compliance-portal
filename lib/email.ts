@@ -1295,12 +1295,69 @@ export function sendRoomRequestEmail(
 }
 
 /** The room itself was taken out of use, so this booking was cancelled. */
-export function sendBookingRoomRetiredEmail(to: string, name: string, f: RoomBookingEmailFacts): Promise<boolean> {
-  return sendBookingMail(to, `Cancelled: ${f.roomName} is no longer available, ${f.dateLabel}`, "Room no longer available", (P) => `
+/** ONE email to a person listing several of their cancelled bookings in a
+ *  room (a room retired, or a manager cancelling a series), not one per date.
+ *  The list is capped; the rest are counted. */
+export const CANCELLED_LIST_CAP = 20;
+export function cappedList(lines: string[]): { shown: string[]; more: number } {
+  const shown = lines.slice(0, CANCELLED_LIST_CAP);
+  return { shown, more: lines.length - shown.length };
+}
+export function sendBookingsCancelledEmail(
+  to: string,
+  name: string,
+  roomName: string,
+  why: "room_retired" | "by_manager",
+  managerName: string,
+  lines: string[]
+): Promise<boolean> {
+  const { shown, more } = cappedList(lines);
+  const intro =
+    why === "room_retired"
+      ? `${esc(roomName)} has been taken out of use, so ${lines.length === 1 ? "your booking below has" : "your bookings below have"} been cancelled. Please book another room.`
+      : `${esc(managerName)} has cancelled ${lines.length === 1 ? "your booking" : "your bookings"} in ${esc(roomName)} listed below.`;
+  const subject =
+    why === "room_retired"
+      ? `Cancelled: ${roomName} is no longer available`
+      : `Cancelled by ${managerName}: ${lines.length === 1 ? "your booking" : `${lines.length} bookings`} in ${roomName}`;
+  return sendBookingMail(to, subject, why === "room_retired" ? "Room no longer available" : "Booking cancelled", (P) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
-    <p style="color:#333;">${esc(f.roomName)} has been taken out of use, so your booking below has been cancelled. Please book another room for it.</p>
+    <p style="color:#333;">${intro}</p>
+    <ul style="background:#f4f4f5;padding:16px 16px 16px 32px;border-radius:6px;margin:16px 0;color:#333;">
+      ${shown.map((l) => `<li style="margin:4px 0;">${esc(l)}</li>`).join("")}
+      ${more > 0 ? `<li style="margin:4px 0;list-style:none;">and ${more} more</li>` : ""}
+    </ul>
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+  `);
+}
+
+/** The requester's ask can no longer be answered, and why. */
+export function sendRoomRequestWithdrawnEmail(
+  to: string,
+  requesterName: string,
+  why: string,
+  f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
+): Promise<boolean> {
+  return sendBookingMail(to, `Your request for ${f.roomName}, ${f.dateLabel}, has lapsed`, "Request no longer needed", (P) => `
+    <p style="color:#333;">Dear ${esc(requesterName)},</p>
+    <p style="color:#333;">Your request for ${esc(f.roomName)} on ${esc(f.dateLabel)} at ${esc(f.timeLabel)} can no longer be answered: ${esc(why)}.</p>
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+  `);
+}
+
+/** A room manager agreed to a request on the holder's behalf. */
+export function sendBookingGivenAwayEmail(
+  to: string,
+  holderName: string,
+  managerName: string,
+  requesterName: string,
+  f: RoomBookingEmailFacts
+): Promise<boolean> {
+  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} was given to ${requesterName}`, "Booking handed over", (P) => `
+    <p style="color:#333;">Dear ${esc(holderName)},</p>
+    <p style="color:#333;">${esc(requesterName)} asked for the room you had booked, and ${esc(managerName)} agreed on your behalf. The slot is now theirs.</p>
     ${bookingFactsBlock(f)}
-    ${bookingButton(P, CALENDAR_LINK(), "Find another room")}
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
   `);
 }
 

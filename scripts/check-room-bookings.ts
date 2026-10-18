@@ -27,7 +27,14 @@ async function main() {
     process.exit(1);
   }
   // Emails only log without a key; keep the output readable.
-  console.log = ((orig) => (...a: unknown[]) => (String(a[0]).startsWith("[Email]") ? undefined : orig(...a)))(console.log);
+  // Without a key the mailer logs "[Email] Would send to <to>: <subject>"; record those as the outbox.
+  const outbox: { to: string; subject: string }[] = [];
+  console.log = ((orig) => (...a: unknown[]) => {
+    const m = /^\[Email\] Would send to (.+?): (.*)$/.exec(String(a[0]));
+    if (m) outbox.push({ to: m[1], subject: m[2] });
+    return String(a[0]).startsWith("[Email]") ? undefined : orig(...a);
+  })(console.log);
+  const mailTo = (to: string, part: string) => outbox.filter((m) => m.to === to && m.subject.includes(part)).length;
 
   const D = await import("../lib/roomBookingData");
   const { readJson } = await import("../lib/controlData");
@@ -411,6 +418,93 @@ async function main() {
   check("R9 holder label comes from holderLabel()", holderView.holderName, "Erin Member");
   const mia = await createUser({ id: "mia", name: "Mia", surname: "Admin", email: "mia@example.test", password: "pw-mia", role: "sgb-admin", forcePasswordChange: false, tagIds: [] });
   check("R8 a room manager gets neutral wording", (await roleOf(mia)).viewerRole, "manager");
+
+  // ======================= third review =======================
+  const { notifyWithdrawn, notifyCancelledByOther, notifyRequestOutcome } = await import("../lib/roomBookingNotify");
+  const { endMinuteFromLabel } = await import("../lib/roomBookings");
+  const { passwordChangeUrl } = await import("../lib/nextPath");
+  const { cappedList } = await import("../lib/email");
+  const actorFromUser = (u: { id: string; name: string; surname: string; email: string }, permissions: string[]) =>
+    D.actorOf({ ...u, role: "", roleName: "", permissions });
+  const samA = actorFromUser({ id: "sam", name: "Sam", surname: "Super", email: "sam@example.test" }, ["book_rooms", "manage_rooms"]);
+  const erinA = actorFromUser({ id: "erin", name: "Erin", surname: "Member", email: "erin@example.test" }, ["book_rooms"]);
+  const miaA = actorFromUser({ id: "mia", name: "Mia", surname: "Admin", email: "mia@example.test" }, ["book_rooms", "manage_rooms"]);
+  const tok = samAsk.value.request.token;
+
+  // T7 a manager who asked cannot approve their own request; another manager can, and the holder is told
+  check("T7 requesting manager cannot answer", (await D.getRequestView(samA, tok)).ok && ((await D.getRequestView(samA, tok)) as { value: { canAnswer: boolean } }).value.canAnswer, false);
+  check("T7 requesting manager approve refused", status(await D.respondToRequest(samA, tok, "approve", "")), 403);
+  const onBehalf = await D.respondToRequest(miaA, tok, "approve", "");
+  check("T7 another manager can approve", onBehalf.ok && onBehalf.value.onBehalf, true);
+  if (!onBehalf.ok) throw new Error("approve failed");
+  outbox.length = 0;
+  await notifyRequestOutcome(onBehalf.value.before, onBehalf.value.after, onBehalf.value.room, onBehalf.value.request, { name: miaA.name, email: miaA.email, onBehalf: true });
+  check("T7 the holder is emailed that it was given away", mailTo("erin@example.test", "was given to"), 1);
+
+  // T1 after the hand-over: roles and access come from who held it when asked
+  check("T1 request records who held it", samAsk.value.request.holderIds, ["erin"]);
+  check("T1 old holder can still open it, as holder", (await roleOf(erin)).viewerRole, "holder");
+  check("T1 requester (now holding it) still reads as requester", (await roleOf(sam)).viewerRole, "requester");
+  check("T1 holder name is the original holder", (await roleOf(sam)).holderName, "Erin Member");
+
+  // T2 every withdrawal emails the requester; a manager's cancel emails both holders
+  const t2 = await D.createBooking(erinA, inp(yard.id, "2027-11-22", 600, 660, { bookedForId: "cara" }));
+  if (!t2.ok) throw new Error("create failed");
+  const t2b = t2.value.bookings[0];
+  await D.requestRoom(bob, yard.id, t2b.date, t2b.id, { title: "Bob's", message: "Please", attendeeCount: 1 });
+  const mCancel = await D.cancelBooking(miaA, yard.id, t2b.date, t2b.id, "one");
+  if (!mCancel.ok) throw new Error("cancel failed");
+  check("T2 cancel reports the withdrawn request", mCancel.value.withdrawn.map((w) => [w.request.requesterId, w.reason]), [["bob", "cancelled"]]);
+  outbox.length = 0;
+  await notifyWithdrawn(mCancel.value.withdrawn, yard);
+  await notifyCancelledByOther(mCancel.value.cancelled, yard, miaA);
+  check("T2 requester emailed on cancel", mailTo("bob@example.test", "has lapsed"), 1);
+  check("T2 manager cancel emails the booker AND the person it was for", [mailTo("erin@example.test", "Cancelled by"), mailTo("cara@example.test", "Cancelled by")], [1, 1]);
+
+  const t2m = await D.createBooking(erinA, inp(yard.id, "2027-11-23", 600, 660));
+  if (!t2m.ok) throw new Error("create failed");
+  const t2mb = t2m.value.bookings[0];
+  await D.requestRoom(bob, yard.id, t2mb.date, t2mb.id, { title: "Bob's", message: "Please", attendeeCount: 1 });
+  const moveIt = await D.updateBooking(erinA, t2mb.id, t2mb.date, inp(yard.id, "2027-11-23", 720, 780));
+  check("T2 a move reports the withdrawn request", moveIt.ok && moveIt.value.withdrawn.map((w) => w.reason), ["moved"]);
+  const t2a = await D.createBooking(erinA, inp(yard.id, "2027-11-24", 600, 660));
+  if (!t2a.ok) throw new Error("create failed");
+  const t2ab = t2a.value.bookings[0];
+  const qa = await D.requestRoom(bob, yard.id, t2ab.date, t2ab.id, { title: "Bob's", message: "Please", attendeeCount: 1 });
+  await D.requestRoom(cara, yard.id, t2ab.date, t2ab.id, { title: "Cara's", message: "Me", attendeeCount: 1 });
+  if (!qa.ok) throw new Error("request failed");
+  const appr = await D.respondToRequest(erinA, qa.value.request.token, "approve", "");
+  check("T2 approving reports the other request as given away", appr.ok && appr.value.withdrawn.map((w) => [w.request.requesterId, w.reason]), [["cara", "given_away"]]);
+  const t2l = await D.createBooking(erinA, inp(yard.id, "2027-11-25", 600, 660));
+  if (!t2l.ok) throw new Error("create failed");
+  const t2lb = t2l.value.bookings[0];
+  const ql = await D.requestRoom(bob, yard.id, t2lb.date, t2lb.id, { title: "Bob's", message: "Please", attendeeCount: 1 });
+  if (!ql.ok) throw new Error("request failed");
+  const late = await D.respondToRequest(erinA, ql.value.request.token, "approve", "", new Date("2027-11-25T09:00:00Z"));
+  check("T2 a lapsed approve reports the lapsed request", !late.ok && late.withdrawn?.map((w) => [w.request.requesterId, w.reason]), [["bob", "lapsed"]]);
+
+  // T3 retiring emails ONE message per holder, not one per booking
+  const quad = await mkRoom("Quad");
+  await D.createBooking(erinA, inp(quad.id, "2027-12-01", 600, 660));
+  await D.createBooking(erinA, inp(quad.id, "2027-12-02", 600, 660));
+  await D.createBooking(erinA, inp(quad.id, "2027-12-03", 600, 660, { bookedForId: "cara" }));
+  const qret = await D.saveRoom(admin, quad.id, { name: "Quad", capacity: 10, color: "#0d9488", notes: "", active: false });
+  if (!qret.ok) throw new Error("retire failed");
+  outbox.length = 0;
+  const qFailed = await notifyRoomRetired(qret.value.cancelled, qret.value.room);
+  check("T3 three bookings, one email each to Erin and Cara", [qret.value.cancelled.length, mailTo("erin@example.test", "no longer available"), mailTo("cara@example.test", "no longer available"), outbox.length, qFailed], [3, 1, 1, 2, 0]);
+  check("T3 the list is capped", [cappedList(Array.from({ length: 25 }, (_, i) => String(i))).shown.length, cappedList(Array.from({ length: 25 }, (_, i) => String(i))).more], [20, 5]);
+
+  // T5 an end of 00:00 is midnight, so 00:00 to 24:00 can be booked
+  check("T5 end 00:00 reads as 24:00", [endMinuteFromLabel("00:00", 0), endMinuteFromLabel("00:00", 600), endMinuteFromLabel("10:00", 0)], [1440, 1440, 600]);
+  check("T5 a whole-day 00:00-24:00 booking is accepted", status(await D.createBooking(erinA, inp(yard.id, "2027-12-28", 0, endMinuteFromLabel("00:00", 0)!), new Date("2027-12-01T00:00:00Z"))), "ok");
+
+  // T6 the forced password change keeps the emailed link
+  check("T6 password change keeps a safe next", [passwordChangeUrl("/bookings/request/abc?action=approve"), passwordChangeUrl("//evil.test"), passwordChangeUrl(null)], [
+    "/account?changePassword=1&next=%2Fbookings%2Frequest%2Fabc%3Faction%3Dapprove",
+    "/account?changePassword=1",
+    "/account?changePassword=1",
+  ]);
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);

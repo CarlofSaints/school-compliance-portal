@@ -7,7 +7,7 @@ import SchoolCrest from "@/components/SchoolCrest";
 import { setSession, getSession } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
-import { safeNextPath } from "@/lib/nextPath";
+import { safeNextPath, passwordChangeUrl } from "@/lib/nextPath";
 
 // Where an emailed link (e.g. a room request) was heading before sign-in.
 function nextOrDashboard(): string {
@@ -47,7 +47,8 @@ export default function LoginPage() {
       }
       setSession(data.session);
       if (data.forcePasswordChange) {
-        router.push("/account?changePassword=1");
+        // The emailed link (?next=) survives the forced password change.
+        router.push(passwordChangeUrl(new URLSearchParams(window.location.search).get("next")));
       } else {
         router.push(nextOrDashboard());
       }

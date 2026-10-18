@@ -42,6 +42,14 @@ export function labelToMinute(hhmm: string): number | null {
   return h * 60 + m;
 }
 
+/** An END time typed as "00:00" means midnight at the end of the day (it
+ *  could never be after the start otherwise), so 00:00 to 24:00 can be booked. */
+export function endMinuteFromLabel(hhmm: string, startMinute: number): number | null {
+  const m = labelToMinute(hhmm);
+  if (m === null) return null;
+  return m <= startMinute && m === 0 ? DAY_END_MINUTE : m;
+}
+
 export function slotStarts(start = DAY_START_MINUTE, end = DAY_END_MINUTE, step = SLOT_MINUTES): number[] {
   const out: number[] = [];
   for (let m = start; m < end; m += step) out.push(m);

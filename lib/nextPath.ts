@@ -27,3 +27,9 @@ export function loginUrlFor(path: string): string {
   const next = safeNextPath(path);
   return next && next !== "/" ? `/login?next=${encodeURIComponent(next)}` : "/login";
 }
+
+/** The forced password-change page, carrying a validated return path. */
+export function passwordChangeUrl(rawNext: string | null | undefined): string {
+  const next = safeNextPath(rawNext);
+  return `/account?changePassword=1${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+}
