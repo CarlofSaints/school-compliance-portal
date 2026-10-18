@@ -1,4 +1,5 @@
-import { readJson, readJsonTolerant, updateJson, listFilesStrict, deleteFile, NO_CHANGE } from "./controlData";
+import { readJson, readJsonTolerant, updateJson, listFilesStrict, deleteFileStrict, NO_CHANGE } from "./controlData";
+import { getUserById } from "./userData";
 import { isPlausibleEmail } from "./emailIdentity";
 import { tenantScope } from "./tenantContext";
 
@@ -125,6 +126,9 @@ export async function countSignIn(
   const day = sastDay(ms);
   const oldest = sastDay(ms - (KEEP_DAYS - 1) * 86400000);
   try {
+    // A deferred write can land after the user was deleted: never recreate
+    // the tally of somebody who is gone.
+    if (!(await getUserById(user.id))) return;
     // mutate can run more than once; the LAST run is the one that was saved.
     let created = false;
     await updateJson<SignInStat | null>(userPath(user.id), null, (cur) => {
@@ -155,13 +159,13 @@ export async function countSignIn(
   }
 }
 
-/** Erases a deleted user's tally (privacy). Never throws; a file that is
- *  still there afterwards is logged. The activity log keeps its entries: an
- *  audit trail records what happened. */
+/** Erases a deleted user's tally (privacy). Never throws; a real storage
+ *  failure is logged. The activity log keeps its entries: an audit trail
+ *  records what happened. */
 export async function deleteSignInStats(userId: string): Promise<void> {
-  await deleteFile(userPath(userId));
-  const still = await readJson<SignInStat | null>(userPath(userId), null).catch(() => null);
-  if (still) console.error("[signins] Could not delete the tally of deleted user", userId);
+  await deleteFileStrict(userPath(userId)).catch((err) =>
+    console.error("[signins] Could not delete the tally of deleted user", userId, err)
+  );
 }
 
 /** Every user's tally, by user id, read in parallel. The LISTING throws on a

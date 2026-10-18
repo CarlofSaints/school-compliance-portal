@@ -203,10 +203,13 @@ async function main() {
   check(rows[0].last7 === 0 && rows[0].last30 === 0 && rows[0].removed && !rows[0].never, "old days outside 7/30 windows; unknown id marked removed");
 
   console.log("\nOnly the last 31 days are kept");
+  await mk("trim", "viewer");
   await countSignIn({ id: "trim", name: "T", email: "t@t" }, "ok", "1.1.1.1", "x", "2026-08-01T10:00:00.000Z");
   await countSignIn({ id: "trim", name: "T", email: "t@t" }, "ok", "1.1.1.1", "x", "2026-10-18T10:00:00.000Z");
   st = await readSignInStats();
   check(JSON.stringify(st.trim?.days) === JSON.stringify({ "2026-10-18": 1 }), "a day older than 31 days is dropped", JSON.stringify(st.trim?.days));
+  await countSignIn({ id: "ghost", name: "G", email: "g@t" }, "ok", "1.1.1.1", "x");
+  check(![...store.keys()].some((k) => k.endsWith("signins/users/ghost.json")), "no tally is created for a user who does not exist (deleted before the deferred write)");
 
   console.log("\nAccount lock (5 wrong passwords) logs once");
   ipSeq = 4;
@@ -218,6 +221,7 @@ async function main() {
   const hhmm = new Date(Date.parse(lockedUntil) + 2 * 3600000).toISOString().slice(11, 16);
   check(/^Account locked until \d\d:\d\d SAST after 5 wrong passwords$/.test(locks[0]?.summary || "") && locks[0]?.summary.includes(hhmm), "lock entry gives the real reset time in SAST", locks[0]?.summary);
   check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "admin").length === 5, "each of the 5 known-user wrong passwords is logged");
+  check(total((await readSignInStats()).admin?.failedDays) === 7, `the 2 attempts while locked still count in the tally (7 failed, got ${total((await readSignInStats()).admin?.failedDays)}), with no extra log lines`);
 
   console.log("\nIP limit: blocked attempts log at most once per window");
   const flood = "10.9.9.9";
@@ -260,6 +264,8 @@ async function main() {
   const authView = await readActivity({ entity: "auth", limit: 10000 });
   check(authView.entries.some((e) => e.action === "auth.sign_in") && authView.entries.every((e) => partitioned.includes(e.action)), "the Sign in filter shows only sign-in/out entries (activity-auth/ only)");
   check(!authView.entries.some((e) => e.action === "auth.password_changed"), "password events are not in the Sign in filter (they are under Everything)");
+  check((await readActivity({ actorId: "member", limit: 10000 })).entries.some((e) => e.action === "auth.sign_in"), "one person's trail on the default view includes their sign-ins");
+  check((await readActivity({ search: "Signed in", limit: 10000 })).entries.some((e) => e.action === "auth.sign_in"), "a search on the default view includes sign-ins");
   const folded0 = blob.__foldedCalls();
   check((await activityMonths()).length === 1 && blob.__foldedCalls() > folded0, "activityMonths uses a folder-only listing (one month, no stray folder)");
   // A sign-in in a month with nothing else in it.

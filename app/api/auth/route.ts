@@ -53,9 +53,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Every attempt goes in the activity log (never the password), through
-    // afterResponse: written once the reply has gone, so logging cannot make
-    // an address with an account answer slower than one without.
+    // What is logged (never a password), all through afterResponse, written
+    // once the reply has gone: every sign-in and every wrong password for a
+    // real account; ONE entry per connection per window for unknown
+    // addresses; ONE entry when a connection is blocked or an account locks.
+    // Attempts on an already-locked account only add to that user's failed
+    // count in the tally, so a flood cannot fill the log.
     // Logged as the address the limiter counted, so an investigator sees
     // the one that was actually counted or locked.
     const ip = ipOf(req);
@@ -89,14 +92,21 @@ export async function POST(req: NextRequest) {
     }
     const account = String(email).trim().toLowerCase();
     const locked = await peek(LIMITS.loginAccount, account);
-    if (!locked.ok) return tooMany(LIMITS.loginAccount, locked);
+    if (!locked.ok) {
+      // Looked up after the reply, so a locked real account answers exactly
+      // as fast as a locked unknown address.
+      await afterResponse(async () => {
+        const u = await getUserByEmail(email);
+        if (u) await countSignIn(u, "failed", ip, device);
+      });
+      return tooMany(LIMITS.loginAccount, locked);
+    }
 
     const user = await getUserByEmail(email);
     if (!user) {
       await hit(LIMITS.loginAccount, account);
       await afterResponse(async () => {
-        // Read first: only the first attempt in a window writes the marker.
-        if (!(await peek(UNKNOWN_ADDRESS_LOG, ip)).ok) return;
+        // Only the first unknown address from this connection in a window.
         const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
         if (marker.count !== 1) return;
         await recordActivity({

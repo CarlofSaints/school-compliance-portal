@@ -169,7 +169,14 @@ export async function readActivity(
   // lists both partitions' (the export merges both, so a month with only
   // sign-ins must still be pickable). The current month is always there, so
   // a new month with nothing in it yet never looks missing.
-  const folders = query.entity === "auth" ? ["activity-auth"] : ["activity"];
+  // One person's trail, or a search, on the default view includes their
+  // sign-ins too (still a single month).
+  const folders =
+    query.entity === "auth"
+      ? ["activity-auth"]
+      : !query.entity && (query.actorId || query.search)
+        ? ["activity", "activity-auth"]
+        : ["activity"];
   const [months, ...parts] = await Promise.all([
     activityMonths(query.entity === "auth" ? ["activity-auth"] : ["activity", "activity-auth"]),
     ...folders.map((f) => readMonth(f, month)),
@@ -220,7 +227,9 @@ export function activityToCsv(entries: ActivityEntry[]): string {
     // CR before one), and a stranger's input reaches this file. Such a cell
     // gets a leading quote and opens as plain text. A plain number or phone
     // number ("-500", "+27 82 123 4567") is left exactly as it is.
-    if (/^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?[\d\s.,()]+$/.test(s))) s = "'" + s;
+    // Judged on the first non-whitespace character: " =1" or "\n=1" runs too.
+    const lead = s.trimStart();
+    if (/^[\t\r]/.test(s) || /^[=@]/.test(lead) || (/^[+-]/.test(lead) && !/^[+-]?[\d\s.,()]+$/.test(lead))) s = "'" + s;
     // Quote everything: a summary can contain a comma, a quote or a newline,
     // and a CSV that breaks on one row loses the rest of the file.
     return `"${s.replace(/"/g, '""')}"`;

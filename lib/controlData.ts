@@ -337,14 +337,17 @@ export async function writeFile(
 }
 
 export async function deleteFile(blobPath: string): Promise<void> {
-  try {
-    const { token } = await scope();
-    const blob = await findBlob(blobPath);
-    if (blob) {
-      await del(blob.url, { token });
-    }
-  } catch {
+  await deleteFileStrict(blobPath).catch(() => {
     // ignore
+  });
+}
+
+/** deleteFile, but a storage error is THROWN, for a caller that must know. */
+export async function deleteFileStrict(blobPath: string): Promise<void> {
+  const { token } = await scope();
+  const blob = await findBlob(blobPath);
+  if (blob) {
+    await del(blob.url, { token });
   }
 }
 
