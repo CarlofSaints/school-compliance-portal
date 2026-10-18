@@ -62,6 +62,9 @@ export async function PUT(
       updates.email = email;
     }
     if (typeof body.forcePasswordChange === "boolean") updates.forcePasswordChange = body.forcePasswordChange;
+    if (typeof body.canSpendTranslationCredits === "boolean") {
+      updates.canSpendTranslationCredits = body.canSpendTranslationCredits;
+    }
     if (Array.isArray(body.tagIds)) {
       const tagIds = body.tagIds.filter((t: unknown): t is string => typeof t === "string");
       if (!sameIds(tagIds, existing.tagIds)) {

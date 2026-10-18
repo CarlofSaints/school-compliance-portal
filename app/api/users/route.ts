@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, surname, email, password, role, forcePasswordChange, sendEmail, tagIds } = body;
+    const { name, surname, email, password, role, forcePasswordChange, sendEmail, tagIds, canSpendTranslationCredits } = body;
 
     if (!name || !surname || !email || !password || !role) {
       return NextResponse.json(
@@ -75,6 +75,7 @@ export async function POST(req: NextRequest) {
       role,
       forcePasswordChange: forcePasswordChange ?? true,
       tagIds: Array.isArray(tagIds) ? tagIds : [],
+      canSpendTranslationCredits: canSpendTranslationCredits === true,
     });
 
     // The account is already created and stored, so a mail failure must not

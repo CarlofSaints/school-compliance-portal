@@ -164,6 +164,7 @@ const navItems: NavItem[] = [
       { label: tk("Minutes Admin"), href: "/admin/minutes", permission: "manage_users" },
       { label: tk("School Branding"), href: "/admin/branding", permission: "manage_users" },
       { label: tk("Weekly Update"), href: "/admin/weekly-update", permission: "manage_users" },
+      { label: tk("Translation Credits"), href: "/admin/translation-credits", permission: "manage_users" },
       {
         label: tk("Action Summary Email"),
         href: "/admin/action-summary",

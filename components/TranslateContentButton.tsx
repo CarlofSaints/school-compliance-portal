@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useLocale, useT } from "@/components/I18nProvider";
 import { LOCALES } from "@/lib/i18n/locales";
@@ -9,6 +9,11 @@ import { LOCALES } from "@/lib/i18n/locales";
 // picked top right, paid with translation credits. Hidden in English. A
 // document already translated is served from storage, free; a new one shows
 // its cost in credits first and only spends them on "Translate".
+//
+// Carl: a school with no credits still SEES the button, greyed, and hovering
+// or clicking says where to load credits. The same for a user who is not
+// ticked "Can spend translation credits". A document already translated is
+// never greyed: reading it is free for everybody.
 export default function TranslateContentButton({ kind, id }: { kind: "policy" | "minutes"; id: string }) {
   const t = useT();
   const locale = useLocale();
@@ -17,8 +22,26 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const [status, setStatus] = useState<{ stored: boolean; balance: number; canSpend: boolean } | null>(null);
+  const [blockedOpen, setBlockedOpen] = useState(false);
+
+  useEffect(() => {
+    if (locale === "en") return;
+    authFetch(`/api/translate?kind=${kind}&id=${encodeURIComponent(id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setStatus(d))
+      .catch(() => setStatus(null));
+  }, [locale, kind, id]);
 
   if (locale === "en") return null;
+  // Why the button is greyed, or "" when it can be used.
+  const blocked = !status || status.stored
+    ? ""
+    : status.balance <= 0
+      ? t("To translate, you need credits. Go to Admin > Translation Credits to load credits.")
+      : !status.canSpend
+        ? t("You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.")
+        : "";
   const language = LOCALES.find((l) => l.code === locale)?.label ?? locale;
 
   const run = async (confirm: boolean) => {
@@ -48,12 +71,26 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
 
   return (
     <>
-      <button
-        onClick={() => run(false)}
-        className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
-      >
-        {t("Translate into {language}", { language })}
-      </button>
+      <span className="relative inline-block">
+        <button
+          onClick={() => (blocked ? setBlockedOpen((o) => !o) : run(false))}
+          title={blocked || undefined}
+          aria-disabled={!!blocked}
+          className={`px-4 py-2 rounded-lg border border-gray-200 text-sm transition-colors ${
+            blocked ? "text-gray-400 bg-gray-50 cursor-not-allowed" : "hover:bg-gray-50"
+          }`}
+        >
+          {t("Translate into {language}", { language })}
+        </button>
+        {blocked && blockedOpen && (
+          <span
+            role="status"
+            className="absolute right-0 top-full mt-2 z-40 w-72 rounded-lg bg-dark text-white text-xs p-3 shadow-lg"
+          >
+            {blocked}
+          </span>
+        )}
+      </span>
       {open && (
         <div
           className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
@@ -98,7 +135,7 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
                     </button>
                   ) : (
                     <p className="text-amber-700">
-                      {t("Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.")}
+                      {t("Your school needs more translation credits. Go to Admin > Translation Credits to load credits.")}
                     </p>
                   )}
                   <p className="text-xs text-gray-500">
