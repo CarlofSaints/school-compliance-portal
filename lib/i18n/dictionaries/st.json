@@ -1532,6 +1532,6 @@
   "No sign-in recorded yet": "Ha ho so be le ho kena ho ngolisitsweng",
   "Unknown address": "Aterese e sa tsejweng",
   "Unknown connection": "Kgokahano e sa tsejweng",
-  "Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.": "Ho kena le ho tswa ha ho thathamiswe mona. Kgetha Kena sefeng, kapa o bule thebe ya Ho kena.",
-  "1 person has never signed in.": "Motho a le mong ha a so ka a kena."
+  "1 person has never signed in.": "Motho a le mong ha a so ka a kena.",
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Ho kena, ho kena ho hlolehileng le ho tswa ha ho thathamiswe mona: kgetha Kena sefeng, kapa o bule thebe ya Ho kena. Diphetoho le ho setwa botjha ha diphasewete di thathamisitswe mona."
 }

@@ -3,7 +3,8 @@ import { LIMITS, peek, hit, clear, tooMany, ipOf, type Limit } from "@/lib/rateL
 import { getUserByEmail, getUserById, verifyPassword, type User } from "@/lib/userData";
 import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
-import { clientIp, afterResponse, actorFromUser } from "@/lib/activityActor";
+import { afterResponse, actorFromUser } from "@/lib/activityActor";
+import { UNKNOWN_ADDRESS, UNKNOWN_CONNECTION } from "@/lib/activityLabels";
 import { countSignIn, deviceOf, maskTypedEmail, sastIso } from "@/lib/signinLog";
 import { SessionPayload } from "@/lib/roles";
 import {
@@ -39,11 +40,6 @@ const UNKNOWN_ADDRESS_LOG: Limit = {
   message: "",
 };
 
-// The "Who" of an entry nobody signed in for. Fixed labels (translated when
-// shown), because what a stranger typed must never stand in for a person.
-const UNKNOWN_ADDRESS = "Unknown address";
-const UNKNOWN_CONNECTION = "Unknown connection";
-
 export async function POST(req: NextRequest) {
   if (!fromThisSite(req)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -60,16 +56,16 @@ export async function POST(req: NextRequest) {
     // Every attempt goes in the activity log (never the password), through
     // afterResponse: written once the reply has gone, so logging cannot make
     // an address with an account answer slower than one without.
-    // The limiter counts by ipOf; the log records the same address every
-    // other activity entry does.
+    // Logged as the address the limiter counted, so an investigator sees
+    // the one that was actually counted or locked.
     const limitKey = ipOf(req);
-    const ip = clientIp(req);
+    const ip = limitKey;
     const device = deviceOf(req.headers.get("user-agent"));
     // What was typed, for detail only, and MASKED (people type their
     // password here). Never the actor or summary: it is a stranger's input
     // and would forge the "Who" column.
     const typed = maskTypedEmail(email);
-    const actorOf = (u: User) => actorFromUser(req, u);
+    const actorOf = (u: User) => ({ ...actorFromUser(req, u), ip });
 
     // Rate limits: every attempt counts against the connection; WRONG
     // passwords count against the address, whether or not it has an account,
@@ -222,6 +218,7 @@ export async function DELETE(req: NextRequest) {
       if (!token || !user || !verifySessionToken(token, user, tenantKey)) return;
       await recordActivity({
         ...actorFromUser(req, user),
+        ip: ipOf(req),
         action: "auth.sign_out",
         entity: "auth",
         entityId: user.id,

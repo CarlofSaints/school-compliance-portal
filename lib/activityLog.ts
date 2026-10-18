@@ -1,4 +1,4 @@
-import { readJson, readJsonTolerant, writeJson, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, listFiles, listFolders } from "./controlData";
 
 // ---------------------------------------------------------------------------
 // The audit trail. One per school, and the school can see its own.
@@ -22,11 +22,12 @@ import { readJson, readJsonTolerant, writeJson, listFiles } from "./controlData"
 //
 //   activity/2026-09/2026-09-05T12:34:56.789Z-a1b2c3.json
 //
-// Sign-ins and sign-outs (entity "auth") go in their OWN partition,
+// Sign-ins, failed sign-ins, blocks and sign-outs go in their OWN partition,
 // activity-auth/<month>/, because there are far more of them than of
-// everything else and every view reads a whole month. The default view reads
-// activity/ only; the "Sign in" filter reads activity-auth/; the month export
-// reads both. 🔴 activity-auth is a sibling of activity/, never inside it:
+// everything else and every view reads a whole month. Password changes and
+// resets stay in activity/: they are security events an auditor looks for.
+// The default view reads activity/ only; the "Sign in" filter reads both
+// (auth entries only); the month export reads both. 🔴 activity-auth is a sibling of activity/, never inside it:
 // activityMonths() treats every folder under activity/ as a month.
 //
 // ---------------------------------------------------------------------------
@@ -74,10 +75,11 @@ function monthOf(iso: string): string {
   return iso.slice(0, 7); // YYYY-MM
 }
 
-const folderFor = (entity?: ActivityEntity) => (entity === "auth" ? "activity-auth" : "activity");
+const AUTH_PARTITION_ACTIONS = new Set(["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"]);
 
 function pathFor(entry: ActivityEntry): string {
-  return `${folderFor(entry.entity)}/${monthOf(entry.at)}/${entry.at}-${entry.id.slice(0, 6)}.json`;
+  const folder = AUTH_PARTITION_ACTIONS.has(entry.action) ? "activity-auth" : "activity";
+  return `${folder}/${monthOf(entry.at)}/${entry.at}-${entry.id.slice(0, 6)}.json`;
 }
 
 /**
@@ -135,10 +137,11 @@ export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-/** Months with at least one entry (in either partition), newest first. */
-export async function activityMonths(): Promise<string[]> {
-  const [main, auth] = await Promise.all([listFiles("activity"), listFiles("activity-auth")]);
-  return [...new Set([...main, ...auth])].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
+/** Months with at least one entry in the given partitions, newest first.
+ *  A folder-only listing: it never pages through a month's entries. */
+export async function activityMonths(folders: string[] = ["activity"]): Promise<string[]> {
+  const lists = await Promise.all(folders.map((f) => listFolders(f)));
+  return [...new Set(lists.flat())].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
 }
 
 /** One partition's month, newest first. */
@@ -165,11 +168,15 @@ export async function readActivity(
   query: ActivityQuery = {}
 ): Promise<ActivityPage> {
   const month = query.month || currentMonth();
-  const availableMonths = await activityMonths();
-
-  // "auth" reads its own partition; everything else reads the main one,
-  // so the default view never downloads a month of sign-ins.
-  let entries = await readMonth(folderFor(query.entity), month);
+  // "auth" reads both partitions (sign-ins AND password events); everything
+  // else reads the main one, so the default view never downloads a month of
+  // sign-ins. The month list matches what the view reads.
+  const folders = query.entity === "auth" ? ["activity", "activity-auth"] : ["activity"];
+  const [availableMonths, ...parts] = await Promise.all([
+    activityMonths(folders),
+    ...folders.map((f) => readMonth(f, month)),
+  ]);
+  let entries = newestFirst((parts as ActivityEntry[][]).flat());
 
   if (query.entity) entries = entries.filter((e) => e.entity === query.entity);
   if (query.actorId) entries = entries.filter((e) => e.actorId === query.actorId);
@@ -198,7 +205,11 @@ export async function readActivity(
  *  for export. No paging, no limit. */
 export async function exportActivity(month: string): Promise<ActivityEntry[]> {
   const [main, auth] = await Promise.all([readMonth("activity", month), readMonth("activity-auth", month)]);
-  return [...main, ...auth].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  return newestFirst([...main, ...auth]);
+}
+
+function newestFirst(entries: ActivityEntry[]): ActivityEntry[] {
+  return entries.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
 /** CSV, oldest first, because that is how an audit trail is read end to end. */

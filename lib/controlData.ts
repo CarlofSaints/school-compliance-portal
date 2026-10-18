@@ -393,6 +393,31 @@ export async function listFiles(dirPath: string): Promise<string[]> {
   return listFilesStrict(dirPath).catch(() => []);
 }
 
+/**
+ * The immediate SUB-FOLDER names under a path, from the store's folded
+ * listing: it never pages through the blobs inside them. For month folders
+ * that each hold thousands of entries. Tolerant like listFiles.
+ */
+export async function listFolders(dirPath: string): Promise<string[]> {
+  try {
+    const { prefix: tenantPrefix, token } = await scope();
+    const prefix = tenantPrefix + dirPath + "/";
+    const names = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const result = await list({ prefix, mode: "folded", limit: 1000, cursor, token });
+      for (const f of result.folders) {
+        const name = f.slice(prefix.length).replace(/\/$/, "");
+        if (name) names.add(name);
+      }
+      cursor = result.hasMore ? result.cursor : undefined;
+    } while (cursor);
+    return [...names];
+  } catch {
+    return [];
+  }
+}
+
 /** listFiles, but a storage error is THROWN rather than read as an empty
  *  folder, for callers where "nothing there" would be a wrong answer. */
 export async function listFilesStrict(dirPath: string): Promise<string[]> {

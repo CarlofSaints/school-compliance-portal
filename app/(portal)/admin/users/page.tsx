@@ -91,13 +91,11 @@ export default function UsersPage() {
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
-    authFetch("/api/activity/signins")
+    authFetch("/api/activity/signins?lastOnly=1")
       .then(async (res) => {
         if (!res.ok) return;
-        const data = (await res.json()) as { rows?: { userId: string; lastAt?: string }[] };
-        const map: Record<string, string> = {};
-        for (const r of data.rows || []) if (r.lastAt) map[r.userId] = r.lastAt;
-        if (live) setLastSignIn(map);
+        const data = (await res.json()) as { last?: Record<string, string> };
+        if (live) setLastSignIn(data.last || {});
       })
       .catch(() => {});
     return () => {

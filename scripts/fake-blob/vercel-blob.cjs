@@ -61,8 +61,23 @@ async function head(urlOrPath) {
   return meta(p, f);
 }
 
+// Every folded-mode call is counted, so a check can prove a caller used it.
+let foldedCalls = 0;
+
 async function list(opts = {}) {
   const prefix = opts.prefix || "";
+  if (opts.mode === "folded") {
+    foldedCalls++;
+    const blobs = [];
+    const folders = new Set();
+    for (const k of [...store.keys()].filter((k) => k.startsWith(prefix)).sort()) {
+      const rest = k.slice(prefix.length);
+      const slash = rest.indexOf("/");
+      if (slash === -1) blobs.push(meta(k, store.get(k)));
+      else folders.add(prefix + rest.slice(0, slash + 1));
+    }
+    return { blobs, folders: [...folders], hasMore: false, cursor: undefined };
+  }
   const all = [...store.keys()].filter((k) => k.startsWith(prefix)).sort();
   const start = opts.cursor ? Number(opts.cursor) : 0;
   const limit = opts.limit || 1000;
@@ -80,4 +95,9 @@ function __fakeStore() {
   return store;
 }
 
-module.exports = { BlobError, BlobNotFoundError, BlobPreconditionFailedError, put, get, head, list, del, __fakeStore };
+/** Test helper: how many folded-mode listings have been made. */
+function __foldedCalls() {
+  return foldedCalls;
+}
+
+module.exports = { BlobError, BlobNotFoundError, BlobPreconditionFailedError, put, get, head, list, del, __fakeStore, __foldedCalls };

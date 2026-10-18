@@ -25,7 +25,7 @@ const check = (ok: boolean, label: string, extra = "") => {
 
 async function main() {
   const { createRequire } = await import("module");
-  const blob = createRequire(__filename)("@vercel/blob") as { __fakeStore?: () => Map<string, { bytes: Uint8Array }> };
+  const blob = createRequire(__filename)("@vercel/blob") as { __fakeStore?: () => Map<string, { bytes: Uint8Array }>; __foldedCalls: () => number };
   if (typeof blob.__fakeStore !== "function") {
     console.error("Refusing to run: @vercel/blob is the REAL store. Run with --import ./scripts/fake-blob/register.mjs");
     process.exit(1);
@@ -45,7 +45,7 @@ async function main() {
   const changePw = await import("../app/api/auth/change-password/route");
   const signins = await import("../app/api/activity/signins/route");
   const usersRoute = await import("../app/api/users/route");
-  const { flushAfterResponse } = await import("../lib/activityActor");
+  const { flushAfterResponse, afterResponseDeps } = await import("../lib/activityActor");
   const { key: tenantKey } = await tenantScope();
 
   // A role that may read the users list but NOT the activity log.
@@ -123,10 +123,19 @@ async function main() {
   const since = await trackingSince();
   check(!!since, `tracking date written on the first sign-in (${since})`);
 
-  console.log("\nIP is the same source as other activity entries (x-forwarded-for first)");
+  console.log("\nSign-in entries carry the address the limiter counted (ipOf)");
   await signIn(member.email, "pw-member-SECRET", "10.0.0.50", "203.0.113.7");
   entries = await authEntries();
-  check(entries.some((e) => e.action === "auth.sign_in" && e.ip === "203.0.113.7"), "entry ip is the forwarded client address");
+  check(entries.some((e) => e.action === "auth.sign_in" && e.ip === "10.0.0.50"), "entry ip is the limiter's key, not x-forwarded-for");
+
+  console.log("\nA logging failure never fails the sign-in");
+  const realScope = afterResponseDeps.tenantScope;
+  afterResponseDeps.tenantScope = async () => {
+    throw new Error("scope exploded");
+  };
+  res = await signIn(member.email, "pw-member-SECRET", "10.0.0.51");
+  afterResponseDeps.tenantScope = realScope;
+  check(res.status === 200 && /sc_session=[^;]+/.test(res.headers.get("set-cookie") || ""), `still 200 with the cookie when scheduling the log throws (HTTP ${res.status})`);
 
   console.log("\nWrong password");
   ipSeq = 2;
@@ -238,8 +247,17 @@ async function main() {
   const keysNow = [...store.keys()];
   check(keysNow.some((k) => /\/activity-auth\/\d{4}-\d{2}\//.test(k)) && !keysNow.some((k) => /\/activity\/\d{4}-\d{2}\//.test(k) && k.includes("auth")), "auth entries stored under activity-auth/<month>/, not activity/");
   const def = await readActivity({ limit: 10000 });
-  check(def.entries.length === 1 && def.entries.every((e) => e.entity !== "auth"), `the default view reads only non-auth entries (${def.entries.length})`);
-  check((await activityMonths()).length === 1, "activityMonths unaffected (one month, no stray folder)");
+  const partitioned = ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"];
+  check(def.entries.some((e) => e.entity === "spend") && def.entries.every((e) => !partitioned.includes(e.action)), `the default view has no sign-in/out entries (${def.entries.length})`);
+  check(def.entries.some((e) => e.action === "auth.password_changed"), "password changes stay in the main log");
+  const authView = await readActivity({ entity: "auth", limit: 10000 });
+  check(authView.entries.some((e) => e.action === "auth.sign_in") && authView.entries.some((e) => e.action === "auth.password_changed") && authView.entries.every((e) => e.entity === "auth"), "the Sign in filter shows both partitions' auth entries");
+  const folded0 = blob.__foldedCalls();
+  check((await activityMonths()).length === 1 && blob.__foldedCalls() > folded0, "activityMonths uses a folder-only listing (one month, no stray folder)");
+  // A sign-in in a month with nothing else in it.
+  await recordActivity({ actorName: "Old", action: "auth.sign_in", entity: "auth", summary: "Signed in", at: "2026-01-15T08:00:00.000Z" });
+  check(!(await readActivity({})).availableMonths.includes("2026-01"), "the default view's months leave out a month with only sign-ins");
+  check((await readActivity({ entity: "auth" })).availableMonths.includes("2026-01"), "the Sign in filter's months include it");
   const exp = await exportActivity(def.month);
   const sorted = [...exp].every((e, i) => i === 0 || exp[i - 1].at >= e.at);
   check(exp.some((e) => e.entity === "auth") && exp.some((e) => e.entity === "spend") && sorted, `the month export has both, newest first (${exp.length})`);
@@ -253,9 +271,14 @@ async function main() {
   check(res.status === 200 && body.rows?.length === 5 && body.since === since, `admin gets 4 users + 1 removed, and the tracking date (HTTP ${res.status}, ${body.rows?.length} rows)`);
   const plain = (await (await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: admin }))).json()) as Record<string, unknown>[];
   check(plain.length > 0 && plain.every((u) => !("lastSignInAt" in u)), "/api/users never carries sign-in data (Admin > Users fetches it separately, once)");
+  res = await signins.GET(req("GET", "/api/activity/signins?lastOnly=1", { as: admin }));
+  const lean = await res.json();
+  check(res.status === 200 && !lean.rows && !!lean.last?.member && !("since" in lean), "lastOnly=1 returns just { last: { userId: lastAt } }", JSON.stringify(lean).slice(0, 120));
   const viewer = await mk("viewer2", "users-viewer");
   res = await signins.GET(req("GET", "/api/activity/signins", { as: viewer }));
   check(res.status === 403, `view_users WITHOUT the activity permission is refused the sign-ins (HTTP ${res.status}), so no column`);
+  res = await signins.GET(req("GET", "/api/activity/signins?lastOnly=1", { as: viewer }));
+  check(res.status === 403, `... and refused lastOnly too (HTTP ${res.status})`);
 
   console.log("\nmeta.json is only touched on a user's FIRST tally");
   const metaKey = [...store.keys()].find((k) => k.endsWith("signins/meta.json"))!;

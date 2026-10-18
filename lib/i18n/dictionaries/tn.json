@@ -1532,6 +1532,6 @@
   "No sign-in recorded yet": "Ga go ise go nne le go tsena go go kwadilweng",
   "Unknown address": "Aterese e e sa itsiweng",
   "Unknown connection": "Kgolagano e e sa itsiweng",
-  "Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.": "Go tsena le go tswa ga go kwalwa fa. Tlhopha Tsena mo sesefong, kgotsa o bule thebe ya Go tsena.",
-  "1 person has never signed in.": "Motho a le mongwe ga a ise a tsene."
+  "1 person has never signed in.": "Motho a le mongwe ga a ise a tsene.",
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Go tsena, go tsena go go paletsweng le go tswa ga go kwalwa fa: tlhopha Tsena mo sesefong, kgotsa o bule thebe ya Go tsena. Diphetogo le go tlhomiwa sešwa ga diphasewete di kwalwa fa."
 }

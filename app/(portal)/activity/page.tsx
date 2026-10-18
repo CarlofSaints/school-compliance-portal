@@ -8,6 +8,7 @@ import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
 import type { SignInRow } from "@/lib/signinLog";
+import { UNKNOWN_ACTORS } from "@/lib/activityLabels";
 import SortableTh from "@/components/SortableTh";
 import { useTableSort } from "@/lib/useTable";
 
@@ -58,12 +59,6 @@ function monthLabel(m: string): string {
     year: "numeric",
   });
 }
-
-// Fixed "Who" labels the server writes for an attempt nobody signed in for.
-const UNKNOWN_ACTORS: Record<string, string> = {
-  "Unknown address": tk("Unknown address"),
-  "Unknown connection": tk("Unknown connection"),
-};
 
 const PAGE_SIZE = 100;
 
@@ -212,7 +207,7 @@ export default function ActivityPage() {
 
       {entity !== "auth" && (
         <p className="text-xs text-gray-400 mb-2">
-          {t("Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.")}
+          {t("Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.")}
         </p>
       )}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -404,7 +399,7 @@ function RowPair({
         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{whenLabel(entry.at)}</td>
         <td className="px-4 py-3">
           <div className="text-dark">
-            {!entry.actorId && UNKNOWN_ACTORS[entry.actorName] ? t(UNKNOWN_ACTORS[entry.actorName]) : entry.actorName}
+            {!entry.actorId && UNKNOWN_ACTORS.has(entry.actorName) ? t(entry.actorName) : entry.actorName}
           </div>
           {entry.actorEmail && (
             <div className="text-xs text-gray-400">{entry.actorEmail}</div>
