@@ -26,6 +26,7 @@ interface Detail {
   endMinute: number;
   yourMeeting: string;
   holderName: string;
+  viewerRole: "holder" | "requester" | "manager";
 }
 
 export default function RoomRequestPage() {
@@ -70,12 +71,29 @@ export default function RoomRequestPage() {
     setDetail((d) => (d ? { ...d, status: data.status, declineReason: mode === "decline" ? reason : d.declineReason } : d));
   };
 
+  const role = detail?.viewerRole ?? "holder";
+
   if (loading || (!detail && !loadError)) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="text-2xl font-bold text-dark mb-1">{t("Someone is asking for your room")}</h1>
-      <p className="text-gray-500 text-sm mb-6">{t("Nothing has changed yet. The room is still yours unless you agree.")}</p>
+      {/* Worded for whoever is reading: the holder answering, the person who asked, or a room manager. */}
+      {role === "requester" ? (
+        <>
+          <h1 className="text-2xl font-bold text-dark mb-1">{t("Your request for {room}", { room: detail?.roomName ?? "" })}</h1>
+          <p className="text-gray-500 text-sm mb-6">{t("Waiting for {holder} to answer. The room stays theirs unless they agree.", { holder: detail?.holderName ?? "" })}</p>
+        </>
+      ) : role === "manager" ? (
+        <>
+          <h1 className="text-2xl font-bold text-dark mb-1">{t("A request for {room}", { room: detail?.roomName ?? "" })}</h1>
+          <p className="text-gray-500 text-sm mb-6">{t("{requester} is asking {holder} for this room. Nothing changes unless it is agreed.", { requester: detail?.requesterName ?? "", holder: detail?.holderName ?? "" })}</p>
+        </>
+      ) : (
+        <>
+          <h1 className="text-2xl font-bold text-dark mb-1">{t("Someone is asking for your room")}</h1>
+          <p className="text-gray-500 text-sm mb-6">{t("Nothing has changed yet. The room is still yours unless you agree.")}</p>
+        </>
+      )}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4 text-sm">
         {loadError || !detail ? (
           <p className="text-gray-600">{loadError}</p>
@@ -83,7 +101,7 @@ export default function RoomRequestPage() {
           <>
             <dl className="divide-y divide-gray-100 rounded-lg border border-gray-200">
               {([
-                [t("Your booking"), detail.yourMeeting],
+                [role === "holder" ? t("Your booking") : t("Booked meeting"), detail.yourMeeting],
                 [t("Room"), detail.roomName],
                 [t("When"), `${longDateLabel(detail.date, t)}, ${slotLabel(detail.startMinute, detail.endMinute, t)}`],
                 [t("They want it for"), detail.requesterMeeting],
@@ -96,16 +114,18 @@ export default function RoomRequestPage() {
               ))}
             </dl>
             <div>
-              <p className="mb-1 text-gray-500">{t("{name} says:", { name: detail.requesterName })}</p>
+              <p className="mb-1 text-gray-500">{role === "requester" ? t("You wrote:") : t("{name} says:", { name: detail.requesterName })}</p>
               <blockquote className="rounded-lg border-l-4 border-primary bg-gray-50 px-3 py-2">{detail.message}</blockquote>
             </div>
 
             {detail.status !== "pending" ? (
               <div className="rounded-lg bg-gray-50 px-3 py-3">
-                {detail.status === "approved" && <p>{t("{name} has the room. It is booked in their name and they have been emailed.", { name: detail.requesterName })}</p>}
+                {detail.status === "approved" && (
+                  <p>{role === "requester" ? t("You have the room. It is booked in your name.") : t("{name} has the room. It is booked in their name and they have been emailed.", { name: detail.requesterName })}</p>
+                )}
                 {detail.status === "declined" && (
                   <p>
-                    {t("The room was kept and {name} has been told why.", { name: detail.requesterName })}
+                    {role === "requester" ? t("{holder} kept the room.", { holder: detail.holderName }) : t("The room was kept and {name} has been told why.", { name: detail.requesterName })}
                     {detail.declineReason ? ` ${t("The reason given: \"{reason}\"", { reason: detail.declineReason })}` : ""}
                   </p>
                 )}
@@ -114,7 +134,9 @@ export default function RoomRequestPage() {
               </div>
             ) : !detail.canAnswer ? (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
-                {t("Only {holder}, who holds the room, can answer this.", { holder: detail.holderName })}
+                {role === "requester"
+                  ? t("Waiting for {holder} to answer. You will get an email either way.", { holder: detail.holderName })
+                  : t("Only {holder}, who holds the room, can answer this.", { holder: detail.holderName })}
               </p>
             ) : mode === null ? (
               <div className="flex flex-wrap justify-end gap-2">

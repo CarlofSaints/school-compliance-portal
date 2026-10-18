@@ -1663,5 +1663,16 @@
   "{base}, {count} times": "{base}, makgetlo a le {count}",
   "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Dipeelo di le {n} tse di tlang di khanseletswe, mme dimeile dingwe kwa beng ba tsone ga di a kgona go romelwa.",
   "{n} upcoming booking(s) cancelled and their holders emailed.": "Dipeelo di le {n} tse di tlang di khanseletswe mme beng ba tsone ba romeletswe imeile.",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emisa \"{name}\"? E ka se tlhole e tlhaga mo dipeelong tse dintšha. Dipeelo tse di tlang di tla khanselwa mme beng ba tsone ba romelwe imeile; tse di fetileng di tla bolokwa."
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emisa \"{name}\"? E ka se tlhole e tlhaga mo dipeelong tse dintšha. Dipeelo tse di tlang di tla khanselwa mme beng ba tsone ba romelwe imeile; tse di fetileng di tla bolokwa.",
+  "Search by name...": "Batla ka leina...",
+  "{n} held by someone else were left alone.": "Tse {n} tsa motho yo mongwe di tlogetswe jalo.",
+  "Your request for {room}": "Kopo ya gago ya {room}",
+  "Waiting for {holder} to answer. The room stays theirs unless they agree.": "Go emetswe {holder} gore a arabe. Phaposi e nna ya bone fa e se gore ba a dumela.",
+  "A request for {room}": "Kopo ya {room}",
+  "{requester} is asking {holder} for this room. Nothing changes unless it is agreed.": "{requester} o kopa {holder} phaposi e. Ga go sepe se se fetogang fa e se gore go dumelelanwe.",
+  "Booked meeting": "Kopano e e beilweng",
+  "You wrote:": "O kwadile:",
+  "You have the room. It is booked in your name.": "O na le phaposi. E beilwe ka leina la gago.",
+  "{holder} kept the room.": "{holder} o bolokile phaposi.",
+  "Waiting for {holder} to answer. You will get an email either way.": "Go emetswe {holder} gore a arabe. O tla amogela imeile go sa kgathalesege karabo."
 }

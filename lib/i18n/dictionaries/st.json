@@ -1663,5 +1663,16 @@
   "{base}, {count} times": "{base}, makgetlo a {count}",
   "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Dipehelo tse {n} tse tlang di hlakotswe, empa diimeile tse ding ho beng ba tsona ha di a kgona ho romelwa.",
   "{n} upcoming booking(s) cancelled and their holders emailed.": "Dipehelo tse {n} tse tlang di hlakotswe mme beng ba tsona ba rometswe imeile.",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emisa \"{name}\"? E ke ke ya hlaha dipehelong tse ntjha. Dipehelo tse tlang di tla hlakolwa mme beng ba tsona ba romelwe imeile; tse fetileng di tla bolokwa."
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emisa \"{name}\"? E ke ke ya hlaha dipehelong tse ntjha. Dipehelo tse tlang di tla hlakolwa mme beng ba tsona ba romelwe imeile; tse fetileng di tla bolokwa.",
+  "Search by name...": "Batla ka lebitso...",
+  "{n} held by someone else were left alone.": "Tse {n} tsa motho e mong di tlohetswe jwalo.",
+  "Your request for {room}": "Kopo ya hao ya {room}",
+  "Waiting for {holder} to answer. The room stays theirs unless they agree.": "Ho emetswe {holder} hore a arabe. Phaposi e dula e le ya bona ntle le ha ba dumela.",
+  "A request for {room}": "Kopo ya {room}",
+  "{requester} is asking {holder} for this room. Nothing changes unless it is agreed.": "{requester} o kopa {holder} phaposi ena. Ha ho letho le fetohang ntle le ha ho dumellanwa.",
+  "Booked meeting": "Kopano e behilweng",
+  "You wrote:": "O ngotse:",
+  "You have the room. It is booked in your name.": "O na le phaposi. E behilwe ka lebitso la hao.",
+  "{holder} kept the room.": "{holder} o bolokile phaposi.",
+  "Waiting for {holder} to answer. You will get an email either way.": "Ho emetswe {holder} hore a arabe. O tla fumana imeile ho sa natswe karabo."
 }

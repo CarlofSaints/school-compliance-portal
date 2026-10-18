@@ -1663,5 +1663,16 @@
   "{base}, {count} times": "{base}, izikhathi ezingu-{count}",
   "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Ukubhuka okuzayo okungu-{n} kukhanseliwe, kodwa amanye ama-imeyili kubaphathi bakho akakwazanga ukuthunyelwa.",
   "{n} upcoming booking(s) cancelled and their holders emailed.": "Ukubhuka okuzayo okungu-{n} kukhanseliwe futhi abaphathi bakho bathunyelwe i-imeyili.",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Misa \"{name}\"? Ngeke lisavela ekubhukeni okusha. Ukubhuka okuzayo kuzokhanselwa futhi abaphathi bakho bathunyelwe i-imeyili; okwedlule kuzogcinwa."
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Misa \"{name}\"? Ngeke lisavela ekubhukeni okusha. Ukubhuka okuzayo kuzokhanselwa futhi abaphathi bakho bathunyelwe i-imeyili; okwedlule kuzogcinwa.",
+  "Search by name...": "Sesha ngegama...",
+  "{n} held by someone else were left alone.": "Okungu-{n} okungokomunye umuntu kushiywe kunjalo.",
+  "Your request for {room}": "Isicelo sakho se-{room}",
+  "Waiting for {holder} to answer. The room stays theirs unless they agree.": "Kulindwe u-{holder} ukuthi aphendule. Igumbi lihlala lingelabo ngaphandle uma bevuma.",
+  "A request for {room}": "Isicelo se-{room}",
+  "{requester} is asking {holder} for this room. Nothing changes unless it is agreed.": "U-{requester} ucela u-{holder} leli gumbi. Akukho okushintshayo ngaphandle uma kuvunyelwana.",
+  "Booked meeting": "Umhlangano obhukiwe",
+  "You wrote:": "Ubhale:",
+  "You have the room. It is booked in your name.": "Unalo igumbi. Libhukwe egameni lakho.",
+  "{holder} kept the room.": "U-{holder} ugcine igumbi.",
+  "Waiting for {holder} to answer. You will get an email either way.": "Kulindwe u-{holder} ukuthi aphendule. Uzothola i-imeyili noma kunjani."
 }

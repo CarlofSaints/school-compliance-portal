@@ -1663,5 +1663,16 @@
   "{base}, {count} times": "{base}, {count} keer",
   "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "{n} komende bespreking(s) gekanselleer, maar sommige e-posse aan hulle houers kon nie gestuur word nie.",
   "{n} upcoming booking(s) cancelled and their holders emailed.": "{n} komende bespreking(s) gekanselleer en hulle houers is per e-pos laat weet.",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Onttrek \"{name}\"? Dit sal nie meer vir nuwe besprekings verskyn nie. Die komende besprekings word gekanselleer en hulle houers kry 'n e-pos; vorige besprekings word behou."
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Onttrek \"{name}\"? Dit sal nie meer vir nuwe besprekings verskyn nie. Die komende besprekings word gekanselleer en hulle houers kry 'n e-pos; vorige besprekings word behou.",
+  "Search by name...": "Soek op naam...",
+  "{n} held by someone else were left alone.": "{n} wat iemand anders het, is gelos.",
+  "Your request for {room}": "U versoek vir {room}",
+  "Waiting for {holder} to answer. The room stays theirs unless they agree.": "Wag vir {holder} om te antwoord. Die lokaal bly hulle s'n tensy hulle instem.",
+  "A request for {room}": "'n Versoek vir {room}",
+  "{requester} is asking {holder} for this room. Nothing changes unless it is agreed.": "{requester} vra {holder} vir hierdie lokaal. Niks verander tensy daar ingestem word nie.",
+  "Booked meeting": "Besproke vergadering",
+  "You wrote:": "U het geskryf:",
+  "You have the room. It is booked in your name.": "U het die lokaal. Dit is in u naam bespreek.",
+  "{holder} kept the room.": "{holder} het die lokaal behou.",
+  "Waiting for {holder} to answer. You will get an email either way.": "Wag vir {holder} om te antwoord. U kry in elk geval 'n e-pos."
 }

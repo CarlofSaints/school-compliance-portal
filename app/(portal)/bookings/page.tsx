@@ -47,7 +47,8 @@ interface RoomOption {
 interface Person {
   id: string;
   name: string;
-  email: string;
+  /** Only for viewers who may see the user list (view_users / manage_users). */
+  email?: string;
 }
 
 const SLOTS = slotStarts();
@@ -156,13 +157,13 @@ function RecurrenceEditor({ value, onChange, startDate, t }: { value: Recurrence
 function HolderPicker({ people, excludeId, defaultLabel, value, onChange, t }: { people: Person[]; excludeId: string; defaultLabel: string; value: string; onChange: (id: string) => void; t: T }) {
   const [search, setSearch] = useState("");
   const term = search.trim().toLowerCase();
-  const choices = people.filter((p) => p.id !== excludeId && (!term || p.name.toLowerCase().includes(term) || p.email.toLowerCase().includes(term)));
+  const choices = people.filter((p) => p.id !== excludeId && (!term || p.name.toLowerCase().includes(term) || (p.email ?? "").toLowerCase().includes(term)));
   const chosen = people.find((p) => p.id === value);
   const pill = (on: boolean) => `rounded-full border px-2.5 py-0.5 text-xs font-medium ${on ? "border-primary bg-primary/10 text-primary-dark" : "border-gray-300 text-gray-600"}`;
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-500">{t("For: {name}", { name: chosen ? chosen.name : defaultLabel })}</p>
-      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search by name or email...")} className={`${inputCls} w-full`} />
+      <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={people.some((p) => p.email) ? t("Search by name or email...") : t("Search by name...")} className={`${inputCls} w-full`} />
       <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-200 bg-white p-2">
         <button type="button" onClick={() => onChange("")} className={pill(value === "")}>{defaultLabel}</button>
         {choices.map((p) => (
@@ -325,7 +326,8 @@ function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking:
     setBusy(false);
     if (!res.ok) return setError(await apiErrorMessage(res, t("Failed")));
     const data = await res.json().catch(() => ({}));
-    onDone(scope === "series" ? t("{n} bookings cancelled", { n: data.count ?? 0 }) : t("Booking cancelled"));
+    const msg = scope === "series" ? t("{n} bookings cancelled", { n: data.count ?? 0 }) : t("Booking cancelled");
+    onDone(data.skipped > 0 ? `${msg} ${t("{n} held by someone else were left alone.", { n: data.skipped })}` : msg);
   };
 
   const sendAsk = async () => {

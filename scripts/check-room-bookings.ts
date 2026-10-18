@@ -209,7 +209,7 @@ async function main() {
   check("#4 later today is accepted", status(later), "ok");
   if (!later.ok) throw new Error("create failed");
   const lb = later.value.bookings[0];
-  const pastOne = new Date("2027-03-10T11:00:00Z"); // 13:00 SAST, the meeting is under way
+  const pastOne = new Date("2027-03-10T10:30:00Z"); // 12:30 SAST, the meeting is under way
   check("#4 editing an under-way meeting's title is allowed", status(await D.updateBooking(alice, lb.id, lb.date, inp(lab.id, "2027-03-10", 720, 780, { title: "Renamed" }), pastOne)), "ok");
   check("#4 moving a booking into the past is refused", status(await D.updateBooking(alice, lb.id, lb.date, inp(lab.id, "2027-03-09", 720, 780), pastOne)), 400);
   check("#4 isPast at the minute", [isPastFn("2027-03-10", 719, noon), isPastFn("2027-03-10", 720, noon)], [true, false]);
@@ -287,6 +287,130 @@ async function main() {
 
   // #10 a dedicated limit for booking writes
   check("#10 bookingWriteUser limit", [LIMITS.bookingWriteUser.scope, LIMITS.bookingWriteUser.max], ["booking-write-user", 120]);
+
+  // ======================= second review =======================
+  const { hasEnded } = await import("../lib/roomBookings");
+  const yard = await mkRoom("Yard");
+  const putHook = blob as unknown as { put: (...a: unknown[]) => Promise<unknown> };
+  const realPut = putHook.put;
+  const quiet = async <T,>(f: () => Promise<T>) => {
+    const e = console.error;
+    console.error = () => {};
+    try {
+      return await f();
+    } finally {
+      console.error = e;
+    }
+  };
+
+  // R1 cancel series only cancels the occurrences the caller holds
+  const ser = await D.createBooking(alice, inp(yard.id, "2027-05-03", 600, 660, { recurrence: weekly(3) })); // May 3, 10, 17
+  if (!ser.ok) throw new Error("create failed");
+  const [y1, y2, y3] = ser.value.bookings;
+  await D.updateBooking(alice, y2.id, y2.date, inp(yard.id, y2.date, 600, 660, { bookedForId: "cara" }));
+  const caraCancel = await D.cancelBooking(cara, yard.id, y2.date, y2.id, "series");
+  check("R1 holder of one occurrence cancels only that one", caraCancel.ok && [caraCancel.value.count, caraCancel.value.skipped], [1, 1]);
+  check("R1 the occurrence she doesn't hold is still booked", (await D.findBooking(yard.id, y3.date, y3.id))?.status, "confirmed");
+  check("R1 earlier occurrence untouched", (await D.findBooking(yard.id, y1.date, y1.id))?.status, "confirmed");
+
+  // R2 a cancel racing a hand-over: the holder is re-checked on the record being written
+  const yardKey = [...store.keys()].find((k) => k.endsWith(`rooms/bookings/${yard.id}/2027-05.json`))!;
+  let yardReads = 0;
+  const getBefore = store.get.bind(store);
+  store.get = (k: string) => {
+    if (k === yardKey && ++yardReads === 2) {
+      const f = getBefore(k)!;
+      const list = JSON.parse(f.bytes.toString()) as Booking[];
+      const changed = list.map((b) => (b.id === y3.id ? { ...b, bookedById: "bob", bookedByName: "bob Tester", updatedAt: "x" } : b));
+      store.set(k, { ...f, bytes: Buffer.from(JSON.stringify(changed)), etag: '"handed"' });
+    }
+    return getBefore(k);
+  };
+  const raceCancel = await D.cancelBooking(alice, yard.id, y3.date, y3.id, "one");
+  store.get = getBefore;
+  check("R2 cancel after it changed hands is refused", status(raceCancel), 403);
+  check("R2 the new holder's booking survives", [(await D.findBooking(yard.id, y3.date, y3.id))?.status, (await D.findBooking(yard.id, y3.date, y3.id))?.bookedById], ["confirmed", "bob"]);
+
+  // R3 a storage failure while writing a series undoes the months already written
+  putHook.put = async (...a: unknown[]) => {
+    if (String(a[0]).endsWith(`rooms/bookings/${yard.id}/2027-07.json`)) throw new Error("store down");
+    return realPut(...a);
+  };
+  const halfSeries = await quiet(() => D.createBooking(alice, inp(yard.id, "2027-06-28", 900, 960, { recurrence: weekly(2), title: "Half" })).then(() => "returned", () => "threw")); // Jun 28, Jul 5
+  putHook.put = realPut;
+  check("R3 series write failure throws", halfSeries, "threw");
+  check("R3 the June half was undone", (await readJson<Booking[]>(`rooms/bookings/${yard.id}/2027-06.json`, [])).filter((b) => b.title === "Half").length, 0);
+
+  // R4 a failed cross-month move leaves the booking in ONE month
+  const mover = await D.createBooking(alice, inp(yard.id, "2027-08-02", 600, 660, { title: "Mover" }));
+  if (!mover.ok) throw new Error("create failed");
+  const mo = mover.value.bookings[0];
+  let augPuts = 0;
+  putHook.put = async (...a: unknown[]) => {
+    if (String(a[0]).endsWith(`rooms/bookings/${yard.id}/2027-08.json`) && ++augPuts === 1) throw new Error("store down");
+    return realPut(...a);
+  };
+  const halfMove = await quiet(() => D.updateBooking(alice, mo.id, mo.date, inp(yard.id, "2027-09-06", 600, 660, { title: "Mover" })).then(() => "returned", () => "threw"));
+  putHook.put = realPut;
+  check("R4 move failure throws", halfMove, "threw");
+  check("R4 no copy left in the new month", (await D.findBooking(yard.id, "2027-09-06", mo.id)) === null, true);
+  check("R4 still in the old month", (await D.findBooking(yard.id, "2027-08-02", mo.id))?.status, "confirmed");
+
+  // R5 no asking for, or approving, a meeting that has started
+  const soon = await D.createBooking(alice, inp(yard.id, "2027-10-20", 600, 720, { title: "Soon" }));
+  if (!soon.ok) throw new Error("create failed");
+  const sb = soon.value.bookings[0];
+  const during = new Date("2027-10-20T08:30:00Z"); // 10:30 SAST, under way
+  check("R5 asking for a started meeting refused", status(await D.requestRoom(bob, yard.id, sb.date, sb.id, { title: "x", message: "y", attendeeCount: 1 }, during)), 400);
+  const early = await D.requestRoom(bob, yard.id, sb.date, sb.id, { title: "Bob's", message: "Please", attendeeCount: 1 });
+  if (!early.ok) throw new Error("request failed");
+  check("R5 approving once it has started refused", status(await D.respondToRequest(alice, early.value.request.token, "approve", "", during)), 409);
+  const lapsed = await D.findBooking(yard.id, sb.date, sb.id);
+  check("R5 the request lapsed, the booking stayed", [lapsed?.requests[0].status, lapsed?.bookedById], ["withdrawn", "alice"]);
+
+  // R6 ended bookings are the record
+  const after = new Date("2027-10-20T11:00:00Z"); // 13:00 SAST, ended at 12:00
+  check("R6 hasEnded", [hasEnded("2027-10-20", 720, after), hasEnded("2027-10-20", 840, after)], [true, false]);
+  check("R6 editing an ended booking refused", status(await D.updateBooking(alice, sb.id, sb.date, inp(yard.id, sb.date, 600, 720, { title: "Rewritten" }), after)), 400);
+  check("R6 cancelling an ended booking refused, even for manage_rooms", status(await D.cancelBooking(admin, yard.id, sb.date, sb.id, "one", after)), 400);
+  check("R6 calendar offers no edit on an ended booking", D.bookingView({ ...sb, date: "2020-01-01" }, admin).canEdit, false);
+
+  // R9 one display-name rule
+  check("R9 displayName", [D.displayName({ name: "Jane", surname: "Doe", email: "j@x" }), D.displayName({ name: " ", surname: "", email: "j@x" })], ["Jane Doe", "j@x"]);
+
+  // R7 + R8 through the real routes
+  process.env.AUTH_SECRET ||= "room-bookings-test-secret";
+  const { NextRequest } = await import("next/server");
+  const { DEFAULT_ROLES } = await import("../lib/roles");
+  const { saveRoles } = await import("../lib/rolesData");
+  const { createSessionToken, SESSION_COOKIE } = await import("../lib/session");
+  const { tenantScope } = await import("../lib/tenantContext");
+  const { key: tenantKey } = await tenantScope();
+  await saveRoles(DEFAULT_ROLES);
+  const erin = await createUser({ id: "erin", name: "Erin", surname: "Member", email: "erin@example.test", password: "pw-erin", role: "sgb-member", forcePasswordChange: false, tagIds: [] });
+  const sam = await createUser({ id: "sam", name: "Sam", surname: "Super", email: "sam@example.test", password: "pw-sam", role: "super-admin", forcePasswordChange: false, tagIds: [] });
+  const get = (as: { id: string; password: string }, path: string) =>
+    new NextRequest(`http://school.test${path}`, { headers: { cookie: `${SESSION_COOKIE}=${createSessionToken(as, tenantKey)}`, host: "school.test" } });
+  const peopleRoute = await import("../app/api/bookings/people/route");
+  const asMember = (await (await peopleRoute.GET(get(erin, "/api/bookings/people"))).json()) as { email?: string }[];
+  const asSuper = (await (await peopleRoute.GET(get(sam, "/api/bookings/people"))).json()) as { email?: string }[];
+  check("R7 booker sees names, no emails", [asMember.length > 0, asMember.some((p) => "email" in p)], [true, false]);
+  check("R7 user-list viewer still sees emails", asSuper.every((p) => typeof p.email === "string"), true);
+
+  const erinBooking = await D.createBooking(D.actorOf({ id: "erin", name: "Erin", surname: "Member", email: "erin@example.test", role: "sgb-member", roleName: "", permissions: ["book_rooms"] }), inp(yard.id, "2027-11-15", 600, 660));
+  if (!erinBooking.ok) throw new Error("create failed");
+  const eb = erinBooking.value.bookings[0];
+  const samAsk = await D.requestRoom(D.actorOf({ id: "sam", name: "Sam", surname: "Super", email: "sam@example.test", role: "super-admin", roleName: "", permissions: ["book_rooms", "manage_rooms"] }), yard.id, eb.date, eb.id, { title: "Sam's", message: "Please", attendeeCount: 1 });
+  if (!samAsk.ok) throw new Error("request failed");
+  const reqRoute = await import("../app/api/bookings/request/[token]/route");
+  const roleOf = async (as: { id: string; password: string }) =>
+    ((await (await reqRoute.GET(get(as, `/api/bookings/request/${samAsk.value.request.token}`), { params: Promise.resolve({ token: samAsk.value.request.token }) })).json()) as { viewerRole: string; holderName: string });
+  const holderView = await roleOf(erin);
+  check("R8 holder gets holder wording", holderView.viewerRole, "holder");
+  check("R8 requester gets requester wording", (await roleOf(sam)).viewerRole, "requester");
+  check("R9 holder label comes from holderLabel()", holderView.holderName, "Erin Member");
+  const mia = await createUser({ id: "mia", name: "Mia", surname: "Admin", email: "mia@example.test", password: "pw-mia", role: "sgb-admin", forcePasswordChange: false, tagIds: [] });
+  check("R8 a room manager gets neutral wording", (await roleOf(mia)).viewerRole, "manager");
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);

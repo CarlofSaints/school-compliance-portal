@@ -15,6 +15,7 @@ import {
   addDays,
   sastToday,
   isPast,
+  hasEnded,
   type Recurrence,
 } from "./roomBookings";
 
@@ -98,14 +99,22 @@ export interface Actor {
   permissions: string[];
 }
 
+/** How a person is named on bookings, emails and pickers: "Name Surname", or
+ *  their email if both are blank. One rule, used everywhere. */
+export function displayName(u: { name?: string; surname?: string; email: string }): string {
+  return `${u.name ?? ""} ${u.surname ?? ""}`.trim() || u.email;
+}
+
 export function actorOf(s: SessionPayload): Actor {
-  return { id: s.id, name: `${s.name} ${s.surname}`.trim() || s.email, email: s.email, permissions: s.permissions };
+  return { id: s.id, name: displayName(s), email: s.email, permissions: s.permissions };
 }
 
 export type Outcome<V = undefined> =
   | { ok: true; value: V; notice?: string }
   | { ok: false; status: number; error: string };
 
+const ENDED = "That booking has already ended, so it stays as the record.";
+const STARTED = "That meeting has already started, so it can no longer be handed over.";
 const PAST = "That time has already passed. Pick a time from now on.";
 
 const fail = (status: number, error: string): { ok: false; status: number; error: string } => ({ ok: false, status, error });
@@ -159,7 +168,8 @@ export function bookingView(b: RoomBooking, actor: Actor) {
     pendingRequests: b.requests.filter((r) => r.status === "pending").length,
     iAsked: b.requests.some((r) => r.status === "pending" && r.requesterId === actor.id),
     isMine: mine,
-    canEdit: mine || canManageRooms(actor),
+    // An ended booking is the record: nobody edits or cancels it.
+    canEdit: (mine || canManageRooms(actor)) && !hasEnded(b.date, b.endMinute),
   };
 }
 
@@ -437,7 +447,7 @@ async function resolveBookedFor(bookedForId: string, ownerId: string) {
   if (!bookedForId || bookedForId === ownerId) return { ok: true as const, person: null };
   const u = await getUserById(bookedForId);
   if (!u) return { ok: false as const };
-  return { ok: true as const, person: { id: u.id, name: `${u.name} ${u.surname}`.trim() || u.email, email: u.email } };
+  return { ok: true as const, person: { id: u.id, name: displayName(u), email: u.email } };
 }
 
 // --- Create ----------------------------------------------------------------------
@@ -493,17 +503,27 @@ export async function createBooking(actor: Actor, input: BookingInput, nowAt: Da
 
   // Then write, re-checking inside each file's own atomic update.
   const written: string[] = [];
+  const ids = new Set(bookings.map((b) => b.id));
+  const undo = async (months: string[]) => {
+    for (const m of months) {
+      await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (list) => (list.some((b) => ids.has(b.id)) ? list.filter((b) => !ids.has(b.id)) : NO_CHANGE));
+    }
+  };
   for (const [month, mine] of byMonth) {
     let clash: { slot: { date: string }; clash: RoomBooking } | null = null;
-    await updateJson<RoomBooking[]>(fileFor(room.id, month), [], (list) => {
-      clash = findConflicts(mine, list.filter((b) => b.status === "confirmed"))[0] ?? null;
-      return clash ? NO_CHANGE : [...list, ...mine];
-    });
+    try {
+      await updateJson<RoomBooking[]>(fileFor(room.id, month), [], (list) => {
+        clash = findConflicts(mine, list.filter((b) => b.status === "confirmed"))[0] ?? null;
+        return clash ? NO_CHANGE : [...list, ...mine];
+      });
+    } catch (err) {
+      // 🔴 Not a clash but a storage failure: still never leave half a series.
+      // This month is undone too, in case the write landed before it failed.
+      await undo([...written, month]).catch((e) => console.error("[rooms] could not undo a half-written series:", e));
+      throw err;
+    }
     if (clash) {
-      const ids = new Set(bookings.map((b) => b.id));
-      for (const m of written) {
-        await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (list) => list.filter((b) => !ids.has(b.id)));
-      }
+      await undo(written);
       const c = clash as { slot: { date: string }; clash: RoomBooking };
       return fail(409, clashMessage(room.name, c.slot.date, c.clash, 0));
     }
@@ -534,6 +554,8 @@ export async function updateBooking(
   if (!before) return fail(404, "That booking no longer exists");
   if (before.status !== "confirmed") return fail(400, "That booking has been cancelled");
   if (!isHolder(before, actor.id) && !canManageRooms(actor)) return fail(403, "Only the people holding this room can change it");
+  // An ended booking is the record of who had the room; one under way may still change.
+  if (hasEnded(before.date, before.endMinute, nowAt)) return fail(400, ENDED);
   const room = await getRoom(before.roomId);
   if (!room || !room.active) return fail(400, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}`);
@@ -601,15 +623,24 @@ export async function updateBooking(
       return [...list.filter((b) => b.id !== id), after];
     });
     if (!error) {
-      await updateJson<RoomBooking[]>(fromFile, [], (list) => {
-        error = null;
-        const cur = list.find((b) => b.id === id);
-        if (!cur || cur.updatedAt !== before.updatedAt) {
-          error = { status: 409, error: "Someone changed this booking a moment ago. Reload and try again." };
-          return NO_CHANGE;
-        }
-        return list.filter((b) => b.id !== id);
-      });
+      try {
+        await updateJson<RoomBooking[]>(fromFile, [], (list) => {
+          error = null;
+          const cur = list.find((b) => b.id === id);
+          if (!cur || cur.updatedAt !== before.updatedAt) {
+            error = { status: 409, error: "Someone changed this booking a moment ago. Reload and try again." };
+            return NO_CHANGE;
+          }
+          return list.filter((b) => b.id !== id);
+        });
+      } catch (err) {
+        // 🔴 The old copy could not be removed: take the new one back out, so
+        // the booking is never in two months at once.
+        await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id)).catch((e) =>
+          console.error("[rooms] could not undo a half-moved booking:", e)
+        );
+        throw err;
+      }
       if (error) await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id));
       // The request links point at a month file; follow the booking to its new one.
       if (!error) {
@@ -632,20 +663,29 @@ const withdrawAll = (b: RoomBooking, now: string): RoomRequest[] =>
   b.requests.map((r) => (r.status === "pending" ? { ...r, status: "withdrawn" as const, respondedAt: now } : r));
 
 /** "one" cancels this occurrence. "series" cancels this one and every later
- *  confirmed occurrence still in the series; past ones are left as the record. */
+ *  confirmed occurrence still in the series; ended ones are left as the record.
+ *
+ *  🔴 Who may cancel is decided PER OCCURRENCE, inside the atomic write, from
+ *  the record as it is now: an occurrence handed to someone else (edited to be
+ *  for them, or given away on request) is theirs, and is skipped and counted
+ *  rather than cancelled from under them. A booking that has ended is the
+ *  record of who had the room and cannot be cancelled by anyone. */
 export async function cancelBooking(
   actor: Actor,
   roomId: string,
   date: string,
   id: string,
-  scope: "one" | "series"
-): Promise<Outcome<{ booking: RoomBooking; count: number }>> {
+  scope: "one" | "series",
+  nowAt: Date = new Date()
+): Promise<Outcome<{ booking: RoomBooking; count: number; skipped: number }>> {
   const booking = await findBooking(roomId, date, id);
   if (!booking) return fail(404, "That booking no longer exists");
   if (!isHolder(booking, actor.id) && !canManageRooms(actor)) return fail(403, "Only the people holding this room can cancel it");
   if (booking.status !== "confirmed") return fail(400, "That booking is already cancelled");
+  if (hasEnded(booking.date, booking.endMinute, nowAt)) return fail(400, ENDED);
 
   const now = new Date().toISOString();
+  const mayCancel = (b: RoomBooking) => isHolder(b, actor.id) || canManageRooms(actor);
   const cancel = (b: RoomBooking): RoomBooking => ({
     ...b,
     status: "cancelled",
@@ -655,38 +695,60 @@ export async function cancelBooking(
     updatedAt: now,
   });
   let count = 0;
+  let skipped = 0;
 
   if (scope === "series" && booking.seriesId) {
-    // This occurrence and every later one; past ones stay as the record.
     const from = booking.date;
-    const today = sastToday();
     const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
       .map((f) => f.replace(/\.json$/, ""))
       .filter((m) => m >= monthOf(from))
       .sort();
     for (const m of months) {
       let n = 0;
+      let k = 0;
       await updateJson<RoomBooking[]>(fileFor(roomId, m), [], (list) => {
         n = 0;
+        k = 0;
         const next = list.map((b) => {
-          if (b.seriesId !== booking.seriesId || b.status !== "confirmed" || ((b.date < from || b.date < today) && b.id !== id)) return b;
+          if (b.seriesId !== booking.seriesId || b.status !== "confirmed" || b.date < from) return b;
+          if (hasEnded(b.date, b.endMinute, nowAt)) return b;
+          if (!mayCancel(b)) {
+            k++;
+            return b;
+          }
           n++;
           return cancel(b);
         });
         return n === 0 ? NO_CHANGE : next;
       });
       count += n;
+      skipped += k;
     }
+    if (count === 0) return fail(403, "Only the people holding this room can cancel it");
   } else {
+    let error: { status: number; error: string } | null = null;
     await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(booking.date)), [], (list) => {
       count = 0;
+      error = null;
       const cur = list.find((b) => b.id === id);
-      if (!cur || cur.status !== "confirmed") return NO_CHANGE;
+      if (!cur || cur.status !== "confirmed") {
+        error = { status: 409, error: "That booking was cancelled or moved a moment ago. Reload and try again." };
+        return NO_CHANGE;
+      }
+      // Re-checked on the record being written: it may have changed hands since it was read.
+      if (!mayCancel(cur)) {
+        error = { status: 403, error: "Only the people holding this room can cancel it" };
+        return NO_CHANGE;
+      }
       count = 1;
       return list.map((b) => (b.id === id ? cancel(b) : b));
     });
+    if (error) {
+      const e = error as { status: number; error: string };
+      return fail(e.status, e.error);
+    }
   }
-  return { ok: true, value: { booking, count } };
+  return { ok: true, value: { booking, count, skipped } };
 }
 
 // --- Ask the holder for the room --------------------------------------------------
@@ -718,12 +780,15 @@ export async function requestRoom(
   roomId: string,
   date: string,
   id: string,
-  input: RequestInput
+  input: RequestInput,
+  nowAt: Date = new Date()
 ): Promise<Outcome<{ booking: RoomBooking; room: Room; request: RoomRequest }>> {
   if (!canBookRooms(actor)) return fail(403, "You can't book rooms");
   const booking = await findBooking(roomId, date, id);
   if (!booking || booking.status !== "confirmed") return fail(404, "That booking is no longer live");
   if (isHolder(booking, actor.id)) return fail(400, "You already have this room");
+  // Nobody can hand over a meeting that has already started.
+  if (isPast(booking.date, booking.startMinute, nowAt)) return fail(400, STARTED);
   const room = await getRoom(roomId);
   if (!room || !room.active) return fail(404, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} only seats ${room.capacity}`);
@@ -791,7 +856,8 @@ export async function respondToRequest(
   actor: Actor,
   token: string,
   decision: "approve" | "decline",
-  reason: string
+  reason: string,
+  nowAt: Date = new Date()
 ): Promise<Outcome<{ before: RoomBooking; after: RoomBooking; request: RoomRequest; room: Room | null }>> {
   if (decision === "decline" && !reason.trim()) return fail(400, "Please say why. They'll only see the reason you give.");
   if (!isId(token)) return fail(404, "That request no longer exists");
@@ -823,6 +889,16 @@ export async function respondToRequest(
       return NO_CHANGE;
     }
     const now = new Date().toISOString();
+    // Too late to hand over a meeting that has started: the request lapses.
+    // Declining is still allowed, it changes nothing.
+    if (decision === "approve" && isPast(cur.date, cur.startMinute, nowAt)) {
+      error = { status: 409, error: "That meeting time has already passed, so the request has lapsed." };
+      return list.map((b) =>
+        b.id === cur.id
+          ? { ...b, requests: b.requests.map((r) => (r.token === token ? { ...r, status: "withdrawn" as const, respondedAt: now } : r)), updatedAt: now }
+          : b
+      );
+    }
     answered = decision === "approve"
       ? { ...req, status: "approved", respondedAt: now }
       : { ...req, status: "declined", declineReason: reason.trim().slice(0, 1000), respondedAt: now };

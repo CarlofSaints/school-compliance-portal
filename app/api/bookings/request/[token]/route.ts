@@ -3,7 +3,7 @@ import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { actorOf, getRequestView, respondToRequest } from "@/lib/roomBookingData";
+import { actorOf, getRequestView, holderLabel, isHolder, respondToRequest } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
 import { notifyRequestOutcome } from "@/lib/roomBookingNotify";
 
@@ -33,7 +33,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       startMinute: booking.startMinute,
       endMinute: booking.endMinute,
       yourMeeting: booking.title,
-      holderName: booking.bookedForName ? `${booking.bookedForName} / ${booking.bookedByName}` : booking.bookedByName,
+      holderName: holderLabel(booking),
+      // Which wording the page uses: the holder answering, the person who asked, or a room manager looking on.
+      viewerRole: isHolder(booking, session.id) ? "holder" : request.requesterId === session.id ? "requester" : "manager",
     },
     { headers: { "Cache-Control": "no-store" } }
   );

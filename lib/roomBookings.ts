@@ -116,6 +116,12 @@ export function isPast(date: string, startMinute: number, now: Date = new Date()
   return date < today || (date === today && startMinute < sastNowMinute(now));
 }
 
+/** A booking whose end has come: an earlier day, or ended earlier today. */
+export function hasEnded(date: string, endMinute: number, now: Date = new Date()): boolean {
+  const today = sastToday(now);
+  return date < today || (date === today && endMinute <= sastNowMinute(now));
+}
+
 export const DAY_SHORT = [tk("Mon"), tk("Tue"), tk("Wed"), tk("Thu"), tk("Fri"), tk("Sat"), tk("Sun")];
 const MONTH_SHORT = [
   tk("Jan"), tk("Feb"), tk("Mar"), tk("Apr"), tk("May"), tk("Jun"),

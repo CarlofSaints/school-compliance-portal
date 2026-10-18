@@ -1663,5 +1663,16 @@
   "{base}, {count} times": "{base}, makga a {count}",
   "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Dipukelo tše {n} tše di tlago di khanseletšwe, eupša dimeile tše dingwe go beng ba tšona ga se tša kgona go romelwa.",
   "{n} upcoming booking(s) cancelled and their holders emailed.": "Dipukelo tše {n} tše di tlago di khanseletšwe gomme beng ba tšona ba romeletšwe imeile.",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emiša \"{name}\"? E ka se sa tšwelela go dipukelo tše mpsha. Dipukelo tše di tlago di tla khanselwa gomme beng ba tšona ba romelwe imeile; tše di fetilego di tla bolokwa."
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emiša \"{name}\"? E ka se sa tšwelela go dipukelo tše mpsha. Dipukelo tše di tlago di tla khanselwa gomme beng ba tšona ba romelwe imeile; tše di fetilego di tla bolokwa.",
+  "Search by name...": "Nyaka ka leina...",
+  "{n} held by someone else were left alone.": "Tše {n} tša motho yo mongwe di tlogetšwe bjalo.",
+  "Your request for {room}": "Kgopelo ya gago ya {room}",
+  "Waiting for {holder} to answer. The room stays theirs unless they agree.": "Re letile {holder} gore a arabe. Phapoši e dula e le ya bona ntle le ge ba dumela.",
+  "A request for {room}": "Kgopelo ya {room}",
+  "{requester} is asking {holder} for this room. Nothing changes unless it is agreed.": "{requester} o kgopela {holder} phapoši ye. Ga go se se fetogago ntle le ge go dumelelanwa.",
+  "Booked meeting": "Kopano ye e pukilwego",
+  "You wrote:": "O ngwadile:",
+  "You have the room. It is booked in your name.": "O na le phapoši. E pukilwe ka leina la gago.",
+  "{holder} kept the room.": "{holder} o bolokile phapoši.",
+  "Waiting for {holder} to answer. You will get an email either way.": "Re letile {holder} gore a arabe. O tla hwetša imeile go sa šetšwe karabo."
 }

@@ -69,7 +69,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const actor = actorOf(session);
   const result = await cancelBooking(actor, roomId, date, id, scope);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  const { booking, count } = result.value;
+  const { booking, count, skipped } = result.value;
   await recordActivity({
     ...actorFrom(req, session),
     action: scope === "series" ? "booking.series_cancelled" : "booking.cancelled",
@@ -77,7 +77,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     entityId: id,
     summary:
       `Cancelled ${scope === "series" ? `${count} booking${count === 1 ? "" : "s"} in the series ` : ""}"${booking.title}" from ${longDateLabel(booking.date)}` +
+      (skipped ? ` (${skipped} held by someone else left alone)` : "") +
       (isHolder(booking, actor.id) ? "" : ` (held by ${holderLabel(booking)})`),
   });
-  return NextResponse.json({ ok: true, count });
+  return NextResponse.json({ ok: true, count, skipped });
 }

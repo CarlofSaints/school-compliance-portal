@@ -1663,5 +1663,16 @@
   "{base}, {count} times": "{base}, amaxesha ali-{count}",
   "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Ukubhukisha okuzayo oku-{n} kurhoxisiwe, kodwa ezinye ii-imeyile kubanini bako azikwazanga ukuthunyelwa.",
   "{n} upcoming booking(s) cancelled and their holders emailed.": "Ukubhukisha okuzayo oku-{n} kurhoxisiwe kwaye abanini bako bathunyelwe i-imeyile.",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Misa \"{name}\"? Aliyi kuphinda livele kukubhukisha okutsha. Ukubhukisha okuzayo kuya kurhoxiswa kwaye abanini bako bathunyelwe i-imeyile; okudlulileyo kuya kugcinwa."
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Misa \"{name}\"? Aliyi kuphinda livele kukubhukisha okutsha. Ukubhukisha okuzayo kuya kurhoxiswa kwaye abanini bako bathunyelwe i-imeyile; okudlulileyo kuya kugcinwa.",
+  "Search by name...": "Khangela ngegama...",
+  "{n} held by someone else were left alone.": "Oku-{n} okungokomnye umntu kushiyiwe kunjalo.",
+  "Your request for {room}": "Isicelo sakho se-{room}",
+  "Waiting for {holder} to answer. The room stays theirs unless they agree.": "Kulindwe u-{holder} ukuba aphendule. Igumbi lihlala lilelabo ngaphandle kokuba bayavuma.",
+  "A request for {room}": "Isicelo se-{room}",
+  "{requester} is asking {holder} for this room. Nothing changes unless it is agreed.": "U-{requester} ucela u-{holder} eli gumbi. Akukho nto itshintshayo ngaphandle kokuba kuvunyelwene.",
+  "Booked meeting": "Intlanganiso ebhukishiweyo",
+  "You wrote:": "Ubhale:",
+  "You have the room. It is booked in your name.": "Unalo igumbi. Libhukishwe egameni lakho.",
+  "{holder} kept the room.": "U-{holder} ligcinile igumbi.",
+  "Waiting for {holder} to answer. You will get an email either way.": "Kulindwe u-{holder} ukuba aphendule. Uya kufumana i-imeyile nokuba kunjani."
 }
