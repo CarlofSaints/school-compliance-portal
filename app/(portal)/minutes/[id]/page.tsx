@@ -4,7 +4,7 @@ import TranslateContentButton from "@/components/TranslateContentButton";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth, authFetch } from "@/lib/useAuth";
+import { useAuth, authFetch, isRedirectingToSignIn, isSigningOut, onSignInRedirect } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
@@ -15,12 +15,16 @@ import {
   draftToOffer,
   hasUnsaved,
   isTextEditable,
+  mergeOffered,
   readDraft,
+  readOffered,
   reconcile,
   removeDraft,
-  sameText,
+  retryDelayMs,
+  saveFailureKind,
   textOf,
   writeDraft,
+  writeOffered,
   type EditVersions,
   type MinutesText,
   type SaveFirst,
@@ -71,9 +75,6 @@ interface MinutesDetail {
   updatedAt?: string;
 }
 
-// Autosave retries after a failure: further apart each time, then every 30s.
-const RETRY_MS = [5000, 15000, 30000];
-
 // localStorage can throw on access (private mode, blocked site data).
 function localStore(): Storage | null {
   try {
@@ -85,12 +86,25 @@ function localStore(): Storage | null {
 type BackupKeys = ReturnType<typeof backupKeys>;
 /** The local backup of unsaved typing (lib/minutesAutosave.ts says why). */
 function backUp(keys: BackupKeys | null, r: MinutesDetail) {
-  if (!keys) return;
+  // Signing out discards on purpose: never write a backup back behind it.
+  if (!keys || isSigningOut()) return;
   writeDraft(localStore(), keys.main, {
     ...textOf(r),
     editedAt: new Date().toISOString(),
     baseUpdatedAt: r.updatedAt,
   });
+}
+
+/** Unsaved text shown in a banner to restore or copy. */
+interface OfferedItem {
+  id: string;
+  draft: MinutesText;
+  editedAt?: string;
+  /** device: a backup from an earlier visit. locked: typing this visit that
+   *  the minutes were locked before it could be saved. */
+  reason: "device" | "locked";
+  /** The saved minutes changed after this backup's edits began. */
+  behind?: boolean;
 }
 
 export default function MinutesDetailPage() {
@@ -119,23 +133,17 @@ export default function MinutesDetailPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [actionsRefresh, setActionsRefresh] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  // Consecutive failed saves (network or server error): drives the retry
-  // backoff and the "Not saved" note, so a failing autosave never turns into
-  // a stream of toasts.
+  // Consecutive failed saves worth retrying (network, timeout, rate limit,
+  // server error): drives the backoff and the "Not saved" note, so a failing
+  // autosave never turns into a stream of toasts.
   const [saveFailures, setSaveFailures] = useState(0);
-  // The server refused the save outright (locked, invalid, not allowed). The
+  // The server refused the save outright (invalid, not allowed, locked). The
   // same text would be refused again, so autosave stops until the next edit.
   const [saveRefused, setSaveRefused] = useState<string | null>(null);
-  // Unsaved text that is not in the editor: a backup from an earlier visit on
-  // this device, or typing the server would no longer take because the
-  // minutes were locked meanwhile. Shown to restore or copy.
-  const [offered, setOffered] = useState<{
-    draft: MinutesText;
-    editedAt?: string;
-    reason: "device" | "locked";
-    /** The saved minutes changed after this backup's edits began. */
-    behind?: boolean;
-  } | null>(null);
+  // Unsaved text that is not in the editor: backups from earlier visits on
+  // this device (newest first), or typing the server would no longer take
+  // because the minutes were locked meanwhile. Each can be restored or copied.
+  const [offered, setOffered] = useState<OfferedItem[]>([]);
 
   // ONE rule for who may change what, used by the autosave and the page alike.
   const locked = !!record && isLocked(record.status);
@@ -157,10 +165,10 @@ export default function MinutesDetailPage() {
   const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Set once the signed-in person and the minutes are known (first load).
   const keysRef = useRef<BackupKeys | null>(null);
-  // A restored backup is only let go of once its text is safely saved.
-  const clearOfferedOnSave = useRef(false);
-  // Signed out mid-save: the redirect to sign-in must not stop on "Leave site?".
-  const skipLeaveWarning = useRef(false);
+  // A restored backup (its editedAt) is only let go of once its text is saved.
+  const restoredOffer = useRef<string | null>(null);
+  // The server's Retry-After on the last transient failure, if it sent one.
+  const retryAfter = useRef<string | null>(null);
   /** Nothing left to save or back up: the minutes are gone, or the user chose
    *  to lose the changes. */
   const forgetUnsaved = () => {
@@ -193,23 +201,29 @@ export default function MinutesDetailPage() {
           // Backed up first: the throttled write may not have run yet.
           if (local) backUp(keys, local);
           versions.current.saved = versions.current.edit;
-          setOffered({ draft: stranded, reason: "locked" });
+          setOffered((prev) => [{ id: "locked", draft: stranded, reason: "locked" }, ...prev.filter((o) => o.id !== "locked")]);
         }
         setDirty(hasUnsaved(versions.current));
         if (first && keys) {
-          // Typing left over from an earlier visit moves aside to its own key,
-          // so this visit's backups cannot overwrite or remove it. Only Restore
-          // (once saved) or Discard lets it go.
+          // Typing left over from an earlier visit joins the offered list, apart
+          // from this visit's own slot, so nothing typed now can overwrite or
+          // remove it. Only Restore (once saved) or Discard lets one go.
           const store = localStore();
           const fresh = draftToOffer(readDraft(store, keys.main), server);
-          if (fresh) writeDraft(store, keys.offered, fresh);
-          if (!fresh || readDraft(store, keys.offered)?.editedAt === fresh.editedAt) removeDraft(store, keys.main);
-          const draft = fresh ?? draftToOffer(readDraft(store, keys.offered), server);
-          if (draft) {
-            setOffered({ draft, editedAt: draft.editedAt, reason: "device", behind: draftIsBehind(draft, server) });
-          } else {
-            removeDraft(store, keys.offered);
+          const list = mergeOffered(readOffered(store, keys.offered), fresh, server);
+          writeOffered(store, keys.offered, list);
+          if (!fresh || readOffered(store, keys.offered).some((d) => d.editedAt === fresh.editedAt)) {
+            removeDraft(store, keys.main);
           }
+          setOffered(
+            list.map((d) => ({
+              id: d.editedAt,
+              draft: d,
+              editedAt: d.editedAt,
+              reason: "device" as const,
+              behind: draftIsBehind(d, server),
+            }))
+          );
         }
       } else {
         setToast({ message: t("Those minutes could not be found."), type: "error" });
@@ -222,6 +236,17 @@ export default function MinutesDetailPage() {
   useEffect(() => {
     if (session) load();
   }, [session, load]);
+
+  // Any request on this page can hit a 401 (a reload, a panel, an action
+  // item). Back up first; the banner brings the typing back after sign-in.
+  useEffect(
+    () =>
+      onSignInRedirect(() => {
+        const r = recordRef.current;
+        if (r && hasUnsaved(versions.current)) backUp(keysRef.current, r);
+      }),
+    []
+  );
 
   // "+ Add to action items" under a section: one click puts the point on the
   // register with just a name and the minuted wording. Who, when and how
@@ -257,43 +282,40 @@ export default function MinutesDetailPage() {
   // Save shows. Autosave failures stay quiet.
   const lastSaveError = useRef<string | null>(null);
 
-  /** One PATCH of the text as it is now. True when the server took it, which
-   *  is not the same as clean: typing may have carried on meanwhile. */
-  const sendSave = async (): Promise<boolean> => {
+  /** One PATCH of the text as it is now: the only way the page saves, for
+   *  autosave, Save, save-before-acting and leaving alike. True when the
+   *  server took it, which is not the same as clean: typing may have carried
+   *  on meanwhile. keepalive is for a tab that is closing. */
+  const sendSave = async (opts: { keepalive?: boolean } = {}): Promise<boolean> => {
     const r = recordRef.current;
     if (!r) return false;
     const version = versions.current.edit;
+    const sentAt = new Date().toISOString();
+    const body = JSON.stringify(textOf(r));
+    // keepalive requests share a 64KB budget; past that the backup has to do.
+    if (opts.keepalive && new TextEncoder().encode(body).length >= 64_000) return false;
     setSaving(true);
     try {
-      const res = await authFetch(
-        `/api/minutes/${r.id}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(textOf(r)),
-        },
-        // Signed out: back up now and let the sign-in redirect through. The
-        // backup banner brings the typing back after signing in.
-        () => {
-          if (recordRef.current) backUp(keysRef.current, recordRef.current);
-          skipLeaveWarning.current = true;
-        }
-      );
+      const res = await authFetch(`/api/minutes/${r.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: opts.keepalive,
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         lastSaveError.current = data.error || t("Could not save.");
-        if (res.status === 401) {
-          // Already on the way to sign-in; just stop autosaving.
-          setSaveRefused(lastSaveError.current);
-        } else if (res.status >= 500) {
+        const kind = saveFailureKind(res.status);
+        if (kind === "transient") {
+          retryAfter.current = res.headers.get("Retry-After");
           setSaveFailures((n) => n + 1);
         } else {
-          // Locked, invalid or not allowed: retrying the same text cannot
-          // help. Re-read, which moves the typing to the banner if the
-          // minutes were locked meanwhile.
+          // Signed out (already on the way to sign-in) or refused: retrying the
+          // same text cannot help, so autosave stops.
           setSaveRefused(lastSaveError.current);
-          // A failed re-read leaves the refusal note up; nothing more to say.
-          load().catch(() => {});
+          // A refusal may mean the minutes were locked meanwhile: re-read, which
+          // moves the typing to the banner. A failed re-read leaves the note up.
+          if (kind === "refused") load().catch(() => {});
         }
         return false;
       }
@@ -304,18 +326,26 @@ export default function MinutesDetailPage() {
       const unsaved = hasUnsaved(versions.current);
       put(reconcile<MinutesDetail>(data, recordRef.current, unsaved).record);
       setDirty(unsaved);
-      if (!unsaved && keysRef.current) {
-        removeDraft(localStore(), keysRef.current.main);
-        if (clearOfferedOnSave.current) {
-          removeDraft(localStore(), keysRef.current.offered);
-          clearOfferedOnSave.current = false;
+      const keys = keysRef.current;
+      if (!unsaved && keys) {
+        // Only a backup made before this save went out holds nothing newer
+        // than it. One written after (the minutes opened again since, say) stays.
+        const store = localStore();
+        const d = readDraft(store, keys.main);
+        if (d && d.editedAt <= sentAt) removeDraft(store, keys.main);
+        if (restoredOffer.current) {
+          const gone = restoredOffer.current;
+          writeOffered(store, keys.offered, readOffered(store, keys.offered).filter((o) => o.editedAt !== gone));
+          restoredOffer.current = null;
         }
       }
       lastSaveError.current = null;
+      retryAfter.current = null;
       setSaveFailures(0);
       setSaveRefused(null);
       return true;
     } catch {
+      // Network: worth retrying.
       lastSaveError.current = t("Could not save.");
       setSaveFailures((n) => n + 1);
       return false;
@@ -324,12 +354,12 @@ export default function MinutesDetailPage() {
     }
   };
 
-  /** Saves once, after any save already running (which sent an older copy).
-   *  Nothing unsaved counts as success. */
-  const saveOnce = async (): Promise<boolean> => {
+  /** Saves once, after any save already running (which sent an older copy),
+   *  so two PATCHes never race. Nothing unsaved counts as success. */
+  const saveOnce = async (opts: { keepalive?: boolean } = {}): Promise<boolean> => {
     while (inFlight.current) await inFlight.current;
     if (!hasUnsaved(versions.current)) return true;
-    const p = sendSave();
+    const p = sendSave(opts);
     inFlight.current = p;
     try {
       return await p;
@@ -372,7 +402,7 @@ export default function MinutesDetailPage() {
   // every failure and record on every success, so the timer always re-arms.
   useEffect(() => {
     if (!dirty || !textEditable || saveRefused) return;
-    const delay = saveFailures === 0 ? 3000 : RETRY_MS[Math.min(saveFailures, RETRY_MS.length) - 1];
+    const delay = saveFailures === 0 ? 3000 : retryDelayMs(saveFailures, retryAfter.current);
     const timer = setTimeout(() => {
       void saveOnce();
     }, delay);
@@ -382,30 +412,21 @@ export default function MinutesDetailPage() {
   }, [record, dirty, textEditable, saveFailures, saveRefused]);
 
   // Leaving by the sidebar or any in-app link fires no beforeunload. Back up
-  // and send what is unsaved on the way out; best effort, as the backup
-  // covers a save that does not land.
+  // and save on the way out, through the same queue as autosave so it waits
+  // for a save in flight instead of racing it. Best effort: the backup covers
+  // a save that does not land.
   useEffect(
     () => () => {
       const r = recordRef.current;
-      const keys = keysRef.current;
       if (!r || !hasUnsaved(versions.current) || !isTextEditable(r.status)) return;
-      backUp(keys, r);
-      const sent = textOf(r);
-      fetch(`/api/minutes/${r.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sent),
-        credentials: "same-origin",
-      })
-        .then((res) => {
-          // Saved, so the backup can go: but only if it still holds what was
-          // sent, as the minutes may have been opened and typed in again since.
-          if (!res.ok || !keys) return;
-          const d = readDraft(localStore(), keys.main);
-          if (d && sameText(d, sent)) removeDraft(localStore(), keys.main);
-        })
-        .catch(() => {});
+      // Signing out discards on purpose; a 401 has already backed up and has
+      // no session to save with.
+      if (isSigningOut() || isRedirectingToSignIn()) return;
+      backUp(keysRef.current, r);
+      void saveOnce();
     },
+    // Runs once, on the way out; saveOnce reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
@@ -422,18 +443,27 @@ export default function MinutesDetailPage() {
     }
   };
 
-  // Closing the tab or reloading with unsaved typing asks first, and backs it
-  // up now rather than waiting for the next throttled write.
+  // Closing the tab or reloading with unsaved typing: back up now rather than
+  // at the next throttled write, try a keepalive save, and ask first. Not when
+  // signing out (discarded on purpose) or on the way to sign-in (the prompt
+  // would stop the redirect; the backup brings the text back).
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => {
-      if (recordRef.current) backUp(keysRef.current, recordRef.current);
-      if (skipLeaveWarning.current) return;
+      if (isSigningOut()) return;
+      const r = recordRef.current;
+      if (r) {
+        backUp(keysRef.current, r);
+        if (isTextEditable(r.status) && !isRedirectingToSignIn()) void saveOnce({ keepalive: true });
+      }
+      if (isRedirectingToSignIn()) return;
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
+    // saveOnce reads only refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty]);
 
   // Returns an error message to keep the dialog open, per DangerConfirmModal.
@@ -460,7 +490,10 @@ export default function MinutesDetailPage() {
     versions.current.edit += 1;
     if (recordRef.current) put({ ...recordRef.current, ...u });
     setDirty(true);
+    // A fresh edit is a fresh start: the normal 3 second autosave again.
     setSaveRefused(null);
+    setSaveFailures(0);
+    retryAfter.current = null;
     // Back up at most once a second while typing.
     if (!backupTimer.current) {
       backupTimer.current = setTimeout(() => {
@@ -470,28 +503,60 @@ export default function MinutesDetailPage() {
     }
   };
 
-  const restoreOffered = () => {
-    if (!offered) return;
-    if (
-      offered.behind &&
-      !window.confirm(t("This replaces the newer saved text with the backup. Restore it anyway?"))
-    ) {
+  const restoreOffered = (item: OfferedItem) => {
+    if (item.behind && !window.confirm(t("This replaces the newer saved text with the backup. Restore it anyway?"))) {
       return;
     }
-    clearOfferedOnSave.current = true;
-    patch(textOf(offered.draft) as Partial<MinutesDetail>);
-    setOffered(null);
+    if (item.reason === "device" && item.editedAt) restoredOffer.current = item.editedAt;
+    patch(textOf(item.draft) as Partial<MinutesDetail>);
+    setOffered((prev) => prev.filter((o) => o.id !== item.id));
   };
-  const discardOffered = () => {
+  const discardOffered = (item: OfferedItem) => {
     const keys = keysRef.current;
-    if (keys && offered) removeDraft(localStore(), offered.reason === "device" ? keys.offered : keys.main);
-    setOffered(null);
+    const store = localStore();
+    if (keys && item.reason === "device") {
+      writeOffered(store, keys.offered, readOffered(store, keys.offered).filter((o) => o.editedAt !== item.editedAt));
+    } else if (keys) {
+      removeDraft(store, keys.main);
+    }
+    setOffered((prev) => prev.filter((o) => o.id !== item.id));
   };
-  const copyOffered = (text: string) => {
-    navigator.clipboard.writeText(text).then(
-      () => setToast({ message: t("Copied."), type: "success" }),
-      () => setToast({ message: t("Could not copy. Select the text and copy it by hand."), type: "error" })
-    );
+  // The clipboard API is missing on plain http and in some browsers; the old
+  // execCommand route still works there. Failing both, select the text so a
+  // Ctrl+C is all that is left to do.
+  const copyOffered = async (text: string, boxId: string) => {
+    const copied = () => setToast({ message: t("Copied."), type: "success" });
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return copied();
+      }
+    } catch {
+      // Refused: try the old way.
+    }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      if (ok) return copied();
+    } catch {
+      // Fall through to selecting the text.
+    }
+    setToast({ message: t("Could not copy. Select the text and copy it by hand."), type: "error" });
+    const box = document.getElementById(boxId);
+    const selection = window.getSelection();
+    if (box && selection) {
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
   };
   // The unsaved text as plain words, to read and copy.
   const offeredText = (d: MinutesText) => {
@@ -569,48 +634,52 @@ export default function MinutesDetailPage() {
         </div>
       )}
 
-      {offered && canManage && (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>
-            {offered.reason === "locked"
-              ? t("These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.")
-              : t("You have unsaved changes from {time} on this device.", {
-                  time: new Date(offered.editedAt ?? "").toLocaleString("en-ZA"),
-                })}
-          </p>
-          {offered.behind && (
-            <p className="mt-1">{t("These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.")}</p>
-          )}
-          {offered.reason === "device" && !textEditable && (
-            <p className="mt-1">{t("These minutes can no longer be edited, so they cannot be put back. Copy anything you need.")}</p>
-          )}
-          <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-amber-200 bg-white p-3 font-sans text-gray-700">
-            {offeredText(offered.draft)}
-          </pre>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {offered.reason === "device" && textEditable && (
-              <button
-                onClick={restoreOffered}
-                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
-              >
-                {t("Restore them")}
-              </button>
+      {canManage &&
+        offered.map((item, i) => (
+          <div key={item.id} className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p>
+              {item.reason === "locked"
+                ? t("These minutes were locked before your latest changes were saved, so those changes could not be saved. They are still shown below: copy anything you need before you leave this page.")
+                : t("You have unsaved changes from {time} on this device.", {
+                    time: new Date(item.editedAt ?? "").toLocaleString("en-ZA"),
+                  })}
+            </p>
+            {item.behind && (
+              <p className="mt-1">{t("These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.")}</p>
             )}
-            <button
-              onClick={() => copyOffered(offeredText(offered.draft))}
-              className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm transition-colors"
+            {item.reason === "device" && !textEditable && (
+              <p className="mt-1">{t("These minutes can no longer be edited, so they cannot be put back. Copy anything you need.")}</p>
+            )}
+            <pre
+              id={`offered-${i}`}
+              className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-amber-200 bg-white p-3 font-sans text-gray-700"
             >
-              {t("Copy")}
-            </button>
-            <button
-              onClick={discardOffered}
-              className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm transition-colors"
-            >
-              {t("Discard")}
-            </button>
+              {offeredText(item.draft)}
+            </pre>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.reason === "device" && textEditable && (
+                <button
+                  onClick={() => restoreOffered(item)}
+                  className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg font-medium text-sm transition-colors"
+                >
+                  {t("Restore them")}
+                </button>
+              )}
+              <button
+                onClick={() => void copyOffered(offeredText(item.draft), `offered-${i}`)}
+                className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm transition-colors"
+              >
+                {t("Copy")}
+              </button>
+              <button
+                onClick={() => discardOffered(item)}
+                className="px-4 py-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-sm transition-colors"
+              >
+                {t("Discard")}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        ))}
 
       {record.original && (
         <div className="mb-6 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm">

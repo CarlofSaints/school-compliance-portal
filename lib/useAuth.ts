@@ -67,7 +67,35 @@ export function useSessionValue(): SessionPayload | null {
   return useSyncExternalStore(subscribeSession, getSession, () => null);
 }
 
+// Leaving the session, so pages holding unsaved work know why they are being
+// torn down. Signing out discards that work on purpose (see signOut); a 401
+// keeps it in the local backup, to come back after signing in again.
+let signingOut = false;
+let redirectingToSignIn = false;
+const signInRedirectListeners = new Set<() => void>();
+
+/** True from the moment someone asks to sign out until they sign in again. */
+export function isSigningOut(): boolean {
+  return signingOut;
+}
+
+/** True once a 401 has sent this page to sign-in: no "Leave site?" prompt. */
+export function isRedirectingToSignIn(): boolean {
+  return redirectingToSignIn;
+}
+
+/** Runs just before any 401 sends the page to sign-in, whichever request
+ *  hit it, e.g. to back up unsaved work. Returns the unsubscribe. */
+export function onSignInRedirect(fn: () => void): () => void {
+  signInRedirectListeners.add(fn);
+  return () => {
+    signInRedirectListeners.delete(fn);
+  };
+}
+
 export function setSession(payload: SessionPayload): void {
+  signingOut = false;
+  redirectingToSignIn = false;
   localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
   emitSessionChange();
 }
@@ -88,9 +116,12 @@ export function clearSession(): void {
  *  local copy goes even if the call fails, so the page never looks signed in
  *  after the person asked to leave. */
 export async function signOut(): Promise<void> {
-  // Unsaved minutes backups belong to this person; on a shared computer the
-  // next one in must not find them. (Not on a 401: there the backup is what
-  // brings the typing back after signing in again.)
+  // 🔴 Signing out DISCARDS unsaved minutes typing, on purpose: the backups
+  // belong to this person, and on a shared computer the next one in must not
+  // find them. Flagged BEFORE clearing, so a page being torn down neither
+  // writes its backup again nor sends a save. (Not on a 401: there the backup
+  // is what brings the typing back after signing in again.)
+  signingOut = true;
   const me = getSession();
   if (me) {
     try {
@@ -122,10 +153,7 @@ export const SESSION_EXPIRED_MESSAGE =
 // grants nothing; the server decides from the cookie alone.
 export async function authFetch(
   url: string,
-  options: RequestInit = {},
-  /** Runs just before the sign-in redirect, e.g. to back up unsaved work and
-   *  drop a "Leave site?" prompt that would otherwise interrupt it. */
-  onSignedOut?: () => void
+  options: RequestInit = {}
 ): Promise<Response> {
   const res = await fetch(url, { ...options, credentials: "same-origin" });
 
@@ -140,7 +168,14 @@ export async function authFetch(
   // The login POST uses a bare fetch(), not this, so a failed login never
   // reaches here.
   if (res.status === 401) {
-    onSignedOut?.();
+    redirectingToSignIn = true;
+    signInRedirectListeners.forEach((fn) => {
+      try {
+        fn();
+      } catch {
+        // One page's backup failing must not stop the redirect.
+      }
+    });
     clearSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.replace("/login");

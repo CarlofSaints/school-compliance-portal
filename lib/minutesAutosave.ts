@@ -5,7 +5,7 @@
 // Carl typed a whole set of minutes, pressed "Send for checking" without
 // saving, and lost all of it to the reload afterwards.
 
-import { isLocked, type MinutesStatus } from "./minutes";
+import { cleanAttendees, isLocked, type MinutesStatus } from "./minutes";
 
 /** Given to the panels that act on the SAVED copy (send, review, sign,
  *  distribute): saves any unsaved typing first. False means do not act;
@@ -58,18 +58,27 @@ function stable(v: unknown): string {
   return JSON.stringify(v);
 }
 
-/** The words as they matter, not as they were stored. The save trims, renumbers
- *  and adds an empty Apologies section, none of which is a change the
- *  minute-taker made, so none of it may raise an "unsaved changes" banner. */
+/** The words as they matter, not as they were stored. The save (PATCH
+ *  /api/minutes/[id]) rebuilds each section field by field: it trims, cleans
+ *  the attendance rows, renumbers and adds an empty Apologies section. None
+ *  of that is a change the minute-taker made, so none of it may raise an
+ *  "unsaved changes" banner. Keep this in step with that route. */
 function normalText(t: MinutesText): string {
   const sections = Array.isArray(t.sections)
     ? (t.sections as Record<string, unknown>[])
         .filter((s) => !(s?.kind === "apologies" && !String(s.body ?? "").trim()))
         .map((s) => {
-          const rest = { ...s };
-          delete rest.id;
-          delete rest.order;
-          return { ...rest, title: String(s.title ?? "").trim(), body: String(s.body ?? "").trim() };
+          const kind = s?.kind === "attendance" || s?.kind === "apologies" ? s.kind : undefined;
+          // Not id or order: the server assigns those.
+          return {
+            title: String(s?.title ?? "").trim(),
+            body: String(s?.body ?? "").trim(),
+            numberingStartsHere: s?.numberingStartsHere || undefined,
+            personIds: s?.personIds,
+            responsible: String(s?.responsible ?? "").trim() || undefined,
+            kind,
+            attendees: kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
+          };
         })
     : t.sections;
   return stable({ title: String(t.title ?? "").trim(), body: t.body, period: t.period, sections });
@@ -82,6 +91,29 @@ export function sameText(a: MinutesText, b: MinutesText): boolean {
 /** ISO timestamps compare as strings. Unknown is never "older". */
 export function isOlder(a?: string, b?: string): boolean {
   return !!a && !!b && a < b;
+}
+
+/** What a failed save means. signed-out: on the way to sign-in. transient:
+ *  worth retrying (timeout, too many requests, server trouble). refused: the
+ *  same text will be refused again (invalid, not allowed, locked, gone). */
+export function saveFailureKind(status: number): "signed-out" | "transient" | "refused" {
+  if (status === 401) return "signed-out";
+  if (status === 408 || status === 429 || status >= 500) return "transient";
+  return "refused";
+}
+
+/** How long to wait before retrying the nth consecutive failure (1-based),
+ *  honouring a Retry-After header (seconds or a date), capped at 5 minutes. */
+export function retryDelayMs(failures: number, retryAfter: string | null, now = Date.now()): number {
+  const steps = [5000, 15000, 30000];
+  const backoff = steps[Math.min(Math.max(failures, 1), steps.length) - 1];
+  let asked = 0;
+  if (retryAfter) {
+    const secs = Number(retryAfter);
+    asked = Number.isFinite(secs) ? secs * 1000 : Date.parse(retryAfter) - now;
+    if (!Number.isFinite(asked)) asked = 0;
+  }
+  return Math.min(Math.max(backoff, asked), 5 * 60_000);
 }
 
 /** Whether the words may still change at all. Out for signing they are
@@ -157,23 +189,26 @@ export function clearUserBackups(
   }
 }
 
+/** Anything that is not a draft we wrote is ignored, never restored. */
+function asDraft(d: unknown): MinutesDraft | null {
+  const o = d as Partial<MinutesDraft> | null;
+  if (
+    !o ||
+    typeof o.title !== "string" ||
+    typeof o.body !== "string" ||
+    typeof o.editedAt !== "string" ||
+    !Array.isArray(o.sections) ||
+    !o.period
+  ) {
+    return null;
+  }
+  return o as MinutesDraft;
+}
+
 export function readDraft(store: Store, key: string): MinutesDraft | null {
   try {
     const raw = store?.getItem(key);
-    if (!raw) return null;
-    const d = JSON.parse(raw);
-    // Anything that is not a draft we wrote is ignored, never restored.
-    if (
-      !d ||
-      typeof d.title !== "string" ||
-      typeof d.body !== "string" ||
-      typeof d.editedAt !== "string" ||
-      !Array.isArray(d.sections) ||
-      !d.period
-    ) {
-      return null;
-    }
-    return d as MinutesDraft;
+    return raw ? asDraft(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
@@ -198,6 +233,43 @@ export function removeDraft(store: Store, key: string): void {
 /** A backup is only worth offering when it says something the server does not. */
 export function draftToOffer(draft: MinutesDraft | null, server: MinutesText): MinutesDraft | null {
   return draft && !sameText(draft, server) ? draft : null;
+}
+
+/** Backups found on opening, kept apart from this visit's own. A list, newest
+ *  first, so a newer backup never silently replaces an older one; capped at
+ *  three, and anything the server already holds is dropped. */
+export const MAX_OFFERED = 3;
+
+export function readOffered(store: Store, key: string): MinutesDraft[] {
+  try {
+    const raw = store?.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+    return list.map(asDraft).filter((d): d is MinutesDraft => d !== null);
+  } catch {
+    return [];
+  }
+}
+
+export function writeOffered(store: Store, key: string, list: MinutesDraft[]): void {
+  try {
+    if (list.length) store?.setItem(key, JSON.stringify(list));
+    else store?.removeItem(key);
+  } catch {
+    // Full or blocked storage, as for writeDraft.
+  }
+}
+
+/** The list to offer once a new backup (fresh, may be null) has joined it. */
+export function mergeOffered(existing: MinutesDraft[], fresh: MinutesDraft | null, server: MinutesText): MinutesDraft[] {
+  const all = fresh ? [fresh, ...existing] : existing;
+  const out: MinutesDraft[] = [];
+  for (const d of [...all].sort((a, b) => b.editedAt.localeCompare(a.editedAt))) {
+    if (sameText(d, server) || out.some((o) => sameText(o, d))) continue;
+    out.push(d);
+  }
+  return out.slice(0, MAX_OFFERED);
 }
 
 /** The saved minutes changed after the backup's edits began (someone else, or

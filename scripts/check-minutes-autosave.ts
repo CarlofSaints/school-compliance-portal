@@ -9,12 +9,17 @@ import {
   draftToOffer,
   hasUnsaved,
   isTextEditable,
+  mergeOffered,
   readDraft,
+  readOffered,
   reconcile,
   removeDraft,
+  retryDelayMs,
   sameText,
+  saveFailureKind,
   textOf,
   writeDraft,
+  writeOffered,
 } from "../lib/minutesAutosave";
 import type { MinutesStatus } from "../lib/minutes";
 
@@ -114,6 +119,57 @@ const listing = {
 clearUserBackups(listing, "h", "u1");
 check("only this person's backups on this site go", [...all.keys()], ["minutes-draft:h:u2:m1", "minutes-draft:other:u1:m1", "hvps_session"]);
 clearUserBackups(null, "h", "u1");
+
+console.log("\nSame words, as the save route rebuilds them");
+const att = {
+  title: "Present", body: "", period: { kind: "month", year: 2026, month: 10 },
+  sections: [{
+    id: "s1", title: "Present", body: "", order: 1, kind: "attendance", responsible: "  ", personIds: [],
+    attendees: [{ position: " Chair ", name: "Ms Dube " }, { position: "", name: "" }, { position: "Clerk", name: "Mr Nel", status: "bogus" }],
+  }],
+};
+const attSaved = {
+  ...att,
+  sections: [{
+    id: "srv", title: "Present", body: "", order: 1, kind: "attendance",
+    attendees: [{ position: "Chair", name: "Ms Dube" }, { position: "Clerk", name: "Mr Nel" }],
+  }],
+};
+check("attendees cleaned, blank responsible and empty personIds: the same", sameText(att, attSaved), true);
+check("a person marked away is a real change",
+  sameText(att, { ...attSaved, sections: [{ ...attSaved.sections[0], attendees: [{ position: "Chair", name: "Ms Dube", status: "apology" }, { position: "Clerk", name: "Mr Nel" }] }] }), false);
+check("responsible filled in is a real change",
+  sameText(att, { ...attSaved, sections: [{ ...attSaved.sections[0], responsible: "Mr Nel" }] }), false);
+check("a keepalive save that landed: its backup is dropped on the next visit", draftToOffer({ ...att, editedAt: "t" }, attSaved), null);
+
+console.log("\nOffered backups");
+const d1 = { ...draft, title: "One", editedAt: "2026-10-18T08:00:00.000Z" };
+const d2 = { ...draft, title: "Two", editedAt: "2026-10-18T09:00:00.000Z" };
+const d3 = { ...draft, title: "Three", editedAt: "2026-10-18T10:00:00.000Z" };
+const d4 = { ...draft, title: "Four", editedAt: "2026-10-18T11:00:00.000Z" };
+check("a new backup joins the old one, newest first", mergeOffered([d1], d2, server).map((d) => d.title), ["Two", "One"]);
+check("at most three, the oldest goes", mergeOffered([d3, d2, d1], d4, server).map((d) => d.title), ["Four", "Three", "Two"]);
+check("the same words twice: kept once", mergeOffered([d1], { ...d1, editedAt: "2026-10-18T12:00:00.000Z" }, server).length, 1);
+check("one the server already holds: dropped", mergeOffered([{ ...d1, ...textOf(server) }], null, server), []);
+const okey = backupKeys("h", "u1", "m1").offered;
+writeOffered(store, okey, [d2, d1]);
+check("list written and read back", readOffered(store, okey).map((d) => d.title), ["Two", "One"]);
+mem.set(okey, JSON.stringify(d1));
+check("an old single backup still reads", readOffered(store, okey).map((d) => d.title), ["One"]);
+mem.set(okey, JSON.stringify([d1, { title: 5 }]));
+check("a bad entry is skipped, the good one kept", readOffered(store, okey).map((d) => d.title), ["One"]);
+writeOffered(store, okey, []);
+check("an empty list removes the key", mem.has(okey), false);
+
+console.log("\nRetrying");
+check("401: signed out", saveFailureKind(401), "signed-out");
+check("408, 429, 500, 503: transient", [408, 429, 500, 503].map(saveFailureKind), ["transient", "transient", "transient", "transient"]);
+check("400, 403, 409: refused", [400, 403, 409].map(saveFailureKind), ["refused", "refused", "refused"]);
+check("backoff 5s, 15s, then 30s", [1, 2, 3, 7].map((n) => retryDelayMs(n, null)), [5000, 15000, 30000, 30000]);
+check("Retry-After in seconds is honoured", retryDelayMs(1, "60"), 60000);
+check("Retry-After as a date is honoured", retryDelayMs(1, new Date(Date.parse("2026-10-18T10:00:20Z")).toUTCString(), Date.parse("2026-10-18T10:00:00Z")), 20000);
+check("a shorter Retry-After never undercuts the backoff", retryDelayMs(3, "1"), 30000);
+check("capped at 5 minutes; nonsense ignored", [retryDelayMs(1, "99999"), retryDelayMs(2, "soon")], [300000, 15000]);
 mem.set(key, "{not json");
 check("corrupt backup: ignored", readDraft(store, key), null);
 mem.set(key, JSON.stringify({ title: 1 }));
