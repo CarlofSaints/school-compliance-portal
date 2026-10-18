@@ -12,6 +12,7 @@
 
 import JSZip from "jszip";
 import {
+  attendeesFromRegister,
   canonicalMinutes,
   cleanAttendees,
   rowsFromText,
@@ -327,6 +328,32 @@ check(
   "a tick is never copied from a template into new minutes",
   sectionsFromTemplate(tickedTemplate)[0].attendees,
   [{ position: "Chair", name: "Mrs Lester" }]
+);
+
+// ---------------------------------------------------------------------------
+console.log("\nMinutes started without a template");
+
+check(
+  "everyone on the register is listed, shared seats together, empty seats left out",
+  attendeesFromRegister([
+    { position: "Chair", name: "Mrs Lester" },
+    { position: "Parent Rep", name: "Mr Scott" },
+    { position: "Parent Rep", name: "Ms Dube" },
+    { position: "Treasurer", name: "" },
+    { position: "", name: "No seat" },
+  ]),
+  [
+    { position: "Chair", name: "Mrs Lester" },
+    { position: "Parent Rep", name: "Mr Scott, Ms Dube" },
+  ]
+);
+check(
+  "the list gets its Apologies section straight after it",
+  withApologiesSection([
+    { id: "a", title: "Attendance", body: "", order: 1, kind: "attendance", attendees: [] },
+    { id: "n", title: "Notes", body: "", order: 2 },
+  ]).map((s) => s.kind ?? s.title),
+  ["attendance", "apologies", "Notes"]
 );
 
 // ---------------------------------------------------------------------------

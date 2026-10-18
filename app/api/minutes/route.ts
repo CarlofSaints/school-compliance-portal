@@ -7,7 +7,7 @@ import {
   saveOriginalFile,
   type MinutesRecord,
 } from "@/lib/minutesData";
-import { checkPeriod, type MeetingPeriod } from "@/lib/minutes";
+import { attendeesFromRegister, checkPeriod, withApologiesSection, type MeetingPeriod } from "@/lib/minutes";
 import { getTemplate, sectionsFromTemplate } from "@/lib/minutesTemplates";
 import { getPeople } from "@/lib/peopleData";
 import { recordActivity } from "@/lib/activityLog";
@@ -102,9 +102,15 @@ export async function POST(req: NextRequest) {
       }
       sections = sectionsFromTemplate(template, holders);
     } else if (startBlank) {
-      // No template chosen and nothing uploaded: one empty section, so the
-      // secretary has somewhere to type rather than a page with no controls.
-      sections = [{ id: uuidv4(), title: "Notes", body: "", order: 1 }];
+      // No template chosen and nothing uploaded: the attendance list with
+      // everyone on the People register (Carl: "just list everyone", the
+      // Apology / Not Present ticks do the rest), then an empty section to
+      // type in. A register that cannot be read gives an empty list.
+      const everyone = attendeesFromRegister(await getPeople().catch(() => []));
+      sections = withApologiesSection([
+        { id: uuidv4(), title: "Attendance", body: "", order: 1, kind: "attendance", attendees: everyone },
+        { id: uuidv4(), title: "Notes", body: "", order: 2 },
+      ]);
     }
 
     const record = await createMinutes({
