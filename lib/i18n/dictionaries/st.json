@@ -1530,5 +1530,7 @@
   "Discard": "Lahla",
   "Copied.": "Ho kopitswe.",
   "Could not copy. Select the text and copy it by hand.": "Ha e a kgona ho kopitsa. Kgetha mongolo mme o o kopitse ka letsoho.",
-  "Not saved: {error}": "Ha di a bolokwa: {error}"
+  "Not saved: {error}": "Ha di a bolokwa: {error}",
+  "This replaces the newer saved text with the backup. Restore it anyway?": "Sena se nkela mongolo o motjha o bolokilweng sebaka ka khopi ya polokelo. O e kgutlisa le ha ho le jwalo?",
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso ena e fetotswe ho tloha ha khopi ena ya polokelo e etswa, ke motho e mong kapa sesebedisweng se seng. Ho e kgutlisa ho tla nkela mongolo o motjha o bolokilweng sebaka."
 }

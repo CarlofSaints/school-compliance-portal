@@ -164,7 +164,9 @@ export async function PATCH(
 
     // What was SAVED, not a re-read. A read straight after a write can serve
     // the previous copy, which makes a correct save look like it failed.
-    return NextResponse.json(saved);
+    // Shaped like GET, so the page's "what is signed" reference stays.
+    const hash = documentHash(saved);
+    return NextResponse.json({ ...saved, documentHash: hash, documentRef: shortHash(hash) });
   } catch (err) {
     if (err instanceof MinutesLockedError) {
       return NextResponse.json({ error: err.message }, { status: 409 });

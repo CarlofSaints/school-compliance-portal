@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { SessionPayload } from "./roles";
+import { clearUserBackups } from "./minutesAutosave";
 
 const SESSION_KEY = "hvps_session";
 
@@ -87,6 +88,17 @@ export function clearSession(): void {
  *  local copy goes even if the call fails, so the page never looks signed in
  *  after the person asked to leave. */
 export async function signOut(): Promise<void> {
+  // Unsaved minutes backups belong to this person; on a shared computer the
+  // next one in must not find them. (Not on a 401: there the backup is what
+  // brings the typing back after signing in again.)
+  const me = getSession();
+  if (me) {
+    try {
+      clearUserBackups(window.localStorage, window.location.host, me.id);
+    } catch {
+      // Storage blocked: nothing was backed up.
+    }
+  }
   try {
     await fetch("/api/auth", { method: "DELETE", credentials: "same-origin" });
   } catch {
@@ -110,7 +122,10 @@ export const SESSION_EXPIRED_MESSAGE =
 // grants nothing; the server decides from the cookie alone.
 export async function authFetch(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  /** Runs just before the sign-in redirect, e.g. to back up unsaved work and
+   *  drop a "Leave site?" prompt that would otherwise interrupt it. */
+  onSignedOut?: () => void
 ): Promise<Response> {
   const res = await fetch(url, { ...options, credentials: "same-origin" });
 
@@ -125,6 +140,7 @@ export async function authFetch(
   // The login POST uses a bare fetch(), not this, so a failed login never
   // reaches here.
   if (res.status === 401) {
+    onSignedOut?.();
     clearSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
       window.location.replace("/login");

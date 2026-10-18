@@ -1530,5 +1530,7 @@
   "Discard": "Lahla",
   "Copied.": "Kukhutshelwe.",
   "Could not copy. Select the text and copy it by hand.": "Ayikwazanga ukukhuphela. Khetha umbhalo uze uwukhuphele ngesandla.",
-  "Not saved: {error}": "Akugcinwanga: {error}"
+  "Not saved: {error}": "Akugcinwanga: {error}",
+  "This replaces the newer saved text with the backup. Restore it anyway?": "Oku kufaka ugcino-lokhuseleko endaweni yombhalo omtsha ogciniweyo. Ulubuyisele nangona kunjalo?",
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Le mizuzu itshintshiwe ukususela oko kwenziwa olu gcino-lokhuseleko, ngomnye umntu okanye kwesinye isixhobo. Ukulubuyisela kuya kufaka endaweni yombhalo omtsha ogciniweyo."
 }

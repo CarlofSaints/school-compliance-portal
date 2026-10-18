@@ -38,8 +38,50 @@ export function textOf<P, S>(r: MinutesText<P, S>): MinutesText<P, S> {
   return { title: r.title, body: r.body, period: r.period, sections: r.sections };
 }
 
+// Empty means absent: the server drops false, "" and [] fields on save.
+function isEmpty(v: unknown): boolean {
+  return v === undefined || v === null || v === false || v === "" || (Array.isArray(v) && v.length === 0);
+}
+
+/** JSON with sorted keys and empty fields left out, so two copies of the same
+ *  words compare equal whatever order their fields were written in. */
+function stable(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stable).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => !isEmpty(o[k]))
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stable(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v);
+}
+
+/** The words as they matter, not as they were stored. The save trims, renumbers
+ *  and adds an empty Apologies section, none of which is a change the
+ *  minute-taker made, so none of it may raise an "unsaved changes" banner. */
+function normalText(t: MinutesText): string {
+  const sections = Array.isArray(t.sections)
+    ? (t.sections as Record<string, unknown>[])
+        .filter((s) => !(s?.kind === "apologies" && !String(s.body ?? "").trim()))
+        .map((s) => {
+          const rest = { ...s };
+          delete rest.id;
+          delete rest.order;
+          return { ...rest, title: String(s.title ?? "").trim(), body: String(s.body ?? "").trim() };
+        })
+    : t.sections;
+  return stable({ title: String(t.title ?? "").trim(), body: t.body, period: t.period, sections });
+}
+
 export function sameText(a: MinutesText, b: MinutesText): boolean {
-  return JSON.stringify(textOf(a)) === JSON.stringify(textOf(b));
+  return normalText(a) === normalText(b);
+}
+
+/** ISO timestamps compare as strings. Unknown is never "older". */
+export function isOlder(a?: string, b?: string): boolean {
+  return !!a && !!b && a < b;
 }
 
 /** Whether the words may still change at all. Out for signing they are
@@ -55,12 +97,16 @@ export function isTextEditable(status: MinutesStatus): boolean {
  * because that is the document that was sent or signed, and the local text
  * comes back separately as "stranded" so the page can show it to copy.
  */
-export function reconcile<T extends MinutesText & { status: MinutesStatus }>(
+export function reconcile<T extends MinutesText & { status: MinutesStatus; updatedAt?: string }>(
   server: T,
   local: T | null,
   hasUnsaved: boolean
 ): { record: T; stranded: MinutesText | null } {
-  if (!local || !hasUnsaved) return { record: server, stranded: null };
+  if (!local) return { record: server, stranded: null };
+  // A read straight after a write can serve the copy from BEFORE it. What is
+  // on screen came from a newer answer, so it wins, text and status alike.
+  if (isOlder(server.updatedAt, local.updatedAt)) return { record: local, stranded: null };
+  if (!hasUnsaved) return { record: server, stranded: null };
   if (!isTextEditable(server.status)) return { record: server, stranded: textOf(local) };
   return { record: { ...server, ...textOf(local) }, stranded: null };
 }
@@ -76,13 +122,40 @@ export interface MinutesDraft extends MinutesText {
   baseUpdatedAt?: string;
 }
 
-/** Per site as well as per minutes: one browser can be signed in to more
- *  than one school, and minutes ids are only unique within a school. */
-export function backupKeyFor(host: string, minutesId: string): string {
-  return `minutes-draft:${host}:${minutesId}`;
+/** Per site, per person and per minutes: one browser can be signed in to
+ *  more than one school, a shared computer has more than one secretary, and
+ *  minutes ids are only unique within a school.
+ *  "offered" holds a backup found when the page opened, apart from this
+ *  visit's own, so typing on this visit can never overwrite or remove it. */
+export function backupKeys(host: string, userId: string, minutesId: string): { main: string; offered: string } {
+  return {
+    main: `minutes-draft:${host}:${userId}:${minutesId}`,
+    offered: `minutes-draft-offered:${host}:${userId}:${minutesId}`,
+  };
 }
 
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem"> | null;
+
+/** On sign-out: this person's backups on this site go with them. */
+export function clearUserBackups(
+  store: (Pick<Storage, "key" | "removeItem"> & { readonly length: number }) | null,
+  host: string,
+  userId: string
+): void {
+  try {
+    if (!store) return;
+    const prefixes = [`minutes-draft:${host}:${userId}:`, `minutes-draft-offered:${host}:${userId}:`];
+    const mine: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k && prefixes.some((p) => k.startsWith(p))) mine.push(k);
+    }
+    // Collected first: removing while walking the index skips keys.
+    mine.forEach((k) => store.removeItem(k));
+  } catch {
+    // Blocked storage holds nothing to clear.
+  }
+}
 
 export function readDraft(store: Store, key: string): MinutesDraft | null {
   try {
@@ -125,4 +198,10 @@ export function removeDraft(store: Store, key: string): void {
 /** A backup is only worth offering when it says something the server does not. */
 export function draftToOffer(draft: MinutesDraft | null, server: MinutesText): MinutesDraft | null {
   return draft && !sameText(draft, server) ? draft : null;
+}
+
+/** The saved minutes changed after the backup's edits began (someone else, or
+ *  this person on another device), so restoring it would replace newer text. */
+export function draftIsBehind(draft: MinutesDraft, server: { updatedAt?: string }): boolean {
+  return isOlder(draft.baseUpdatedAt, server.updatedAt);
 }

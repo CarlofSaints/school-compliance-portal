@@ -1530,5 +1530,7 @@
   "Discard": "Lahla",
   "Copied.": "Go kopišitšwe.",
   "Could not copy. Select the text and copy it by hand.": "Go paletšwe go kopiša. Kgetha sengwalwa gomme o se kopiše ka seatla.",
-  "Not saved: {error}": "Ga se tša bolokwa: {error}"
+  "Not saved: {error}": "Ga se tša bolokwa: {error}",
+  "This replaces the newer saved text with the backup. Restore it anyway?": "Se se tšea legato la sengwalwa se seswa se se bolokilwego ka khopi ya polokelo. O e bušetša le ge go le bjalo?",
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Metsotso ye e fetotšwe go tloga ge khopi ye ya polokelo e dirwa, ke motho yo mongwe goba sedirišweng se sengwe. Go e bušetša go tla tšea legato la sengwalwa se seswa se se bolokilwego."
 }

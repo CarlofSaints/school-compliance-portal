@@ -10,13 +10,15 @@ import PeriodPicker from "@/components/PeriodPicker";
 import MinutesSectionEditor from "@/components/MinutesSectionEditor";
 import { quickActionTitle } from "@/lib/minutesCapture";
 import {
-  backupKeyFor,
+  backupKeys,
+  draftIsBehind,
   draftToOffer,
   hasUnsaved,
   isTextEditable,
   readDraft,
   reconcile,
   removeDraft,
+  sameText,
   textOf,
   writeDraft,
   type EditVersions,
@@ -80,10 +82,11 @@ function localStore(): Storage | null {
     return null;
   }
 }
-const backupKey = (id: string) => backupKeyFor(window.location.host, id);
+type BackupKeys = ReturnType<typeof backupKeys>;
 /** The local backup of unsaved typing (lib/minutesAutosave.ts says why). */
-function backUp(r: MinutesDetail) {
-  writeDraft(localStore(), backupKey(r.id), {
+function backUp(keys: BackupKeys | null, r: MinutesDetail) {
+  if (!keys) return;
+  writeDraft(localStore(), keys.main, {
     ...textOf(r),
     editedAt: new Date().toISOString(),
     baseUpdatedAt: r.updatedAt,
@@ -123,13 +126,16 @@ export default function MinutesDetailPage() {
   // The server refused the save outright (locked, invalid, not allowed). The
   // same text would be refused again, so autosave stops until the next edit.
   const [saveRefused, setSaveRefused] = useState<string | null>(null);
-  // Bumped when any save finishes, so the autosave timer re-arms even when
-  // nothing else on the page changed.
-  const [saveTick, setSaveTick] = useState(0);
   // Unsaved text that is not in the editor: a backup from an earlier visit on
   // this device, or typing the server would no longer take because the
   // minutes were locked meanwhile. Shown to restore or copy.
-  const [offered, setOffered] = useState<{ draft: MinutesText; editedAt?: string; reason: "device" | "locked" } | null>(null);
+  const [offered, setOffered] = useState<{
+    draft: MinutesText;
+    editedAt?: string;
+    reason: "device" | "locked";
+    /** The saved minutes changed after this backup's edits began. */
+    behind?: boolean;
+  } | null>(null);
 
   // ONE rule for who may change what, used by the autosave and the page alike.
   const locked = !!record && isLocked(record.status);
@@ -149,6 +155,12 @@ export default function MinutesDetailPage() {
   const versions = useRef<EditVersions>({ edit: 0, saved: 0 });
   const inFlight = useRef<Promise<boolean> | null>(null);
   const backupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set once the signed-in person and the minutes are known (first load).
+  const keysRef = useRef<BackupKeys | null>(null);
+  // A restored backup is only let go of once its text is safely saved.
+  const clearOfferedOnSave = useRef(false);
+  // Signed out mid-save: the redirect to sign-in must not stop on "Leave site?".
+  const skipLeaveWarning = useRef(false);
   /** Nothing left to save or back up: the minutes are gone, or the user chose
    *  to lose the changes. */
   const forgetUnsaved = () => {
@@ -156,19 +168,22 @@ export default function MinutesDetailPage() {
     setDirty(false);
     if (backupTimer.current) clearTimeout(backupTimer.current);
     backupTimer.current = null;
-    removeDraft(localStore(), backupKey(params.id));
+    if (keysRef.current) removeDraft(localStore(), keysRef.current.main);
   };
 
+  const userId = session?.id;
   const load = useCallback(async () => {
     setBusy(true);
     try {
       const res = await authFetch(`/api/minutes/${params.id}`);
       if (res.ok) {
         const server: MinutesDetail = await res.json();
-        const first = recordRef.current === null;
+        const local = recordRef.current;
+        const first = local === null;
+        if (first && userId) keysRef.current = backupKeys(window.location.host, userId, params.id);
+        const keys = keysRef.current;
         // Every panel reloads through here after it acts. Typing since the
         // last save stays on screen and stays dirty, and autosave saves it.
-        const local = recordRef.current;
         const { record: next, stranded } = reconcile(server, local, hasUnsaved(versions.current));
         recordRef.current = next;
         setRecord(next);
@@ -176,16 +191,25 @@ export default function MinutesDetailPage() {
           // Locked meanwhile: the editor shows what was sent or signed, and
           // the typing moves to the banner (and stays in the backup) to copy.
           // Backed up first: the throttled write may not have run yet.
-          if (local) backUp(local);
+          if (local) backUp(keys, local);
           versions.current.saved = versions.current.edit;
           setOffered({ draft: stranded, reason: "locked" });
         }
         setDirty(hasUnsaved(versions.current));
-        if (first) {
-          const key = backupKey(params.id);
-          const draft = draftToOffer(readDraft(localStore(), key), server);
-          if (draft) setOffered({ draft, editedAt: draft.editedAt, reason: "device" });
-          else removeDraft(localStore(), key);
+        if (first && keys) {
+          // Typing left over from an earlier visit moves aside to its own key,
+          // so this visit's backups cannot overwrite or remove it. Only Restore
+          // (once saved) or Discard lets it go.
+          const store = localStore();
+          const fresh = draftToOffer(readDraft(store, keys.main), server);
+          if (fresh) writeDraft(store, keys.offered, fresh);
+          if (!fresh || readDraft(store, keys.offered)?.editedAt === fresh.editedAt) removeDraft(store, keys.main);
+          const draft = fresh ?? draftToOffer(readDraft(store, keys.offered), server);
+          if (draft) {
+            setOffered({ draft, editedAt: draft.editedAt, reason: "device", behind: draftIsBehind(draft, server) });
+          } else {
+            removeDraft(store, keys.offered);
+          }
         }
       } else {
         setToast({ message: t("Those minutes could not be found."), type: "error" });
@@ -193,7 +217,7 @@ export default function MinutesDetailPage() {
     } finally {
       setBusy(false);
     }
-  }, [params.id]);
+  }, [params.id, userId]);
 
   useEffect(() => {
     if (session) load();
@@ -241,22 +265,35 @@ export default function MinutesDetailPage() {
     const version = versions.current.edit;
     setSaving(true);
     try {
-      const res = await authFetch(`/api/minutes/${r.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(textOf(r)),
-      });
+      const res = await authFetch(
+        `/api/minutes/${r.id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(textOf(r)),
+        },
+        // Signed out: back up now and let the sign-in redirect through. The
+        // backup banner brings the typing back after signing in.
+        () => {
+          if (recordRef.current) backUp(keysRef.current, recordRef.current);
+          skipLeaveWarning.current = true;
+        }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         lastSaveError.current = data.error || t("Could not save.");
-        if (res.status >= 500) {
+        if (res.status === 401) {
+          // Already on the way to sign-in; just stop autosaving.
+          setSaveRefused(lastSaveError.current);
+        } else if (res.status >= 500) {
           setSaveFailures((n) => n + 1);
         } else {
           // Locked, invalid or not allowed: retrying the same text cannot
           // help. Re-read, which moves the typing to the banner if the
           // minutes were locked meanwhile.
           setSaveRefused(lastSaveError.current);
-          void load();
+          // A failed re-read leaves the refusal note up; nothing more to say.
+          load().catch(() => {});
         }
         return false;
       }
@@ -267,7 +304,13 @@ export default function MinutesDetailPage() {
       const unsaved = hasUnsaved(versions.current);
       put(reconcile<MinutesDetail>(data, recordRef.current, unsaved).record);
       setDirty(unsaved);
-      if (!unsaved) removeDraft(localStore(), backupKey(r.id));
+      if (!unsaved && keysRef.current) {
+        removeDraft(localStore(), keysRef.current.main);
+        if (clearOfferedOnSave.current) {
+          removeDraft(localStore(), keysRef.current.offered);
+          clearOfferedOnSave.current = false;
+        }
+      }
       lastSaveError.current = null;
       setSaveFailures(0);
       setSaveRefused(null);
@@ -278,7 +321,6 @@ export default function MinutesDetailPage() {
       return false;
     } finally {
       setSaving(false);
-      setSaveTick((n) => n + 1);
     }
   };
 
@@ -326,7 +368,8 @@ export default function MinutesDetailPage() {
 
   // Autosave a few seconds after the last keystroke. Carl typed a whole set of
   // minutes, sent it for checking without pressing Save, and lost all of it.
-  // A failed save retries further apart each time, and re-arms off saveTick.
+  // A failed save retries further apart each time: saveFailures changes on
+  // every failure and record on every success, so the timer always re-arms.
   useEffect(() => {
     if (!dirty || !textEditable || saveRefused) return;
     const delay = saveFailures === 0 ? 3000 : RETRY_MS[Math.min(saveFailures, RETRY_MS.length) - 1];
@@ -336,7 +379,7 @@ export default function MinutesDetailPage() {
     return () => clearTimeout(timer);
     // saveOnce is recreated every render but reads only refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [record, dirty, textEditable, saveTick, saveFailures, saveRefused]);
+  }, [record, dirty, textEditable, saveFailures, saveRefused]);
 
   // Leaving by the sidebar or any in-app link fires no beforeunload. Back up
   // and send what is unsaved on the way out; best effort, as the backup
@@ -344,14 +387,24 @@ export default function MinutesDetailPage() {
   useEffect(
     () => () => {
       const r = recordRef.current;
+      const keys = keysRef.current;
       if (!r || !hasUnsaved(versions.current) || !isTextEditable(r.status)) return;
-      backUp(r);
-      void fetch(`/api/minutes/${r.id}`, {
+      backUp(keys, r);
+      const sent = textOf(r);
+      fetch(`/api/minutes/${r.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(textOf(r)),
+        body: JSON.stringify(sent),
         credentials: "same-origin",
-      }).catch(() => {});
+      })
+        .then((res) => {
+          // Saved, so the backup can go: but only if it still holds what was
+          // sent, as the minutes may have been opened and typed in again since.
+          if (!res.ok || !keys) return;
+          const d = readDraft(localStore(), keys.main);
+          if (d && sameText(d, sent)) removeDraft(localStore(), keys.main);
+        })
+        .catch(() => {});
     },
     []
   );
@@ -374,7 +427,8 @@ export default function MinutesDetailPage() {
   useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => {
-      if (recordRef.current) backUp(recordRef.current);
+      if (recordRef.current) backUp(keysRef.current, recordRef.current);
+      if (skipLeaveWarning.current) return;
       e.preventDefault();
       e.returnValue = "";
     };
@@ -411,18 +465,26 @@ export default function MinutesDetailPage() {
     if (!backupTimer.current) {
       backupTimer.current = setTimeout(() => {
         backupTimer.current = null;
-        if (recordRef.current && hasUnsaved(versions.current)) backUp(recordRef.current);
+        if (recordRef.current && hasUnsaved(versions.current)) backUp(keysRef.current, recordRef.current);
       }, 1000);
     }
   };
 
   const restoreOffered = () => {
     if (!offered) return;
+    if (
+      offered.behind &&
+      !window.confirm(t("This replaces the newer saved text with the backup. Restore it anyway?"))
+    ) {
+      return;
+    }
+    clearOfferedOnSave.current = true;
     patch(textOf(offered.draft) as Partial<MinutesDetail>);
     setOffered(null);
   };
   const discardOffered = () => {
-    removeDraft(localStore(), backupKey(record.id));
+    const keys = keysRef.current;
+    if (keys && offered) removeDraft(localStore(), offered.reason === "device" ? keys.offered : keys.main);
     setOffered(null);
   };
   const copyOffered = (text: string) => {
@@ -516,6 +578,9 @@ export default function MinutesDetailPage() {
                   time: new Date(offered.editedAt ?? "").toLocaleString("en-ZA"),
                 })}
           </p>
+          {offered.behind && (
+            <p className="mt-1">{t("These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.")}</p>
+          )}
           {offered.reason === "device" && !textEditable && (
             <p className="mt-1">{t("These minutes can no longer be edited, so they cannot be put back. Copy anything you need.")}</p>
           )}

@@ -1530,5 +1530,7 @@
   "Discard": "Gooi weg",
   "Copied.": "Gekopieer.",
   "Could not copy. Select the text and copy it by hand.": "Kon nie kopieer nie. Kies die teks en kopieer dit self.",
-  "Not saved: {error}": "Nie gestoor nie: {error}"
+  "Not saved: {error}": "Nie gestoor nie: {error}",
+  "This replaces the newer saved text with the backup. Restore it anyway?": "Dit vervang die nuwer gestoorde teks met die rugsteun. Herstel dit in elk geval?",
+  "These minutes have been changed since this backup was made, by someone else or on another device. Restoring it would replace the newer saved text.": "Hierdie notule is verander sedert hierdie rugsteun gemaak is, deur iemand anders of op ’n ander toestel. Om dit te herstel sal die nuwer gestoorde teks vervang."
 }
