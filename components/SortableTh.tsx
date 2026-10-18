@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import type { SortDir } from "@/lib/useTable";
+import { useT } from "@/components/I18nProvider";
 
 interface Props {
   label: string;
@@ -42,6 +43,7 @@ export default function SortableTh({
   stickyLeft = false,
   stickyLeftOffset = 0,
 }: Props) {
+  const t = useT();
   const thRef = useRef<HTMLTableCellElement>(null);
   const key = resizeKey || sortKey;
   const sortable = !!sortKey && !!onSort;
@@ -104,11 +106,11 @@ export default function SortableTh({
         sortable ? "cursor-pointer hover:text-gray-700" : ""
       }`}
       onClick={sortable ? () => onSort!(sortKey!) : undefined}
-      title={sortable ? `Sort by ${label}` : undefined}
+      title={sortable ? t("Sort by {label}", { label: t(label) }) : undefined}
       scope="col"
     >
       <span className="whitespace-nowrap">
-        {label}
+        {t(label)}
         {isActive && (
           <span className="text-primary ml-1">{dir === "asc" ? "▲" : "▼"}</span>
         )}
@@ -118,7 +120,7 @@ export default function SortableTh({
           onMouseDown={startResize}
           onClick={(e) => e.stopPropagation()}
           className="absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-primary/30"
-          title="Drag to resize"
+          title={t("Drag to resize")}
         />
       )}
     </th>

@@ -1,3 +1,4 @@
+import { tk } from "./i18n/translate";
 // Bulk import of an existing project list (Excel / CSV) into spend applications.
 //
 // Pure and client-safe: the import page uses it to build the preview, and the
@@ -93,7 +94,7 @@ export const IMPORT_FIELDS: FieldSpec[] = [
   },
   {
     key: "supplier",
-    label: "Supplier",
+    label: tk("Supplier"),
     required: false,
     synonyms: [
       "supplier",
@@ -106,7 +107,7 @@ export const IMPORT_FIELDS: FieldSpec[] = [
   },
   {
     key: "eta",
-    label: "ETA / target date",
+    label: tk("ETA / target date"),
     required: false,
     synonyms: [
       "eta",
@@ -139,7 +140,7 @@ export const IMPORT_FIELDS: FieldSpec[] = [
   },
   {
     key: "budgeted",
-    label: "Budgeted?",
+    label: tk("Budgeted?"),
     required: false,
     synonyms: ["budgeted", "in budget", "is budgeted"],
   },

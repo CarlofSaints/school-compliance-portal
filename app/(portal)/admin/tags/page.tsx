@@ -3,6 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, Fragment } from "react";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 import { TAG_COLORS, TAG_COLOR_CLASSES } from "@/lib/tags";
 
 interface TagRecord {
@@ -23,6 +24,7 @@ interface TagMember {
 }
 
 export default function TagsPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_tags");
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [members, setMembers] = useState<Record<string, TagMember[]>>({});
@@ -82,7 +84,7 @@ export default function TagsPage() {
 
   const save = async () => {
     if (!form.name.trim()) {
-      setToast({ message: "A tag needs a name", type: "error" });
+      setToast({ message: t("A tag needs a name"), type: "error" });
       return;
     }
     setSaving(true);
@@ -97,39 +99,39 @@ export default function TagsPage() {
     setSaving(false);
     if (res.ok) {
       setShowModal(false);
-      setToast({ message: editing ? "Tag updated" : "Tag created", type: "success" });
+      setToast({ message: editing ? t("Tag updated") : t("Tag created"), type: "success" });
       setMembers({});
       fetchTags();
     } else {
       const err = await res.json().catch(() => ({}));
-      setToast({ message: err.error || "Could not save the tag", type: "error" });
+      setToast({ message: err.error || t("Could not save the tag"), type: "error" });
     }
   };
 
   const remove = async (tag: TagRecord) => {
     if (
       !confirm(
-        `Delete the "${tag.name}" tag? It will be removed from ${tag.memberCount} ${
-          tag.memberCount === 1 ? "person" : "people"
-        }.`
+        tag.memberCount === 1
+          ? t("Delete the \"{name}\" tag? It will be removed from {count} person.", { name: tag.name, count: tag.memberCount })
+          : t("Delete the \"{name}\" tag? It will be removed from {count} people.", { name: tag.name, count: tag.memberCount })
       )
     ) {
       return;
     }
     const res = await authFetch(`/api/tags/${tag.id}`, { method: "DELETE" });
     if (res.ok) {
-      setToast({ message: `Deleted "${tag.name}"`, type: "success" });
+      setToast({ message: t("Deleted \"{name}\"", { name: tag.name }), type: "success" });
       fetchTags();
     } else {
       const err = await res.json().catch(() => ({}));
       setToast({
-        message: err.error || "Could not delete the tag",
+        message: err.error || t("Could not delete the tag"),
         type: "error",
       });
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -143,25 +145,24 @@ export default function TagsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Tags</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Tags")}</h1>
           <p className="text-gray-500 text-sm">
-            Name a group of individuals, then use it to decide who approves what
+            {t("Name a group of individuals, then use it to decide who approves what")}
           </p>
         </div>
         <button
           onClick={openCreate}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          + Add Tag
+          {t("+ Add Tag")}
         </button>
       </div>
 
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-900">
-        A tag can be put on a <strong>user</strong> (someone who signs in) from
-        Admin &gt; Users, or on a <strong>person</strong> on the school register
-        from Admin &gt; People. Tag the finance committee as FINCOM, then in
-        Fund Application Approval Settings say that amounts over R10 000 need
-        FINCOM approval. Only someone with a login can click Approve.
+        {t("A tag can be put on a")} <strong>{t("user")}</strong>{" "}
+        {t("(someone who signs in) from Admin > Users, or on a")}{" "}
+        <strong>{t("person")}</strong>{" "}
+        {t("on the school register from Admin > People. Tag the finance committee as FINCOM, then in Fund Application Approval Settings say that amounts over R10 000 need FINCOM approval. Only someone with a login can click Approve.")}
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -169,16 +170,16 @@ export default function TagsPage() {
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
               <th className="text-left px-6 py-3 font-medium text-gray-500">
-                Tag
+                {t("Tag")}
               </th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">
-                Description
+                {t("Description")}
               </th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">
-                People
+                {t("People")}
               </th>
               <th className="text-right px-6 py-3 font-medium text-gray-500">
-                Actions
+                {t("Actions")}
               </th>
             </tr>
           </thead>
@@ -204,7 +205,7 @@ export default function TagsPage() {
                       className="text-primary hover:underline text-xs font-medium"
                     >
                       {tag.memberCount}{" "}
-                      {tag.memberCount === 1 ? "person" : "people"}
+                      {tag.memberCount === 1 ? t("person") : t("people")}
                       {expanded === tag.id ? " ▲" : " ▼"}
                     </button>
                   </td>
@@ -213,13 +214,13 @@ export default function TagsPage() {
                       onClick={() => openEdit(tag)}
                       className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
                     >
-                      Edit
+                      {t("Edit")}
                     </button>
                     <button
                       onClick={() => remove(tag)}
                       className="text-risk-high hover:text-red-700 text-xs font-medium"
                     >
-                      Delete
+                      {t("Delete")}
                     </button>
                   </td>
                 </tr>
@@ -232,16 +233,15 @@ export default function TagsPage() {
                             <li key={m.key}>
                               {m.name}{" "}
                               <span className="text-gray-400">
-                                {m.email || "no email"} &middot;{" "}
-                                {m.userId ? "can approve" : "no login, email only"}
+                                {m.email || t("no email")} &middot;{" "}
+                                {m.userId ? t("can approve") : t("no login, email only")}
                               </span>
                             </li>
                           ))}
                         </ul>
                       ) : (
                         <p className="text-xs text-gray-400 italic">
-                          Nobody carries this tag yet. Add it from Admin &gt;
-                          Users or Admin &gt; People.
+                          {t("Nobody carries this tag yet. Add it from Admin > Users or Admin > People.")}
                         </p>
                       )}
                     </td>
@@ -252,7 +252,7 @@ export default function TagsPage() {
             {tags.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                  No tags yet.
+                  {t("No tags yet.")}
                 </td>
               </tr>
             )}
@@ -270,13 +270,13 @@ export default function TagsPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="px-6 py-4 border-b border-gray-100">
               <h2 className="font-semibold text-dark">
-                {editing ? "Edit tag" : "New tag"}
+                {editing ? t("Edit tag") : t("New tag")}
               </h2>
             </div>
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name
+                  {t("Name")}
                 </label>
                 <input
                   type="text"
@@ -288,7 +288,7 @@ export default function TagsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
+                  {t("Description")}
                 </label>
                 <input
                   type="text"
@@ -302,7 +302,7 @@ export default function TagsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Colour
+                  {t("Colour")}
                 </label>
                 <div className="flex gap-2 flex-wrap">
                   {TAG_COLORS.map((c) => (
@@ -314,7 +314,7 @@ export default function TagsPage() {
                         TAG_COLOR_CLASSES[c]
                       } ${form.color === c ? "ring-2 ring-primary" : ""}`}
                     >
-                      {form.name || "Tag"}
+                      {form.name || t("Tag")}
                     </button>
                   ))}
                 </div>
@@ -325,14 +325,14 @@ export default function TagsPage() {
                 onClick={() => setShowModal(false)}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium"
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 onClick={save}
                 disabled={saving}
                 className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium"
               >
-                {saving ? "Saving..." : "Save"}
+                {saving ? t("Saving...") : t("Save")}
               </button>
             </div>
           </div>

@@ -7,14 +7,16 @@ import type { RequiredApprover } from "@/lib/approvalEngine";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 const STATUS_DISPLAY: Record<string, string> = {
-  pending: "APPLIED",
-  pending_decision: "PENDING DECISION",
-  approved: "APPROVED",
-  rejected: "DECLINED",
-  requires_changes: "NEEDS MORE WORK",
-  completed: "COMPLETED",
+  pending: tk("APPLIED"),
+  pending_decision: tk("PENDING DECISION"),
+  approved: tk("APPROVED"),
+  rejected: tk("DECLINED"),
+  requires_changes: tk("NEEDS MORE WORK"),
+  completed: tk("COMPLETED"),
 };
 
 interface QuoteDetail {
@@ -79,6 +81,7 @@ interface SpendDetail {
 
 export default function SpendDetailPage() {
   const { session, loading } = useAuth();
+  const t = useT();
   const params = useParams();
   const spendId = params.id as string;
   const [data, setData] = useState<SpendDetail | null>(null);
@@ -133,16 +136,16 @@ export default function SpendDetailPage() {
         // Re-read rather than appending locally, so the note shown is the one
         // the server stamped with the author and time.
         await fetchData();
-        setToast({ message: "Note added", type: "success" });
+        setToast({ message: t("Note added"), type: "success" });
       } else {
         const err = await res.json().catch(() => ({}));
         setToast({
-          message: err.error || "Could not add the note",
+          message: err.error || t("Could not add the note"),
           type: "error",
         });
       }
     } catch {
-      setToast({ message: "Could not add the note", type: "error" });
+      setToast({ message: t("Could not add the note"), type: "error" });
     } finally {
       setAddingNote(false);
     }
@@ -169,10 +172,10 @@ export default function SpendDetailPage() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } else {
-        setToast({ message: "Failed to download quote", type: "error" });
+        setToast({ message: t("Failed to download quote"), type: "error" });
       }
     } catch {
-      setToast({ message: "Download failed", type: "error" });
+      setToast({ message: t("Download failed"), type: "error" });
     }
     setDownloading(null);
   };
@@ -180,7 +183,7 @@ export default function SpendDetailPage() {
   const handleDecision = async (decision: string) => {
     if (decision === "requires_changes" && !comments.trim()) {
       setToast({
-        message: "Please add comments explaining what needs to change",
+        message: t("Please add comments explaining what needs to change"),
         type: "error",
       });
       return;
@@ -197,14 +200,14 @@ export default function SpendDetailPage() {
     });
 
     if (res.ok) {
-      setToast({ message: "Decision recorded", type: "success" });
+      setToast({ message: t("Decision recorded"), type: "success" });
       setComments("");
       setShowCommentsFor(null);
       setSelectedQuotePreference(undefined);
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Failed", type: "error" });
+      setToast({ message: err.error || t("Failed"), type: "error" });
     }
     setSubmitting(false);
   };
@@ -217,11 +220,11 @@ export default function SpendDetailPage() {
       body: JSON.stringify({ quoteIndex }),
     });
     if (res.ok) {
-      setToast({ message: "Quote confirmed", type: "success" });
+      setToast({ message: t("Quote confirmed"), type: "success" });
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Failed", type: "error" });
+      setToast({ message: err.error || t("Failed"), type: "error" });
     }
     setSubmitting(false);
   };
@@ -244,12 +247,12 @@ export default function SpendDetailPage() {
       }),
     });
     if (res.ok) {
-      setToast({ message: "Project marked as completed", type: "success" });
+      setToast({ message: t("Project marked as completed"), type: "success" });
       setShowCompleteModal(false);
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Failed", type: "error" });
+      setToast({ message: err.error || t("Failed"), type: "error" });
     }
     setCompleting(false);
   };
@@ -264,17 +267,17 @@ export default function SpendDetailPage() {
       body: JSON.stringify({ progress }),
     });
     if (res.ok) {
-      setToast({ message: "Progress updated", type: "success" });
+      setToast({ message: t("Progress updated"), type: "success" });
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Failed", type: "error" });
+      setToast({ message: err.error || t("Failed"), type: "error" });
     }
     setSubmitting(false);
   };
 
   const handleForceApprove = async () => {
-    if (!confirm("Mark this application as already approved? This skips the normal approval flow.")) return;
+    if (!confirm(t("Mark this application as already approved? This skips the normal approval flow."))) return;
     setSubmitting(true);
     const res = await authFetch(`/api/spend/${spendId}/approve`, {
       method: "POST",
@@ -282,16 +285,16 @@ export default function SpendDetailPage() {
       body: JSON.stringify({ forceApprove: true }),
     });
     if (res.ok) {
-      setToast({ message: "Marked as approved", type: "success" });
+      setToast({ message: t("Marked as approved"), type: "success" });
       fetchData();
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Failed", type: "error" });
+      setToast({ message: err.error || t("Failed"), type: "error" });
     }
     setSubmitting(false);
   };
 
-  if (loading || !data) return <div className="p-6">Loading...</div>;
+  if (loading || !data) return <div className="p-6">{t("Loading...")}</div>;
 
   // Whether this person is one of the approvers THIS application asked for.
   // The permission alone is not enough - the list was frozen at submission.
@@ -323,9 +326,9 @@ export default function SpendDetailPage() {
 
   // Manual execution progress (falls back to a status-derived default).
   const PROGRESS_OPTS = [
-    { key: "not_started", label: "Not Started" },
-    { key: "in_progress", label: "In Progress" },
-    { key: "completed", label: "Completed" },
+    { key: "not_started", label: tk("Not Started") },
+    { key: "in_progress", label: tk("In Progress") },
+    { key: "completed", label: tk("Completed") },
   ] as const;
   const effectiveProgress: "not_started" | "in_progress" | "completed" =
     data.projectProgress ||
@@ -369,7 +372,7 @@ export default function SpendDetailPage() {
             href="/spend"
             className="text-gray-400 hover:text-gray-600 text-sm"
           >
-            &larr; Back
+            &larr; {t("Back")}
           </Link>
           <h1 className="text-2xl font-bold text-dark">
             {data.projectName}
@@ -379,15 +382,21 @@ export default function SpendDetailPage() {
               statusColors[data.status] || ""
             }`}
           >
-            {STATUS_DISPLAY[data.status] || data.status}
+            {STATUS_DISPLAY[data.status]
+              ? t(STATUS_DISPLAY[data.status])
+              : data.status}
           </span>
         </div>
         <p className="text-gray-500 text-sm">
-          Submitted by {data.submittedByName} on{" "}
-          {new Date(data.submittedAt).toLocaleDateString()}
+          {t("Submitted by {name} on {date}", {
+            name: data.submittedByName,
+            date: new Date(data.submittedAt).toLocaleDateString(),
+          })}
           {data.submittedOnBehalf && (
             <span className="ml-2 text-primary">
-              (on behalf of {data.applicantName} {data.applicantSurname})
+              {t("(on behalf of {name})", {
+                name: `${data.applicantName} ${data.applicantSurname}`,
+              })}
             </span>
           )}
         </p>
@@ -397,7 +406,7 @@ export default function SpendDetailPage() {
               href={`/spend/${data.id}/edit`}
               className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
             >
-              Edit Application
+              {t("Edit Application")}
             </Link>
           )}
           {canComplete && (
@@ -405,7 +414,7 @@ export default function SpendDetailPage() {
               onClick={() => setShowCompleteModal(true)}
               className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
             >
-              Complete Project
+              {t("Complete Project")}
             </button>
           )}
           {isAdmin && data.status !== "approved" && data.status !== "completed" && (
@@ -414,7 +423,7 @@ export default function SpendDetailPage() {
               disabled={submitting}
               className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
             >
-              Already Approved
+              {t("Already Approved")}
             </button>
           )}
         </div>
@@ -425,13 +434,13 @@ export default function SpendDetailPage() {
           {/* Details */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
-              DETAILS
+              {t("DETAILS")}
             </h3>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">
               {data.description}
             </p>
             <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">Estimated Amount</p>
+              <p className="text-sm text-gray-500">{t("Estimated Amount")}</p>
               <p className="text-2xl font-bold text-dark">
                 R{data.estimatedAmount.toLocaleString()}
               </p>
@@ -441,7 +450,7 @@ export default function SpendDetailPage() {
               {data.supplierConnection && (
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <p className="text-xs text-gray-500">
-                    Supplier Connection
+                    {t("Supplier Connection")}
                   </p>
                   <p className="text-sm font-medium text-dark mt-1">
                     {data.supplierConnection}
@@ -450,15 +459,15 @@ export default function SpendDetailPage() {
               )}
               {data.budgeted !== undefined && (
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">Budgeted</p>
+                  <p className="text-xs text-gray-500">{t("Budgeted")}</p>
                   <p className="text-sm font-medium text-dark mt-1">
-                    {data.budgeted ? "Yes" : "No"}
+                    {data.budgeted ? t("Yes") : t("No")}
                   </p>
                 </div>
               )}
               {data.fundingAllocations && data.fundingAllocations.length > 0 ? (
                 <div className="p-3 bg-gray-50 rounded-lg md:col-span-1">
-                  <p className="text-xs text-gray-500">Source(s) of Funds</p>
+                  <p className="text-xs text-gray-500">{t("Source(s) of Funds")}</p>
                   <div className="mt-1 space-y-0.5">
                     {data.fundingAllocations.map((a) => (
                       <div
@@ -476,7 +485,7 @@ export default function SpendDetailPage() {
               ) : (
                 data.sourceOfFunds && (
                   <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500">Source of Funds</p>
+                    <p className="text-xs text-gray-500">{t("Source of Funds")}</p>
                     <p className="text-sm font-medium text-dark mt-1">
                       {data.sourceOfFunds}
                     </p>
@@ -489,7 +498,7 @@ export default function SpendDetailPage() {
             {data.submittedOnBehalf && (
               <div className="mt-4 p-3 bg-primary/5 rounded-lg border border-primary/10">
                 <p className="text-xs text-gray-500 mb-1">
-                  Application For
+                  {t("Application For")}
                 </p>
                 <p className="text-sm font-medium text-dark">
                   {data.applicantName} {data.applicantSurname}
@@ -514,11 +523,11 @@ export default function SpendDetailPage() {
               return (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                   <h3 className="font-medium text-sm text-gray-500 mb-3">
-                    QUOTE PRICE SUMMARY (Excl. VAT)
+                    {t("QUOTE PRICE SUMMARY (Excl. VAT)")}
                   </h3>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="p-4 bg-risk-high/5 rounded-lg text-center">
-                      <p className="text-xs text-gray-500">Highest</p>
+                      <p className="text-xs text-gray-500">{t("Highest")}</p>
                       <p className="text-xl font-bold text-risk-high mt-1">
                         R
                         {highest.toLocaleString(undefined, {
@@ -528,7 +537,7 @@ export default function SpendDetailPage() {
                       </p>
                     </div>
                     <div className="p-4 bg-emerald-50 rounded-lg text-center">
-                      <p className="text-xs text-gray-500">Lowest</p>
+                      <p className="text-xs text-gray-500">{t("Lowest")}</p>
                       <p className="text-xl font-bold text-emerald-600 mt-1">
                         R
                         {lowest.toLocaleString(undefined, {
@@ -538,7 +547,7 @@ export default function SpendDetailPage() {
                       </p>
                     </div>
                     <div className="p-4 bg-primary/5 rounded-lg text-center">
-                      <p className="text-xs text-gray-500">Average</p>
+                      <p className="text-xs text-gray-500">{t("Average")}</p>
                       <p className="text-xl font-bold text-primary mt-1">
                         R
                         {average.toLocaleString(undefined, {
@@ -556,7 +565,7 @@ export default function SpendDetailPage() {
           {data.quotes.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="font-medium text-sm text-gray-500 mb-3">
-                QUOTES ({data.quotes.length})
+                {t("QUOTES ({n})", { n: data.quotes.length })}
               </h3>
               <div className="space-y-3">
                 {data.quotes.map((q, i) => {
@@ -588,18 +597,20 @@ export default function SpendDetailPage() {
                             />
                           </svg>
                           <span className="text-sm font-medium text-dark">
-                            Quote {i + 1}
+                            {t("Quote {n}", { n: i + 1 })}
                             {detail?.supplierName &&
                               ` — ${detail.supplierName}`}
                           </span>
                           {isSelected && (
                             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs rounded-full font-medium">
-                              SELECTED
+                              {t("SELECTED")}
                             </span>
                           )}
                           {prefCount > 0 && (
                             <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                              {prefCount} preference{prefCount !== 1 ? "s" : ""}
+                              {prefCount === 1
+                                ? t("{n} preference", { n: prefCount })
+                                : t("{n} preferences", { n: prefCount })}
                             </span>
                           )}
                         </div>
@@ -610,7 +621,7 @@ export default function SpendDetailPage() {
                               disabled={submitting}
                               className="text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 px-2 py-1 rounded font-medium transition-colors disabled:opacity-50"
                             >
-                              Confirm This Quote
+                              {t("Confirm This Quote")}
                             </button>
                           )}
                           <button
@@ -632,8 +643,8 @@ export default function SpendDetailPage() {
                               />
                             </svg>
                             {downloading === i + 1
-                              ? "Downloading..."
-                              : "Download"}
+                              ? t("Downloading...")
+                              : t("Download")}
                           </button>
                         </div>
                       </div>
@@ -643,7 +654,7 @@ export default function SpendDetailPage() {
                             detail.priceExclVat > 0 && (
                               <div className="mt-2 p-2 bg-gray-50 rounded inline-block">
                                 <span className="text-xs text-gray-400">
-                                  Price Excl. VAT:{" "}
+                                  {t("Price Excl. VAT:")}{" "}
                                 </span>
                                 <span className="text-sm font-semibold text-dark">
                                   R
@@ -660,7 +671,7 @@ export default function SpendDetailPage() {
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 text-xs">
                             {detail.supplierName && (
                               <div>
-                                <span className="text-gray-400">Supplier</span>
+                                <span className="text-gray-400">{t("Supplier")}</span>
                                 <p className="text-gray-700">
                                   {detail.supplierName}
                                 </p>
@@ -668,7 +679,7 @@ export default function SpendDetailPage() {
                             )}
                             {detail.supplierEmail && (
                               <div>
-                                <span className="text-gray-400">Email</span>
+                                <span className="text-gray-400">{t("Email")}</span>
                                 <p className="text-gray-700">
                                   <a
                                     href={`mailto:${detail.supplierEmail}`}
@@ -681,7 +692,7 @@ export default function SpendDetailPage() {
                             )}
                             {detail.supplierPhone && (
                               <div>
-                                <span className="text-gray-400">Phone</span>
+                                <span className="text-gray-400">{t("Phone")}</span>
                                 <p className="text-gray-700">
                                   {detail.supplierPhone}
                                 </p>
@@ -689,7 +700,7 @@ export default function SpendDetailPage() {
                             )}
                             {detail.supplierWebsite && (
                               <div>
-                                <span className="text-gray-400">Website</span>
+                                <span className="text-gray-400">{t("Website")}</span>
                                 <p className="text-gray-700">
                                   <a
                                     href={detail.supplierWebsite}
@@ -697,7 +708,7 @@ export default function SpendDetailPage() {
                                     rel="noopener noreferrer"
                                     className="text-primary hover:underline"
                                   >
-                                    Visit
+                                    {t("Visit")}
                                   </a>
                                 </p>
                               </div>
@@ -716,22 +727,22 @@ export default function SpendDetailPage() {
           {data.status === "completed" && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="font-medium text-sm text-gray-500 mb-3">
-                COMPLETION DETAILS
+                {t("COMPLETION DETAILS")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">Finished On Time</p>
+                  <p className="text-xs text-gray-500">{t("Finished On Time")}</p>
                   <p
                     className={`text-sm font-medium mt-1 ${
                       data.finishedOnTime ? "text-emerald-600" : "text-risk-high"
                     }`}
                   >
-                    {data.finishedOnTime ? "Yes" : "No"}
+                    {data.finishedOnTime ? t("Yes") : t("No")}
                   </p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg">
                   <p className="text-xs text-gray-500">
-                    Finished Within Budget
+                    {t("Finished Within Budget")}
                   </p>
                   <p
                     className={`text-sm font-medium mt-1 ${
@@ -740,14 +751,14 @@ export default function SpendDetailPage() {
                         : "text-risk-high"
                     }`}
                   >
-                    {data.finishedWithinBudget ? "Yes" : "No"}
+                    {data.finishedWithinBudget ? t("Yes") : t("No")}
                   </p>
                 </div>
                 {!data.finishedWithinBudget && data.budgetOverrunAmount && (
                   <>
                     <div className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500">
-                        Budget Overrun Amount
+                        {t("Budget Overrun Amount")}
                       </p>
                       <p className="text-sm font-medium text-risk-high mt-1">
                         R{data.budgetOverrunAmount.toLocaleString()}
@@ -755,7 +766,7 @@ export default function SpendDetailPage() {
                     </div>
                     {data.budgetOverrunExplanation && (
                       <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-xs text-gray-500">Explanation</p>
+                        <p className="text-xs text-gray-500">{t("Explanation")}</p>
                         <p className="text-sm text-gray-700 mt-1">
                           {data.budgetOverrunExplanation}
                         </p>
@@ -766,7 +777,7 @@ export default function SpendDetailPage() {
               </div>
               {data.completedAt && (
                 <p className="text-xs text-gray-400 mt-3">
-                  Completed on{" "}
+                  {t("Completed on")}{" "}
                   {new Date(data.completedAt).toLocaleDateString()}
                 </p>
               )}
@@ -776,7 +787,7 @@ export default function SpendDetailPage() {
           {/* Approval History */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
-              APPROVAL HISTORY ({data.approvals.length})
+              {t("APPROVAL HISTORY ({n})", { n: data.approvals.length })}
             </h3>
             {data.approvals.length > 0 ? (
               <div className="space-y-3">
@@ -803,7 +814,9 @@ export default function SpendDetailPage() {
                         <div className="flex items-center gap-2">
                           {a.preferredQuoteIndex !== undefined && (
                             <span className="text-xs text-blue-600">
-                              Preferred Quote {a.preferredQuoteIndex + 1}
+                              {t("Preferred Quote {n}", {
+                                n: a.preferredQuoteIndex + 1,
+                              })}
                             </span>
                           )}
                           <span
@@ -811,8 +824,9 @@ export default function SpendDetailPage() {
                               decColors[a.decision] || ""
                             }`}
                           >
-                            {STATUS_DISPLAY[a.decision] ||
-                              a.decision.charAt(0).toUpperCase() +
+                            {STATUS_DISPLAY[a.decision]
+                              ? t(STATUS_DISPLAY[a.decision])
+                              : a.decision.charAt(0).toUpperCase() +
                                 a.decision.slice(1)}
                           </span>
                         </div>
@@ -831,7 +845,7 @@ export default function SpendDetailPage() {
               </div>
             ) : (
               <p className="text-sm text-gray-400 italic">
-                No decisions yet.
+                {t("No decisions yet.")}
               </p>
             )}
           </div>
@@ -839,7 +853,7 @@ export default function SpendDetailPage() {
           {/* Who this application needs, and where each of them stands */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-medium text-sm text-gray-500 mb-1">
-              APPROVALS REQUIRED
+              {t("APPROVALS REQUIRED")}
             </h3>
             {data.approvalTierLabel && (
               <p className="text-xs text-gray-400 mb-3">
@@ -857,12 +871,11 @@ export default function SpendDetailPage() {
 
             {data.approvalLogOnly ? (
               <p className="text-sm text-gray-500">
-                This amount needs no approval. It is recorded for the record
-                only.
+                {t("This amount needs no approval. It is recorded for the record only.")}
               </p>
             ) : (data.requiredApprovers || []).length === 0 ? (
               <p className="text-sm text-gray-400 italic">
-                No approvers were set for this application.
+                {t("No approvers were set for this application.")}
               </p>
             ) : (
               <>
@@ -874,9 +887,12 @@ export default function SpendDetailPage() {
                         : "font-semibold"
                     }
                   >
-                    {progress.approved} of {progress.total}
+                    {t("{approved} of {total}", {
+                      approved: progress.approved,
+                      total: progress.total,
+                    })}
                   </span>{" "}
-                  approved
+                  {t("approved")}
                 </p>
                 <div className="space-y-2">
                   {(data.requiredApprovers || []).map((approver) => {
@@ -886,14 +902,14 @@ export default function SpendDetailPage() {
                     const decision = entries[entries.length - 1];
                     const label =
                       decision?.decision === "approved"
-                        ? "Approved"
+                        ? t("Approved")
                         : decision?.decision === "rejected"
-                          ? "Declined"
+                          ? t("Declined")
                           : decision?.decision === "responded"
-                            ? "Asked a question"
+                            ? t("Asked a question")
                             : decision?.decision === "requires_changes"
-                              ? "Needs more work"
-                              : "Waiting";
+                              ? t("Needs more work")
+                              : t("Waiting");
                     const tone =
                       decision?.decision === "approved"
                         ? "bg-emerald-100 text-emerald-700"
@@ -911,8 +927,8 @@ export default function SpendDetailPage() {
                           {approver.name}
                           <span className="text-xs text-gray-400 ml-2">
                             {approver.tagName}
-                            {approver.mode === "any" && " (any one)"}
-                            {!approver.userId && " - no login"}
+                            {approver.mode === "any" && " " + t("(any one)")}
+                            {!approver.userId && " - " + t("no login")}
                           </span>
                         </span>
                         <span
@@ -926,8 +942,7 @@ export default function SpendDetailPage() {
                 </div>
                 {progress.responded.length > 0 && (
                   <p className="text-xs text-blue-700 mt-3">
-                    A question is outstanding. The application does not move
-                    until it is answered and that approver decides.
+                    {t("A question is outstanding. The application does not move until it is answered and that approver decides.")}
                   </p>
                 )}
               </>
@@ -937,7 +952,7 @@ export default function SpendDetailPage() {
           {/* Notes - open to anyone who can see the project */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
-              NOTES ({notes.length})
+              {t("NOTES ({n})", { n: notes.length })}
             </h3>
 
             <div className="mb-4">
@@ -946,19 +961,19 @@ export default function SpendDetailPage() {
                 onChange={(e) => setNewNote(e.target.value)}
                 rows={3}
                 maxLength={2000}
-                placeholder="Add a note about this project..."
+                placeholder={t("Add a note about this project...")}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               />
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs text-gray-400">
-                  Your name and the date and time are recorded on the note.
+                  {t("Your name and the date and time are recorded on the note.")}
                 </p>
                 <button
                   onClick={handleAddNote}
                   disabled={addingNote || !newNote.trim()}
                   className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 >
-                  {addingNote ? "Adding..." : "Add Note"}
+                  {addingNote ? t("Adding...") : t("Add Note")}
                 </button>
               </div>
             </div>
@@ -981,7 +996,7 @@ export default function SpendDetailPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-400 italic">No notes yet.</p>
+              <p className="text-sm text-gray-400 italic">{t("No notes yet.")}</p>
             )}
           </div>
         </div>
@@ -991,7 +1006,7 @@ export default function SpendDetailPage() {
           {/* Project progress */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
-              PROJECT PROGRESS
+              {t("PROJECT PROGRESS")}
             </h3>
             {canSetProgress ? (
               <div className="grid grid-cols-3 gap-2">
@@ -1008,19 +1023,22 @@ export default function SpendDetailPage() {
                           : "bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50"
                       }`}
                     >
-                      {opt.label}
+                      {t(opt.label)}
                     </button>
                   );
                 })}
               </div>
             ) : (
               <p className="text-sm font-medium text-dark">
-                {PROGRESS_OPTS.find((o) => o.key === effectiveProgress)?.label}
+                {t(
+                  PROGRESS_OPTS.find((o) => o.key === effectiveProgress)?.label ??
+                    ""
+                )}
               </p>
             )}
             {!data.projectProgress && (
               <p className="text-xs text-gray-400 mt-2">
-                Auto-set from approval status until you change it.
+                {t("Auto-set from approval status until you change it.")}
               </p>
             )}
           </div>
@@ -1028,7 +1046,7 @@ export default function SpendDetailPage() {
           {/* Decision panel */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-6">
             <h3 className="font-medium text-sm text-gray-500 mb-3">
-              YOUR DECISION
+              {t("YOUR DECISION")}
             </h3>
 
             {canDecide ? (
@@ -1037,7 +1055,7 @@ export default function SpendDetailPage() {
                 {data.quoteDetails && data.quoteDetails.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Preferred Quote (optional)
+                      {t("Preferred Quote (optional)")}
                     </label>
                     <div className="space-y-2">
                       {data.quoteDetails.map((qd, i) => (
@@ -1058,7 +1076,7 @@ export default function SpendDetailPage() {
                           />
                           <div className="text-xs">
                             <span className="font-medium">
-                              Quote {i + 1}
+                              {t("Quote {n}", { n: i + 1 })}
                             </span>
                             {qd.supplierName && (
                               <span className="text-gray-500">
@@ -1087,7 +1105,7 @@ export default function SpendDetailPage() {
                 {showCommentsFor && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Comments{" "}
+                      {t("Comments")}{" "}
                       {showCommentsFor === "requires_changes" && (
                         <span className="text-risk-high">*</span>
                       )}
@@ -1098,8 +1116,8 @@ export default function SpendDetailPage() {
                       rows={4}
                       placeholder={
                         showCommentsFor === "requires_changes"
-                          ? "Explain what changes are needed..."
-                          : "Add any comments or conditions..."
+                          ? t("Explain what changes are needed...")
+                          : t("Add any comments or conditions...")
                       }
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
                     />
@@ -1116,14 +1134,12 @@ export default function SpendDetailPage() {
                         }`}
                       >
                         {submitting
-                          ? "Submitting..."
-                          : `Confirm ${
-                              showCommentsFor === "approved"
-                                ? "Approval"
-                                : showCommentsFor === "rejected"
-                                ? "Decline"
-                                : "Needs More Work"
-                            }`}
+                          ? t("Submitting...")
+                          : showCommentsFor === "approved"
+                          ? t("Confirm Approval")
+                          : showCommentsFor === "rejected"
+                          ? t("Confirm Decline")
+                          : t("Confirm Needs More Work")}
                       </button>
                       <button
                         onClick={() => {
@@ -1132,7 +1148,7 @@ export default function SpendDetailPage() {
                         }}
                         className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-colors"
                       >
-                        Cancel
+                        {t("Cancel")}
                       </button>
                     </div>
                   </div>
@@ -1145,70 +1161,70 @@ export default function SpendDetailPage() {
                       onClick={() => setShowCommentsFor("approved")}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
                     >
-                      Approve
+                      {t("Approve")}
                     </button>
                     <button
                       onClick={() => setShowCommentsFor("rejected")}
                       className="w-full bg-risk-high hover:bg-red-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
                     >
-                      Decline
+                      {t("Decline")}
                     </button>
                     <button
                       onClick={() => setShowCommentsFor("responded")}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
-                      title="Ask a question or leave a comment without deciding yet"
+                      title={t("Ask a question or leave a comment without deciding yet")}
                     >
-                      Respond with a question
+                      {t("Respond with a question")}
                     </button>
                     <button
                       onClick={() => setShowCommentsFor("requires_changes")}
                       className="w-full bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg text-sm font-medium transition-colors"
                     >
-                      Needs More Work
+                      {t("Needs More Work")}
                     </button>
                   </div>
                 )}
               </div>
             ) : canApprove && alreadyApproved ? (
               <p className="text-sm text-gray-400 italic text-center py-4">
-                You have already submitted your decision.
+                {t("You have already submitted your decision.")}
               </p>
             ) : !canApprove ? (
               <div className="space-y-2">
                 <button
                   disabled
                   className="w-full bg-gray-200 text-gray-400 py-2.5 rounded-lg text-sm font-medium cursor-not-allowed"
-                  title="You do not have permission to approve spend applications"
+                  title={t("You do not have permission to approve spend applications")}
                 >
-                  Approve
+                  {t("Approve")}
                 </button>
                 <button
                   disabled
                   className="w-full bg-gray-200 text-gray-400 py-2.5 rounded-lg text-sm font-medium cursor-not-allowed"
-                  title="You do not have permission to approve spend applications"
+                  title={t("You do not have permission to approve spend applications")}
                 >
-                  Decline
+                  {t("Decline")}
                 </button>
                 <button
                   disabled
                   className="w-full bg-gray-200 text-gray-400 py-2.5 rounded-lg text-sm font-medium cursor-not-allowed"
-                  title="You do not have permission to approve spend applications"
+                  title={t("You do not have permission to approve spend applications")}
                 >
-                  Needs More Work
+                  {t("Needs More Work")}
                 </button>
                 <p className="text-xs text-gray-400 text-center mt-2">
-                  You do not have permission to make decisions on spend applications.
+                  {t("You do not have permission to make decisions on spend applications.")}
                 </p>
               </div>
             ) : (
               <p className="text-sm text-gray-400 italic text-center py-4">
                 {data.status === "approved"
-                  ? "This application has been approved."
+                  ? t("This application has been approved.")
                   : data.status === "rejected"
-                  ? "This application has been declined."
+                  ? t("This application has been declined.")
                   : data.status === "completed"
-                  ? "This project has been completed."
-                  : "Decisions are not available for this status."}
+                  ? t("This project has been completed.")
+                  : t("Decisions are not available for this status.")}
               </p>
             )}
           </div>
@@ -1217,7 +1233,7 @@ export default function SpendDetailPage() {
           {data.approvedAmount !== undefined && data.approvedAmount > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
               <h3 className="font-medium text-sm text-gray-500 mb-2">
-                APPROVED AMOUNT
+                {t("APPROVED AMOUNT")}
               </h3>
               <p className="text-2xl font-bold text-emerald-600">
                 R{data.approvedAmount.toLocaleString()}
@@ -1225,7 +1241,7 @@ export default function SpendDetailPage() {
               {data.selectedQuoteIndex !== undefined &&
                 data.quoteDetails?.[data.selectedQuoteIndex] && (
                   <p className="text-xs text-gray-500 mt-1">
-                    From Quote {data.selectedQuoteIndex + 1} —{" "}
+                    {t("From Quote {n}", { n: data.selectedQuoteIndex + 1 })} —{" "}
                     {data.quoteDetails[data.selectedQuoteIndex].supplierName}
                   </p>
                 )}
@@ -1238,11 +1254,13 @@ export default function SpendDetailPage() {
       {showCompleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-lg p-6">
-            <h2 className="text-lg font-semibold mb-4">Complete Project</h2>
+            <h2 className="text-lg font-semibold mb-4">
+              {t("Complete Project")}
+            </h2>
             <form onSubmit={handleComplete} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Did the project finish on time?
+                  {t("Did the project finish on time?")}
                 </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -1253,7 +1271,7 @@ export default function SpendDetailPage() {
                       onChange={() => setFinishedOnTime(true)}
                       className="w-4 h-4 text-primary focus:ring-primary"
                     />
-                    <span className="text-sm">Yes</span>
+                    <span className="text-sm">{t("Yes")}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1263,14 +1281,14 @@ export default function SpendDetailPage() {
                       onChange={() => setFinishedOnTime(false)}
                       className="w-4 h-4 text-primary focus:ring-primary"
                     />
-                    <span className="text-sm">No</span>
+                    <span className="text-sm">{t("No")}</span>
                   </label>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Did the project finish within budget?
+                  {t("Did the project finish within budget?")}
                 </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -1281,7 +1299,7 @@ export default function SpendDetailPage() {
                       onChange={() => setFinishedWithinBudget(true)}
                       className="w-4 h-4 text-primary focus:ring-primary"
                     />
-                    <span className="text-sm">Yes</span>
+                    <span className="text-sm">{t("Yes")}</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1291,7 +1309,7 @@ export default function SpendDetailPage() {
                       onChange={() => setFinishedWithinBudget(false)}
                       className="w-4 h-4 text-primary focus:ring-primary"
                     />
-                    <span className="text-sm">No</span>
+                    <span className="text-sm">{t("No")}</span>
                   </label>
                 </div>
               </div>
@@ -1300,7 +1318,7 @@ export default function SpendDetailPage() {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      By how much did the project overrun? (ZAR)
+                      {t("By how much did the project overrun? (ZAR)")}
                     </label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
@@ -1321,7 +1339,7 @@ export default function SpendDetailPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Brief explanation
+                      {t("Brief explanation")}
                     </label>
                     <textarea
                       value={budgetOverrunExplanation}
@@ -1330,7 +1348,7 @@ export default function SpendDetailPage() {
                       }
                       rows={3}
                       required
-                      placeholder="Explain the budget overrun..."
+                      placeholder={t("Explain the budget overrun...")}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
                     />
                   </div>
@@ -1343,14 +1361,14 @@ export default function SpendDetailPage() {
                   disabled={completing}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 >
-                  {completing ? "Completing..." : "Mark as Completed"}
+                  {completing ? t("Completing...") : t("Mark as Completed")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCompleteModal(false)}
                   className="px-6 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
                 >
-                  Cancel
+                  {t("Cancel")}
                 </button>
               </div>
             </form>

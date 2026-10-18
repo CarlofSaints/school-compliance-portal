@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Toast from "@/components/Toast";
 import FundingSplit, { type Allocation } from "@/components/FundingSplit";
 import { DEFAULT_SUPPLIER_CONNECTIONS } from "@/lib/positions";
+import { useT } from "@/components/I18nProvider";
 
 interface SpendSettings {
   sourcesOfFunds: string[];
@@ -59,6 +60,7 @@ interface QuoteEntry {
 
 export default function EditSpendPage() {
   const { session, loading } = useAuth("submit_spend");
+  const t = useT();
   const params = useParams();
   const router = useRouter();
   const spendId = params.id as string;
@@ -191,7 +193,7 @@ export default function EditSpendPage() {
 
     if (allocations.length === 0) {
       setToast({
-        message: "Select at least one source of funds.",
+        message: t("Select at least one source of funds."),
         type: "error",
       });
       return;
@@ -239,13 +241,13 @@ export default function EditSpendPage() {
       router.push(`/spend/${spendId}`);
     } else {
       const err = await res.json();
-      setToast({ message: err.error || "Failed to save", type: "error" });
+      setToast({ message: err.error || t("Failed to save"), type: "error" });
     }
     setSubmitting(false);
   };
 
   if (loading || !data)
-    return <div className="p-6">Loading...</div>;
+    return <div className="p-6">{t("Loading...")}</div>;
 
   // Access check
   const isSubmitter = data.submittedBy === session?.id;
@@ -256,7 +258,7 @@ export default function EditSpendPage() {
   if (!isSubmitter && !isAdmin) {
     return (
       <div className="p-6 text-center text-gray-500">
-        You do not have permission to edit this application.
+        {t("You do not have permission to edit this application.")}
       </div>
     );
   }
@@ -264,7 +266,7 @@ export default function EditSpendPage() {
   if (data.status === "approved" || data.status === "completed") {
     return (
       <div className="p-6 text-center text-gray-500">
-        This application cannot be edited in its current status.
+        {t("This application cannot be edited in its current status.")}
       </div>
     );
   }
@@ -280,9 +282,9 @@ export default function EditSpendPage() {
       )}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-dark">Edit Application</h1>
+        <h1 className="text-2xl font-bold text-dark">{t("Edit Application")}</h1>
         <p className="text-gray-500 text-sm">
-          Editing: {data.projectName}
+          {t("Editing: {name}", { name: data.projectName })}
         </p>
       </div>
 
@@ -298,13 +300,13 @@ export default function EditSpendPage() {
                 className="w-4 h-4 text-primary focus:ring-primary rounded"
               />
               <span className="text-sm font-medium text-gray-700">
-                Filling in this form for someone else?
+                {t("Filling in this form for someone else?")}
               </span>
             </label>
             {onBehalf && (
               <div className="mt-4">
                 <label className="block text-xs text-gray-500 mb-1">
-                  Who is this for?
+                  {t("Who is this for?")}
                 </label>
                 <select
                   value={applicantUserId}
@@ -321,7 +323,7 @@ export default function EditSpendPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 >
                   <option value="">
-                    Someone not on the portal (type the details below)
+                    {t("Someone not on the portal (type the details below)")}
                   </option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
@@ -335,7 +337,7 @@ export default function EditSpendPage() {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Name
+                    {t("Name")}
                   </label>
                   <input
                     type="text"
@@ -347,7 +349,7 @@ export default function EditSpendPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Surname
+                    {t("Surname")}
                   </label>
                   <input
                     type="text"
@@ -359,7 +361,7 @@ export default function EditSpendPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Email
+                    {t("Email")}
                   </label>
                   <input
                     type="email"
@@ -376,7 +378,7 @@ export default function EditSpendPage() {
           {/* Project Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Project Name
+              {t("Project Name")}
             </label>
             <input
               type="text"
@@ -390,7 +392,7 @@ export default function EditSpendPage() {
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+              {t("Description")}
             </label>
             <textarea
               value={description}
@@ -404,7 +406,7 @@ export default function EditSpendPage() {
           {/* Estimated Amount */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estimated Amount (ZAR)
+              {t("Estimated Amount (ZAR)")}
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
@@ -425,7 +427,7 @@ export default function EditSpendPage() {
           {/* Supplier Connection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Supplier Connection
+              {t("Supplier Connection")}
             </label>
             <select
               value={supplierConnection}
@@ -443,7 +445,7 @@ export default function EditSpendPage() {
           {/* Budgeted */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Has this been budgeted for?
+              {t("Has this been budgeted for?")}
             </label>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -454,7 +456,7 @@ export default function EditSpendPage() {
                   onChange={() => setBudgeted(true)}
                   className="w-4 h-4 text-primary focus:ring-primary"
                 />
-                <span className="text-sm">Yes</span>
+                <span className="text-sm">{t("Yes")}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -464,7 +466,7 @@ export default function EditSpendPage() {
                   onChange={() => setBudgeted(false)}
                   className="w-4 h-4 text-primary focus:ring-primary"
                 />
-                <span className="text-sm">No</span>
+                <span className="text-sm">{t("No")}</span>
               </label>
             </div>
           </div>
@@ -472,11 +474,10 @@ export default function EditSpendPage() {
           {/* Source of Funds (multi-select with split) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Proposed Source(s) of Funds
+              {t("Proposed Source(s) of Funds")}
             </label>
             <p className="text-xs text-gray-500 mb-2">
-              Tick every source this spend will draw from. If it&apos;s split,
-              enter how much comes from each.
+              {t("Tick every source this spend will draw from. If it's split, enter how much comes from each.")}
             </p>
             <FundingSplit
               sources={sourcesOfFunds}
@@ -489,7 +490,7 @@ export default function EditSpendPage() {
           {/* Quotes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quotes (up to 4)
+              {t("Quotes (up to 4)")}
             </label>
             <div className="space-y-4">
               {[0, 1, 2, 3].map((i) => (
@@ -498,10 +499,10 @@ export default function EditSpendPage() {
                   className="border border-gray-200 rounded-lg p-4"
                 >
                   <p className="text-sm font-medium text-gray-600 mb-3">
-                    Quote {i + 1}
+                    {t("Quote {n}", { n: i + 1 })}
                     {quotes[i]?.existingPath && !quotes[i]?.file && (
                       <span className="text-xs text-primary ml-2">
-                        (existing file uploaded)
+                        {t("(existing file uploaded)")}
                       </span>
                     )}
                   </p>
@@ -519,7 +520,7 @@ export default function EditSpendPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Name
+                          {t("Supplier Name")}
                         </label>
                         <input
                           type="text"
@@ -534,7 +535,7 @@ export default function EditSpendPage() {
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Website
+                          {t("Supplier Website")}
                         </label>
                         <input
                           type="url"
@@ -549,7 +550,7 @@ export default function EditSpendPage() {
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Email
+                          {t("Supplier Email")}
                         </label>
                         <input
                           type="email"
@@ -564,7 +565,7 @@ export default function EditSpendPage() {
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Phone
+                          {t("Supplier Phone")}
                         </label>
                         <input
                           type="tel"
@@ -580,7 +581,7 @@ export default function EditSpendPage() {
                     </div>
                     <div className="mt-3">
                       <label className="block text-xs text-gray-500 mb-1">
-                        Price Excl. VAT (ZAR)
+                        {t("Price Excl. VAT (ZAR)")}
                       </label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
@@ -612,14 +613,14 @@ export default function EditSpendPage() {
               disabled={submitting}
               className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {submitting ? "Saving..." : "Save Changes"}
+              {submitting ? t("Saving...") : t("Save Changes")}
             </button>
             <button
               type="button"
               onClick={() => router.push(`/spend/${spendId}`)}
               className="px-6 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         </form>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { downloadWithAuth } from "@/lib/download";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 import { WEEKDAY_LABELS } from "@/lib/weeklyUpdate";
 import {
   ALL_FREQUENCIES,
@@ -75,6 +76,7 @@ const toggle = (list: string[], id: string) =>
   list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
 export default function ActionSummaryPage() {
+  const t = useT();
   const { session, loading } = useAuth(ADMIN_PERMISSIONS);
   const [data, setData] = useState<Data | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -87,7 +89,7 @@ export default function ActionSummaryPage() {
   const load = useCallback(async () => {
     const res = await authFetch("/api/action-summary", { cache: "no-store" });
     if (!res.ok) {
-      setLoadError(await apiErrorMessage(res, "Could not load the action summary settings."));
+      setLoadError(await apiErrorMessage(res, t("Could not load the action summary settings.")));
       return;
     }
     const d: Data = await res.json();
@@ -133,7 +135,7 @@ export default function ActionSummaryPage() {
         }),
       });
       if (!res.ok) {
-        setToast({ message: await apiErrorMessage(res, "Could not save."), type: "error" });
+        setToast({ message: await apiErrorMessage(res, t("Could not save.")), type: "error" });
         return;
       }
       const saved = await res.json();
@@ -141,7 +143,7 @@ export default function ActionSummaryPage() {
       // after a write can serve the previous copy.
       setData((d) => (d ? { ...d, ...saved } : d));
       setForm(formFrom(saved.settings));
-      setToast({ message: "Saved", type: "success" });
+      setToast({ message: t("Saved"), type: "success" });
     } finally {
       setBusy("");
     }
@@ -156,12 +158,12 @@ export default function ActionSummaryPage() {
         body: JSON.stringify({ action: kind }),
       });
       if (!res.ok) {
-        setToast({ message: await apiErrorMessage(res, "Could not send."), type: "error" });
+        setToast({ message: await apiErrorMessage(res, t("Could not send.")), type: "error" });
         return;
       }
       const r = await res.json();
       setToast({
-        message: kind === "send" ? `Summary ${r.summary}` : `Preview sent to ${session?.email}`,
+        message: kind === "send" ? t("Summary {summary}", { summary: r.summary }) : t("Preview sent to {email}", { email: session?.email ?? "" }),
         type: r.failed ? "error" : "success",
       });
       if (kind === "send") await load();
@@ -175,7 +177,7 @@ export default function ActionSummaryPage() {
     setBusy("download");
     const result = await downloadWithAuth("/api/action-summary?download=1", "action-items.xlsx");
     setBusy("");
-    if (!result.ok) setToast({ message: result.error || "Could not download the file.", type: "error" });
+    if (!result.ok) setToast({ message: result.error || t("Could not download the file."), type: "error" });
   };
 
   if (loading || !session) {
@@ -197,32 +199,31 @@ export default function ActionSummaryPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Action Summary Email</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("Action Summary Email")}</h1>
         <p className="text-gray-500 mt-1">
-          An email with every open action item attached as a colour-coded Excel file: person responsible, ETA, progress and the
-          latest update. Red is overdue, orange is due soon. You choose how often it goes and who gets it.
+          {t("An email with every open action item attached as a colour-coded Excel file: person responsible, ETA, progress and the latest update. Red is overdue, orange is due soon. You choose how often it goes and who gets it.")}
         </p>
       </div>
 
       {loadError && <p className="text-red-600 mb-4">{loadError}</p>}
-      {!data && !loadError && <p className="text-gray-500">Loading...</p>}
+      {!data && !loadError && <p className="text-gray-500">{t("Loading...")}</p>}
 
       {data && form && (
         <div className="space-y-6 max-w-3xl">
           {!data.emailConfigured && (
             <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4 text-sm">
-              Email is not set up on this site (no RESEND_API_KEY), so nothing will actually be delivered.
+              {t("Email is not set up on this site (no RESEND_API_KEY), so nothing will actually be delivered.")}
             </div>
           )}
 
           {/* What it would send now */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">If it went out now</h2>
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">{t("If it went out now")}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-              <Stat value={data.counts.open} label="Open" tone="primary" />
-              <Stat value={data.counts.overdue} label="Overdue" tone={data.counts.overdue ? "red" : "grey"} />
-              <Stat value={data.counts.dueSoon} label={`Due in ${data.settings.dueSoonDays} days`} tone={data.counts.dueSoon ? "orange" : "grey"} />
-              <Stat value={data.counts.noDate} label="No ETA set" tone="grey" />
+              <Stat value={data.counts.open} label={t("Open")} tone="primary" />
+              <Stat value={data.counts.overdue} label={t("Overdue")} tone={data.counts.overdue ? "red" : "grey"} />
+              <Stat value={data.counts.dueSoon} label={t("Due in {count} days", { count: data.settings.dueSoonDays })} tone={data.counts.dueSoon ? "orange" : "grey"} />
+              <Stat value={data.counts.noDate} label={t("No ETA set")} tone="grey" />
             </div>
             <div className="flex flex-wrap gap-3">
               <button
@@ -230,23 +231,23 @@ export default function ActionSummaryPage() {
                 disabled={busy !== ""}
                 className="bg-primary text-white px-4 py-2 rounded-md disabled:opacity-50"
               >
-                {busy === "download" ? "Building..." : "Download the Excel now"}
+                {busy === "download" ? t("Building...") : t("Download the Excel now")}
               </button>
               <button
                 onClick={() => post("preview")}
                 disabled={busy !== ""}
                 className="border border-primary text-primary px-4 py-2 rounded-md disabled:opacity-50"
               >
-                {busy === "preview" ? "Sending..." : "Email a preview to me"}
+                {busy === "preview" ? t("Sending...") : t("Email a preview to me")}
               </button>
               {!confirmSend ? (
                 <button
                   onClick={() => setConfirmSend(true)}
                   disabled={busy !== "" || data.recipients.length === 0 || dirty}
-                  title={dirty ? "Save your changes first" : data.recipients.length === 0 ? "Nobody is on the list yet" : ""}
+                  title={dirty ? t("Save your changes first") : data.recipients.length === 0 ? t("Nobody is on the list yet") : ""}
                   className="bg-gray-800 text-white px-4 py-2 rounded-md disabled:opacity-50"
                 >
-                  Send to the list now
+                  {t("Send to the list now")}
                 </button>
               ) : (
                 <span className="flex items-center gap-2">
@@ -255,10 +256,10 @@ export default function ActionSummaryPage() {
                     disabled={busy !== ""}
                     className="bg-red-600 text-white px-4 py-2 rounded-md disabled:opacity-50"
                   >
-                    {busy === "send" ? "Sending..." : `Yes, email all ${data.recipients.length}`}
+                    {busy === "send" ? t("Sending...") : t("Yes, email all {count}", { count: data.recipients.length })}
                   </button>
                   <button onClick={() => setConfirmSend(false)} className="text-gray-600 px-2">
-                    Cancel
+                    {t("Cancel")}
                   </button>
                 </span>
               )}
@@ -267,7 +268,7 @@ export default function ActionSummaryPage() {
 
           {/* Schedule */}
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
-            <h2 className="text-lg font-semibold text-gray-800">How often</h2>
+            <h2 className="text-lg font-semibold text-gray-800">{t("How often")}</h2>
 
             <label className="flex items-center gap-3">
               <input
@@ -276,12 +277,12 @@ export default function ActionSummaryPage() {
                 checked={form.enabled}
                 onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
               />
-              <span className="text-gray-800">Send the summary automatically</span>
+              <span className="text-gray-800">{t("Send the summary automatically")}</span>
             </label>
 
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="block">
-                <span className="text-sm text-gray-600">Send</span>
+                <span className="text-sm text-gray-600">{t("Send")}</span>
                 <select
                   className="mt-1 w-full border rounded-md px-3 py-2"
                   value={form.frequency}
@@ -289,7 +290,7 @@ export default function ActionSummaryPage() {
                 >
                   {ALL_FREQUENCIES.map((f) => (
                     <option key={f} value={f}>
-                      {FREQUENCY_LABELS[f]}
+                      {t(FREQUENCY_LABELS[f])}
                     </option>
                   ))}
                 </select>
@@ -297,7 +298,7 @@ export default function ActionSummaryPage() {
 
               {(form.frequency === "weekly" || form.frequency === "fortnightly") && (
                 <label className="block">
-                  <span className="text-sm text-gray-600">On</span>
+                  <span className="text-sm text-gray-600">{t("On")}</span>
                   <select
                     className="mt-1 w-full border rounded-md px-3 py-2"
                     value={form.weekday}
@@ -305,7 +306,7 @@ export default function ActionSummaryPage() {
                   >
                     {WEEKDAY_LABELS.map((d, i) => (
                       <option key={d} value={i}>
-                        {d} at 07:00
+                        {t("{day} at 07:00", { day: t(d) })}
                       </option>
                     ))}
                   </select>
@@ -314,7 +315,7 @@ export default function ActionSummaryPage() {
 
               {form.frequency === "monthly" && (
                 <label className="block">
-                  <span className="text-sm text-gray-600">On the</span>
+                  <span className="text-sm text-gray-600">{t("On the")}</span>
                   <select
                     className="mt-1 w-full border rounded-md px-3 py-2"
                     value={form.dayOfMonth}
@@ -322,7 +323,7 @@ export default function ActionSummaryPage() {
                   >
                     {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
                       <option key={d} value={d}>
-                        {ordinal(d)} of the month at 07:00
+                        {t("{day} of the month at 07:00", { day: ordinal(d) })}
                       </option>
                     ))}
                   </select>
@@ -330,7 +331,7 @@ export default function ActionSummaryPage() {
               )}
 
               <label className="block">
-                <span className="text-sm text-gray-600">Orange (&quot;due soon&quot;) when the ETA is within</span>
+                <span className="text-sm text-gray-600">{t("Orange (\"due soon\") when the ETA is within")}</span>
                 <select
                   className="mt-1 w-full border rounded-md px-3 py-2"
                   value={form.dueSoonDays}
@@ -338,7 +339,7 @@ export default function ActionSummaryPage() {
                 >
                   {[3, 5, 7, 10, 14, 21, 30].map((d) => (
                     <option key={d} value={d}>
-                      {d} days
+                      {t("{count} days", { count: d })}
                     </option>
                   ))}
                 </select>
@@ -347,41 +348,40 @@ export default function ActionSummaryPage() {
 
             <p className="text-sm text-gray-500">
               {data.settings.enabled && data.nextSendOn
-                ? `${data.scheduleText}. Next send: ${niceDate(data.nextSendOn)}.`
-                : "Off. Nothing is sent until you tick the box and save."}
-              {data.settings.lastResult ? ` Last send: ${data.settings.lastResult}.` : ""}
+                ? `${data.scheduleText}. ${t("Next send: {date}.", { date: niceDate(data.nextSendOn) })}`
+                : t("Off. Nothing is sent until you tick the box and save.")}
+              {data.settings.lastResult ? ` ${t("Last send: {result}.", { result: data.settings.lastResult })}` : ""}
             </p>
           </div>
 
           {/* Who */}
           <div className="bg-white rounded-lg shadow p-6 space-y-5">
             <div>
-              <h2 className="text-lg font-semibold text-gray-800">Who gets it</h2>
+              <h2 className="text-lg font-semibold text-gray-800">{t("Who gets it")}</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Pick people, tags, or type addresses. A tag is looked up on every send, so somebody newly tagged is on the next
-                one. Nobody picked means nobody is emailed.
+                {t("Pick people, tags, or type addresses. A tag is looked up on every send, so somebody newly tagged is on the next one. Nobody picked means nobody is emailed.")}
               </p>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Tags</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-2">{t("Tags")}</h3>
               {data.tags.length === 0 ? (
-                <p className="text-sm text-gray-500">No tags yet. Create them in Admin, Tags.</p>
+                <p className="text-sm text-gray-500">{t("No tags yet. Create them in Admin, Tags.")}</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {data.tags.map((t) => {
-                    const on = form.tagIds.includes(t.id);
+                  {data.tags.map((tg) => {
+                    const on = form.tagIds.includes(tg.id);
                     return (
                       <button
-                        key={t.id}
+                        key={tg.id}
                         type="button"
-                        onClick={() => setForm({ ...form, tagIds: toggle(form.tagIds, t.id) })}
+                        onClick={() => setForm({ ...form, tagIds: toggle(form.tagIds, tg.id) })}
                         className={`px-3 py-1.5 rounded-full text-sm border ${
                           on ? "bg-primary text-white border-primary" : "bg-white text-gray-700 border-gray-300"
                         }`}
                       >
                         {on ? "✓ " : ""}
-                        {t.name} <span className={on ? "text-white/80" : "text-gray-400"}>({t.members})</span>
+                        {tg.name} <span className={on ? "text-white/80" : "text-gray-400"}>({tg.members})</span>
                       </button>
                     );
                   })}
@@ -391,11 +391,11 @@ export default function ActionSummaryPage() {
 
             <div>
               <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                People ({form.userIds.length} picked)
+                {t("People ({count} picked)", { count: form.userIds.length })}
               </h3>
               <input
                 className="w-full border rounded-md px-3 py-2 mb-2 text-sm"
-                placeholder="Search by name or email"
+                placeholder={t("Search by name or email")}
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
               />
@@ -408,16 +408,16 @@ export default function ActionSummaryPage() {
                       checked={form.userIds.includes(u.id)}
                       onChange={() => setForm({ ...form, userIds: toggle(form.userIds, u.id) })}
                     />
-                    <span className="text-gray-800">{u.name || "(no name)"}</span>
-                    <span className="text-gray-500 truncate">{u.email || "no email address"}</span>
+                    <span className="text-gray-800">{u.name || t("(no name)")}</span>
+                    <span className="text-gray-500 truncate">{u.email || t("no email address")}</span>
                   </label>
                 ))}
-                {shownUsers.length === 0 && <p className="px-3 py-2 text-sm text-gray-500">Nobody matches.</p>}
+                {shownUsers.length === 0 && <p className="px-3 py-2 text-sm text-gray-500">{t("Nobody matches.")}</p>}
               </div>
             </div>
 
             <label className="block">
-              <span className="text-sm font-semibold text-gray-700">Other addresses (one per line)</span>
+              <span className="text-sm font-semibold text-gray-700">{t("Other addresses (one per line)")}</span>
               <textarea
                 className="mt-1 w-full border rounded-md px-3 py-2 text-sm"
                 rows={3}
@@ -426,7 +426,7 @@ export default function ActionSummaryPage() {
                 onChange={(e) => setForm({ ...form, extraEmailsText: e.target.value })}
               />
               <span className="text-xs text-gray-500">
-                For people with no portal account. They receive the full list, so add only people who should see it.
+                {t("For people with no portal account. They receive the full list, so add only people who should see it.")}
               </span>
             </label>
 
@@ -435,13 +435,15 @@ export default function ActionSummaryPage() {
               disabled={!dirty || busy !== ""}
               className="bg-primary text-white px-4 py-2 rounded-md disabled:opacity-50"
             >
-              {busy === "save" ? "Saving..." : "Save"}
+              {busy === "save" ? t("Saving...") : t("Save")}
             </button>
-            {dirty && <span className="ml-3 text-sm text-amber-700">Unsaved changes</span>}
+            {dirty && <span className="ml-3 text-sm text-amber-700">{t("Unsaved changes")}</span>}
 
             <div className="border-t pt-4">
               <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                As saved, it goes to {data.recipients.length} {data.recipients.length === 1 ? "address" : "addresses"}
+                {data.recipients.length === 1
+                  ? t("As saved, it goes to {count} address", { count: data.recipients.length })
+                  : t("As saved, it goes to {count} addresses", { count: data.recipients.length })}
               </h3>
               {data.recipients.length > 0 && (
                 <ul className="divide-y text-sm">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { authFetch } from "@/lib/useAuth";
+import { useT } from "@/components/I18nProvider";
 import {
   canReview,
   canSendForReview,
@@ -45,6 +46,7 @@ export default function MinutesReviewPanel({
   onChanged,
   onToast,
 }: Props) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [comments, setComments] = useState("");
   const [askingForChanges, setAskingForChanges] = useState(false);
@@ -65,15 +67,19 @@ export default function MinutesReviewPanel({
       const res = await authFetch(`/api/minutes/${id}/send-for-review`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        onToast(data.error || "Could not send the minutes for checking.", "error");
+        onToast(data.error || t("Could not send the minutes for checking."), "error");
         return;
       }
-      const parts = [`Sent to ${data.sent} ${data.sent === 1 ? "person" : "people"}.`];
+      const parts = [
+        data.sent === 1
+          ? t("Sent to {n} person.", { n: data.sent })
+          : t("Sent to {n} people.", { n: data.sent }),
+      ];
       // Named, not swallowed. A secretary who thinks everybody was asked will
       // wait for a response that is never coming.
-      if (data.failed?.length) parts.push(`Could not reach ${data.failed.join(", ")}.`);
+      if (data.failed?.length) parts.push(t("Could not reach {names}.", { names: data.failed.join(", ") }));
       if (data.withoutEmail?.length)
-        parts.push(`No email address for ${data.withoutEmail.join(", ")}.`);
+        parts.push(t("No email address for {names}.", { names: data.withoutEmail.join(", ") }));
       onToast(
         parts.join(" "),
         data.failed?.length || data.withoutEmail?.length ? "error" : "success"
@@ -94,15 +100,15 @@ export default function MinutesReviewPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        onToast(data.error || "Could not record your response.", "error");
+        onToast(data.error || t("Could not record your response."), "error");
         return;
       }
       onToast(
         decision === "approved"
           ? data.progress?.complete
-            ? "Approved. Everyone has now checked it, so it has gone out for signing."
-            : "Approved. Still waiting on the others."
-          : "Sent back to the secretary with your notes.",
+            ? t("Approved. Everyone has now checked it, so it has gone out for signing.")
+            : t("Approved. Still waiting on the others.")
+          : t("Sent back to the secretary with your notes."),
         "success"
       );
       setComments("");
@@ -117,14 +123,14 @@ export default function MinutesReviewPanel({
 
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-sm font-semibold text-dark mb-1">Checking</h2>
+      <h2 className="text-sm font-semibold text-dark mb-1">{t("Checking")}</h2>
 
       {canSendForReview(status) && (
         <>
           <p className="text-sm text-gray-500 mb-4">
             {status === "changes_requested"
-              ? "Somebody asked for changes. Once you have made them, send it out again as the next draft."
-              : "Send this to the people who check minutes. They can approve it, or send it back with a note."}
+              ? t("Somebody asked for changes. Once you have made them, send it out again as the next draft.")
+              : t("Send this to the people who check minutes. They can approve it, or send it back with a note.")}
           </p>
           {canManage && (
             <button
@@ -132,7 +138,7 @@ export default function MinutesReviewPanel({
               disabled={busy}
               className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
             >
-              {busy ? "Sending..." : `Send draft ${draftNumber + 1} for checking`}
+              {busy ? t("Sending...") : t("Send draft {n} for checking", { n: draftNumber + 1 })}
             </button>
           )}
         </>
@@ -141,31 +147,44 @@ export default function MinutesReviewPanel({
       {canReview(status) && (
         <>
           <p className="text-sm text-gray-500 mb-4">
-            Draft {draftNumber} is out for checking. {progress.approved} of {progress.total}{" "}
-            approved
-            {progress.waitingOn.length > 0 && `, waiting on ${progress.waitingOn.join(", ")}`}.
+            {progress.waitingOn.length > 0
+              ? t("Draft {draft} is out for checking. {approved} of {total} approved, waiting on {names}.", {
+                  draft: draftNumber,
+                  approved: progress.approved,
+                  total: progress.total,
+                  names: progress.waitingOn.join(", "),
+                })
+              : t("Draft {draft} is out for checking. {approved} of {total} approved.", {
+                  draft: draftNumber,
+                  approved: progress.approved,
+                  total: progress.total,
+                })}
           </p>
 
           {mayReview ? (
             <div className="rounded-lg border border-gray-200 p-4">
               {mine && (
                 <p className="text-xs text-gray-500 mb-3">
-                  You {mine.decision === "approved" ? "approved" : "asked for changes to"} this
-                  draft on {new Date(mine.at).toLocaleDateString("en-ZA")}. You can change your
-                  mind below.
+                  {mine.decision === "approved"
+                    ? t("You approved this draft on {date}. You can change your mind below.", {
+                        date: new Date(mine.at).toLocaleDateString("en-ZA"),
+                      })
+                    : t("You asked for changes to this draft on {date}. You can change your mind below.", {
+                        date: new Date(mine.at).toLocaleDateString("en-ZA"),
+                      })}
                 </p>
               )}
               {askingForChanges ? (
                 <>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    What needs changing?
+                    {t("What needs changing?")}
                   </label>
                   <textarea
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
                     rows={4}
                     autoFocus
-                    placeholder="The finance figure in section 4 should be R52,000."
+                    placeholder={t("The finance figure in section 4 should be R52,000.")}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition text-sm"
                   />
                   <div className="flex gap-2 mt-3">
@@ -174,19 +193,18 @@ export default function MinutesReviewPanel({
                       disabled={busy || !comments.trim()}
                       className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
                     >
-                      {busy ? "Sending..." : "Send it back"}
+                      {busy ? t("Sending...") : t("Send it back")}
                     </button>
                     <button
                       onClick={() => setAskingForChanges(false)}
                       className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
                     >
-                      Cancel
+                      {t("Cancel")}
                     </button>
                   </div>
                   {!comments.trim() && (
                     <p className="text-xs text-gray-400 mt-2">
-                      A note is required. Without one the secretary is told only that somebody is
-                      unhappy.
+                      {t("A note is required. Without one the secretary is told only that somebody is unhappy.")}
                     </p>
                   )}
                 </>
@@ -197,22 +215,21 @@ export default function MinutesReviewPanel({
                     disabled={busy}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
                   >
-                    {busy ? "Saving..." : "Approve this draft"}
+                    {busy ? t("Saving...") : t("Approve this draft")}
                   </button>
                   <button
                     onClick={() => setAskingForChanges(true)}
                     disabled={busy}
                     className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
                   >
-                    Ask for changes
+                    {t("Ask for changes")}
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <p className="text-xs text-gray-400">
-              You were not asked to check these minutes, so there is nothing for you to respond
-              to.
+              {t("You were not asked to check these minutes, so there is nothing for you to respond to.")}
             </p>
           )}
         </>

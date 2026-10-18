@@ -2,6 +2,7 @@ import { SignIn } from "@clerk/nextjs";
 import { isClerkEnabled } from "@/lib/clerkConfig";
 import { notFound } from "next/navigation";
 import PlatformAuthShell, { clerkAppearance } from "@/components/PlatformAuthShell";
+import { getT } from "@/lib/i18n/server";
 
 // Clerk's sign-in, for the shared multi-tenant app.
 //
@@ -16,10 +17,11 @@ import PlatformAuthShell, { clerkAppearance } from "@/components/PlatformAuthShe
 
 export const dynamic = "force-dynamic";
 
-export default function SignInPage() {
+export default async function SignInPage() {
   if (!isClerkEnabled()) notFound();
+  const t = await getT();
   return (
-    <PlatformAuthShell lede="Sign in to administer School Compliance.">
+    <PlatformAuthShell lede={t("Sign in to administer School Compliance.")}>
       <SignIn appearance={clerkAppearance} />
     </PlatformAuthShell>
   );

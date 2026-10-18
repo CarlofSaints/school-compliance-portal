@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/useAuth";
 import ActionItemForm from "@/components/ActionItemForm";
 import { STATUS_LABELS, STATUS_PILL, type ActionStatus } from "@/lib/actionItems";
 import { sectionNumbers, type MinutesSection } from "@/lib/minutes";
+import { useT } from "@/components/I18nProvider";
 
 // ---------------------------------------------------------------------------
 // Raising action items out of the minutes.
@@ -63,6 +64,7 @@ export default function MinutesActionsPanel({
   onToast,
   refreshKey,
 }: Props) {
+  const t = useT();
   const [actions, setActions] = useState<RaisedAction[] | null>(null);
   const [directory, setDirectory] = useState<DirectoryPerson[]>([]);
   // The section being raised from, or "" for the meeting as a whole.
@@ -104,11 +106,11 @@ export default function MinutesActionsPanel({
     const section = ordered.find((s) => s.id === raisingFrom);
     return (
       <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-sm font-semibold text-dark mb-1">Raise an action</h2>
+        <h2 className="text-sm font-semibold text-dark mb-1">{t("Raise an action")}</h2>
         <p className="text-sm text-gray-500 mb-4">
           {section
-            ? `From "${section.title}". Edit anything below - the minute is the starting point, not the action.`
-            : "From this meeting as a whole."}
+            ? t('From "{title}". Edit anything below - the minute is the starting point, not the action.', { title: section.title })
+            : t("From this meeting as a whole.")}
         </p>
         <ActionItemForm
           directory={directory}
@@ -132,24 +134,24 @@ export default function MinutesActionsPanel({
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
-        <h2 className="text-sm font-semibold text-dark">Actions from this meeting</h2>
+        <h2 className="text-sm font-semibold text-dark">{t("Actions from this meeting")}</h2>
         {canRaise && (
           <button
             onClick={() => setRaisingFrom("")}
             className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
           >
-            Raise an action
+            {t("Raise an action")}
           </button>
         )}
       </div>
 
       {actions === null ? (
-        <p className="text-sm text-gray-400">Loading...</p>
+        <p className="text-sm text-gray-400">{t("Loading...")}</p>
       ) : raised.length === 0 ? (
         /* Absence said out loud. A blank panel reads as one that has not
            loaded, and "nothing yet" is the state a secretary is checking for. */
         <p className="text-sm text-gray-400 mb-4">
-          Nothing has been raised from this meeting yet.
+          {t("Nothing has been raised from this meeting yet.")}
         </p>
       ) : (
         <ul className="mt-3 mb-4 space-y-2">
@@ -170,7 +172,7 @@ export default function MinutesActionsPanel({
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full ${STATUS_PILL[a.status]}`}
                 >
-                  {STATUS_LABELS[a.status]}
+                  {t(STATUS_LABELS[a.status])}
                 </span>
                 {a.assigneeNames.length > 0 && (
                   <span className="text-xs text-gray-400">
@@ -179,11 +181,11 @@ export default function MinutesActionsPanel({
                 )}
                 {a.dueDate && (
                   <span className="text-xs text-gray-400">
-                    due {new Date(a.dueDate).toLocaleDateString("en-ZA")}
+                    {t("due {date}", { date: new Date(a.dueDate).toLocaleDateString("en-ZA") })}
                   </span>
                 )}
                 {n != null && (
-                  <span className="text-xs text-gray-400">from item {n}</span>
+                  <span className="text-xs text-gray-400">{t("from item {n}", { n })}</span>
                 )}
               </li>
             );
@@ -196,7 +198,7 @@ export default function MinutesActionsPanel({
           minute is what keeps the two lists apart. */}
       {canRaise && ordered.length > 0 && (
         <div className="pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-500 mb-2">Raise one from a specific item:</p>
+          <p className="text-xs text-gray-500 mb-2">{t("Raise one from a specific item:")}</p>
           <div className="flex flex-wrap gap-2">
             {ordered.map((s) => (
               <button
@@ -205,7 +207,7 @@ export default function MinutesActionsPanel({
                 className="px-3 py-1.5 rounded-lg border border-gray-200 hover:border-primary hover:text-primary text-xs text-gray-600 transition-colors"
               >
                 {numbers.get(s.id) == null ? "" : `${numbers.get(s.id)}. `}
-                {s.title || "Untitled section"}
+                {s.title || t("Untitled section")}
               </button>
             ))}
           </div>

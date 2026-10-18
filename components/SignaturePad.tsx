@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/components/I18nProvider";
 
 // ---------------------------------------------------------------------------
 // Draw or type a signature, the way Adobe and SignNow do it.
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function SignaturePad({ name, onChange }: Props) {
+  const t = useT();
   const [mode, setMode] = useState<"drawn" | "typed">("drawn");
   const [typed, setTyped] = useState(name);
   const [hasMark, setHasMark] = useState(false);
@@ -157,7 +159,7 @@ export default function SignaturePad({ name, onChange }: Props) {
                 : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
             }`}
           >
-            {m === "drawn" ? "Draw it" : "Type it"}
+            {m === "drawn" ? t("Draw it") : t("Type it")}
           </button>
         ))}
       </div>
@@ -181,10 +183,10 @@ export default function SignaturePad({ name, onChange }: Props) {
               onClick={clear}
               className="text-xs text-gray-500 hover:text-dark"
             >
-              Clear
+              {t("Clear")}
             </button>
             <span className="text-xs text-gray-400">
-              {hasMark ? "Sign with a mouse, a finger or a stylus." : "Sign in the box above."}
+              {hasMark ? t("Sign with a mouse, a finger or a stylus.") : t("Sign in the box above.")}
             </span>
           </div>
         </div>
@@ -193,7 +195,7 @@ export default function SignaturePad({ name, onChange }: Props) {
           <input
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            placeholder="Your name"
+            placeholder={t("Your name")}
             className="w-full max-w-xl px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
           />
           <div
@@ -207,7 +209,7 @@ export default function SignaturePad({ name, onChange }: Props) {
                 fontSize: "clamp(20px, 6vw, 56px)",
               }}
             >
-              {typed.trim() || "Your name"}
+              {typed.trim() || t("Your name")}
             </span>
           </div>
         </div>

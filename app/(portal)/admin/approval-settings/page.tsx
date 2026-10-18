@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
+import { useT } from "@/components/I18nProvider";
 
 interface TagRecord {
   id: string;
@@ -38,6 +39,7 @@ interface Tier {
 }
 
 export default function ApprovalSettingsPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_approval_settings");
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [notifyEach, setNotifyEach] = useState(true);
@@ -120,7 +122,7 @@ export default function ApprovalSettingsPage() {
           ?.requirements.some((r) => r.tagId === tag.id)
     );
     if (!firstUnused) {
-      setToast({ message: "No more tags to add", type: "error" });
+      setToast({ message: t("No more tags to add"), type: "error" });
       return;
     }
     setTiers((prev) =>
@@ -206,11 +208,11 @@ export default function ApprovalSettingsPage() {
       setTiers(s.tiers || []);
       setProblems(s.problems || []);
       setDirty(false);
-      setToast({ message: "Approval settings saved", type: "success" });
+      setToast({ message: t("Approval settings saved"), type: "success" });
     } else {
       const err = await res.json().catch(() => ({}));
       setToast({
-        message: err.error || "Could not save the settings",
+        message: err.error || t("Could not save the settings"),
         type: "error",
       });
     }
@@ -220,7 +222,7 @@ export default function ApprovalSettingsPage() {
 
   const sorted = [...tiers].sort((a, b) => a.minAmount - b.minAmount);
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -235,10 +237,10 @@ export default function ApprovalSettingsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-dark">
-            Fund Application Approval Settings
+            {t("Fund Application Approval Settings")}
           </h1>
           <p className="text-gray-500 text-sm">
-            How much can be spent before someone has to approve it, and who
+            {t("How much can be spent before someone has to approve it, and who")}
           </p>
         </div>
         <button
@@ -246,20 +248,20 @@ export default function ApprovalSettingsPage() {
           disabled={saving || !dirty || loadError}
           className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          {saving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
+          {saving ? t("Saving...") : dirty ? t("Save Changes") : t("Saved")}
         </button>
       </div>
 
       {loadError && (
         <div className="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          The saved approval bands could not be loaded, so saving is switched off to protect them. Refresh the page to try again.
+          {t("The saved approval bands could not be loaded, so saving is switched off to protect them. Refresh the page to try again.")}
         </div>
       )}
 
       {problems.length > 0 && (
         <div className="bg-risk-medium/10 border border-risk-medium/30 rounded-xl p-4 mb-6">
           <p className="text-sm font-medium text-risk-medium mb-2">
-            Check these before relying on the workflow
+            {t("Check these before relying on the workflow")}
           </p>
           <ul className="list-disc pl-5 text-xs text-gray-700 space-y-1">
             {problems.map((p, i) => (
@@ -278,7 +280,7 @@ export default function ApprovalSettingsPage() {
             <div className="flex flex-wrap items-end gap-3 mb-4">
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-xs text-gray-500 mb-1">
-                  What this band is called
+                  {t("What this band is called")}
                 </label>
                 <input
                   type="text"
@@ -288,7 +290,7 @@ export default function ApprovalSettingsPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">From</label>
+                <label className="block text-xs text-gray-500 mb-1">{t("From")}</label>
                 <input
                   type="number"
                   min={0}
@@ -301,13 +303,13 @@ export default function ApprovalSettingsPage() {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
-                  Up to (blank = no limit)
+                  {t("Up to (blank = no limit)")}
                 </label>
                 <input
                   type="number"
                   min={0}
                   value={tier.maxAmount ?? ""}
-                  placeholder="No limit"
+                  placeholder={t("No limit")}
                   onChange={(e) =>
                     update(tier.id, {
                       maxAmount:
@@ -321,7 +323,7 @@ export default function ApprovalSettingsPage() {
                 onClick={() => removeTier(tier.id)}
                 className="text-risk-high hover:text-red-700 text-xs font-medium px-2 py-2"
               >
-                Remove band
+                {t("Remove band")}
               </button>
             </div>
 
@@ -334,27 +336,26 @@ export default function ApprovalSettingsPage() {
                 }
                 className="accent-primary"
               />
-              No approval needed, but the application is still logged
+              {t("No approval needed, but the application is still logged")}
             </label>
 
             {!tier.logOnly && (
               <div className="border-t border-gray-100 pt-3">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-gray-500">
-                    Who has to approve in this band
+                    {t("Who has to approve in this band")}
                   </p>
                   <button
                     onClick={() => addRequirement(tier.id)}
                     className="text-primary hover:text-primary-dark text-xs font-medium"
                   >
-                    + Add approver tag
+                    {t("+ Add approver tag")}
                   </button>
                 </div>
 
                 {tier.requirements.length === 0 && (
                   <p className="text-xs text-risk-medium">
-                    No approver set. Applications in this band will wait with
-                    nobody able to action them.
+                    {t("No approver set. Applications in this band will wait with nobody able to action them.")}
                   </p>
                 )}
 
@@ -380,8 +381,8 @@ export default function ApprovalSettingsPage() {
                             }
                             className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs outline-none"
                           >
-                            <option value="all">All of</option>
-                            <option value="any">Any one of</option>
+                            <option value="all">{t("All of")}</option>
+                            <option value="any">{t("Any one of")}</option>
                           </select>
                           <select
                             value={req.tagId}
@@ -396,7 +397,7 @@ export default function ApprovalSettingsPage() {
                                 the row cannot silently become a different tag. */}
                             {!tag && (
                               <option value={req.tagId}>
-                                (removed tag)
+                                {t("(removed tag)")}
                               </option>
                             )}
                             {tags.map((t) => (
@@ -413,19 +414,19 @@ export default function ApprovalSettingsPage() {
                               }`}
                             >
                               {tag.memberCount}{" "}
-                              {tag.memberCount === 1 ? "person" : "people"}
+                              {tag.memberCount === 1 ? t("person") : t("people")}
                             </span>
                           )}
                           {tag && tag.memberCount === 0 && (
                             <span className="text-xs text-risk-high">
-                              nobody carries this tag
+                              {t("nobody carries this tag")}
                             </span>
                           )}
                           <button
                             onClick={() => removeRequirement(tier.id, i)}
                             className="text-gray-400 hover:text-risk-high text-xs"
                           >
-                            remove
+                            {t("remove")}
                           </button>
                         </div>
                       );
@@ -435,13 +436,11 @@ export default function ApprovalSettingsPage() {
 
                 <div className="mt-3 border-t border-gray-100 pt-3">
                   <p className="text-xs text-gray-500 mb-2">
-                    Or name people from the register directly — use this when
-                    the approver is one position-holder rather than a committee
+                    {t("Or name people from the register directly — use this when the approver is one position-holder rather than a committee")}
                   </p>
                   {people.length === 0 ? (
                     <p className="text-xs text-gray-400">
-                      Nobody is on the register yet. Add them in Admin &gt;
-                      People.
+                      {t("Nobody is on the register yet. Add them in Admin > People.")}
                     </p>
                   ) : (
                     <div className="grid gap-1.5 sm:grid-cols-2">
@@ -468,7 +467,7 @@ export default function ApprovalSettingsPage() {
                               rather than letting the band look configured. */}
                           {!p.hasLogin && (
                             <span className="text-xs text-risk-high whitespace-nowrap">
-                              no login — cannot approve
+                              {t("no login — cannot approve")}
                             </span>
                           )}
                         </label>
@@ -486,11 +485,11 @@ export default function ApprovalSettingsPage() {
         onClick={addTier}
         className="mt-4 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
       >
-        + Add a band
+        {t("+ Add a band")}
       </button>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 mt-6">
-        <h2 className="font-semibold text-dark mb-3">Applicant emails</h2>
+        <h2 className="font-semibold text-dark mb-3">{t("Applicant emails")}</h2>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
@@ -501,11 +500,10 @@ export default function ApprovalSettingsPage() {
             }}
             className="accent-primary"
           />
-          Email the applicant every time an approver decides
+          {t("Email the applicant every time an approver decides")}
         </label>
         <p className="text-xs text-gray-400 mt-2">
-          The applicant is always emailed once the last approval is in, whether
-          or not this is ticked.
+          {t("The applicant is always emailed once the last approval is in, whether or not this is ticked.")}
         </p>
       </div>
     </div>

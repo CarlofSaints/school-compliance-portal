@@ -13,6 +13,7 @@ import {
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
 import { captureText } from "@/lib/minutesCapture";
 import { AttendanceGroups } from "@/components/AttendanceList";
+import { useT } from "@/components/I18nProvider";
 
 // The minute-taking surface: sections a school defines for itself.
 //
@@ -40,6 +41,7 @@ export default function MinutesSectionEditor({
    *  once the action is saved. */
   onCaptureAction?: (sectionId: string, text: string) => Promise<boolean>;
 }) {
+  const t = useT();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   // The text boxes, so the capture button can read where the cursor is.
   const boxes = useRef(new Map<string, HTMLTextAreaElement>());
@@ -50,7 +52,7 @@ export default function MinutesSectionEditor({
     const box = boxes.current.get(s.id);
     const text = box ? captureText(s.body, box.selectionStart, box.selectionEnd) : "";
     if (!text) {
-      setCaptureHint({ id: s.id, text: "Click into the point you want, or select its text, then press the button." });
+      setCaptureHint({ id: s.id, text: t("Click into the point you want, or select its text, then press the button.") });
       return;
     }
     setCaptureHint(null);
@@ -98,8 +100,7 @@ export default function MinutesSectionEditor({
   if (ordered.length === 0 && !editable) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-sm text-gray-400">
-        These minutes have no written sections. They may exist as an uploaded
-        file above.
+        {t("These minutes have no written sections. They may exist as an uploaded file above.")}
       </div>
     );
   }
@@ -124,7 +125,7 @@ export default function MinutesSectionEditor({
                 <input
                   value={s.title}
                   onChange={(e) => update(s.id, { title: e.target.value })}
-                  placeholder="Section heading"
+                  placeholder={t("Section heading")}
                   className="flex-1 px-3 py-2 border border-gray-200 rounded-lg font-medium text-dark focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
                 />
               ) : (
@@ -137,7 +138,7 @@ export default function MinutesSectionEditor({
                     type="button"
                     onClick={() => move(s.id, -1)}
                     disabled={i === 0}
-                    aria-label="Move up"
+                    aria-label={t("Move up")}
                     className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                   >
                     ↑
@@ -146,7 +147,7 @@ export default function MinutesSectionEditor({
                     type="button"
                     onClick={() => move(s.id, 1)}
                     disabled={i === ordered.length - 1}
-                    aria-label="Move down"
+                    aria-label={t("Move down")}
                     className="px-2 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                   >
                     ↓
@@ -158,7 +159,7 @@ export default function MinutesSectionEditor({
                       onClick={() => setConfirmRemove(s.id)}
                       className="px-2 py-1 text-xs text-risk-high hover:underline"
                     >
-                      Remove
+                      {t("Remove")}
                     </button>
                   )}
                 </div>
@@ -169,12 +170,12 @@ export default function MinutesSectionEditor({
               // Confirmed, because a section can hold a whole meeting's worth of
               // typing and there is no undo.
               <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-risk-high flex items-center gap-3">
-                <span>Remove &quot;{s.title || "this section"}&quot; and its notes?</span>
+                <span>{t('Remove "{title}" and its notes?', { title: s.title || t("this section") })}</span>
                 <button onClick={() => remove(s.id)} className="font-medium underline">
-                  Remove
+                  {t("Remove")}
                 </button>
                 <button onClick={() => setConfirmRemove(null)} className="text-gray-500">
-                  Keep
+                  {t("Keep")}
                 </button>
               </div>
             )}
@@ -199,7 +200,7 @@ export default function MinutesSectionEditor({
                           : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
                       }`}
                     >
-                      {k === "text" ? "Text" : "Attendance list"}
+                      {k === "text" ? t("Text") : t("Attendance list")}
                     </button>
                   );
                 })}
@@ -211,7 +212,7 @@ export default function MinutesSectionEditor({
                 <div className="mb-3">
                   {(s.attendees?.length ?? 0) === 0 && rowsFromText(s.body).rows.length > 0 && (
                     <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-3">
-                      <span>You typed a list in the box below. Turn it into rows?</span>
+                      <span>{t("You typed a list in the box below. Turn it into rows?")}</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -220,14 +221,14 @@ export default function MinutesSectionEditor({
                         }}
                         className="font-medium underline"
                       >
-                        Turn my typed list into rows
+                        {t("Turn my typed list into rows")}
                       </button>
                     </div>
                   )}
                   <p className="text-xs text-gray-500 mb-2">
-                    Tick <span className="font-medium">Apology</span> or{" "}
-                    <span className="font-medium">Not Present</span> and that person
-                    moves to the Apologies section.
+                    {t("Tick")} <span className="font-medium">{t("Apology")}</span>{" "}
+                    {t("or")} <span className="font-medium">{t("Not Present")}</span>{" "}
+                    {t("and that person moves to the Apologies section.")}
                   </p>
                   <AttendeeRowsEditor
                     rows={s.attendees ?? []}
@@ -245,9 +246,7 @@ export default function MinutesSectionEditor({
               <div className="mb-3">
                 {editable && (
                   <p className="text-xs text-gray-500 mb-2">
-                    Filled in from the attendance list: anyone ticked Apology is
-                    listed here, and anyone ticked Not Present under Not in
-                    Attendance.
+                    {t("Filled in from the attendance list: anyone ticked Apology is listed here, and anyone ticked Not Present under Not in Attendance.")}
                   </p>
                 )}
                 <AttendanceGroups groups={groups} />
@@ -266,10 +265,10 @@ export default function MinutesSectionEditor({
                 rows={isAttendance(s) || isApologies(s) ? 2 : 5}
                 placeholder={
                   isApologies(s)
-                    ? "Anything else to record about apologies (optional)"
+                    ? t("Anything else to record about apologies (optional)")
                     : isAttendance(s)
-                      ? "Wording under the list (optional)"
-                      : "What was discussed and decided"
+                      ? t("Wording under the list (optional)")
+                      : t("What was discussed and decided")
                 }
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               />
@@ -282,10 +281,10 @@ export default function MinutesSectionEditor({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => capture(s)}
                     disabled={capturing === s.id || !s.body.trim()}
-                    title="Adds the text you have selected, or the paragraph your cursor is in, to the action list. Add who and when later."
+                    title={t("Adds the text you have selected, or the paragraph your cursor is in, to the action list. Add who and when later.")}
                     className="text-xs font-medium text-primary hover:underline disabled:text-gray-300 disabled:no-underline"
                   >
-                    {capturing === s.id ? "Adding..." : "+ Add to action items"}
+                    {capturing === s.id ? t("Adding...") : t("+ Add to action items")}
                   </button>
                   {captureHint?.id === s.id && (
                     <span className="text-xs text-gray-500">{captureHint.text}</span>
@@ -295,7 +294,7 @@ export default function MinutesSectionEditor({
               </>
             ) : s.body || groups.length === 0 ? (
               <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                {s.body || <span className="text-gray-400">Nothing recorded.</span>}
+                {s.body || <span className="text-gray-400">{t("Nothing recorded.")}</span>}
               </p>
             ) : null}
           </div>
@@ -308,7 +307,7 @@ export default function MinutesSectionEditor({
           onClick={add}
           className="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-500 hover:border-primary hover:text-primary transition-colors"
         >
-          Add a section
+          {t("Add a section")}
         </button>
       )}
     </div>

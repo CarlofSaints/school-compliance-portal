@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useT } from "@/components/I18nProvider";
 
 // ---------------------------------------------------------------------------
 // Setting a school up, with nobody on our side involved.
@@ -34,6 +35,7 @@ type Availability =
   | { state: "taken"; reason: string };
 
 export default function StartForm() {
+  const t = useT();
   const [name, setName] = useState("");
   const [key, setKey] = useState("");
   // Once somebody edits the address themselves, the name must stop overwriting
@@ -62,7 +64,7 @@ export default function StartForm() {
     }
     setAvail({ state: "checking" });
     const mine = ++seq.current;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/schools?key=${encodeURIComponent(effectiveKey)}`);
         const data = await res.json();
@@ -76,20 +78,21 @@ export default function StartForm() {
         setAvail(
           data.available
             ? { state: "free", hostname: data.hostname }
-            : { state: "taken", reason: data.reason || "That address is not available." }
+            : { state: "taken", reason: data.reason || t("That address is not available.") }
         );
       } catch {
         if (mine === seq.current) setAvail({ state: "idle" });
       }
     }, 400);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveKey]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (!name.trim()) return setError("Give the school its name.");
-    if (!adminEmail.trim()) return setError("We need an email address for the first administrator.");
+    if (!name.trim()) return setError(t("Give the school its name."));
+    if (!adminEmail.trim()) return setError(t("We need an email address for the first administrator."));
     if (avail.state === "taken") return setError(avail.reason);
 
     setBusy(true);
@@ -106,12 +109,12 @@ export default function StartForm() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "That school could not be set up.");
+        setError(data.error || t("That school could not be set up."));
         return;
       }
       setDone({ url: data.url, email: adminEmail.trim() });
     } catch {
-      setError("That school could not be set up. Please try again.");
+      setError(t("That school could not be set up. Please try again."));
     } finally {
       setBusy(false);
     }
@@ -120,9 +123,9 @@ export default function StartForm() {
   if (done) {
     return (
       <main className="mx-auto max-w-xl px-6 py-24">
-        <h1 className="text-2xl font-bold text-dark">Your school is ready.</h1>
+        <h1 className="text-2xl font-bold text-dark">{t("Your school is ready.")}</h1>
         <p className="mt-3 text-gray-600">
-          It lives at{" "}
+          {t("It lives at")}{" "}
           <a href={done.url} className="text-primary font-medium hover:underline">
             {done.url.replace(/^https:\/\//, "")}
           </a>
@@ -132,19 +135,16 @@ export default function StartForm() {
             here. Anyone standing behind this screen would otherwise be one
             click from owning the school's first administrator account. */}
         <p className="mt-4 text-gray-600">
-          We have emailed <strong>{done.email}</strong> a link to set a password.
-          It is good for a few hours. Once you are in, add the rest of your
-          governing body under Admin, Users.
+          {t("We have emailed")} <strong>{done.email}</strong> {t("a link to set a password. It is good for a few hours. Once you are in, add the rest of your governing body under Admin, Users.")}
         </p>
         <p className="mt-4 text-sm text-gray-500">
-          Nothing arrived? Check the junk folder first. If it is not there, the
-          school still exists, so get in touch rather than setting it up again.
+          {t("Nothing arrived? Check the junk folder first. If it is not there, the school still exists, so get in touch rather than setting it up again.")}
         </p>
         <a
           href={done.url}
           className="mt-8 inline-block rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-white hover:bg-primary-dark transition-colors"
         >
-          Go to your portal
+          {t("Go to your portal")}
         </a>
       </main>
     );
@@ -156,23 +156,21 @@ export default function StartForm() {
 
   return (
     <main className="mx-auto max-w-xl px-6 py-16">
-      <h1 className="text-2xl font-bold text-dark">Set your school up</h1>
+      <h1 className="text-2xl font-bold text-dark">{t("Set your school up")}</h1>
       <p className="mt-2 text-gray-600">
-        This takes about a minute. You will have your own portal, on your own
-        address, with your school&apos;s data kept separate from every other
-        school.
+        {t("This takes about a minute. You will have your own portal, on your own address, with your school's data kept separate from every other school.")}
       </p>
 
       <form onSubmit={submit} className="mt-8 space-y-5">
         <div>
           <label className={label} htmlFor="name">
-            The school&apos;s name
+            {t("The school's name")}
           </label>
           <input
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Hurlyvale Primary School"
+            placeholder={t("Hurlyvale Primary School")}
             className={field}
             autoComplete="organization"
           />
@@ -190,7 +188,7 @@ export default function StartForm() {
             browser's heuristic keys off. */}
         <div>
           <label className={label} htmlFor="subdomain">
-            Choose your web address
+            {t("Choose your web address")}
           </label>
           <div className="flex items-stretch">
             <input
@@ -218,11 +216,11 @@ export default function StartForm() {
           </div>
           <p className="mt-1 text-xs min-h-[1.25rem]">
             {avail.state === "checking" && (
-              <span className="text-gray-400">Checking...</span>
+              <span className="text-gray-400">{t("Checking...")}</span>
             )}
             {avail.state === "free" && (
               <span className="text-emerald-700">
-                {avail.hostname} is available.
+                {t("{hostname} is available.", { hostname: avail.hostname })}
               </span>
             )}
             {avail.state === "taken" && (
@@ -230,8 +228,7 @@ export default function StartForm() {
             )}
             {avail.state === "idle" && (
               <span className="text-gray-400">
-                This is the web address your staff will type to reach the
-                portal. It cannot be changed later.
+                {t("This is the web address your staff will type to reach the portal. It cannot be changed later.")}
               </span>
             )}
           </p>
@@ -241,13 +238,13 @@ export default function StartForm() {
 
         <div>
           <label className={label} htmlFor="adminName">
-            Your name
+            {t("Your name")}
           </label>
           <input
             id="adminName"
             value={adminName}
             onChange={(e) => setAdminName(e.target.value)}
-            placeholder="Your full name"
+            placeholder={t("Your full name")}
             className={field}
             autoComplete="name"
           />
@@ -255,7 +252,7 @@ export default function StartForm() {
 
         <div>
           <label className={label} htmlFor="adminEmail">
-            Your email address
+            {t("Your email address")}
           </label>
           <input
             id="adminEmail"
@@ -267,8 +264,7 @@ export default function StartForm() {
             autoComplete="email"
           />
           <p className="mt-1 text-xs text-gray-400">
-            You become the first administrator. We send a link here to set your
-            password, so use an address you can open now.
+            {t("You become the first administrator. We send a link here to set your password, so use an address you can open now.")}
           </p>
         </div>
 
@@ -283,7 +279,7 @@ export default function StartForm() {
           disabled={busy || avail.state === "taken"}
           className="w-full bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
         >
-          {busy ? "Setting your school up..." : "Create my school"}
+          {busy ? t("Setting your school up...") : t("Create my school")}
         </button>
       </form>
     </main>

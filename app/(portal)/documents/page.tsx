@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import FileUpload from "@/components/FileUpload";
 import ComplianceScore from "@/components/ComplianceScore";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 import Link from "next/link";
 
 interface DocRecord {
@@ -17,6 +18,7 @@ interface DocRecord {
 }
 
 export default function DocumentsPage() {
+  const t = useT();
   const { session, loading } = useAuth("check_documents");
   const [docs, setDocs] = useState<DocRecord[]>([]);
   const [showUpload, setShowUpload] = useState(false);
@@ -52,28 +54,28 @@ export default function DocumentsPage() {
 
     if (res.ok) {
       await res.json();
-      setToast({ message: "Document uploaded", type: "success" });
+      setToast({ message: t("Document uploaded"), type: "success" });
       setShowUpload(false);
       setName("");
       setDescription("");
       setFile(null);
       fetchDocs();
     } else {
-      setToast({ message: "Upload failed", type: "error" });
+      setToast({ message: t("Upload failed"), type: "error" });
     }
     setSubmitting(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this document?")) return;
+    if (!confirm(t("Delete this document?"))) return;
     const res = await authFetch(`/api/documents/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setToast({ message: "Document deleted", type: "success" });
+      setToast({ message: t("Document deleted"), type: "success" });
       fetchDocs();
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -81,16 +83,16 @@ export default function DocumentsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Document Checker</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Document Checker")}</h1>
           <p className="text-gray-500 text-sm">
-            Upload and check non-policy documents for compliance
+            {t("Upload and check non-policy documents for compliance")}
           </p>
         </div>
         <button
           onClick={() => setShowUpload(!showUpload)}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          + Upload Document
+          {t("+ Upload Document")}
         </button>
       </div>
 
@@ -99,7 +101,7 @@ export default function DocumentsPage() {
           <form onSubmit={handleUpload} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Document Name
+                {t("Document Name")}
               </label>
               <input
                 type="text"
@@ -111,7 +113,7 @@ export default function DocumentsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
+                {t("Description")}
               </label>
               <textarea
                 value={description}
@@ -120,21 +122,21 @@ export default function DocumentsPage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
               />
             </div>
-            <FileUpload onChange={setFile} value={file} label="Upload document" />
+            <FileUpload onChange={setFile} value={file} label={t("Upload document")} />
             <div className="flex gap-3">
               <button
                 type="submit"
                 disabled={submitting || !file}
                 className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
-                {submitting ? "Uploading..." : "Upload & Save"}
+                {submitting ? t("Uploading...") : t("Upload & Save")}
               </button>
               <button
                 type="button"
                 onClick={() => setShowUpload(false)}
                 className="px-6 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
               >
-                Cancel
+                {t("Cancel")}
               </button>
             </div>
           </form>
@@ -145,10 +147,10 @@ export default function DocumentsPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Document</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Uploaded</th>
-              <th className="text-center px-6 py-3 font-medium text-gray-500">Last Score</th>
-              <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Document")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Uploaded")}</th>
+              <th className="text-center px-6 py-3 font-medium text-gray-500">{t("Last Score")}</th>
+              <th className="text-right px-6 py-3 font-medium text-gray-500">{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -172,7 +174,7 @@ export default function DocumentsPage() {
                   {doc.lastCheckScore !== null ? (
                     <ComplianceScore score={doc.lastCheckScore} size="sm" />
                   ) : (
-                    <span className="text-xs text-gray-400">Not checked</span>
+                    <span className="text-xs text-gray-400">{t("Not checked")}</span>
                   )}
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -180,13 +182,13 @@ export default function DocumentsPage() {
                     href={`/documents/results/${doc.id}`}
                     className="text-primary hover:text-primary-dark text-xs font-medium mr-3"
                   >
-                    View
+                    {t("View")}
                   </Link>
                   <button
                     onClick={() => handleDelete(doc.id)}
                     className="text-risk-high hover:text-red-700 text-xs font-medium"
                   >
-                    Delete
+                    {t("Delete")}
                   </button>
                 </td>
               </tr>
@@ -194,7 +196,7 @@ export default function DocumentsPage() {
             {docs.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                  No documents uploaded yet.
+                  {t("No documents uploaded yet.")}
                 </td>
               </tr>
             )}

@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Toast from "@/components/Toast";
 import PhotoUpload from "@/components/PhotoUpload";
+import { useT } from "@/components/I18nProvider";
 
 interface LinkedPerson {
   id: string;
@@ -14,6 +15,7 @@ interface LinkedPerson {
 }
 
 function AccountContent() {
+  const t = useT();
   const { session, loading } = useAuth();
   const searchParams = useSearchParams();
   const forceChange = searchParams.get("changePassword") === "1";
@@ -78,7 +80,7 @@ function AccountContent() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Your photo could not be saved.");
+        throw new Error(err.error || t("Your photo could not be saved."));
       }
     } else if (photoRemoved) {
       await authFetch(`/api/people/${person.id}/photo`, { method: "DELETE" });
@@ -96,7 +98,7 @@ function AccountContent() {
     // must never be the way somebody loses their name.
     if (!name.trim() || !surname.trim() || !email.trim()) {
       setToast({
-        message: "Name, surname and email cannot be empty.",
+        message: t("Name, surname and email cannot be empty."),
         type: "error",
       });
       return;
@@ -127,8 +129,8 @@ function AccountContent() {
         await loadAccount();
         setToast({
           message: saved.pendingEmail
-            ? `Saved. We emailed a link to ${saved.pendingEmail}: your email changes when you click it.`
-            : "Profile updated",
+            ? t("Saved. We emailed a link to {email}: your email changes when you click it.", { email: saved.pendingEmail })
+            : t("Profile updated"),
           type: "success",
         });
       } catch (err) {
@@ -136,14 +138,14 @@ function AccountContent() {
         // would have them type everything again.
         setToast({
           message:
-            (err instanceof Error ? err.message : "Your photo could not be saved.") +
-            " Your other details were saved.",
+            (err instanceof Error ? err.message : t("Your photo could not be saved.")) +
+            " " + t("Your other details were saved."),
           type: "error",
         });
       }
     } else {
       const data = await res.json().catch(() => ({}));
-      setToast({ message: data.error || "Failed to update profile", type: "error" });
+      setToast({ message: data.error || t("Failed to update profile"), type: "error" });
     }
     setSaving(false);
   };
@@ -151,7 +153,7 @@ function AccountContent() {
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
-      setToast({ message: "Passwords do not match", type: "error" });
+      setToast({ message: t("Passwords do not match"), type: "error" });
       return;
     }
     const res = await authFetch("/api/auth/change-password", {
@@ -160,7 +162,7 @@ function AccountContent() {
       body: JSON.stringify({ currentPassword, newPassword }),
     });
     if (res.ok) {
-      setToast({ message: "Password changed", type: "success" });
+      setToast({ message: t("Password changed"), type: "success" });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -169,24 +171,24 @@ function AccountContent() {
       if (s) setSession(s);
     } else {
       const data = await res.json();
-      setToast({ message: data.error || "Failed", type: "error" });
+      setToast({ message: data.error || t("Failed"), type: "error" });
     }
   };
 
-  if (loading || !session) return <div className="p-6">Loading...</div>;
+  if (loading || !session) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-dark">My Account</h1>
-        <p className="text-gray-500 text-sm">Manage your profile and security</p>
+        <h1 className="text-2xl font-bold text-dark">{t("My Account")}</h1>
+        <p className="text-gray-500 text-sm">{t("Manage your profile and security")}</p>
       </div>
 
       {forceChange && (
         <div className="bg-risk-medium/10 border border-risk-medium/30 text-risk-medium px-4 py-3 rounded-lg mb-6 text-sm">
-          You must change your password before continuing.
+          {t("You must change your password before continuing.")}
         </div>
       )}
 
@@ -200,7 +202,7 @@ function AccountContent() {
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            Profile
+            {t("Profile")}
           </button>
           <button
             onClick={() => setActiveTab("password")}
@@ -210,7 +212,7 @@ function AccountContent() {
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            Password
+            {t("Password")}
           </button>
         </div>
 
@@ -228,28 +230,26 @@ function AccountContent() {
                     onRemove={setPhotoRemoved}
                   />
                   <p className="text-xs text-gray-400 mt-2">
-                    This is the photo shown against {person.position} on the{" "}
+                    {t("This is the photo shown against {position} on the", { position: person.position })}{" "}
                     <Link href="/people" className="text-primary hover:underline">
-                      People
+                      {t("People")}
                     </Link>{" "}
-                    page.
+                    {t("page.")}
                   </p>
                 </div>
               )}
               {personLoaded && !person && (
                 <div className="pb-4 border-b border-gray-100">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Photo
+                    {t("Photo")}
                   </label>
                   <p className="text-xs text-gray-500">
-                    You are not on the People register yet, so there is nowhere for
-                    a photo to appear. Ask an administrator to add you in Admin
-                    &gt; People and link it to this login.
+                    {t("You are not on the People register yet, so there is nowhere for a photo to appear. Ask an administrator to add you in Admin > People and link it to this login.")}
                   </p>
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
                 <input
                   type="text"
                   value={name}
@@ -258,7 +258,7 @@ function AccountContent() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Surname</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Surname")}</label>
                 <input
                   type="text"
                   value={surname}
@@ -267,7 +267,7 @@ function AccountContent() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Email")}</label>
                 <input
                   type="email"
                   value={email}
@@ -277,7 +277,7 @@ function AccountContent() {
                 {emailChanged && (
                   <div className="mt-2">
                     <label className="block text-xs text-gray-500 mb-1">
-                      Your current password, to change your email
+                      {t("Your current password, to change your email")}
                     </label>
                     <input
                       type="password"
@@ -287,18 +287,18 @@ function AccountContent() {
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      We will email a link to the new address. Your email changes when you click it.
+                      {t("We will email a link to the new address. Your email changes when you click it.")}
                     </p>
                   </div>
                 )}
                 {pendingEmail && !emailChanged && (
                   <p className="text-xs text-amber-700 mt-2">
-                    Waiting for you to confirm <strong>{pendingEmail}</strong>. Check that inbox for the link.
+                    {t("Waiting for you to confirm")} <strong>{pendingEmail}</strong>. {t("Check that inbox for the link.")}
                   </p>
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Role")}</label>
                 <input
                   type="text"
                   value={session.roleName}
@@ -310,14 +310,14 @@ function AccountContent() {
                 type="submit"
                 className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
               >
-                Save Changes
+                {t("Save Changes")}
               </button>
             </form>
           ) : (
             <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Current Password
+                  {t("Current Password")}
                 </label>
                 <input
                   type="password"
@@ -329,7 +329,7 @@ function AccountContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password
+                  {t("New Password")}
                 </label>
                 <input
                   type="password"
@@ -342,7 +342,7 @@ function AccountContent() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm New Password
+                  {t("Confirm New Password")}
                 </label>
                 <input
                   type="password"
@@ -356,7 +356,7 @@ function AccountContent() {
                 type="submit"
                 className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors"
               >
-                Change Password
+                {t("Change Password")}
               </button>
             </form>
           )}
@@ -367,8 +367,9 @@ function AccountContent() {
 }
 
 export default function AccountPage() {
+  const t = useT();
   return (
-    <Suspense fallback={<div className="p-6">Loading...</div>}>
+    <Suspense fallback={<div className="p-6">{t("Loading...")}</div>}>
       <AccountContent />
     </Suspense>
   );

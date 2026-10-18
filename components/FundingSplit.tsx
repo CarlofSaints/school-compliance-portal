@@ -1,6 +1,7 @@
 "use client";
 
 import { formatRand } from "@/lib/spendReport";
+import { useT } from "@/components/I18nProvider";
 
 export interface Allocation {
   source: string;
@@ -25,6 +26,7 @@ export default function FundingSplit({
   onChange,
   estimatedAmount,
 }: Props) {
+  const t = useT();
   const selected = new Map(value.map((a) => [a.source, a.amount]));
   const allocated = value.reduce((t, a) => t + (a.amount || 0), 0);
   const remainder = estimatedAmount - allocated;
@@ -90,18 +92,18 @@ export default function FundingSplit({
 
       <div className="flex items-center justify-between pt-1 text-xs">
         <span className="text-gray-500">
-          Allocated {formatRand(allocated)} of {formatRand(estimatedAmount)}
+          {t("Allocated {allocated} of {estimate}", { allocated: formatRand(allocated), estimate: formatRand(estimatedAmount) })}
         </span>
         {mismatch ? (
           <span className="font-medium text-amber-600">
             {remainder > 0
-              ? `${formatRand(remainder)} unallocated`
-              : `${formatRand(-remainder)} over`}
+              ? t("{amount} unallocated", { amount: formatRand(remainder) })
+              : t("{amount} over", { amount: formatRand(-remainder) })}
           </span>
         ) : value.length > 0 ? (
-          <span className="font-medium text-green-600">Balanced</span>
+          <span className="font-medium text-green-600">{t("Balanced")}</span>
         ) : (
-          <span className="text-gray-400">Select at least one source</span>
+          <span className="text-gray-400">{t("Select at least one source")}</span>
         )}
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import FileUpload from "@/components/FileUpload";
 import Toast from "@/components/Toast";
+import { useT } from "@/components/I18nProvider";
 
 interface GuidelineRecord {
   id: string;
@@ -16,6 +17,7 @@ interface GuidelineRecord {
 }
 
 export default function GuidelinesPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_guidelines");
   const [guidelines, setGuidelines] = useState<GuidelineRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -52,28 +54,28 @@ export default function GuidelinesPage() {
     });
 
     if (res.ok) {
-      setToast({ message: "Guideline uploaded", type: "success" });
+      setToast({ message: t("Guideline uploaded"), type: "success" });
       setShowForm(false);
       setName("");
       setDescription("");
       setFile(null);
       fetchGuidelines();
     } else {
-      setToast({ message: "Upload failed", type: "error" });
+      setToast({ message: t("Upload failed"), type: "error" });
     }
     setSubmitting(false);
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this guideline?")) return;
+    if (!confirm(t("Delete this guideline?"))) return;
     const res = await authFetch(`/api/guidelines/${id}`, { method: "DELETE" });
     if (res.ok) {
-      setToast({ message: "Guideline deleted", type: "success" });
+      setToast({ message: t("Guideline deleted"), type: "success" });
       fetchGuidelines();
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -81,16 +83,16 @@ export default function GuidelinesPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Guidelines</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Guidelines")}</h1>
           <p className="text-gray-500 text-sm">
-            GDE/DoE/BELA guideline documents used for compliance checks
+            {t("GDE/DoE/BELA guideline documents used for compliance checks")}
           </p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          + Upload Guideline
+          {t("+ Upload Guideline")}
         </button>
       </div>
 
@@ -99,20 +101,20 @@ export default function GuidelinesPage() {
           <form onSubmit={handleUpload} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Guideline Name
+                {t("Guideline Name")}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                placeholder="e.g. GDE Circular 12/2024 - Financial Management"
+                placeholder={t("e.g. GDE Circular 12/2024 - Financial Management")}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
+                {t("Description")}
               </label>
               <textarea
                 value={description}
@@ -122,34 +124,34 @@ export default function GuidelinesPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t("Source")}</label>
               <select
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
               >
-                <option value="GDE">GDE (Gauteng Dept of Education)</option>
-                <option value="DoE">DoE (National Dept of Education)</option>
-                <option value="SASA">SASA (SA Schools Act)</option>
-                <option value="BELA">BELA (Basic Education Laws Amendment Act)</option>
-                <option value="Other">Other</option>
+                <option value="GDE">{t("GDE (Gauteng Dept of Education)")}</option>
+                <option value="DoE">{t("DoE (National Dept of Education)")}</option>
+                <option value="SASA">{t("SASA (SA Schools Act)")}</option>
+                <option value="BELA">{t("BELA (Basic Education Laws Amendment Act)")}</option>
+                <option value="Other">{t("Other")}</option>
               </select>
             </div>
-            <FileUpload onChange={setFile} value={file} label="Upload guideline document" />
+            <FileUpload onChange={setFile} value={file} label={t("Upload guideline document")} />
             <div className="flex gap-3">
               <button
                 type="submit"
                 disabled={submitting || !file}
                 className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
-                {submitting ? "Uploading..." : "Upload"}
+                {submitting ? t("Uploading...") : t("Upload")}
               </button>
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
                 className="px-6 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
               >
-                Cancel
+                {t("Cancel")}
               </button>
             </div>
           </form>
@@ -160,11 +162,11 @@ export default function GuidelinesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Name</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Source</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">File</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">Uploaded</th>
-              <th className="text-right px-6 py-3 font-medium text-gray-500">Actions</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Name")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Source")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("File")}</th>
+              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Uploaded")}</th>
+              <th className="text-right px-6 py-3 font-medium text-gray-500">{t("Actions")}</th>
             </tr>
           </thead>
           <tbody>
@@ -190,7 +192,7 @@ export default function GuidelinesPage() {
                     onClick={() => handleDelete(g.id)}
                     className="text-risk-high hover:text-red-700 text-xs font-medium"
                   >
-                    Delete
+                    {t("Delete")}
                   </button>
                 </td>
               </tr>
@@ -198,7 +200,7 @@ export default function GuidelinesPage() {
             {guidelines.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
-                  No guidelines uploaded. Upload GDE/DoE/BELA documents to enable compliance checking.
+                  {t("No guidelines uploaded. Upload GDE/DoE/BELA documents to enable compliance checking.")}
                 </td>
               </tr>
             )}

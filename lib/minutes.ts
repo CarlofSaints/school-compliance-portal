@@ -1,3 +1,4 @@
+import { tk } from "./i18n/translate";
 // PURE meeting-minutes types and period logic.
 //
 // No storage, no @vercel/blob, no next/headers, so a client component can
@@ -6,9 +7,9 @@
 export type MeetingBody = "sgb" | "fincom" | "other";
 
 export const MEETING_BODY_LABELS: Record<MeetingBody, string> = {
-  sgb: "SGB",
-  fincom: "FINCOM",
-  other: "Other",
+  sgb: tk("SGB"),
+  fincom: tk("FINCOM"),
+  other: tk("Other"),
 };
 
 /**
@@ -33,12 +34,12 @@ export type MinutesStatus =
   | "archived";
 
 export const MINUTES_STATUS_LABELS: Record<MinutesStatus, string> = {
-  draft: "Draft",
+  draft: tk("Draft"),
   in_review: "Out for checking",
   changes_requested: "Changes requested",
   awaiting_signatures: "Awaiting signatures",
   signed: "Signed",
-  archived: "Archived",
+  archived: tk("Archived"),
 };
 
 /** 🔴 Once signed, minutes are a record of what a governing body agreed and
@@ -160,7 +161,7 @@ export type SectionKind = "text" | "attendance" | "apologies";
 export type AttendanceStatus = "apology" | "absent";
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
-  apology: "Apology",
+  apology: tk("Apology"),
   absent: "Not Present",
 };
 
@@ -426,10 +427,10 @@ export interface MinutesDistributionNote {
 export type SignatoryRole = "sgb_chair" | "principal" | "deputy_chair" | "other";
 
 export const SIGNATORY_ROLE_LABELS: Record<SignatoryRole, string> = {
-  sgb_chair: "SGB Chair",
+  sgb_chair: tk("SGB Chair"),
   principal: "Principal",
-  deputy_chair: "Deputy Chair",
-  other: "Other",
+  deputy_chair: tk("Deputy Chair"),
+  other: tk("Other"),
 };
 
 export interface Signatory {

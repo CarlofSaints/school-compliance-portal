@@ -4,6 +4,7 @@ import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { REQUIRED_ACTION_CATEGORY } from "@/lib/actionItems";
+import { useT } from "@/components/I18nProvider";
 
 // Mirrors ACTION_ADMIN_PERMISSIONS on the server.
 const ADMIN_PERMISSIONS = ["manage_action_items", "manage_people"];
@@ -26,6 +27,7 @@ const isRequired = (name: string) =>
   name.trim().toLowerCase() === REQUIRED_ACTION_CATEGORY.toLowerCase();
 
 export default function ActionCategoriesPage() {
+  const t = useT();
   const { session, loading } = useAuth(ADMIN_PERMISSIONS);
   const [rows, setRows] = useState<Row[]>([]);
   // How many actions sit in each category, so a category is never removed
@@ -103,7 +105,7 @@ export default function ActionCategoriesPage() {
     const value = adding.trim();
     if (!value) return;
     if (names.some((c) => c.toLowerCase() === value.toLowerCase())) {
-      setToast({ message: `"${value}" is already on the list`, type: "error" });
+      setToast({ message: t("\"{value}\" is already on the list", { value }), type: "error" });
       return;
     }
     setRows((prev) => [...prev, { original: null, value }]);
@@ -134,7 +136,7 @@ export default function ActionCategoriesPage() {
 
     if (!res.ok) {
       setToast({
-        message: await apiErrorMessage(res, "Could not save the categories"),
+        message: await apiErrorMessage(res, t("Could not save the categories")),
         type: "error",
       });
       return;
@@ -144,15 +146,17 @@ export default function ActionCategoriesPage() {
     setToast({
       message:
         moved > 0
-          ? `Action categories saved, and ${moved} ${moved === 1 ? "action" : "actions"} moved to the new name`
-          : "Action categories saved",
+          ? moved === 1
+            ? t("Action categories saved, and {count} action moved to the new name", { count: moved })
+            : t("Action categories saved, and {count} actions moved to the new name", { count: moved })
+          : t("Action categories saved"),
       type: "success",
     });
     // Reloaded so the usage counts reflect the actions that just moved.
     await load();
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -166,9 +170,9 @@ export default function ActionCategoriesPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Action Categories</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Action Categories")}</h1>
           <p className="text-gray-500 text-sm">
-            The categories an action item can be filed under
+            {t("The categories an action item can be filed under")}
           </p>
         </div>
         <button
@@ -176,7 +180,7 @@ export default function ActionCategoriesPage() {
           disabled={saving || !dirty}
           className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
-          {saving ? "Saving..." : dirty ? "Save Changes" : "Saved"}
+          {saving ? t("Saving...") : dirty ? t("Save Changes") : t("Saved")}
         </button>
       </div>
 
@@ -197,32 +201,34 @@ export default function ActionCategoriesPage() {
                   />
                   <span className="text-xs text-gray-400 w-28 text-right">
                     {row.original === null
-                      ? "new"
+                      ? t("new")
                       : inUse === 0
-                        ? "not used"
-                        : `${inUse} ${inUse === 1 ? "action" : "actions"}`}
+                        ? t("not used")
+                        : inUse === 1
+                          ? t("{count} action", { count: inUse })
+                          : t("{count} actions", { count: inUse })}
                   </span>
                   {row.original && isRequired(row.original) ? (
                     <span
                       className="text-xs text-gray-400 w-16 text-right"
-                      title="Used when an action is raised or imported without a category, so it cannot be removed"
+                      title={t("Used when an action is raised or imported without a category, so it cannot be removed")}
                     >
-                      required
+                      {t("required")}
                     </span>
                   ) : (
                     <button
                       onClick={() => remove(i)}
                       className="text-risk-high hover:text-red-700 text-xs font-medium w-16 text-right"
                     >
-                      Remove
+                      {t("Remove")}
                     </button>
                   )}
                 </div>
                 {renamed && inUse > 0 && row.value.trim() && (
                   <p className="text-xs text-amber-600 mt-1">
-                    Was &quot;{row.original}&quot;. Saving moves its {inUse}{" "}
-                    {inUse === 1 ? "action" : "actions"} to &quot;
-                    {row.value.trim()}&quot;.
+                    {inUse === 1
+                      ? t("Was \"{from}\". Saving moves its {count} action to \"{to}\".", { from: row.original ?? "", count: inUse, to: row.value.trim() })
+                      : t("Was \"{from}\". Saving moves its {count} actions to \"{to}\".", { from: row.original ?? "", count: inUse, to: row.value.trim() })}
                   </p>
                 )}
               </div>
@@ -234,7 +240,7 @@ export default function ActionCategoriesPage() {
           <input
             type="text"
             value={adding}
-            placeholder="Add a category..."
+            placeholder={t("Add a category...")}
             onChange={(e) => setAdding(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
@@ -248,22 +254,23 @@ export default function ActionCategoriesPage() {
             onClick={add}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
-            Add
+            {t("Add")}
           </button>
         </div>
 
         {removed.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
             <p className="text-xs font-medium text-gray-600">
-              Removed categories that actions still use
+              {t("Removed categories that actions still use")}
             </p>
             {removed.map((r, i) => {
               const count = usage[r.name] || 0;
               return (
                 <div key={r.name} className="flex items-center gap-2 text-sm">
                   <span className="flex-1 text-gray-600">
-                    Move the {count} {count === 1 ? "action" : "actions"} in
-                    &quot;{r.name}&quot; to
+                    {count === 1
+                      ? t("Move the {count} action in \"{name}\" to", { count, name: r.name })
+                      : t("Move the {count} actions in \"{name}\" to", { count, name: r.name })}
                   </span>
                   <select
                     value={names.includes(r.moveTo) ? r.moveTo : REQUIRED_ACTION_CATEGORY}
@@ -288,9 +295,7 @@ export default function ActionCategoriesPage() {
         )}
 
         <p className="text-xs text-gray-400 mt-4">
-          Renaming a category moves every action filed under it to the new name.
-          Removing one that actions use asks where to move them. Nothing changes
-          until you click Save Changes.
+          {t("Renaming a category moves every action filed under it to the new name. Removing one that actions use asks where to move them. Nothing changes until you click Save Changes.")}
         </p>
       </div>
     </div>

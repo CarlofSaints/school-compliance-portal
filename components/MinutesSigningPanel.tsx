@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { authFetch } from "@/lib/useAuth";
 import DownloadLink from "@/components/DownloadLink";
+import { useT } from "@/components/I18nProvider";
 import {
   canOpenSigning,
   signatureMatchesDocument,
@@ -59,6 +60,7 @@ export default function MinutesSigningPanel({
   onChanged,
   onToast,
 }: Props) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
 
   const me = myEmail.trim().toLowerCase();
@@ -76,7 +78,7 @@ export default function MinutesSigningPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        onToast(data.error || "That did not work.", "error");
+        onToast(data.error || t("That did not work."), "error");
         return null;
       }
       if (ok) onToast(ok, "success");
@@ -90,10 +92,14 @@ export default function MinutesSigningPanel({
   async function openSigning() {
     const data = await post("open-signing");
     if (!data) return;
-    const parts = [`Signing codes sent to ${data.sent} ${data.sent === 1 ? "person" : "people"}.`];
-    if (data.failed?.length) parts.push(`Could not reach ${data.failed.join(", ")}.`);
+    const parts = [
+      data.sent === 1
+        ? t("Signing codes sent to {n} person.", { n: data.sent })
+        : t("Signing codes sent to {n} people.", { n: data.sent }),
+    ];
+    if (data.failed?.length) parts.push(t("Could not reach {names}.", { names: data.failed.join(", ") }));
     if (data.withoutEmail?.length)
-      parts.push(`No email address for ${data.withoutEmail.join(", ")}, so they cannot sign.`);
+      parts.push(t("No email address for {names}, so they cannot sign.", { names: data.withoutEmail.join(", ") }));
     onToast(parts.join(" "), data.failed?.length || data.withoutEmail?.length ? "error" : "success");
   }
 
@@ -111,10 +117,10 @@ export default function MinutesSigningPanel({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        onToast(data.error || "Could not upload that file.", "error");
+        onToast(data.error || t("Could not upload that file."), "error");
         return;
       }
-      onToast("Signed copy uploaded. These minutes are now closed.", "success");
+      onToast(t("Signed copy uploaded. These minutes are now closed."), "success");
       onChanged();
     } finally {
       setBusy(false);
@@ -125,13 +131,12 @@ export default function MinutesSigningPanel({
 
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-sm font-semibold text-dark mb-1">Signing</h2>
+      <h2 className="text-sm font-semibold text-dark mb-1">{t("Signing")}</h2>
 
       {canOpenSigning(status) && (
         <>
           <p className="text-sm text-gray-500 mb-4">
-            Each signatory is emailed their own code. Typing it is what signs the minutes, so
-            nobody can sign on somebody else&apos;s behalf.
+            {t("Each signatory is emailed their own code. Typing it is what signs the minutes, so nobody can sign on somebody else's behalf.")}
           </p>
           {canManage && (
             <button
@@ -139,7 +144,7 @@ export default function MinutesSigningPanel({
               disabled={busy}
               className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
             >
-              {busy ? "Sending..." : "Send out for signing"}
+              {busy ? t("Sending...") : t("Send out for signing")}
             </button>
           )}
         </>
@@ -152,8 +157,7 @@ export default function MinutesSigningPanel({
       {canManage && status !== "signed" && (
         <div className={canOpenSigning(status) ? "mt-5 pt-5 border-t border-gray-100" : ""}>
           <p className="text-sm text-gray-500 mb-2">
-            Signed on paper instead? Download the Word file above, sign it, then upload the
-            signed page here. That closes the minutes the same way.
+            {t("Signed on paper instead? Download the Word file above, sign it, then upload the signed page here. That closes the minutes the same way.")}
           </p>
           <label className="inline-block">
             <input
@@ -170,7 +174,7 @@ export default function MinutesSigningPanel({
               className="hidden"
             />
             <span className="inline-block cursor-pointer px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors">
-              {busy ? "Uploading..." : "Upload a signed copy"}
+              {busy ? t("Uploading...") : t("Upload a signed copy")}
             </span>
           </label>
         </div>
@@ -183,8 +187,13 @@ export default function MinutesSigningPanel({
               a signed page for, which reads as a failure. */}
           {signatories.length > 0 && (
             <p className="text-sm text-gray-500 mb-4">
-              {progress.signed} of {progress.total} signed
-              {progress.waitingOn.length > 0 && `, waiting on ${progress.waitingOn.join(", ")}`}.
+              {progress.waitingOn.length > 0
+                ? t("{signed} of {total} signed, waiting on {names}.", {
+                    signed: progress.signed,
+                    total: progress.total,
+                    names: progress.waitingOn.join(", "),
+                  })
+                : t("{signed} of {total} signed.", { signed: progress.signed, total: progress.total })}
             </p>
           )}
 
@@ -202,35 +211,34 @@ export default function MinutesSigningPanel({
                   style={{ borderColor: s.signedAt ? "#059669" : "#e5e7eb" }}
                 >
                   <span className="text-dark font-medium">{s.name}</span>
-                  <span className="text-gray-400 text-xs">{SIGNATORY_ROLE_LABELS[s.role]}</span>
+                  <span className="text-gray-400 text-xs">{t(SIGNATORY_ROLE_LABELS[s.role])}</span>
                   {s.signedAt ? (
-                    <span className="text-emerald-700 text-xs">Signed {when(s.signedAt)}</span>
+                    <span className="text-emerald-700 text-xs">{t("Signed {when}", { when: when(s.signedAt) })}</span>
                   ) : (
                     <span className="text-gray-400 text-xs">
-                      {s.codeSentAt ? `Code sent ${when(s.codeSentAt)}` : "No code sent yet"}
+                      {s.codeSentAt ? t("Code sent {when}", { when: when(s.codeSentAt) }) : t("No code sent yet")}
                     </span>
                   )}
                   {stale && (
                     <span className="text-xs text-risk-high font-medium">
-                      Signed a different version of this document
+                      {t("Signed a different version of this document")}
                     </span>
                   )}
                 </li>
               );
             })}
             {signatories.length === 0 && !signedCopy && (
-              <li className="text-sm text-gray-400">Nobody has been asked to sign yet.</li>
+              <li className="text-sm text-gray-400">{t("Nobody has been asked to sign yet.")}</li>
             )}
           </ul>
 
           {open && mine && !mine.signedAt && (
             <div className="rounded-lg border border-gray-200 p-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Your signature
+                {t("Your signature")}
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                Open the minutes, read them through, then sign with the code emailed to{" "}
-                {mine.email}.
+                {t("Open the minutes, read them through, then sign with the code emailed to {email}.", { email: mine.email })}
               </p>
               <div className="flex flex-wrap gap-2">
                 {/* 🔴 Signing happens on the DOCUMENT, not here. Carl expected
@@ -241,29 +249,29 @@ export default function MinutesSigningPanel({
                   href={`/minutes/${id}/sign`}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors"
                 >
-                  Read and sign
+                  {t("Read and sign")}
                 </Link>
                 <button
                   onClick={() =>
-                    post("open-signing", { resendMine: true }, "A new code is on its way to you.")
+                    post("open-signing", { resendMine: true }, t("A new code is on its way to you."))
                   }
                   disabled={busy}
                   className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
                 >
-                  Send my code again
+                  {t("Send my code again")}
                 </button>              </div>
             </div>
           )}
 
           {open && !mine && (
             <p className="text-xs text-gray-400">
-              You are not on the signing list for these minutes.
+              {t("You are not on the signing list for these minutes.")}
             </p>
           )}
 
           {signedCopy && (
             <p className="mt-4 text-sm">
-              <span className="text-gray-500">Signed on paper: </span>
+              <span className="text-gray-500">{t("Signed on paper:")} </span>
               <DownloadLink
                 href={`/api/minutes/${id}/signed-copy`}
                 filename={signedCopy.filename}
@@ -272,14 +280,13 @@ export default function MinutesSigningPanel({
               >
                 {signedCopy.filename}
               </DownloadLink>
-              <span className="text-gray-400"> uploaded {when(signedCopy.uploadedAt)}</span>
+              <span className="text-gray-400"> {t("uploaded {when}", { when: when(signedCopy.uploadedAt) })}</span>
             </p>
           )}
 
           {currentRef && status === "signed" && (
             <p className="text-xs text-gray-400 mt-4">
-              Document reference {currentRef}. This identifies the exact wording that was signed,
-              so a later copy can be checked against it.
+              {t("Document reference {ref}. This identifies the exact wording that was signed, so a later copy can be checked against it.", { ref: currentRef })}
             </p>
           )}
         </>

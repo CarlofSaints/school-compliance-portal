@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from "next/server";
+import type Anthropic from "@anthropic-ai/sdk";
+import { requireLogin } from "@/lib/rolesData";
+import { LIMITS, enforce } from "@/lib/rateLimit";
+import { getLocale } from "@/lib/i18n/server";
+import { getPolicyById, getPolicyVersions, downloadPolicyFile } from "@/lib/policyData";
+import { getMinutes } from "@/lib/minutesData";
+import { sessionMayReadMinutes } from "@/lib/minutesAccess";
+import { documentHash } from "@/lib/minutesSigning";
+import { ATTENDANCE_STATUS_LABELS } from "@/lib/minutes";
+import { extractTextFromBuffer } from "@/lib/pdfParser";
+import {
+  getAddon,
+  getUsage,
+  storedTranslation,
+  translateContent,
+  type ContentKind,
+} from "@/lib/contentTranslation";
+
+// A long policy can take several minutes to translate in full. 800s is the
+// Vercel Pro ceiling.
+export const maxDuration = 800;
+
+// Whether to show the Translate button, and how much of the month is left.
+export async function GET(req: NextRequest) {
+  const session = await requireLogin(req);
+  if (session instanceof NextResponse) return session;
+  const addon = await getAddon();
+  return NextResponse.json({
+    enabled: addon.enabled,
+    used: addon.enabled ? await getUsage() : 0,
+    cap: addon.monthlyCap,
+  });
+}
+
+// { kind: "policy" | "minutes", id } -> the document in the visitor's language.
+export async function POST(req: NextRequest) {
+  const session = await requireLogin(req);
+  if (session instanceof NextResponse) return session;
+
+  let body: { kind?: unknown; id?: unknown } = {};
+  try {
+    body = await req.json();
+  } catch {
+    // Falls through to the 400 below.
+  }
+  const kind = body.kind;
+  const id = body.id;
+  if ((kind !== "policy" && kind !== "minutes") || typeof id !== "string" || !/^[\w-]{1,80}$/.test(id)) {
+    return NextResponse.json({ error: "kind and id are required" }, { status: 400 });
+  }
+  const locale = await getLocale();
+
+  // The same read rule as the document itself: whoever cannot open it cannot
+  // have it translated, and gets the same 404 as for one that does not exist.
+  let title: string;
+  let sourceHash: string;
+  let source: () => Promise<Anthropic.ContentBlockParam[]>;
+  if (kind === "policy") {
+    if (!session.permissions.includes("download_policies")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const policy = await getPolicyById(id);
+    const version = policy && (await getPolicyVersions(id)).find((v) => v.version === policy.currentVersion);
+    if (!policy || !version) return NextResponse.json({ error: "Policy not found" }, { status: 404 });
+    title = policy.name;
+    sourceHash = `v${version.version}`;
+    source = async () => {
+      const file = await downloadPolicyFile(id, version.version, version.ext);
+      if (!file) throw new Error("Policy file missing");
+      if (version.ext.toLowerCase() === "pdf") {
+        return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: file.toString("base64") } }];
+      }
+      return [{ type: "text", text: await extractTextFromBuffer(file, version.ext) }];
+    };
+  } else {
+    const record = await getMinutes(id);
+    if (!record || !(await sessionMayReadMinutes(session, record))) {
+      return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
+    }
+    title = record.title;
+    sourceHash = documentHash(record);
+    source = async () => [
+      {
+        type: "text",
+        text: [...record.sections]
+          .sort((a, b) => a.order - b.order)
+          .map((s) => {
+            const rows = (s.attendees || [])
+              .map((r) => `- ${r.position}: ${r.name}${r.status ? ` (${ATTENDANCE_STATUS_LABELS[r.status]})` : ""}`)
+              .join("\n");
+            return `# ${s.title}\n${[s.body, rows, s.responsible ? `Responsible: ${s.responsible}` : ""].filter(Boolean).join("\n")}`;
+          })
+          .join("\n\n"),
+      },
+    ];
+  }
+
+  const stored = await storedTranslation(kind as ContentKind, id, locale, sourceHash);
+  if (stored) return NextResponse.json(stored);
+
+  // Only a NEW translation is a paid AI call, so only that is rate limited.
+  const limited = await enforce([[LIMITS.translateUser, session.id]]);
+  if (limited) return limited;
+
+  const result = await translateContent({ kind: kind as ContentKind, id, locale, sourceHash, title, source });
+  return result.ok
+    ? NextResponse.json(result)
+    : NextResponse.json({ error: result.error }, { status: result.status });
+}

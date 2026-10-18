@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/useAuth";
 import DownloadLink from "@/components/DownloadLink";
 import { PLACEHOLDERS } from "@/lib/letterhead";
+import { useT } from "@/components/I18nProvider";
 
 // ---------------------------------------------------------------------------
 // The school's own Word letterhead.
@@ -26,6 +27,7 @@ export default function LetterheadUpload({
 }: {
   onToast: (message: string, type: "success" | "error") => void;
 }) {
+  const t = useT();
   const [meta, setMeta] = useState<Meta | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -55,11 +57,11 @@ export default function LetterheadUpload({
         // Kept on the page rather than only in a toast. This message tells
         // somebody to go and edit their letterhead in Word, which is not a
         // thing to read once while it fades out.
-        setProblem(data.error || "That letterhead could not be uploaded.");
+        setProblem(data.error || t("That letterhead could not be uploaded."));
         return;
       }
       setMeta(data);
-      onToast("Letterhead saved. New minutes will be built on it.", "success");
+      onToast(t("Letterhead saved. New minutes will be built on it."), "success");
     } finally {
       setBusy(false);
     }
@@ -70,12 +72,12 @@ export default function LetterheadUpload({
     try {
       const res = await authFetch("/api/branding/letterhead", { method: "DELETE" });
       if (!res.ok) {
-        onToast("Could not remove the letterhead.", "error");
+        onToast(t("Could not remove the letterhead."), "error");
         return;
       }
       setMeta(null);
       setProblem(null);
-      onToast("Letterhead removed. Documents go back to the standard layout.", "success");
+      onToast(t("Letterhead removed. Documents go back to the standard layout."), "success");
     } finally {
       setBusy(false);
     }
@@ -85,11 +87,9 @@ export default function LetterheadUpload({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-6">
-      <h2 className="text-sm font-semibold text-dark mb-1">Word letterhead</h2>
+      <h2 className="text-sm font-semibold text-dark mb-1">{t("Word letterhead")}</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Upload the school&apos;s own Word letterhead and documents are built on it: your crest,
-        your fonts, your wording, unchanged. Without one, documents use a standard layout with
-        the crest and colours from above.
+        {t("Upload the school's own Word letterhead and documents are built on it: your crest, your fonts, your wording, unchanged. Without one, documents use a standard layout with the crest and colours from above.")}
       </p>
 
       {meta ? (
@@ -105,13 +105,15 @@ export default function LetterheadUpload({
             </DownloadLink>
             <span className="text-gray-400">
               {" "}
-              ({(meta.size / 1024).toFixed(0)}KB), uploaded{" "}
-              {new Date(meta.uploadedAt).toLocaleDateString("en-ZA", {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-              })}{" "}
-              by {meta.uploadedBy}
+              {t("({size}KB), uploaded {date} by {name}", {
+                size: (meta.size / 1024).toFixed(0),
+                date: new Date(meta.uploadedAt).toLocaleDateString("en-ZA", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                }),
+                name: meta.uploadedBy,
+              })}
             </span>
           </p>
           {/* Which markers THIS file actually has, so a school can see what it
@@ -122,13 +124,13 @@ export default function LetterheadUpload({
               return (
                 <span
                   key={p.name}
-                  title={p.what}
+                  title={t(p.what)}
                   className={`text-[11px] px-2 py-0.5 rounded-full font-mono ${
                     on ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-400"
                   }`}
                 >
                   {`{{${p.name}}}`}
-                  {on ? "" : " · not used"}
+                  {on ? "" : ` · ${t("not used")}`}
                 </span>
               );
             })}
@@ -136,7 +138,7 @@ export default function LetterheadUpload({
         </div>
       ) : (
         <div className="rounded-lg border border-dashed border-gray-300 p-4 mb-4 text-sm text-gray-500">
-          No letterhead uploaded. Documents use the standard layout.
+          {t("No letterhead uploaded. Documents use the standard layout.")}
         </div>
       )}
 
@@ -148,26 +150,25 @@ export default function LetterheadUpload({
 
       <details className="mb-4">
         <summary className="text-sm text-primary cursor-pointer hover:underline">
-          How to prepare your letterhead
+          {t("How to prepare your letterhead")}
         </summary>
         <div className="mt-3 text-sm text-gray-600 space-y-2">
           <p>
-            Open your letterhead in Word and type{" "}
-            <code className="bg-gray-100 px-1 rounded font-mono text-xs">{"{{content}}"}</code> on
-            its own line, where the numbered items should go. Save it as .docx and upload it
-            here. Everything else in the file is left exactly as it is.
+            {t("Open your letterhead in Word and type")}{" "}
+            <code className="bg-gray-100 px-1 rounded font-mono text-xs">{"{{content}}"}</code>{" "}
+            {t("on its own line, where the numbered items should go. Save it as .docx and upload it here. Everything else in the file is left exactly as it is.")}
           </p>
-          <p>These are optional, and anywhere you put them they get filled in:</p>
+          <p>{t("These are optional, and anywhere you put them they get filled in:")}</p>
           <ul className="space-y-1">
             {PLACEHOLDERS.filter((p) => p.name !== "content").map((p) => (
               <li key={p.name}>
                 <code className="bg-gray-100 px-1 rounded font-mono text-xs">{`{{${p.name}}}`}</code>{" "}
-                <span className="text-gray-500">{p.what}</span>
+                <span className="text-gray-500">{t(p.what)}</span>
               </li>
             ))}
           </ul>
           <p className="text-gray-500">
-            Anything you leave out keeps whatever your letterhead already says there.
+            {t("Anything you leave out keeps whatever your letterhead already says there.")}
           </p>
         </div>
       </details>
@@ -188,7 +189,7 @@ export default function LetterheadUpload({
             className="hidden"
           />
           <span className="inline-block cursor-pointer bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors">
-            {busy ? "Uploading..." : meta ? "Replace letterhead" : "Upload a letterhead"}
+            {busy ? t("Uploading...") : meta ? t("Replace letterhead") : t("Upload a letterhead")}
           </span>
         </label>
         {meta && (
@@ -197,7 +198,7 @@ export default function LetterheadUpload({
             disabled={busy}
             className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors disabled:opacity-50"
           >
-            Remove
+            {t("Remove")}
           </button>
         )}
       </div>

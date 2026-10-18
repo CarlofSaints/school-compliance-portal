@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import AuthShell from "@/components/AuthShell";
+import { useT } from "@/components/I18nProvider";
 
 export default function ForgotPasswordPage() {
+  const t = useT();
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState("");
   const [error, setError] = useState("");
@@ -24,12 +26,12 @@ export default function ForgotPasswordPage() {
       if (!res.ok) {
         // Only a genuinely broken site (no mail provider, send failed) gets
         // here. An unknown address deliberately looks exactly like a hit.
-        setError(data.error || "Something went wrong. Please try again.");
+        setError(data.error || t("Something went wrong. Please try again."));
         return;
       }
       setSent(data.message);
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("Network error. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -37,29 +39,27 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <AuthShell title="Check your email">
+      <AuthShell title={t("Check your email")}>
         <div className="bg-green-50 text-green-800 px-4 py-3 rounded-lg mb-6 text-sm">
           {sent}
         </div>
         <p className="text-sm text-gray-600 mb-6">
-          If it has not arrived in a few minutes, check your junk folder before
-          asking for another link.
+          {t("If it has not arrived in a few minutes, check your junk folder before asking for another link.")}
         </p>
         <Link
           href="/login"
           className="block w-full text-center bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors"
         >
-          Back to sign in
+          {t("Back to sign in")}
         </Link>
       </AuthShell>
     );
   }
 
   return (
-    <AuthShell title="Forgot your password?">
+    <AuthShell title={t("Forgot your password?")}>
       <p className="text-sm text-gray-600 mb-6">
-        Enter the email address you sign in with and we will send you a link to
-        choose a new password.
+        {t("Enter the email address you sign in with and we will send you a link to choose a new password.")}
       </p>
 
       {error && (
@@ -71,7 +71,7 @@ export default function ForgotPasswordPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email
+            {t("Email")}
           </label>
           <input
             type="email"
@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
             required
             autoFocus
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-            placeholder="your@email.com"
+            placeholder={t("your@email.com")}
           />
         </div>
 
@@ -89,13 +89,13 @@ export default function ForgotPasswordPage() {
           disabled={loading}
           className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {loading ? "Sending..." : "Send reset link"}
+          {loading ? t("Sending...") : t("Send reset link")}
         </button>
       </form>
 
       <p className="text-center text-sm text-gray-500 mt-6">
         <Link href="/login" className="text-primary hover:underline">
-          Back to sign in
+          {t("Back to sign in")}
         </Link>
       </p>
     </AuthShell>

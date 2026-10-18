@@ -8,8 +8,10 @@ import SchoolBrandingFields, {
   type BrandingValue,
 } from "@/components/SchoolBrandingFields";
 import { useBranding } from "@/components/BrandingProvider";
+import { useT } from "@/components/I18nProvider";
 
 export default function BrandingPage() {
+  const t = useT();
   const { session, loading } = useAuth("manage_users");
   const branding = useBranding();
   // The From header the server actually builds, so this preview cannot drift
@@ -93,11 +95,11 @@ export default function BrandingPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setToast({ message: data.error || "Could not save.", type: "error" });
+        setToast({ message: data.error || t("Could not save."), type: "error" });
         return;
       }
       setToast({
-        message: "Saved. Reload any open page to see the new look.",
+        message: t("Saved. Reload any open page to see the new look."),
         type: "success",
       });
       setHadLogo(!!data.logo);
@@ -108,7 +110,7 @@ export default function BrandingPage() {
         }));
       }
     } catch {
-      setToast({ message: "Could not save.", type: "error" });
+      setToast({ message: t("Could not save."), type: "error" });
     } finally {
       setSaving(false);
     }
@@ -123,30 +125,29 @@ export default function BrandingPage() {
       )}
       {loadError && (
         <div className="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          The saved branding settings could not be loaded, so saving is switched off to protect them. Refresh the page to try again.
+          {t("The saved branding settings could not be loaded, so saving is switched off to protect them. Refresh the page to try again.")}
         </div>
       )}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-dark">School branding</h1>
+        <h1 className="text-2xl font-bold text-dark">{t("School branding")}</h1>
         <p className="text-gray-500 mt-1">
-          Your crest and colours, used across the portal, on reports and in every
-          email it sends.
+          {t("Your crest and colours, used across the portal, on reports and in every email it sends.")}
         </p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-6">
         {busy ? (
-          <p className="text-sm text-gray-500">Loading...</p>
+          <p className="text-sm text-gray-500">{t("Loading...")}</p>
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  School name
+                  {t("School name")}
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  The full name, as it should appear on reports and emails.
+                  {t("The full name, as it should appear on reports and emails.")}
                 </p>
                 <input
                   type="text"
@@ -157,10 +158,10 @@ export default function BrandingPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Short name
+                  {t("Short name")}
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  The acronym used in the sidebar and in tight spaces.
+                  {t("The acronym used in the sidebar and in tight spaces.")}
                 </p>
                 <input
                   type="text"
@@ -178,36 +179,29 @@ export default function BrandingPage() {
             />
 
             <div className="pt-6 border-t border-gray-100">
-              <h2 className="text-sm font-semibold text-dark mb-1">Email</h2>
+              <h2 className="text-sm font-semibold text-dark mb-1">{t("Email")}</h2>
               <p className="text-xs text-gray-500 mb-4">
-                How reminders, approvals and sign-in emails appear to whoever
-                receives them.
+                {t("How reminders, approvals and sign-in emails appear to whoever receives them.")}
               </p>
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Emails are sent from
+                  {t("Emails are sent from")}
                 </label>
                 <div className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600 font-mono break-all">
-                  {(fullName || "Your school") + " <" + (sendingAddress || "noreply@…") + ">"}
+                  {(fullName || t("Your school")) + " <" + (sendingAddress || "noreply@…") + ">"}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Your school&apos;s name is the part people see. The address itself
-                  is fixed, because a sending domain has to be verified with our
-                  email provider before anything it sends will be delivered.
-                  If each school typed its own, its email would quietly land in
-                  spam.
+                  {t("Your school's name is the part people see. The address itself is fixed, because a sending domain has to be verified with our email provider before anything it sends will be delivered. If each school typed its own, its email would quietly land in spam.")}
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Replies go to
+                  {t("Replies go to")}
                 </label>
                 <p className="text-xs text-gray-500 mb-2">
-                  Nobody reads a no-reply mailbox. Put a real address here and a
-                  reply to any of these emails reaches a person. Leave it blank
-                  and replies go nowhere.
+                  {t("Nobody reads a no-reply mailbox. Put a real address here and a reply to any of these emails reaches a person. Leave it blank and replies go nowhere.")}
                 </p>
                 <input
                   type="email"
@@ -225,14 +219,14 @@ export default function BrandingPage() {
                 disabled={saving || loadError}
                 className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {saving ? "Saving..." : "Save branding"}
+                {saving ? t("Saving...") : t("Save branding")}
               </button>
               <button
                 onClick={load}
                 disabled={saving}
                 className="px-5 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
-                Discard changes
+                {t("Discard changes")}
               </button>
             </div>
           </>

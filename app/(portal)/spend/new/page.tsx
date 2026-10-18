@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Toast from "@/components/Toast";
 import FundingSplit, { type Allocation } from "@/components/FundingSplit";
 import { DEFAULT_SUPPLIER_CONNECTIONS, GOVERNANCE_LABEL } from "@/lib/positions";
+import { useT } from "@/components/I18nProvider";
 
 interface SpendSettings {
   sourcesOfFunds: string[];
@@ -39,6 +40,7 @@ const emptyQuote = (): QuoteEntry => ({
 
 export default function NewSpendPage() {
   const { session, loading } = useAuth("submit_spend");
+  const t = useT();
   const router = useRouter();
   const [projectName, setProjectName] = useState("");
   const [description, setDescription] = useState("");
@@ -112,7 +114,7 @@ export default function NewSpendPage() {
 
     if (allocations.length === 0) {
       setToast({
-        message: "Select at least one source of funds.",
+        message: t("Select at least one source of funds."),
         type: "error",
       });
       return;
@@ -168,12 +170,12 @@ export default function NewSpendPage() {
       router.push(`/spend/${data.id}`);
     } else {
       const data = await res.json();
-      setToast({ message: data.error || "Submission failed", type: "error" });
+      setToast({ message: data.error || t("Submission failed"), type: "error" });
     }
     setSubmitting(false);
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -187,10 +189,12 @@ export default function NewSpendPage() {
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-dark">
-          New Spend Application
+          {t("New Spend Application")}
         </h1>
         <p className="text-gray-500 text-sm">
-          Submit a spend request for {GOVERNANCE_LABEL} approval
+          {t("Submit a spend request for {label} approval", {
+            label: GOVERNANCE_LABEL,
+          })}
         </p>
       </div>
 
@@ -206,14 +210,14 @@ export default function NewSpendPage() {
                 className="w-4 h-4 text-primary focus:ring-primary rounded"
               />
               <span className="text-sm font-medium text-gray-700">
-                Filling in this form for someone else?
+                {t("Filling in this form for someone else?")}
               </span>
             </label>
 
             {onBehalf && (
               <div className="mt-4">
                 <label className="block text-xs text-gray-500 mb-1">
-                  Who is this for?
+                  {t("Who is this for?")}
                 </label>
                 <select
                   value={applicantUserId}
@@ -230,7 +234,7 @@ export default function NewSpendPage() {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                 >
                   <option value="">
-                    Someone not on the portal (type the details below)
+                    {t("Someone not on the portal (type the details below)")}
                   </option>
                   {users.map((u) => (
                     <option key={u.id} value={u.id}>
@@ -245,33 +249,33 @@ export default function NewSpendPage() {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Name
+                    {t("Name")}
                   </label>
                   <input
                     type="text"
                     value={applicantName}
                     onChange={(e) => setApplicantName(e.target.value)}
                     required={onBehalf}
-                    placeholder="First name"
+                    placeholder={t("First name")}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Surname
+                    {t("Surname")}
                   </label>
                   <input
                     type="text"
                     value={applicantSurname}
                     onChange={(e) => setApplicantSurname(e.target.value)}
                     required={onBehalf}
-                    placeholder="Surname"
+                    placeholder={t("Surname")}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                   />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Email
+                    {t("Email")}
                   </label>
                   <input
                     type="email"
@@ -289,14 +293,14 @@ export default function NewSpendPage() {
           {/* Project Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Project Name
+              {t("Project Name")}
             </label>
             <input
               type="text"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               required
-              placeholder="e.g. Classroom Painting"
+              placeholder={t("e.g. Classroom Painting")}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
             />
           </div>
@@ -304,14 +308,14 @@ export default function NewSpendPage() {
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+              {t("Description")}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               required
               rows={4}
-              placeholder="Describe the project, justification, and expected outcomes..."
+              placeholder={t("Describe the project, justification, and expected outcomes...")}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-none"
             />
           </div>
@@ -319,7 +323,7 @@ export default function NewSpendPage() {
           {/* Estimated Amount */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estimated Amount (ZAR)
+              {t("Estimated Amount (ZAR)")}
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
@@ -340,7 +344,7 @@ export default function NewSpendPage() {
           {/* Supplier Connection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Are any of the suppliers connected to the school in some way?
+              {t("Are any of the suppliers connected to the school in some way?")}
             </label>
             <select
               value={supplierConnection}
@@ -358,7 +362,7 @@ export default function NewSpendPage() {
           {/* Budgeted */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Has this been budgeted for?
+              {t("Has this been budgeted for?")}
             </label>
             <div className="flex gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -369,7 +373,7 @@ export default function NewSpendPage() {
                   onChange={() => setBudgeted(true)}
                   className="w-4 h-4 text-primary focus:ring-primary"
                 />
-                <span className="text-sm text-gray-700">Yes</span>
+                <span className="text-sm text-gray-700">{t("Yes")}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -379,7 +383,7 @@ export default function NewSpendPage() {
                   onChange={() => setBudgeted(false)}
                   className="w-4 h-4 text-primary focus:ring-primary"
                 />
-                <span className="text-sm text-gray-700">No</span>
+                <span className="text-sm text-gray-700">{t("No")}</span>
               </label>
             </div>
           </div>
@@ -387,11 +391,10 @@ export default function NewSpendPage() {
           {/* Source of Funds (multi-select with split) */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Proposed Source(s) of Funds
+              {t("Proposed Source(s) of Funds")}
             </label>
             <p className="text-xs text-gray-500 mb-2">
-              Tick every source this spend will draw from. If it&apos;s split,
-              enter how much comes from each.
+              {t("Tick every source this spend will draw from. If it's split, enter how much comes from each.")}
             </p>
             <FundingSplit
               sources={sourcesOfFunds}
@@ -404,7 +407,7 @@ export default function NewSpendPage() {
           {/* Quotes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Quotes (up to 4)
+              {t("Quotes (up to 4)")}
             </label>
             <div className="space-y-4">
               {[0, 1, 2, 3].map((i) => (
@@ -413,7 +416,7 @@ export default function NewSpendPage() {
                   className="border border-gray-200 rounded-lg p-4"
                 >
                   <p className="text-sm font-medium text-gray-600 mb-3">
-                    Quote {i + 1}
+                    {t("Quote {n}", { n: i + 1 })}
                   </p>
                   <div className="space-y-3">
                     <input
@@ -434,7 +437,7 @@ export default function NewSpendPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Name
+                          {t("Supplier Name")}
                         </label>
                         <input
                           type="text"
@@ -444,14 +447,14 @@ export default function NewSpendPage() {
                               supplierName: e.target.value,
                             })
                           }
-                          placeholder="Company name"
+                          placeholder={t("Company name")}
                           className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                         />
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Website{" "}
-                          <span className="text-gray-400">(optional)</span>
+                          {t("Supplier Website")}{" "}
+                          <span className="text-gray-400">{t("(optional)")}</span>
                         </label>
                         <input
                           type="url"
@@ -467,7 +470,7 @@ export default function NewSpendPage() {
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Contact Email
+                          {t("Supplier Contact Email")}
                         </label>
                         <input
                           type="email"
@@ -483,8 +486,8 @@ export default function NewSpendPage() {
                       </div>
                       <div>
                         <label className="block text-xs text-gray-500 mb-1">
-                          Supplier Contact Number{" "}
-                          <span className="text-gray-400">(optional)</span>
+                          {t("Supplier Contact Number")}{" "}
+                          <span className="text-gray-400">{t("(optional)")}</span>
                         </label>
                         <input
                           type="tel"
@@ -501,7 +504,7 @@ export default function NewSpendPage() {
                     </div>
                     <div className="mt-3">
                       <label className="block text-xs text-gray-500 mb-1">
-                        Total Price Excluding VAT (ZAR)
+                        {t("Total Price Excluding VAT (ZAR)")}
                       </label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
@@ -538,7 +541,7 @@ export default function NewSpendPage() {
                 className="w-4 h-4 text-primary focus:ring-primary rounded"
               />
               <span className="text-sm font-medium text-gray-700">
-                Switch on reminders until this is approved
+                {t("Switch on reminders until this is approved")}
               </span>
             </label>
 
@@ -546,7 +549,7 @@ export default function NewSpendPage() {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Approval required by
+                    {t("Approval required by")}
                   </label>
                   <input
                     type="date"
@@ -556,16 +559,16 @@ export default function NewSpendPage() {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    Shown to the approvers in their email.
+                    {t("Shown to the approvers in their email.")}
                   </p>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Remind them
+                    {t("Remind them")}
                   </label>
                   <div className="flex gap-2">
                     <span className="text-sm text-gray-500 self-center">
-                      every
+                      {t("every")}
                     </span>
                     <input
                       type="number"
@@ -583,19 +586,18 @@ export default function NewSpendPage() {
                       className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
                     >
                       <option value="day">
-                        day{reminderIntervalCount !== "1" ? "s" : ""}
+                        {reminderIntervalCount !== "1" ? t("days") : t("day")}
                       </option>
                       <option value="week">
-                        week{reminderIntervalCount !== "1" ? "s" : ""}
+                        {reminderIntervalCount !== "1" ? t("weeks") : t("week")}
                       </option>
                       <option value="month">
-                        month{reminderIntervalCount !== "1" ? "s" : ""}
+                        {reminderIntervalCount !== "1" ? t("months") : t("month")}
                       </option>
                     </select>
                   </div>
                   <p className="text-xs text-gray-400 mt-1">
-                    Anything from every day to once every few months. Reminders
-                    stop on their own once the decision is made.
+                    {t("Anything from every day to once every few months. Reminders stop on their own once the decision is made.")}
                   </p>
                 </div>
               </div>
@@ -608,14 +610,14 @@ export default function NewSpendPage() {
               disabled={submitting}
               className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
-              {submitting ? "Submitting..." : "Submit Application"}
+              {submitting ? t("Submitting...") : t("Submit Application")}
             </button>
             <button
               type="button"
               onClick={() => router.back()}
               className="px-6 py-2 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
             >
-              Cancel
+              {t("Cancel")}
             </button>
           </div>
         </form>

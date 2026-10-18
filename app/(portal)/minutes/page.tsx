@@ -8,6 +8,7 @@ import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import DownloadLink from "@/components/DownloadLink";
 import DangerConfirmModal from "@/components/DangerConfirmModal";
+import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
   isLocked,
@@ -42,6 +43,7 @@ const STATUS_TONE: Record<MinutesStatus, string> = {
 };
 
 export default function MinutesPage() {
+  const t = useT();
   const { session, loading } = useAuth();
   const router = useRouter();
   const canManage =
@@ -59,12 +61,12 @@ export default function MinutesPage() {
   const load = useCallback(async () => {
     setBusy(true);
     try {
-      const [res, t] = await Promise.all([
+      const [res, tplRes] = await Promise.all([
         authFetch("/api/minutes"),
         authFetch("/api/minutes-templates"),
       ]);
       if (res.ok) setRows(await res.json());
-      if (t.ok) setTemplates(await t.json());
+      if (tplRes.ok) setTemplates(await tplRes.json());
     } finally {
       setBusy(false);
     }
@@ -88,10 +90,9 @@ export default function MinutesPage() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-dark">Meeting minutes</h1>
+          <h1 className="text-2xl font-bold text-dark">{t("Meeting minutes")}</h1>
           <p className="text-gray-500 mt-1">
-            Every set of SGB and FINCOM minutes in one place. Upload what you
-            already have, or write them here.
+            {t("Every set of SGB and FINCOM minutes in one place. Upload what you already have, or write them here.")}
           </p>
         </div>
         {canManage && (
@@ -99,16 +100,16 @@ export default function MinutesPage() {
             onClick={() => setAdding(true)}
             className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
           >
-            Add minutes
+            {t("Add minutes")}
           </button>
         )}
       </div>
 
       {deleting && (
         <DangerConfirmModal
-          title="Delete minutes"
+          title={t("Delete minutes")}
           itemName={deleting.title}
-          actionLabel="Delete minutes"
+          actionLabel={t("Delete minutes")}
           onClose={() => setDeleting(null)}
           onConfirm={async (typed) => {
             const res = await authFetch(`/api/minutes/${deleting.id}`, {
@@ -117,12 +118,12 @@ export default function MinutesPage() {
               body: JSON.stringify({ confirm: typed }),
             });
             const data = await res.json().catch(() => ({}));
-            if (!res.ok) return data.error || "Could not delete.";
+            if (!res.ok) return data.error || t("Could not delete.");
             // Dropped from the rows we hold rather than re-listed: a list
             // straight after a delete can still include the deleted record.
             setRows((r) => r.filter((m) => m.id !== deleting.id));
             setDeleting(null);
-            setToast({ message: `Deleted "${deleting.title}".`, type: "success" });
+            setToast({ message: t("Deleted \"{title}\".", { title: deleting.title }), type: "success" });
           }}
         />
       )}
@@ -152,12 +153,12 @@ export default function MinutesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-500">Minutes</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 w-32">Meeting</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 w-44">Period</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 w-44">Status</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 w-40">Added</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 w-48">Actions</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500">{t("Minutes")}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 w-32">{t("Meeting")}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 w-44">{t("Period")}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 w-44">{t("Status")}</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 w-40">{t("Added")}</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 w-48">{t("Actions")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -173,16 +174,18 @@ export default function MinutesPage() {
                   <div className="text-xs text-gray-400">
                     {m.original
                       ? m.original.filename
-                      : `${m.sections.length} section${m.sections.length === 1 ? "" : "s"}`}
+                      : m.sections.length === 1
+                        ? t("{count} section", { count: m.sections.length })
+                        : t("{count} sections", { count: m.sections.length })}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-600">
-                  {MEETING_BODY_LABELS[m.body]}
+                  {t(MEETING_BODY_LABELS[m.body])}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{formatPeriod(m.period)}</td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-1 rounded ${STATUS_TONE[m.status]}`}>
-                    {MINUTES_STATUS_LABELS[m.status]}
+                    {t(MINUTES_STATUS_LABELS[m.status])}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-500 text-xs">
@@ -198,7 +201,7 @@ export default function MinutesPage() {
                     href={`/minutes/${m.id}`}
                     className="text-primary hover:text-primary-dark text-xs font-medium mr-3"
                   >
-                    {canManage && m.status === "draft" ? "Open and edit" : "Open"}
+                    {canManage && m.status === "draft" ? t("Open and edit") : t("Open")}
                   </Link>
                   <DownloadLink
                     href={
@@ -207,11 +210,11 @@ export default function MinutesPage() {
                         : `/api/minutes/${m.id}/docx`
                     }
                     filename={m.original ? m.original.filename : `${m.title}.docx`}
-                    title={m.original ? m.original.filename : "Word document"}
+                    title={m.original ? m.original.filename : t("Word document")}
                     className="text-gray-500 hover:text-dark text-xs"
                     onError={(message) => setToast({ message, type: "error" })}
                   >
-                    Download
+                    {t("Download")}
                   </DownloadLink>
                   {/* Not offered on signed minutes: the server refuses, and
                       a button that can only ever fail reads as broken. */}
@@ -220,7 +223,7 @@ export default function MinutesPage() {
                       onClick={() => setDeleting(m)}
                       className="text-risk-high hover:underline text-xs ml-3"
                     >
-                      Delete
+                      {t("Delete")}
                     </button>
                   )}
                 </td>
@@ -229,15 +232,15 @@ export default function MinutesPage() {
             {sorted.length === 0 && !busy && (
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                  No minutes yet.
-                  {canManage && " Add your first set with the button above."}
+                  {t("No minutes yet.")}
+                  {canManage && " " + t("Add your first set with the button above.")}
                 </td>
               </tr>
             )}
             {busy && (
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center text-gray-400">
-                  Loading...
+                  {t("Loading...")}
                 </td>
               </tr>
             )}
@@ -259,6 +262,7 @@ function AddMinutes({
   onSaved: (msg: string, record: { id: string } | null, writing: boolean) => void;
   onError: (msg: string) => void;
 }) {
+  const t = useT();
   const now = new Date();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState<MeetingBody>("sgb");
@@ -274,8 +278,8 @@ function AddMinutes({
   const fileInput = useRef<HTMLInputElement>(null);
 
   const save = async () => {
-    if (!title.trim()) return onError("Give these minutes a name.");
-    if (mode === "upload" && !file) return onError("Choose a file, or switch to writing them here.");
+    if (!title.trim()) return onError(t("Give these minutes a name."));
+    if (mode === "upload" && !file) return onError(t("Choose a file, or switch to writing them here."));
 
     setSaving(true);
     try {
@@ -291,10 +295,10 @@ function AddMinutes({
 
       const res = await authFetch("/api/minutes", { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return onError(data.error || "Could not save those minutes.");
-      onSaved(`Added "${title.trim()}".`, data, mode === "write");
+      if (!res.ok) return onError(data.error || t("Could not save those minutes."));
+      onSaved(t("Added \"{title}\".", { title: title.trim() }), data, mode === "write");
     } catch {
-      onError("Could not save those minutes.");
+      onError(t("Could not save those minutes."));
     } finally {
       setSaving(false);
     }
@@ -304,16 +308,16 @@ function AddMinutes({
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. SGB meeting, 7 May 2026"
+            placeholder={t("e.g. SGB meeting, 7 May 2026")}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Meeting</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("Meeting")}</label>
           <select
             value={body}
             onChange={(e) => setBody(e.target.value as MeetingBody)}
@@ -321,7 +325,7 @@ function AddMinutes({
           >
             {Object.entries(MEETING_BODY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>
-                {v}
+                {t(v)}
               </option>
             ))}
           </select>
@@ -345,14 +349,14 @@ function AddMinutes({
                   : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
               }`}
             >
-              {m === "upload" ? "Upload a file" : "Write them here"}
+              {m === "upload" ? t("Upload a file") : t("Write them here")}
               {m === "write" && (
                 <span
                   className={`block text-[11px] ${
                     mode === m ? "text-white/75" : "text-gray-400"
                   }`}
                 >
-                  Pick from a template
+                  {t("Pick from a template")}
                 </span>
               )}
             </button>
@@ -373,7 +377,7 @@ function AddMinutes({
               onClick={() => fileInput.current?.click()}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              {file ? "Choose a different file" : "Browse for a file"}
+              {file ? t("Choose a different file") : t("Browse for a file")}
             </button>
             {file && (
               <span className="ml-3 text-sm text-gray-500">
@@ -381,38 +385,34 @@ function AddMinutes({
               </span>
             )}
             <p className="text-xs text-gray-500 mt-2">
-              Word, Excel or PDF, up to 15MB. Useful on its own: this is simply
-              where the school keeps its minutes.
+              {t("Word, Excel or PDF, up to 15MB. Useful on its own: this is simply where the school keeps its minutes.")}
             </p>
           </div>
         ) : (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Start from a template
+              {t("Start from a template")}
             </label>
             <p className="text-xs text-gray-500 mb-2">
-              The template&apos;s sections and any standing wording are copied in,
-              then you edit them for this meeting. Changing a template later
-              never changes minutes already written.
+              {t("The template's sections and any standing wording are copied in, then you edit them for this meeting. Changing a template later never changes minutes already written.")}
             </p>
             <select
               value={templateId}
               onChange={(e) => setTemplateId(e.target.value)}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
             >
-              <option value="">No template, start empty</option>
+              <option value="">{t("No template, start empty")}</option>
               {templates
-                .filter((t) => !t.body || t.body === body)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.sections.length} sections)
+                .filter((tpl) => !tpl.body || tpl.body === body)
+                .map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} ({t("{count} sections", { count: tpl.sections.length })})
                   </option>
                 ))}
             </select>
             {templates.length === 0 && (
               <p className="text-xs text-gray-400 mt-2">
-                No templates yet. An admin can build one under Admin, Minutes
-                admin, so this list is not empty next time.
+                {t("No templates yet. An admin can build one under Admin, Minutes admin, so this list is not empty next time.")}
               </p>
             )}
           </div>
@@ -427,18 +427,18 @@ function AddMinutes({
         >
           {saving
             ? mode === "write"
-              ? "Opening..."
-              : "Saving..."
+              ? t("Opening...")
+              : t("Saving...")
             : mode === "write"
-              ? "Start writing"
-              : "Save minutes"}
+              ? t("Start writing")
+              : t("Save minutes")}
         </button>
         <button
           onClick={onClose}
           disabled={saving}
           className="px-5 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
-          Cancel
+          {t("Cancel")}
         </button>
       </div>
     </div>

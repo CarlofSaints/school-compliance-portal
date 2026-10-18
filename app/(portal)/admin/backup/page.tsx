@@ -5,8 +5,10 @@ import { useState } from "react";
 import Toast from "@/components/Toast";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import { useBranding } from "@/components/BrandingProvider";
+import { useT } from "@/components/I18nProvider";
 
 export default function BackupPage() {
+  const t = useT();
   const branding = useBranding();
   const { session, loading } = useAuth("manage_roles");
   const [downloading, setDownloading] = useState(false);
@@ -20,8 +22,8 @@ export default function BackupPage() {
     try {
       const res = await authFetch("/api/admin/backup");
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: "Backup failed" }));
-        setToast({ message: body.error || "Backup failed", type: "error" });
+        const body = await res.json().catch(() => ({ error: t("Backup failed") }));
+        setToast({ message: body.error || t("Backup failed"), type: "error" });
         return;
       }
 
@@ -38,9 +40,9 @@ export default function BackupPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setToast({ message: "Backup downloaded successfully", type: "success" });
+      setToast({ message: t("Backup downloaded successfully"), type: "success" });
     } catch {
-      setToast({ message: "Failed to download backup", type: "error" });
+      setToast({ message: t("Failed to download backup"), type: "error" });
     } finally {
       setDownloading(false);
     }
@@ -65,31 +67,29 @@ export default function BackupPage() {
       )}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Backup Data</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("Backup Data")}</h1>
         <p className="text-gray-500 mt-1">
-          Download a complete backup of all application data
+          {t("Download a complete backup of all application data")}
         </p>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
         <h2 className="text-lg font-semibold text-gray-800 mb-3">
-          What&apos;s included
+          {t("What's included")}
         </h2>
         <ul className="text-sm text-gray-600 space-y-1 mb-6 list-disc list-inside">
-          <li>Users, roles &amp; permissions</li>
-          <li>Policies &amp; policy versions</li>
-          <li>Compliance guidelines</li>
-          <li>Documents &amp; compliance results</li>
-          <li>People ({GOVERNANCE_LABEL} members)</li>
-          <li>Spend requests &amp; settings</li>
-          <li>Audit logs</li>
-          <li>User avatars</li>
+          <li>{t("Users, roles & permissions")}</li>
+          <li>{t("Policies & policy versions")}</li>
+          <li>{t("Compliance guidelines")}</li>
+          <li>{t("Documents & compliance results")}</li>
+          <li>{t("People ({label} members)", { label: GOVERNANCE_LABEL })}</li>
+          <li>{t("Spend requests & settings")}</li>
+          <li>{t("Audit logs")}</li>
+          <li>{t("User avatars")}</li>
         </ul>
 
         <p className="text-xs text-gray-400 mb-6">
-          The backup is a ZIP file containing all data stored in Vercel Blob
-          storage. JSON files are included as text; images are included as
-          binary files.
+          {t("The backup is a ZIP file containing all data stored in Vercel Blob storage. JSON files are included as text; images are included as binary files.")}
         </p>
 
         <button
@@ -122,10 +122,10 @@ export default function BackupPage() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              Preparing backup...
+              {t("Preparing backup...")}
             </span>
           ) : (
-            "Download Backup"
+            t("Download Backup")
           )}
         </button>
       </div>

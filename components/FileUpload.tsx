@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useT } from "@/components/I18nProvider";
 
 interface FileUploadProps {
   accept?: string;
@@ -11,10 +12,11 @@ interface FileUploadProps {
 
 export default function FileUpload({
   accept = ".pdf,.docx,.doc,.txt",
-  label = "Upload File",
+  label,
   onChange,
   value,
 }: FileUploadProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -67,9 +69,9 @@ export default function FileUpload({
         <p className="text-sm text-primary font-medium">{value.name}</p>
       ) : (
         <>
-          <p className="text-sm text-gray-600 font-medium">{label}</p>
+          <p className="text-sm text-gray-600 font-medium">{label ?? t("Upload File")}</p>
           <p className="text-xs text-gray-400 mt-1">
-            Drag & drop or click to browse
+            {t("Drag & drop or click to browse")}
           </p>
         </>
       )}

@@ -5,6 +5,7 @@ import {
   type AttendanceStatus,
   type AttendeeRow,
 } from "@/lib/minutes";
+import { useT } from "@/components/I18nProvider";
 
 // The two-column attendance grid, shared by the template editor and the
 // minutes editor so the list is edited the same way in both.
@@ -45,6 +46,7 @@ export default function AttendeeRowsEditor({
    */
   showStatus?: boolean;
 }) {
+  const t = useT();
   const holderOf = (position: string): string => {
     const wanted = position.trim().toLowerCase();
     if (!wanted || !people) return "";
@@ -104,9 +106,9 @@ export default function AttendeeRowsEditor({
     <div>
       {rows.length > 0 && (
         <div className={`hidden sm:grid ${columns} gap-2 mb-1 text-xs font-medium text-gray-500`}>
-          <span>Position</span>
-          <span>Name</span>
-          {showStatus && <span className="w-44">Away</span>}
+          <span>{t("Position")}</span>
+          <span>{t("Name")}</span>
+          {showStatus && <span className="w-44">{t("Away")}</span>}
           <span className="w-28" />
         </div>
       )}
@@ -118,8 +120,8 @@ export default function AttendeeRowsEditor({
               <input
                 value={r.position}
                 onChange={(e) => set(i, { position: e.target.value })}
-                placeholder="e.g. Chair"
-                aria-label={`Position, row ${i + 1}`}
+                placeholder={t("e.g. Chair")}
+                aria-label={t("Position, row {n}", { n: i + 1 })}
                 className={cell}
               />
               <input
@@ -127,12 +129,12 @@ export default function AttendeeRowsEditor({
                 onChange={(e) => set(i, { name: e.target.value })}
                 placeholder={
                   holder
-                    ? `${holder} (from the People register)`
+                    ? t("{holder} (from the People register)", { holder })
                     : fillNames
-                      ? "e.g. Mrs Lester (DL)"
-                      : "Blank fills from the People register"
+                      ? t("e.g. Mrs Lester (DL)")
+                      : t("Blank fills from the People register")
                 }
-                aria-label={`Name, row ${i + 1}`}
+                aria-label={t("Name, row {n}", { n: i + 1 })}
                 className={`${cell} ${r.status ? "text-gray-400 line-through" : ""}`}
               />
               {showStatus && (
@@ -143,10 +145,10 @@ export default function AttendeeRowsEditor({
                         type="checkbox"
                         checked={r.status === status}
                         onChange={(e) => setStatus(i, status, e.target.checked)}
-                        aria-label={`${ATTENDANCE_STATUS_LABELS[status]}, row ${i + 1}`}
+                        aria-label={t("{label}, row {n}", { label: t(ATTENDANCE_STATUS_LABELS[status]), n: i + 1 })}
                         className="rounded border-gray-300"
                       />
-                      {ATTENDANCE_STATUS_LABELS[status]}
+                      {t(ATTENDANCE_STATUS_LABELS[status])}
                     </label>
                   ))}
                 </div>
@@ -156,7 +158,7 @@ export default function AttendeeRowsEditor({
                   type="button"
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
-                  aria-label="Move row up"
+                  aria-label={t("Move row up")}
                   className="px-1.5 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                 >
                   ↑
@@ -165,7 +167,7 @@ export default function AttendeeRowsEditor({
                   type="button"
                   onClick={() => move(i, 1)}
                   disabled={i === rows.length - 1}
-                  aria-label="Move row down"
+                  aria-label={t("Move row down")}
                   className="px-1.5 py-1 text-gray-400 hover:text-dark disabled:opacity-30"
                 >
                   ↓
@@ -175,7 +177,7 @@ export default function AttendeeRowsEditor({
                   onClick={() => onChange(rows.filter((_, j) => j !== i))}
                   className="px-1.5 py-1 text-xs text-risk-high hover:underline"
                 >
-                  Remove
+                  {t("Remove")}
                 </button>
               </div>
             </div>
@@ -189,7 +191,7 @@ export default function AttendeeRowsEditor({
           onClick={() => onChange([...rows, { position: "", name: "" }])}
           className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-700 hover:bg-gray-50"
         >
-          Add a row
+          {t("Add a row")}
         </button>
         {canFill && (
           <button
@@ -197,7 +199,7 @@ export default function AttendeeRowsEditor({
             onClick={fillFromRegister}
             className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-700 hover:bg-gray-50"
           >
-            Fill from People register
+            {t("Fill from People register")}
           </button>
         )}
       </div>

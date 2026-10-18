@@ -2,6 +2,7 @@ import { SignUp } from "@clerk/nextjs";
 import { isClerkEnabled } from "@/lib/clerkConfig";
 import { notFound } from "next/navigation";
 import PlatformAuthShell, { clerkAppearance } from "@/components/PlatformAuthShell";
+import { getT } from "@/lib/i18n/server";
 
 // Clerk's sign-up. Open, because Carl chose fully self-serve: "i want them to
 // be able to create their school at 1am if they want."
@@ -17,10 +18,11 @@ import PlatformAuthShell, { clerkAppearance } from "@/components/PlatformAuthShe
 
 export const dynamic = "force-dynamic";
 
-export default function SignUpPage() {
+export default async function SignUpPage() {
   if (!isClerkEnabled()) notFound();
+  const t = await getT();
   return (
-    <PlatformAuthShell lede="Create the account you will use to administer School Compliance.">
+    <PlatformAuthShell lede={t("Create the account you will use to administer School Compliance.")}>
       <SignUp appearance={clerkAppearance} />
     </PlatformAuthShell>
   );

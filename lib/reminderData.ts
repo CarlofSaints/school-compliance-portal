@@ -1,4 +1,5 @@
 import { readJson, writeJson, updateJson, addToList, updateInList, removeFromList } from "./controlData";
+import { tk } from "./i18n/translate";
 
 // Who a reminder goes to. Resolved to actual addresses at send time, not when
 // the reminder is created, so a change of custodian or applicant is picked up
@@ -58,14 +59,14 @@ export interface SpendReminder {
 export const RECIPIENT_LABELS: Record<ReminderRecipient, string> = {
   admin: "Admins",
   applicant: "Applicant",
-  submitter: "Submitter",
+  submitter: tk("Submitter"),
   custodian: "Custodian",
 };
 
 export const FREQUENCY_LABELS: Record<ReminderFrequency, string> = {
   once: "Once only",
-  daily: "Every day",
-  weekly: "Every week",
+  daily: tk("Every day"),
+  weekly: tk("Every week"),
   monthly: "Every month",
   custom: "Custom interval",
 };

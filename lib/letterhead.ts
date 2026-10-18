@@ -1,3 +1,4 @@
+import { tk } from "./i18n/translate";
 // ---------------------------------------------------------------------------
 // The school's own Word letterhead.
 //
@@ -30,8 +31,8 @@ export const REQUIRED_PLACEHOLDER = "content";
 export const PLACEHOLDERS: { name: string; what: string }[] = [
   { name: "content", what: "The numbered table of items. Required." },
   { name: "title", what: "The name of the meeting, e.g. SGB meeting, 7 May 2026." },
-  { name: "period", what: "The period, e.g. May 2026 or Q2 2026." },
-  { name: "meeting", what: "SGB or FINCOM." },
+  { name: "period", what: tk("The period, e.g. May 2026 or Q2 2026.") },
+  { name: "meeting", what: tk("SGB or FINCOM.") },
   { name: "school", what: "The school's full name." },
   { name: "draft", what: 'e.g. DRAFT 2. Empty once signed.' },
   {

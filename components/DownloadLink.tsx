@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/components/I18nProvider";
 import { downloadWithAuth } from "@/lib/download";
 
 // A link that downloads from an authenticated route.
@@ -29,6 +30,7 @@ export default function DownloadLink({
   title?: string;
   onError?: (message: string) => void;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
 
   return (
@@ -53,7 +55,7 @@ export default function DownloadLink({
       }}
       className={`${className} disabled:opacity-50 disabled:cursor-wait`}
     >
-      {busy ? "Preparing..." : children}
+      {busy ? t("Preparing...") : children}
     </button>
   );
 }

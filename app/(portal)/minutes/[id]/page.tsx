@@ -1,5 +1,6 @@
 "use client";
 
+import TranslateContentButton from "@/components/TranslateContentButton";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -14,6 +15,7 @@ import MinutesSigningPanel from "@/components/MinutesSigningPanel";
 import MinutesDistributePanel from "@/components/MinutesDistributePanel";
 import MinutesActionsPanel from "@/components/MinutesActionsPanel";
 import DangerConfirmModal from "@/components/DangerConfirmModal";
+import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
   isLocked,
@@ -53,6 +55,7 @@ interface MinutesDetail {
 }
 
 export default function MinutesDetailPage() {
+  const t = useT();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { session, loading } = useAuth();
@@ -86,7 +89,7 @@ export default function MinutesDetailPage() {
         setRecord(await res.json());
         setDirty(false);
       } else {
-        setToast({ message: "Those minutes could not be found.", type: "error" });
+        setToast({ message: t("Those minutes could not be found."), type: "error" });
       }
     } finally {
       setBusy(false);
@@ -116,11 +119,11 @@ export default function MinutesDetailPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setToast({ message: data.error || "Could not add it to the action list.", type: "error" });
+      setToast({ message: data.error || t("Could not add it to the action list."), type: "error" });
       return false;
     }
     setToast({
-      message: `Added ${data.ref} to the action list. Add who and when later in Action Items.`,
+      message: t("Added {ref} to the action list. Add who and when later in Action Items.", { ref: data.ref }),
       type: "success",
     });
     setActionsRefresh((n) => n + 1);
@@ -143,16 +146,16 @@ export default function MinutesDetailPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setToast({ message: data.error || "Could not save.", type: "error" });
+        setToast({ message: data.error || t("Could not save."), type: "error" });
         return;
       }
       // What came BACK, not a re-read: a read straight after a write can serve
       // the previous copy and make a good save look like it failed.
       setRecord(data);
       setDirty(false);
-      setToast({ message: "Saved.", type: "success" });
+      setToast({ message: t("Saved."), type: "success" });
     } catch {
-      setToast({ message: "Could not save.", type: "error" });
+      setToast({ message: t("Could not save."), type: "error" });
     } finally {
       setSaving(false);
     }
@@ -167,13 +170,13 @@ export default function MinutesDetailPage() {
       body: JSON.stringify({ confirm: typed }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return data.error || "Could not delete.";
+    if (!res.ok) return data.error || t("Could not delete.");
     router.push("/minutes");
   };
 
   if (loading || !session) return null;
-  if (busy) return <div className="p-6 text-gray-400">Loading...</div>;
-  if (!record) return <div className="p-6 text-gray-400">Not found.</div>;
+  if (busy) return <div className="p-6 text-gray-400">{t("Loading...")}</div>;
+  if (!record) return <div className="p-6 text-gray-400">{t("Not found.")}</div>;
 
   const locked = isLocked(record.status);
   const editable = canManage && !locked;
@@ -194,26 +197,27 @@ export default function MinutesDetailPage() {
       )}
 
       <Link href="/minutes" className="text-sm text-gray-500 hover:text-primary">
-        Back to all minutes
+        {t("Back to all minutes")}
       </Link>
 
       <div className="mt-2 mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-dark">{record.title}</h1>
           <p className="text-gray-500 mt-1">
-            {MEETING_BODY_LABELS[record.body]} · {formatPeriod(record.period)} ·{" "}
-            {MINUTES_STATUS_LABELS[record.status]}
-            {record.draftNumber > 0 && ` · Draft ${record.draftNumber}`}
+            {t(MEETING_BODY_LABELS[record.body])} · {formatPeriod(record.period)} ·{" "}
+            {t(MINUTES_STATUS_LABELS[record.status])}
+            {record.draftNumber > 0 && " · " + t("Draft {n}", { n: record.draftNumber })}
           </p>
         </div>
         <div className="flex gap-2">
+          <TranslateContentButton kind="minutes" id={record.id} />
           <DownloadLink
             href={`/api/minutes/${record.id}/docx`}
             filename={`${record.title}.docx`}
             className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
             onError={(message) => setToast({ message, type: "error" })}
           >
-            Download as Word
+            {t("Download as Word")}
           </DownloadLink>
           {textEditable && (
             <button
@@ -221,7 +225,7 @@ export default function MinutesDetailPage() {
               disabled={saving || !dirty}
               className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium text-sm transition-colors disabled:opacity-50"
             >
-              {saving ? "Saving..." : dirty ? "Save changes" : "Saved"}
+              {saving ? t("Saving...") : dirty ? t("Save changes") : t("Saved")}
             </button>
           )}
         </div>
@@ -229,21 +233,22 @@ export default function MinutesDetailPage() {
 
       {locked && (
         <div className="mb-6 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          These minutes have been signed
-          {record.signedAt &&
-            ` on ${new Date(record.signedAt).toLocaleDateString("en-ZA", {
-              day: "2-digit",
-              month: "long",
-              year: "numeric",
-            })}`}
-          . A signed record cannot be changed. If something needs correcting,
-          record it in the next set of minutes.
+          {record.signedAt
+            ? t("These minutes have been signed on {date}.", {
+                date: new Date(record.signedAt).toLocaleDateString("en-ZA", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                }),
+              })
+            : t("These minutes have been signed.")}{" "}
+          {t("A signed record cannot be changed. If something needs correcting, record it in the next set of minutes.")}
         </div>
       )}
 
       {record.original && (
         <div className="mb-6 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm">
-          <span className="text-gray-500">Uploaded file: </span>
+          <span className="text-gray-500">{t("Uploaded file:")} </span>
           <DownloadLink
             href={`/api/minutes/${record.id}/file`}
             filename={record.original.filename}
@@ -261,8 +266,7 @@ export default function MinutesDetailPage() {
 
       {signingOpen && canManage && (
         <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          These minutes are out for signing, so the text is locked: everyone must sign the same words. If something
-          needs changing, delete these minutes and start them again, or record the correction in the next set.
+          {t("These minutes are out for signing, so the text is locked: everyone must sign the same words. If something needs changing, delete these minutes and start them again, or record the correction in the next set.")}
         </div>
       )}
 
@@ -270,7 +274,7 @@ export default function MinutesDetailPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
               <input
                 value={record.title}
                 onChange={(e) => patch({ title: e.target.value })}
@@ -278,7 +282,7 @@ export default function MinutesDetailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Meeting</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t("Meeting")}</label>
               <select
                 value={record.body}
                 onChange={(e) => patch({ body: e.target.value as MeetingBody })}
@@ -286,7 +290,7 @@ export default function MinutesDetailPage() {
               >
                 {Object.entries(MEETING_BODY_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>
-                    {v}
+                    {t(v)}
                   </option>
                 ))}
               </select>
@@ -350,17 +354,18 @@ export default function MinutesDetailPage() {
 
       {record.reviews.length > 0 && (
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-sm font-semibold text-dark mb-3">Review history</h2>
+          <h2 className="text-sm font-semibold text-dark mb-3">{t("Review history")}</h2>
           <ul className="space-y-3">
             {record.reviews.map((r, i) => (
               <li key={i} className="text-sm border-l-2 border-gray-200 pl-3">
                 <span className="text-dark font-medium">{r.byName}</span>{" "}
                 <span className="text-gray-500">
-                  {r.decision === "approved" ? "approved" : "asked for changes to"} draft{" "}
-                  {r.draftNumber} on {new Date(r.at).toLocaleDateString("en-ZA")}
+                  {r.decision === "approved"
+                    ? t("approved draft {n} on {date}", { n: r.draftNumber, date: new Date(r.at).toLocaleDateString("en-ZA") })
+                    : t("asked for changes to draft {n} on {date}", { n: r.draftNumber, date: new Date(r.at).toLocaleDateString("en-ZA") })}
                 </span>
                 {r.draftNumber < record.draftNumber && (
-                  <span className="ml-2 text-xs text-gray-400">(an earlier draft)</span>
+                  <span className="ml-2 text-xs text-gray-400">{t("(an earlier draft)")}</span>
                 )}
                 {r.comments && <p className="text-gray-600 mt-1">{r.comments}</p>}
               </li>
@@ -375,27 +380,25 @@ export default function MinutesDetailPage() {
       {editable && (
         <div className="mt-8 rounded-xl border border-risk-high/30 p-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-sm font-semibold text-risk-high">Danger zone</h2>
+            <h2 className="text-sm font-semibold text-risk-high">{t("Danger zone")}</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Deletes these minutes, the uploaded file and any signatures
-              collected so far. Action items raised from them stay in the
-              action register.
+              {t("Deletes these minutes, the uploaded file and any signatures collected so far. Action items raised from them stay in the action register.")}
             </p>
           </div>
           <button
             onClick={() => setConfirmingDelete(true)}
             className="bg-risk-high hover:opacity-90 text-white px-4 py-2 rounded-lg text-sm font-medium transition-opacity"
           >
-            Delete minutes
+            {t("Delete minutes")}
           </button>
         </div>
       )}
 
       {confirmingDelete && (
         <DangerConfirmModal
-          title="Delete minutes"
+          title={t("Delete minutes")}
           itemName={record.title}
-          actionLabel="Delete minutes"
+          actionLabel={t("Delete minutes")}
           onClose={() => setConfirmingDelete(false)}
           onConfirm={remove}
         />

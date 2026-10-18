@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import PersonPhoto from "./PersonPhoto";
+import { useT } from "@/components/I18nProvider";
 
 interface PhotoUploadProps {
   name: string;
@@ -62,6 +63,7 @@ export default function PhotoUpload({
   onPick,
   onRemove,
 }: PhotoUploadProps) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,11 +85,11 @@ export default function PhotoUpload({
     setError(null);
 
     if (!/\.(jpe?g|png|webp)$/i.test(picked.name)) {
-      setError("Use a JPG, PNG or WebP image.");
+      setError(t("Use a JPG, PNG or WebP image."));
       return;
     }
     if (picked.size > MAX_SOURCE_BYTES) {
-      setError("That image is very large. Please use one under 15MB.");
+      setError(t("That image is very large. Please use one under 15MB."));
       return;
     }
 
@@ -97,7 +99,7 @@ export default function PhotoUpload({
       onPick(square);
       onRemove(false);
     } catch {
-      setError("That image could not be read. Try a different one.");
+      setError(t("That image could not be read. Try a different one."));
     }
     setWorking(false);
   };
@@ -106,7 +108,7 @@ export default function PhotoUpload({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{t("Photo")}</label>
       <div className="flex items-center gap-4">
         <PersonPhoto name={name} photoUrl={shown} size="lg" />
         <div className="flex flex-col gap-2">
@@ -117,7 +119,7 @@ export default function PhotoUpload({
               disabled={working}
               className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
-              {working ? "Reading..." : shown ? "Change photo" : "Upload photo"}
+              {working ? t("Reading...") : shown ? t("Change photo") : t("Upload photo")}
             </button>
             {shown && (
               <button
@@ -130,12 +132,12 @@ export default function PhotoUpload({
                 }}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium text-risk-high hover:bg-red-50 transition-colors"
               >
-                Remove
+                {t("Remove")}
               </button>
             )}
           </div>
           <p className="text-xs text-gray-400">
-            JPG, PNG or WebP. Cropped to a square and saved at 512px.
+            {t("JPG, PNG or WebP. Cropped to a square and saved at 512px.")}
           </p>
         </div>
       </div>

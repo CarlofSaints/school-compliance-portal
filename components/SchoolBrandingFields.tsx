@@ -7,6 +7,7 @@ import {
   normaliseHex,
   type ColourWarning,
 } from "@/lib/brandingColors";
+import { useT } from "@/components/I18nProvider";
 
 // ---------------------------------------------------------------------------
 // The branding half of school setup: crest, main colour, second colour.
@@ -44,6 +45,7 @@ export default function SchoolBrandingFields({
   onChange: (next: BrandingValue) => void;
   schoolName: string;
 }) {
+  const t = useT();
   const fileInput = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<ColourWarning[]>([]);
@@ -58,17 +60,19 @@ export default function SchoolBrandingFields({
     setFileError(null);
     if (!file) return;
     if (!ACCEPTED.includes(file.type)) {
-      setFileError("That needs to be a PNG, JPG, WEBP or SVG image.");
+      setFileError(t("That needs to be a PNG, JPG, WEBP or SVG image."));
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
       setFileError(
-        `That file is ${(file.size / 1024 / 1024).toFixed(1)}MB. Please use one under 2MB, since a crest is only ever shown small.`
+        t("That file is {size}MB. Please use one under 2MB, since a crest is only ever shown small.", {
+          size: (file.size / 1024 / 1024).toFixed(1),
+        })
       );
       return;
     }
     const reader = new FileReader();
-    reader.onerror = () => setFileError("That file could not be read. Try another.");
+    reader.onerror = () => setFileError(t("That file could not be read. Try another."));
     reader.onload = () =>
       onChange({
         ...value,
@@ -82,11 +86,10 @@ export default function SchoolBrandingFields({
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          School crest or logo
+          {t("School crest or logo")}
         </label>
         <p className="text-xs text-gray-500 mb-3">
-          Shown on the sign-in page, in the sidebar, on reports and at the top of
-          every email the portal sends. PNG, JPG, WEBP or SVG, under 2MB.
+          {t("Shown on the sign-in page, in the sidebar, on reports and at the top of every email the portal sends. PNG, JPG, WEBP or SVG, under 2MB.")}
         </p>
 
         <div className="flex items-center gap-4">
@@ -97,11 +100,11 @@ export default function SchoolBrandingFields({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={value.logoDataUrl}
-                alt="The crest you have chosen"
+                alt={t("The crest you have chosen")}
                 className="max-w-full max-h-full object-contain"
               />
             ) : (
-              <span className="text-xs text-gray-400 text-center px-2">No crest yet</span>
+              <span className="text-xs text-gray-400 text-center px-2">{t("No crest yet")}</span>
             )}
           </div>
 
@@ -118,7 +121,7 @@ export default function SchoolBrandingFields({
               onClick={() => fileInput.current?.click()}
               className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              {value.logoDataUrl ? "Choose a different file" : "Browse for a file"}
+              {value.logoDataUrl ? t("Choose a different file") : t("Browse for a file")}
             </button>
             {value.logoFilename && (
               <span className="text-xs text-gray-500">{value.logoFilename}</span>
@@ -133,7 +136,7 @@ export default function SchoolBrandingFields({
                 }}
                 className="text-xs text-risk-high hover:underline self-start"
               >
-                Remove
+                {t("Remove")}
               </button>
             )}
           </div>
@@ -146,14 +149,14 @@ export default function SchoolBrandingFields({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <ColourField
-          label="Main colour"
-          hint="Buttons, headings and the email header."
+          label={t("Main colour")}
+          hint={t("Buttons, headings and the email header.")}
           value={value.primary}
           onChange={(primary) => onChange({ ...value, primary })}
         />
         <ColourField
-          label="Second colour"
-          hint="The school name in the sidebar, and the highlight on the page you are on."
+          label={t("Second colour")}
+          hint={t("The school name in the sidebar, and the highlight on the page you are on.")}
           value={value.accent}
           onChange={(accent) => onChange({ ...value, accent })}
         />
@@ -170,7 +173,7 @@ export default function SchoolBrandingFields({
                   : "bg-amber-50 text-amber-800"
               }`}
             >
-              {w.message}
+              {t(w.message)}
             </p>
           ))}
         </div>
@@ -196,6 +199,7 @@ function ColourField({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const t = useT();
   // The text box is kept separate from the committed value so somebody can type
   // "#00b" on the way to "#00bcd4" without the swatch lurching to a colour they
   // never meant. It only commits once what they have typed is a real colour.
@@ -214,7 +218,7 @@ function ColourField({
           value={normaliseHex(value) || "#475569"}
           onChange={(e) => onChange(e.target.value)}
           className="w-11 h-11 rounded-lg border border-gray-200 cursor-pointer bg-white p-1"
-          aria-label={`${label} swatch`}
+          aria-label={t("{label} swatch", { label })}
         />
         <input
           type="text"
@@ -249,10 +253,11 @@ function BrandingPreview({
   logo: string | null;
   palette: ReturnType<typeof derivePalette>;
 }) {
-  const name = schoolName.trim() || "Your school";
+  const t = useT();
+  const name = schoolName.trim() || t("Your school");
   return (
     <div>
-      <p className="block text-sm font-medium text-gray-700 mb-2">Preview</p>
+      <p className="block text-sm font-medium text-gray-700 mb-2">{t("Preview")}</p>
       <div className="rounded-xl border border-gray-200 overflow-hidden">
         <div className="flex" style={{ minHeight: 190 }}>
           {/* Sidebar — where the second colour earns its keep */}
@@ -275,10 +280,10 @@ function BrandingPreview({
               className="text-[11px] px-2 py-1.5 rounded mb-1"
               style={{ background: `${palette.accent}26`, color: palette.accent }}
             >
-              Dashboard
+              {t("Dashboard")}
             </div>
-            <div className="text-[11px] px-2 py-1.5 text-white/50">Policies</div>
-            <div className="text-[11px] px-2 py-1.5 text-white/50">Action items</div>
+            <div className="text-[11px] px-2 py-1.5 text-white/50">{t("Policies")}</div>
+            <div className="text-[11px] px-2 py-1.5 text-white/50">{t("Action items")}</div>
           </div>
 
           {/* Page — where the main colour earns its keep */}
@@ -287,17 +292,17 @@ function BrandingPreview({
               className="text-sm font-semibold mb-3"
               style={{ color: palette.primary }}
             >
-              Compliance overview
+              {t("Compliance overview")}
             </div>
             <div className="flex gap-2 mb-4">
               <span
                 className="text-xs px-3 py-1.5 rounded-lg font-medium"
                 style={{ background: palette.primary, color: palette.onPrimary }}
               >
-                Run a check
+                {t("Run a check")}
               </span>
               <span className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600">
-                Export
+                {t("Export")}
               </span>
             </div>
             <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-2">
@@ -307,8 +312,9 @@ function BrandingPreview({
               />
             </div>
             <p className="text-[11px] text-gray-400">
-              Buttons use {palette.onPrimary === "#ffffff" ? "white" : "dark"} text
-              so they stay readable on your main colour.
+              {palette.onPrimary === "#ffffff"
+                ? t("Buttons use white text so they stay readable on your main colour.")
+                : t("Buttons use dark text so they stay readable on your main colour.")}
             </p>
           </div>
         </div>
@@ -328,7 +334,7 @@ function BrandingPreview({
             {name}
           </div>
           <div className="text-[10px]" style={{ color: palette.primaryTint }}>
-            Compliance Portal
+            {t("Compliance Portal")}
           </div>
         </div>
       </div>
