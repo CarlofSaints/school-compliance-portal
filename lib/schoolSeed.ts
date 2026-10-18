@@ -37,7 +37,8 @@ export interface SeedOutcome {
  * 🔴 Never rewrites a role that already exists. A stored role predating a new
  * permission key does not gain it, which is deliberate: silently granting an
  * existing role a new power is how somebody ends up with access nobody chose
- * to give them. New keys become tickable on the Roles page instead.
+ * to give them. New keys are listed on the Roles page anyway (permissionsForDisplay),
+ * so this copy only records them in the school's stored list.
  */
 async function seedRolesAndPermissions(notes: string[]): Promise<void> {
   const existingPerms = await getPermissions();

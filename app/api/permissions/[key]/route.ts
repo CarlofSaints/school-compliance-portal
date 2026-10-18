@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission, deletePermission } from "@/lib/rolesData";
+import { requirePermission, deletePermission, isBuiltInPermission } from "@/lib/rolesData";
 
 export async function DELETE(
   req: NextRequest,
@@ -9,6 +9,14 @@ export async function DELETE(
   if (session instanceof NextResponse) return session;
 
   const { key } = await params;
+  // Built-in ones always come back on the Roles page (permissionsForDisplay),
+  // so deleting one would report success and change nothing.
+  if (isBuiltInPermission(key)) {
+    return NextResponse.json(
+      { error: "This is one of the portal's own permissions, so it cannot be removed. Untick it on each role instead." },
+      { status: 400 }
+    );
+  }
   const deleted = await deletePermission(key);
   if (!deleted) {
     return NextResponse.json(

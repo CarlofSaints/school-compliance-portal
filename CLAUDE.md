@@ -38,8 +38,8 @@ the day is bookable; the grid opens at 07:00.
   itself lives on the booking). Logic in `lib/roomBookingData.ts`, maths in
   `lib/roomBookings.ts`, emails in `lib/roomBookingNotify.ts` + `lib/email.ts`.
 - Check: `npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-room-bookings.ts`.
-- New keys need `/api/seed?secret=…` re-run, then tick `book_rooms` / `manage_rooms`
-  on the Roles page (Super Admin gets them automatically).
+- New keys show on every school's Roles page automatically (`permissionsForDisplay`,
+  2026-10-18); tick `book_rooms` / `manage_rooms` there (Super Admin has them).
 
 ## Approval workflow + spend grid (2026-08-30, 9 commits, pushed to main → both projects auto-deployed)
 `961162e` → `a80f2ef`. `tsc --noEmit` and `next build` both clean.
@@ -83,8 +83,8 @@ nothing look identical otherwise.
 `manage_users` to edit), `delete_spend`, `manage_tags`,
 `manage_approval_settings`. Super Admin gets new keys automatically via
 `resolveRolePermissions` (`lib/rolesData.ts`) since seed never rewrites an
-existing role. **Every other role must be ticked by hand** — re-run
-`/api/seed?secret=…` to make new keys tickable, then set them on the Roles page.
+existing role. **Every other role must be ticked by hand** — since
+2026-10-18 new keys are listed on the Roles page automatically; set them there.
 
 ### Still open after this session
 - Wire the dashboard "Total Policies" card — still hardcoded `value={0}`

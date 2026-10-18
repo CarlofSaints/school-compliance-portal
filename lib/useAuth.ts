@@ -139,7 +139,12 @@ if (typeof window !== "undefined") {
   });
 }
 
+function samePermissions(a: string[], b: string[]): boolean {
+  return [...a].sort().join(",") === [...b].sort().join(",");
+}
+
 export function setSession(payload: SessionPayload): void {
+  permissionsRefresh = null;
   signingOut = false;
   redirectingToSignIn = false;
   localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
@@ -154,6 +159,7 @@ export function updateSession(updates: Partial<SessionPayload>): void {
 }
 
 export function clearSession(): void {
+  permissionsRefresh = null;
   localStorage.removeItem(SESSION_KEY);
   emitSessionChange();
 }
@@ -267,6 +273,50 @@ export async function apiErrorMessage(
   }
 }
 
+// Brings the drawn copy of the permissions (and role) up to date with what
+// the server says NOW, so the menu and the page show a new feature or a newly
+// ticked permission without signing out and in. Grants nothing: the server
+// decides every request from the cookie regardless.
+//
+// Once per page LOAD and per user (dropped on sign-in and sign-out, so the
+// next person on the same tab never gets this answer), plus whenever a page
+// is about to turn someone away (force), since the copy may simply be older
+// than a permission ticked since. Resolves to "signed-out" on a 401, else to
+// true when the check ran; callers re-read getSession() themselves.
+let permissionsRefresh: { userId: string; promise: Promise<boolean | "signed-out"> } | null = null;
+function refreshPermissions(force = false): Promise<boolean | "signed-out"> {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  const me = getSession();
+  if (!me) return Promise.resolve(false);
+  const cached = permissionsRefresh;
+  if (!force && cached && cached.userId === me.id) return cached.promise;
+  const promise = fetch("/api/auth", { credentials: "same-origin" })
+    .then((r) => (r.status === 401 ? "signed-out" : r.ok ? r.json() : null))
+    .then((d: "signed-out" | { id?: unknown; permissions?: unknown; role?: unknown; roleName?: unknown } | null) => {
+      if (d === "signed-out") return "signed-out" as const;
+      // Never during a sign-out or a sign-in redirect: writing the copy back
+      // then would resurrect a session the person is leaving.
+      if (signingOut || redirectingToSignIn) return false;
+      const current = getSession();
+      // Only for the same person: a cookie for someone else must not
+      // relabel this copy with their permissions.
+      if (!current || !d || d.id !== current.id || !Array.isArray(d.permissions)) return false;
+      const fresh = d.permissions.filter((p): p is string => typeof p === "string");
+      const role = typeof d.role === "string" ? d.role : current.role;
+      const roleName = typeof d.roleName === "string" ? d.roleName : current.roleName;
+      if (!samePermissions(fresh, current.permissions) || role !== current.role || roleName !== current.roleName) {
+        // Written directly, not through setSession: that one is for SIGNING IN
+        // and resets the sign-out flags and this cache.
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ ...current, permissions: fresh, role, roleName }));
+        emitSessionChange();
+      }
+      return true;
+    })
+    .catch(() => false);
+  permissionsRefresh = { userId: me.id, promise };
+  return promise;
+}
+
 // `requiredPermission` may be a single key or a list, in which case ANY of them
 // is enough. A list matters where a new, narrower permission is introduced
 // alongside an existing broader one - gating on the new key alone would lock
@@ -300,12 +350,53 @@ export function useAuth(requiredPermission?: string | string[]) {
       return;
     }
     const needed = permissionKey === "" ? [] : permissionKey.split(",");
-    if (needed.length > 0 && !needed.some((p) => s.permissions.includes(p))) {
-      router.replace("/dashboard");
-      return;
+    const allowed = (x: SessionPayload) => needed.length === 0 || needed.some((p) => x.permissions.includes(p));
+    let live = true;
+    if (!allowed(s)) {
+      // The copy may simply be older than a permission ticked since sign-in:
+      // ask the server before sending them away.
+      refreshPermissions(true).then((result) => {
+        if (!live) return;
+        if (result === "signed-out") {
+          clearSession();
+          router.replace(loginUrlFor(window.location.pathname + window.location.search));
+          return;
+        }
+        const fresh = getSession();
+        if (fresh && allowed(fresh)) {
+          setSessionState(fresh);
+          setLoading(false);
+        } else {
+          router.replace("/dashboard");
+        }
+      });
+      return () => {
+        live = false;
+      };
     }
     setSessionState(s);
     setLoading(false);
+    refreshPermissions().then((result) => {
+      if (!live) return;
+      if (result === "signed-out") {
+        clearSession();
+        router.replace(loginUrlFor(window.location.pathname + window.location.search));
+        return;
+      }
+      const fresh = getSession();
+      if (result !== true || !fresh) return;
+      // A permission taken away since sign-in: leave the page rather than
+      // show one where every save would fail.
+      if (!allowed(fresh)) router.replace("/dashboard");
+      // Only when something changed, so pages that load on `session` don't
+      // fetch everything twice for nothing.
+      else if (!samePermissions(fresh.permissions, s.permissions) || fresh.role !== s.role || fresh.roleName !== s.roleName) {
+        setSessionState(fresh);
+      }
+    });
+    return () => {
+      live = false;
+    };
   }, [router, permissionKey]);
 
   return { session, loading };

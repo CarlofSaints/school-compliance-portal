@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readJson, writeJson } from "./controlData";
-import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS } from "./roles";
+import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS, DEFAULT_PERMISSIONS } from "./roles";
 import { getUserById } from "./userData";
 import {
   SESSION_COOKIE,
@@ -71,8 +71,26 @@ export async function deleteRole(id: string): Promise<boolean> {
 }
 
 // --- Permissions CRUD ---
+/** The school's STORED list, as saved. Seeding, adding and deleting work on
+ *  this; the Roles page shows permissionsForDisplay(). */
 export async function getPermissions(): Promise<Permission[]> {
   return readJson<Permission[]>(PERMISSIONS_PATH, []);
+}
+
+/**
+ * What the Roles page lists: every permission the code defines (with the
+ * code's name and category) plus any custom ones the school added. A key added
+ * in a release (book_rooms, manage_rooms...) used to stay untickable until
+ * someone re-ran /api/seed for that school, and for every new school too.
+ * Read-only: nothing is written.
+ */
+export async function permissionsForDisplay(): Promise<Permission[]> {
+  const stored = await getPermissions();
+  return [...DEFAULT_PERMISSIONS, ...stored.filter((p) => !isBuiltInPermission(p.key))];
+}
+
+export function isBuiltInPermission(key: string): boolean {
+  return ALL_PERMISSION_KEYS.includes(key);
 }
 
 export async function savePermissions(perms: Permission[]): Promise<void> {

@@ -3,8 +3,10 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
-import { Permission, Role } from "@/lib/roles";
+import { ALL_PERMISSION_KEYS, Permission, Role } from "@/lib/roles";
 import { useT } from "@/components/I18nProvider";
+
+const BUILT_IN_KEYS = new Set(ALL_PERMISSION_KEYS);
 
 export default function RolesPage() {
   const t = useT();
@@ -163,7 +165,11 @@ export default function RolesPage() {
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {perms.map((perm) => {
-                        const checked = selectedRole.permissions.includes(perm.key);
+                        // Super Admin always holds every BUILT-IN permission (the server
+                        // grants them), so those boxes show ticked and cannot be changed.
+                        // A school's own custom permissions stay tickable.
+                        const isSuper = selectedRole.id === "super-admin" && BUILT_IN_KEYS.has(perm.key);
+                        const checked = isSuper || selectedRole.permissions.includes(perm.key);
                         return (
                           <label
                             key={perm.key}
@@ -172,8 +178,9 @@ export default function RolesPage() {
                             <input
                               type="checkbox"
                               checked={checked}
+                              disabled={isSuper}
                               onChange={() => togglePermission(selectedRole, perm.key)}
-                              className="accent-primary w-4 h-4"
+                              className="accent-primary w-4 h-4 disabled:opacity-60"
                             />
                             <div>
                               <p className="text-sm font-medium">{perm.name}</p>

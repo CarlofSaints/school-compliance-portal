@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission, getPermissions, createPermission } from "@/lib/rolesData";
+import { requirePermission, createPermission, permissionsForDisplay } from "@/lib/rolesData";
 
 export async function GET(req: NextRequest) {
   const session = await requirePermission(req, "manage_roles");
   if (session instanceof NextResponse) return session;
 
-  const perms = await getPermissions();
-  return NextResponse.json(perms);
+  return NextResponse.json(await permissionsForDisplay());
 }
 
 export async function POST(req: NextRequest) {
@@ -23,7 +22,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const perms = await getPermissions();
+    const perms = await permissionsForDisplay();
     if (perms.some((p) => p.key === key)) {
       return NextResponse.json(
         { error: "Permission key already exists" },
