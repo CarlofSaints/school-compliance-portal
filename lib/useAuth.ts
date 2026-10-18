@@ -274,28 +274,26 @@ export async function apiErrorMessage(
 // ticked permission without signing out and in. Grants nothing: the server
 // decides every request from the cookie regardless.
 //
-// Kept per USER and for a few seconds only, so several useAuth calls on one
-// page share one request, every navigation after that checks again, and a
-// different person signing in on the same tab never gets the previous
-// person's answer. Resolves to the up-to-date session, or null when it could
-// not be checked (the caller then keeps what it has).
-const REFRESH_REUSE_MS = 5000;
-let permissionsRefresh: { userId: string; at: number; promise: Promise<SessionPayload | null> } | null = null;
-function refreshPermissions(): Promise<SessionPayload | null> {
-  if (typeof window === "undefined") return Promise.resolve(null);
+// Once per page LOAD and per user (dropped on sign-in and sign-out, so the
+// next person on the same tab never gets this answer), plus whenever a page
+// is about to turn someone away (force), since the copy may simply be older
+// than a permission ticked since. Resolves to "signed-out" on a 401, else to
+// true when the check ran; callers re-read getSession() themselves.
+let permissionsRefresh: { userId: string; promise: Promise<boolean | "signed-out"> } | null = null;
+function refreshPermissions(force = false): Promise<boolean | "signed-out"> {
+  if (typeof window === "undefined") return Promise.resolve(false);
   const me = getSession();
-  if (!me) return Promise.resolve(null);
+  if (!me) return Promise.resolve(false);
   const cached = permissionsRefresh;
-  if (cached && cached.userId === me.id && Date.now() - cached.at < REFRESH_REUSE_MS) {
-    return cached.promise;
-  }
+  if (!force && cached && cached.userId === me.id) return cached.promise;
   const promise = fetch("/api/auth", { credentials: "same-origin" })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((d: { id?: unknown; permissions?: unknown; role?: unknown; roleName?: unknown } | null) => {
+    .then((r) => (r.status === 401 ? "signed-out" : r.ok ? r.json() : null))
+    .then((d: "signed-out" | { id?: unknown; permissions?: unknown; role?: unknown; roleName?: unknown } | null) => {
+      if (d === "signed-out") return "signed-out" as const;
       const current = getSession();
       // Only for the same person: a cookie for someone else must not
       // relabel this copy with their permissions.
-      if (!current || !d || d.id !== current.id || !Array.isArray(d.permissions)) return null;
+      if (!current || !d || d.id !== current.id || !Array.isArray(d.permissions)) return false;
       const fresh = d.permissions.filter((p): p is string => typeof p === "string");
       const role = typeof d.role === "string" ? d.role : current.role;
       const roleName = typeof d.roleName === "string" ? d.roleName : current.roleName;
@@ -306,10 +304,10 @@ function refreshPermissions(): Promise<SessionPayload | null> {
       ) {
         updateSession({ permissions: fresh, role, roleName });
       }
-      return getSession();
+      return true;
     })
-    .catch(() => null);
-  permissionsRefresh = { userId: me.id, at: Date.now(), promise };
+    .catch(() => false);
+  permissionsRefresh = { userId: me.id, promise };
   return promise;
 }
 
@@ -351,8 +349,14 @@ export function useAuth(requiredPermission?: string | string[]) {
     if (!allowed(s)) {
       // The copy may simply be older than a permission ticked since sign-in:
       // ask the server before sending them away.
-      refreshPermissions().then((fresh) => {
+      refreshPermissions(true).then((result) => {
         if (!live) return;
+        if (result === "signed-out") {
+          clearSession();
+          router.replace(loginUrlFor(window.location.pathname + window.location.search));
+          return;
+        }
+        const fresh = getSession();
         if (fresh && allowed(fresh)) {
           setSessionState(fresh);
           setLoading(false);
@@ -366,12 +370,16 @@ export function useAuth(requiredPermission?: string | string[]) {
     }
     setSessionState(s);
     setLoading(false);
-    refreshPermissions().then((fresh) => {
-      if (!live || !fresh) return;
+    const before = s.permissions.slice().sort().join(",");
+    refreshPermissions().then((result) => {
+      const fresh = getSession();
+      if (!live || result !== true || !fresh) return;
       // A permission taken away since sign-in: leave the page rather than
       // show one where every save would fail.
       if (!allowed(fresh)) router.replace("/dashboard");
-      else setSessionState(fresh);
+      // Only when something changed, so pages that load on `session` don't
+      // fetch everything twice for nothing.
+      else if (fresh.permissions.slice().sort().join(",") !== before) setSessionState(fresh);
     });
     return () => {
       live = false;

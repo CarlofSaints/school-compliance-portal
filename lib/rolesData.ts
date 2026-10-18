@@ -78,16 +78,15 @@ export async function getPermissions(): Promise<Permission[]> {
 }
 
 /**
- * What the Roles page lists: the stored list plus every permission the code
- * defines. A key added in a release (book_rooms, manage_rooms...) used to stay
- * untickable until someone re-ran /api/seed for that school, and for every
- * new school too. Read-only: nothing is written, so a stock permission's
- * name still follows the code. Stored entries win; custom ones are kept.
+ * What the Roles page lists: every permission the code defines (with the
+ * code's name and category) plus any custom ones the school added. A key added
+ * in a release (book_rooms, manage_rooms...) used to stay untickable until
+ * someone re-ran /api/seed for that school, and for every new school too.
+ * Read-only: nothing is written.
  */
 export async function permissionsForDisplay(): Promise<Permission[]> {
   const stored = await getPermissions();
-  const have = new Set(stored.map((p) => p.key));
-  return [...stored, ...DEFAULT_PERMISSIONS.filter((p) => !have.has(p.key))];
+  return [...DEFAULT_PERMISSIONS, ...stored.filter((p) => !isBuiltInPermission(p.key))];
 }
 
 export function isBuiltInPermission(key: string): boolean {

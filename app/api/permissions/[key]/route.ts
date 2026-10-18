@@ -13,7 +13,7 @@ export async function DELETE(
   // so deleting one would report success and change nothing.
   if (isBuiltInPermission(key)) {
     return NextResponse.json(
-      { error: "Built-in permissions cannot be deleted. Untick it on the roles instead." },
+      { error: "This is one of the portal's own permissions, so it cannot be removed. Untick it on each role instead." },
       { status: 400 }
     );
   }

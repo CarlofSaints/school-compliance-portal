@@ -28,7 +28,7 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
     ["custom kept", keys.includes("custom_x")],
     ["no duplicates", new Set(keys).size === keys.length],
     ["stored list untouched (seed/add/delete use it)", (await getPermissions()).length === 2],
-    ["school's rename wins", (await permissionsForDisplay()).find((p) => p.key === "view_dashboard")?.name === "Renamed by the school"],
+    ["built-in names follow the code", (await permissionsForDisplay()).find((p) => p.key === "view_dashboard")?.name !== "Renamed by the school"],
   ].filter(([, ok]) => !ok);
   for (const [n] of fails) console.log("FAIL", n);
   console.log(fails.length ? `${fails.length} FAILED` : "All passed");

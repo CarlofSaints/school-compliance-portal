@@ -163,7 +163,10 @@ export default function RolesPage() {
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {perms.map((perm) => {
-                        const checked = selectedRole.permissions.includes(perm.key);
+                        // Super Admin always holds every permission (the server grants
+                        // them all), so its boxes are shown ticked and cannot be changed.
+                        const isSuper = selectedRole.id === "super-admin";
+                        const checked = isSuper || selectedRole.permissions.includes(perm.key);
                         return (
                           <label
                             key={perm.key}
@@ -172,8 +175,9 @@ export default function RolesPage() {
                             <input
                               type="checkbox"
                               checked={checked}
+                              disabled={isSuper}
                               onChange={() => togglePermission(selectedRole, perm.key)}
-                              className="accent-primary w-4 h-4"
+                              className="accent-primary w-4 h-4 disabled:opacity-60"
                             />
                             <div>
                               <p className="text-sm font-medium">{perm.name}</p>
