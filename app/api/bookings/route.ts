@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, "book_rooms");
   if (session instanceof NextResponse) return session;
-  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  const limited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
   if (limited) return limited;
 
   const parsed = parseBookingInput(await req.json().catch(() => null));

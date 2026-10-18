@@ -1609,7 +1609,6 @@
   "Decline the request": "Gana kgopelo",
   "Open the room calendar": "Bula khalendara ya diphapoši",
   "Room saved": "Phapoši e bolokilwe",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its existing bookings are kept.": "Emiša \"{name}\"? E ka se sa tšwelela go dipukelo tše mpsha. Dipukelo tše di lego gona di tla bolokwa.",
   "Bring \"{name}\" back for booking?": "Bušetša \"{name}\" gore e pukwe?",
   "\"{name}\" has bookings on record, so it can't be deleted. It will be retired instead, keeping the calendar history. Carry on?": "\"{name}\" e na le dipukelo tše di ngwadilwego, ka fao e ka se phumolwe. E tla emišwa go e na le moo, gomme histori ya khalendara e bolokwe. Tšwela pele?",
   "Delete \"{name}\"? It has never been booked, so it will be removed completely.": "Phumola \"{name}\"? Ga e so ke e pukwa, ka fao e tla tlošwa ka botlalo.",
@@ -1661,5 +1660,8 @@
   "{base} on {days}": "{base} ka {days}",
   "Every {n} months": "Ka morago ga dikgwedi tše {n}",
   "{base}, until {date}": "{base}, go fihla {date}",
-  "{base}, {count} times": "{base}, makga a {count}"
+  "{base}, {count} times": "{base}, makga a {count}",
+  "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Dipukelo tše {n} tše di tlago di khanseletšwe, eupša dimeile tše dingwe go beng ba tšona ga se tša kgona go romelwa.",
+  "{n} upcoming booking(s) cancelled and their holders emailed.": "Dipukelo tše {n} tše di tlago di khanseletšwe gomme beng ba tšona ba romeletšwe imeile.",
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emiša \"{name}\"? E ka se sa tšwelela go dipukelo tše mpsha. Dipukelo tše di tlago di tla khanselwa gomme beng ba tšona ba romelwe imeile; tše di fetilego di tla bolokwa."
 }

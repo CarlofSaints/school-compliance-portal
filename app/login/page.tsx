@@ -7,6 +7,12 @@ import SchoolCrest from "@/components/SchoolCrest";
 import { setSession, getSession } from "@/lib/useAuth";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
+import { safeNextPath } from "@/lib/nextPath";
+
+// Where an emailed link (e.g. a room request) was heading before sign-in.
+function nextOrDashboard(): string {
+  return safeNextPath(new URLSearchParams(window.location.search).get("next")) ?? "/dashboard";
+}
 
 export default function LoginPage() {
   const branding = useBranding();
@@ -20,7 +26,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const s = getSession();
-    if (s) router.replace("/dashboard");
+    if (s) router.replace(nextOrDashboard());
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,7 +49,7 @@ export default function LoginPage() {
       if (data.forcePasswordChange) {
         router.push("/account?changePassword=1");
       } else {
-        router.push("/dashboard");
+        router.push(nextOrDashboard());
       }
     } catch {
       setError(t("Network error. Please try again."));

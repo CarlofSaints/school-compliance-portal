@@ -50,6 +50,7 @@ export const LIMITS = {
   aiSchool: { scope: "ai-school", max: 200, windowSec: 24 * 60 * 60, message: "Your school has reached today's limit for compliance checks. Try again in {wait}, or contact support." },
   translateUser: { scope: "translate-user", max: 10, windowSec: 60 * 60, message: "You have translated a lot of documents this hour. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },
+  bookingWriteUser: { scope: "booking-write-user", max: 120, windowSec: 60 * 60, message: "You have made a lot of room booking changes this hour. Try again in {wait}." },
 } satisfies Record<string, Limit>;
 
 interface Bucket {

@@ -1,4 +1,4 @@
-import { readJson, updateJson, writeJson, listFiles, NO_CHANGE } from "./controlData";
+import { readJson, updateJson, writeJson, listFilesStrict, NO_CHANGE } from "./controlData";
 import { getUserById } from "./userData";
 import type { SessionPayload } from "./roles";
 import {
@@ -14,6 +14,7 @@ import {
   parseDateKey,
   addDays,
   sastToday,
+  isPast,
   type Recurrence,
 } from "./roomBookings";
 
@@ -104,6 +105,8 @@ export function actorOf(s: SessionPayload): Actor {
 export type Outcome<V = undefined> =
   | { ok: true; value: V; notice?: string }
   | { ok: false; status: number; error: string };
+
+const PAST = "That time has already passed. Pick a time from now on.";
 
 const fail = (status: number, error: string): { ok: false; status: number; error: string } => ({ ok: false, status, error });
 
@@ -282,20 +285,56 @@ export async function getRoom(id: string): Promise<Room | null> {
   return (await getRooms()).find((r) => r.id === id) ?? null;
 }
 
-/** True once anybody has ever booked the room, cancelled bookings included. */
+/** True once anybody has ever booked the room, cancelled bookings included.
+ *  🔴 FAILS CLOSED: if the store cannot be listed, the answer is "yes", so a
+ *  storage hiccup can never hard-delete a room that has history. */
 export async function roomHasBookings(roomId: string): Promise<boolean> {
-  const months = await listFiles(`rooms/bookings/${roomId}`);
-  for (const m of months) {
-    const list = await readJson<RoomBooking[]>(`rooms/bookings/${roomId}/${m}`, []);
-    if (list.length > 0) return true;
+  try {
+    return (await listFilesStrict(`rooms/bookings/${roomId}`)).length > 0;
+  } catch (err) {
+    console.error(`[rooms] could not list bookings for ${roomId}, treating as booked:`, err);
+    return true;
   }
-  return false;
 }
 
-export async function saveRoom(actor: Actor, id: string | null, input: RoomInput & { active?: boolean }): Promise<Outcome<Room>> {
+/** Cancels every confirmed booking in a room from today (SAST) on, for a room
+ *  being retired: the calendar only shows active rooms, so a booking left
+ *  behind would be invisible yet still sent its reminder. Returns what was
+ *  cancelled so the holders can be told. */
+export async function cancelRoomFutureBookings(roomId: string, byName: string, now: Date = new Date()): Promise<RoomBooking[]> {
+  const today = sastToday(now);
+  const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
+    .map((f) => f.replace(/\.json$/, ""))
+    .filter((m) => m >= monthOf(today))
+    .sort();
+  const out: RoomBooking[] = [];
+  for (const m of months) {
+    let hit: RoomBooking[] = [];
+    await updateJson<RoomBooking[]>(fileFor(roomId, m), [], (list) => {
+      hit = [];
+      const stamp = new Date().toISOString();
+      const next = list.map((b) => {
+        if (b.status !== "confirmed" || b.date < today) return b;
+        hit.push(b);
+        return { ...b, status: "cancelled" as const, requests: withdrawAll(b, stamp), cancelledAt: stamp, cancelledByName: byName, updatedAt: stamp };
+      });
+      return hit.length ? next : NO_CHANGE;
+    });
+    out.push(...hit);
+  }
+  return out;
+}
+
+export async function saveRoom(
+  actor: Actor,
+  id: string | null,
+  input: RoomInput & { active?: boolean }
+): Promise<Outcome<{ room: Room; cancelled: RoomBooking[] }>> {
   if (!canManageRooms(actor)) return fail(403, "Forbidden");
   let result: Outcome<Room> = fail(404, "That room is no longer in the list");
+  let retiredNow = false;
   await updateJson<Room[]>(ROOMS_PATH, [], (rooms) => {
+    retiredNow = false;
     const now = new Date().toISOString();
     if (rooms.some((r) => r.id !== id && r.name.toLowerCase() === input.name.toLowerCase())) {
       result = fail(409, "A room with that name already exists");
@@ -312,36 +351,55 @@ export async function saveRoom(actor: Actor, id: string | null, input: RoomInput
       return NO_CHANGE;
     }
     const room = { ...rooms[idx], ...input, active: input.active ?? rooms[idx].active, updatedAt: now };
+    // Any explicit retire, not only the first: cancelling is idempotent, so a
+    // retry after a failed cancel finishes the job.
+    retiredNow = !room.active && input.active === false;
     result = { ok: true, value: room };
     return rooms.map((r, i) => (i === idx ? room : r));
   });
-  return result;
+  const r = result as Outcome<Room>;
+  if (!r.ok) return r;
+  const cancelled = retiredNow ? await cancelRoomFutureBookings(r.value.id, actor.name) : [];
+  return { ok: true, value: { room: r.value, cancelled } };
 }
 
-/** Deletes a never-booked room; a room with bookings on record is retired. */
-export async function deleteRoom(actor: Actor, id: string): Promise<Outcome<{ room: Room; retired: boolean }>> {
+/** Deletes a never-booked room; a room with bookings on record is retired
+ *  (and its upcoming bookings cancelled). The room is retired FIRST, so no
+ *  booking can be made while it is being checked; if one slipped in anyway
+ *  (it read the room just before), the room is put back as retired. */
+export async function deleteRoom(
+  actor: Actor,
+  id: string
+): Promise<Outcome<{ room: Room; retired: boolean; cancelled: RoomBooking[] }>> {
   if (!canManageRooms(actor)) return fail(403, "Forbidden");
-  const booked = await roomHasBookings(id);
-  let result: Outcome<{ room: Room; retired: boolean }> = fail(404, "That room is no longer in the list");
+  let room: Room | null = null;
   await updateJson<Room[]>(ROOMS_PATH, [], (rooms) => {
-    const room = rooms.find((r) => r.id === id);
-    if (!room) {
-      result = fail(404, "That room is no longer in the list");
-      return NO_CHANGE;
-    }
-    if (!booked) {
-      result = { ok: true, value: { room, retired: false } };
-      return rooms.filter((r) => r.id !== id);
-    }
-    result = {
-      ok: true,
-      value: { room, retired: true },
-      notice: `${room.name} has bookings on record, so it has been retired instead of deleted. Its calendar history is kept.`,
-    };
+    room = rooms.find((r) => r.id === id) ?? null;
+    if (!room) return NO_CHANGE;
     if (!room.active) return NO_CHANGE;
     return rooms.map((r) => (r.id === id ? { ...r, active: false, updatedAt: new Date().toISOString() } : r));
   });
-  return result;
+  const found = room as Room | null;
+  if (!found) return fail(404, "That room is no longer in the list");
+  const retiredRoom: Room = { ...found, active: false };
+
+  const retire = async () => {
+    // Always, not only when it was active: a retry after a failed cancel finishes it.
+    const cancelled = await cancelRoomFutureBookings(id, actor.name);
+    return {
+      ok: true as const,
+      value: { room: retiredRoom, retired: true, cancelled },
+      notice: `${found.name} has bookings on record, so it has been retired instead of deleted. Its calendar history is kept.`,
+    };
+  };
+
+  if (await roomHasBookings(id)) return retire();
+  await updateJson<Room[]>(ROOMS_PATH, [], (rooms) => (rooms.some((r) => r.id === id) ? rooms.filter((r) => r.id !== id) : NO_CHANGE));
+  if (await roomHasBookings(id)) {
+    await updateJson<Room[]>(ROOMS_PATH, [], (rooms) => (rooms.some((r) => r.id === id) ? NO_CHANGE : [...rooms, retiredRoom]));
+    return retire();
+  }
+  return { ok: true, value: { room: found, retired: false, cancelled: [] } };
 }
 
 // --- Reading bookings ------------------------------------------------------------
@@ -384,12 +442,13 @@ async function resolveBookedFor(bookedForId: string, ownerId: string) {
 
 // --- Create ----------------------------------------------------------------------
 
-export async function createBooking(actor: Actor, input: BookingInput): Promise<Outcome<{ bookings: RoomBooking[]; room: Room }>> {
+export async function createBooking(actor: Actor, input: BookingInput, nowAt: Date = new Date()): Promise<Outcome<{ bookings: RoomBooking[]; room: Room }>> {
   if (!canBookRooms(actor)) return fail(403, "You can't book rooms");
   const room = await getRoom(input.roomId);
   if (!room || !room.active) return fail(400, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}. Pick a bigger room or reduce the headcount.`);
 
+  if (isPast(input.date, input.startMinute, nowAt)) return fail(400, PAST);
   const dates = expandRecurrence(input.date, input.recurrence);
   if (dates.length === 0) return fail(400, "That repeat pattern doesn't produce any dates");
 
@@ -468,20 +527,23 @@ export async function updateBooking(
   actor: Actor,
   id: string,
   locatorDate: string,
-  input: BookingInput
+  input: BookingInput,
+  nowAt: Date = new Date()
 ): Promise<Outcome<EditResult>> {
   const before = await findBooking(input.roomId, locatorDate, id);
   if (!before) return fail(404, "That booking no longer exists");
   if (before.status !== "confirmed") return fail(400, "That booking has been cancelled");
   if (!isHolder(before, actor.id) && !canManageRooms(actor)) return fail(403, "Only the people holding this room can change it");
   const room = await getRoom(before.roomId);
-  if (!room) return fail(400, "That room isn't available");
+  if (!room || !room.active) return fail(400, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}`);
 
   const forWho = await resolveBookedFor(input.bookedForId, before.bookedById);
   if (!forWho.ok) return fail(400, "That person can't be booked for");
 
   const moved = before.date !== input.date || before.startMinute !== input.startMinute || before.endMinute !== input.endMinute;
+  // Leaving an under-way meeting's times alone is fine; moving one INTO the past is not.
+  if ((before.date !== input.date || before.startMinute !== input.startMinute) && isPast(input.date, input.startMinute, nowAt)) return fail(400, PAST);
   const holderChanged = (forWho.person?.id ?? null) !== before.bookedForId;
   const now = new Date().toISOString();
   const after: RoomBooking = {
@@ -549,6 +611,12 @@ export async function updateBooking(
         return list.filter((b) => b.id !== id);
       });
       if (error) await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id));
+      // The request links point at a month file; follow the booking to its new one.
+      if (!error) {
+        for (const q of after.requests) {
+          await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(after.date), bookingId: id });
+        }
+      }
     }
   }
   if (error) {
@@ -589,8 +657,10 @@ export async function cancelBooking(
   let count = 0;
 
   if (scope === "series" && booking.seriesId) {
-    const from = booking.date < sastToday() ? booking.date : sastToday();
-    const months = (await listFiles(`rooms/bookings/${roomId}`))
+    // This occurrence and every later one; past ones stay as the record.
+    const from = booking.date;
+    const today = sastToday();
+    const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
       .map((f) => f.replace(/\.json$/, ""))
       .filter((m) => m >= monthOf(from))
       .sort();
@@ -599,7 +669,7 @@ export async function cancelBooking(
       await updateJson<RoomBooking[]>(fileFor(roomId, m), [], (list) => {
         n = 0;
         const next = list.map((b) => {
-          if (b.seriesId !== booking.seriesId || b.status !== "confirmed" || (b.date < from && b.id !== id)) return b;
+          if (b.seriesId !== booking.seriesId || b.status !== "confirmed" || ((b.date < from || b.date < today) && b.id !== id)) return b;
           n++;
           return cancel(b);
         });
@@ -655,7 +725,7 @@ export async function requestRoom(
   if (!booking || booking.status !== "confirmed") return fail(404, "That booking is no longer live");
   if (isHolder(booking, actor.id)) return fail(400, "You already have this room");
   const room = await getRoom(roomId);
-  if (!room) return fail(404, "That room isn't available");
+  if (!room || !room.active) return fail(404, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} only seats ${room.capacity}`);
 
   const request: RoomRequest = {
@@ -798,7 +868,8 @@ export async function respondToRequest(
 export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ booking: RoomBooking; room: Room }[]> {
   const tomorrow = addDays(sastToday(now), 1);
   const out: { booking: RoomBooking; room: Room }[] = [];
-  for (const room of await getRooms()) {
+  // A retired room has no calendar; its upcoming bookings were cancelled on retiring.
+  for (const room of (await getRooms()).filter((r) => r.active)) {
     for (const b of await readMonth(room.id, monthOf(tomorrow))) {
       if (b.date === tomorrow && b.status === "confirmed" && !b.reminderSentAt) out.push({ booking: b, room });
     }

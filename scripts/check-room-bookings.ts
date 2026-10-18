@@ -33,6 +33,7 @@ async function main() {
   const { readJson } = await import("../lib/controlData");
   const { createUser } = await import("../lib/userData");
   const { runRoomBookingReminders } = await import("../lib/roomBookingNotify");
+  const { isPast: isPastFn } = await import("../lib/roomBookings");
   type Booking = import("../lib/roomBookingData").RoomBooking;
 
   for (const [id, name] of [["alice", "Alice"], ["bob", "Bob"], ["cara", "Cara"]]) {
@@ -48,7 +49,7 @@ async function main() {
   check("booker cannot create a room", (await D.saveRoom(alice, null, { name: "Hall", capacity: 10, color: "#0d9488", notes: "" })).ok, false);
   const made = await D.saveRoom(admin, null, { name: "Boardroom", capacity: 12, color: "#0d9488", notes: "Projector" });
   if (!made.ok) throw new Error("room create failed");
-  const room = made.value;
+  const room = made.value.room;
   check("duplicate room name refused", (await D.saveRoom(admin, null, { name: "boardroom", capacity: 4, color: "#0d9488", notes: "" })).ok, false);
   check("room input validation: capacity 0 refused", D.parseRoomInput({ name: "X", capacity: 0 }).ok, false);
 
@@ -125,7 +126,9 @@ async function main() {
   const aug1 = (await readJson<Booking[]>(`rooms/bookings/${room.id}/2027-08.json`, [])).filter((b) => b.seriesId === o1.seriesId);
   check("cancel one leaves the rest", aug1.map((b) => b.status), ["confirmed", "cancelled", "confirmed", "confirmed"]);
   const cs = await D.cancelBooking(alice, room.id, o3.date, o3.id, "series");
-  check("cancel series cancels every upcoming one left", cs.ok && cs.value.count, 3);
+  check("cancel series from a later one cancels it and the ones after", cs.ok && cs.value.count, 2);
+  const aug2 = (await readJson<Booking[]>(`rooms/bookings/${room.id}/2027-08.json`, [])).filter((b) => b.seriesId === o1.seriesId);
+  check("cancel series leaves EARLIER upcoming ones alone", aug2.map((b) => b.status), ["confirmed", "cancelled", "cancelled", "cancelled"]);
 
   // --- edit
   const mine = b1.ok ? b1.value.bookings[0] : null!;
@@ -174,13 +177,116 @@ async function main() {
   // --- deleting a room
   const spare = await D.saveRoom(admin, null, { name: "Spare", capacity: 4, color: "#4f46e5", notes: "" });
   if (!spare.ok) throw new Error("room create failed");
-  check("booker cannot delete a room", status(await D.deleteRoom(alice, spare.value.id)), 403);
-  const del1 = await D.deleteRoom(admin, spare.value.id);
+  check("booker cannot delete a room", status(await D.deleteRoom(alice, spare.value.room.id)), 403);
+  const del1 = await D.deleteRoom(admin, spare.value.room.id);
   check("never-booked room is deleted", del1.ok && del1.value.retired, false);
-  check("deleted room gone", await D.getRoom(spare.value.id), null);
+  check("deleted room gone", await D.getRoom(spare.value.room.id), null);
   const del2 = await D.deleteRoom(admin, room.id);
   check("booked room is retired, not deleted", [del2.ok && del2.value.retired, (await D.getRoom(room.id))?.active], [true, false]);
   check("retired room takes no new bookings", status(await D.createBooking(alice, input("2027-11-01", "09:00", "10:00"))), 400);
+
+  // ======================= review fixes =======================
+  const { writeJson } = await import("../lib/controlData");
+  const { safeNextPath, loginUrlFor } = await import("../lib/nextPath");
+  const { LIMITS } = await import("../lib/rateLimit");
+  const mkRoom = async (name: string) => {
+    const r = await D.saveRoom(admin, null, { name, capacity: 10, color: "#0d9488", notes: "" });
+    if (!r.ok) throw new Error("room create failed");
+    return r.value.room;
+  };
+  const inp = (roomId: string, date: string, s: number, e: number, extra: Record<string, unknown> = {}) => {
+    const p = D.parseBookingInput({ roomId, title: "Meeting", date, startMinute: s, endMinute: e, attendeeCount: 2, ...extra });
+    if (!p.ok) throw new Error(p.error);
+    return p.value;
+  };
+
+  // #4 past dates and times
+  const lab = await mkRoom("Lab");
+  const noon = new Date("2027-03-10T10:00:00Z"); // 12:00 SAST
+  check("#4 a past date is refused", status(await D.createBooking(alice, inp(lab.id, "2027-03-09", 600, 660), noon)), 400);
+  check("#4 earlier today is refused", status(await D.createBooking(alice, inp(lab.id, "2027-03-10", 540, 600), noon)), 400);
+  const later = await D.createBooking(alice, inp(lab.id, "2027-03-10", 720, 780), noon);
+  check("#4 later today is accepted", status(later), "ok");
+  if (!later.ok) throw new Error("create failed");
+  const lb = later.value.bookings[0];
+  const pastOne = new Date("2027-03-10T11:00:00Z"); // 13:00 SAST, the meeting is under way
+  check("#4 editing an under-way meeting's title is allowed", status(await D.updateBooking(alice, lb.id, lb.date, inp(lab.id, "2027-03-10", 720, 780, { title: "Renamed" }), pastOne)), "ok");
+  check("#4 moving a booking into the past is refused", status(await D.updateBooking(alice, lb.id, lb.date, inp(lab.id, "2027-03-09", 720, 780), pastOne)), 400);
+  check("#4 isPast at the minute", [isPastFn("2027-03-10", 719, noon), isPastFn("2027-03-10", 720, noon)], [true, false]);
+
+  // #6 a request link survives its booking moving to another month
+  const mv = await D.createBooking(alice, inp(lab.id, "2027-09-10", 600, 660));
+  if (!mv.ok) throw new Error("create failed");
+  const mb = mv.value.bookings[0];
+  const mq = await D.requestRoom(bob, lab.id, mb.date, mb.id, { title: "Bob's", message: "Please", attendeeCount: 2 });
+  if (!mq.ok) throw new Error("request failed");
+  await D.respondToRequest(alice, mq.value.request.token, "decline", "Need it");
+  check("#6 cross-month move", status(await D.updateBooking(alice, mb.id, mb.date, inp(lab.id, "2027-10-12", 600, 660))), "ok");
+  const view = await D.getRequestView(alice, mq.value.request.token);
+  check("#6 request page still opens after the move", view.ok && [view.value.booking.date, view.value.request.status], ["2027-10-12", "declined"]);
+
+  // #8 + #3 a room retired by hand (simulating a race) refuses edits, requests, reminders
+  const tb = await D.createBooking(alice, inp(lab.id, "2027-12-15", 600, 660));
+  if (!tb.ok) throw new Error("create failed");
+  const tbk = tb.value.bookings[0];
+  const all = await readJson<import("../lib/roomBookingData").Room[]>("rooms/rooms.json", []);
+  await writeJson("rooms/rooms.json", all.map((r) => (r.id === lab.id ? { ...r, active: false } : r)));
+  check("#8 retired room: edit refused", status(await D.updateBooking(alice, tbk.id, tbk.date, inp(lab.id, "2027-12-15", 600, 700))), 400);
+  check("#8 retired room: asking for it refused", status(await D.requestRoom(bob, lab.id, tbk.date, tbk.id, { title: "x", message: "y", attendeeCount: 1 })), 404);
+  check("#3 retired room: no reminder", (await D.bookingsDueForReminder(new Date("2027-12-14T05:00:00Z"))).some((x) => x.booking.id === tbk.id), false);
+
+  // #3 retiring cancels upcoming bookings (not past ones) and says which
+  const hall = await mkRoom("Hall");
+  const old = await D.createBooking(alice, inp(hall.id, "2026-01-05", 600, 660), new Date("2026-01-01T00:00:00Z"));
+  const fut = await D.createBooking(alice, inp(hall.id, "2027-12-20", 600, 660, { bookedForId: "cara" }));
+  if (!old.ok || !fut.ok) throw new Error("create failed");
+  const ret = await D.saveRoom(admin, hall.id, { name: "Hall", capacity: 10, color: "#0d9488", notes: "", active: false });
+  check("#3 retiring cancels the upcoming booking only", ret.ok && ret.value.cancelled.map((b) => b.id), [fut.value.bookings[0].id]);
+  check("#3 upcoming booking now cancelled", (await D.findBooking(hall.id, "2027-12-20", fut.value.bookings[0].id))?.status, "cancelled");
+  check("#3 past booking kept", (await D.findBooking(hall.id, "2026-01-05", old.value.bookings[0].id))?.status, "confirmed");
+  const { notifyRoomRetired } = await import("../lib/roomBookingNotify");
+  check("#3 holders emailed (no failures)", ret.ok && (await notifyRoomRetired(ret.value.cancelled, ret.value.room)), 0);
+
+  // #2 + #9 deleting fails closed when the store cannot be listed
+  const errLogFirst = console.error;
+  const blobMod = blob as unknown as { list: (o: unknown) => Promise<unknown> };
+  const realList = blobMod.list;
+  const shed = await mkRoom("Shed");
+  blobMod.list = async () => {
+    throw new Error("store down");
+  };
+  console.error = () => {};
+  check("#2 list failure reads as has-bookings", await D.roomHasBookings(shed.id), true);
+  console.error = errLogFirst;
+  const errLog = console.error;
+  console.error = () => {};
+  const delDown = await D.deleteRoom(admin, shed.id).then(() => "returned", () => "threw");
+  console.error = errLog;
+  check("#2 list failure: delete errors out, room retired NOT deleted", [delDown, (await D.getRoom(shed.id))?.active], ["threw", false]);
+  blobMod.list = realList;
+
+  // #2 a booking that lands between the check and the delete brings the room back
+  const barn = await mkRoom("Barn");
+  let calls = 0;
+  blobMod.list = async (o: unknown) => {
+    const res = (await realList(o)) as { blobs: unknown[] };
+    const prefix = (o as { prefix?: string }).prefix || "";
+    if (prefix.includes(`rooms/bookings/${barn.id}`) && ++calls === 2) {
+      return { ...res, blobs: [{ pathname: `${prefix}2027-12.json` }], hasMore: false };
+    }
+    return res;
+  };
+  const delRace = await D.deleteRoom(admin, barn.id);
+  blobMod.list = realList;
+  check("#2 race: room restored as retired", [delRace.ok && delRace.value.retired, (await D.getRoom(barn.id))?.active], [true, false]);
+
+  // #5 sign-in return path
+  check("#5 relative path kept", safeNextPath("/bookings/request/abc?action=approve"), "/bookings/request/abc?action=approve");
+  check("#5 other origins refused", ["//evil.test/x", "/\\evil.test", "https://evil.test", "evil", "/login?next=/x", "/x\n"].map(safeNextPath), [null, null, null, null, null, null]);
+  check("#5 login url carries next", loginUrlFor("/bookings/request/abc?action=decline"), "/login?next=%2Fbookings%2Frequest%2Fabc%3Faction%3Ddecline");
+
+  // #10 a dedicated limit for booking writes
+  check("#10 bookingWriteUser limit", [LIMITS.bookingWriteUser.scope, LIMITS.bookingWriteUser.max], ["booking-write-user", 120]);
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);

@@ -391,6 +391,16 @@ export async function deleteFolder(dirPath: string): Promise<number> {
  */
 export async function listFiles(dirPath: string): Promise<string[]> {
   try {
+    return await listFilesStrict(dirPath);
+  } catch {
+    return [];
+  }
+}
+
+/** listFiles, but a storage error THROWS instead of reading as "empty". For a
+ *  caller that would do something irreversible on an empty answer. */
+export async function listFilesStrict(dirPath: string): Promise<string[]> {
+  {
     const { prefix: tenantPrefix, token } = await scope();
     // Resolved ONCE. The old version rebuilt the prefix inside the map, so
     // every row paid for it; now it is also an await, which cannot go there.
@@ -411,7 +421,5 @@ export async function listFiles(dirPath: string): Promise<string[]> {
     } while (cursor);
 
     return [...names];
-  } catch {
-    return [];
   }
 }

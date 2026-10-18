@@ -24,6 +24,7 @@ import {
   minuteLabel,
   parseDateKey,
   sastToday,
+  sastNowMinute,
   slotStarts,
   weekDays,
   weekRangeLabel,
@@ -311,7 +312,7 @@ function BookingForm({
 
 // --- Detail, cancel, ask for the room ---------------------------------------------
 
-function BookingDetail({ booking, room, onEdit, onDone, t }: { booking: BookingView; room: RoomOption; onEdit: () => void; onDone: (msg: string, error?: boolean) => void; t: T }) {
+function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking: BookingView; room: RoomOption; canBook: boolean; onEdit: () => void; onDone: (msg: string, error?: boolean) => void; t: T }) {
   const [asking, setAsking] = useState(false);
   const [ask, setAsk] = useState({ title: "", message: "", attendeeCount: 1 });
   const [busy, setBusy] = useState(false);
@@ -414,7 +415,7 @@ function BookingDetail({ booking, room, onEdit, onDone, t }: { booking: BookingV
             <button type="button" disabled={busy} onClick={() => cancel("one")} className={`${btnGhost} text-risk-high`}>{t("Cancel booking")}</button>
           </>
         )}
-        {!booking.isMine &&
+        {!booking.isMine && canBook &&
           (booking.iAsked ? (
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">{t("You've asked for this room")}</span>
           ) : (
@@ -434,6 +435,9 @@ export default function BookingsPage() {
   const [rooms, setRooms] = useState<RoomOption[] | null>(null);
   const [roomId, setRoomId] = useState("");
   const [today] = useState(() => sastToday());
+  // Taken once per visit: past slots are greyed out, and the server refuses them anyway.
+  const [nowMinute] = useState(() => sastNowMinute());
+  const slotPast = (day: string, m: number) => day < today || (day === today && m + SLOT_MINUTES <= nowMinute);
   const [monday, setMonday] = useState(() => weekStart(sastToday()));
   const [bookings, setBookings] = useState<BookingView[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
@@ -547,10 +551,11 @@ export default function BookingsPage() {
                       <button
                         key={m}
                         type="button"
-                        disabled={!canBook}
-                        onClick={() => setNewAt({ date: day, startMinute: m })}
-                        title={canBook ? t("Book {time} on {date}", { time: minuteLabel(m), date: longDateLabel(day, t) }) : undefined}
-                        className="absolute w-full border-b border-gray-100 enabled:hover:bg-primary/5"
+                        disabled={!canBook || slotPast(day, m)}
+                        // A slot already under way opens at the next 5 minutes, not at its (past) start.
+                        onClick={() => setNewAt({ date: day, startMinute: day === today && m < nowMinute ? Math.min(DAY_END_MINUTE - MIN_DURATION, Math.ceil((nowMinute + 1) / 5) * 5) : m })}
+                        title={canBook && !slotPast(day, m) ? t("Book {time} on {date}", { time: minuteLabel(m), date: longDateLabel(day, t) }) : undefined}
+                        className={`absolute w-full border-b border-gray-100 enabled:hover:bg-primary/5 ${slotPast(day, m) ? "bg-gray-50" : ""}`}
                         style={{ top: m * PX_PER_MIN, height: SLOT_MINUTES * PX_PER_MIN }}
                       />
                     ))}
@@ -612,6 +617,7 @@ export default function BookingsPage() {
           <BookingDetail
             booking={viewing}
             room={room}
+            canBook={canBook}
             onEdit={() => {
               setEditing(viewing);
               setViewing(null);

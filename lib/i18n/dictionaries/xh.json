@@ -1609,7 +1609,6 @@
   "Decline the request": "Yala isicelo",
   "Open the room calendar": "Vula ikhalenda yamagumbi",
   "Room saved": "Igumbi ligciniwe",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its existing bookings are kept.": "Misa \"{name}\"? Aliyi kuphinda livele kukubhukisha okutsha. Ukubhukisha okukhoyo kuya kugcinwa.",
   "Bring \"{name}\" back for booking?": "Buyisela \"{name}\" ukuze libhukishwe?",
   "\"{name}\" has bookings on record, so it can't be deleted. It will be retired instead, keeping the calendar history. Carry on?": "\"{name}\" linokubhukisha okurekhodiweyo, ngoko alinakucinywa. Liya kumiswa endaweni yoko, kugcinwe imbali yekhalenda. Uyaqhubeka?",
   "Delete \"{name}\"? It has never been booked, so it will be removed completely.": "Cima \"{name}\"? Alikaze libhukishwe, ngoko liya kususwa ngokupheleleyo.",
@@ -1661,5 +1660,8 @@
   "{base} on {days}": "{base} ngo-{days}",
   "Every {n} months": "Rhoqo emva kweenyanga ezi-{n}",
   "{base}, until {date}": "{base}, kude kube ngu-{date}",
-  "{base}, {count} times": "{base}, amaxesha ali-{count}"
+  "{base}, {count} times": "{base}, amaxesha ali-{count}",
+  "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Ukubhukisha okuzayo oku-{n} kurhoxisiwe, kodwa ezinye ii-imeyile kubanini bako azikwazanga ukuthunyelwa.",
+  "{n} upcoming booking(s) cancelled and their holders emailed.": "Ukubhukisha okuzayo oku-{n} kurhoxisiwe kwaye abanini bako bathunyelwe i-imeyile.",
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Misa \"{name}\"? Aliyi kuphinda livele kukubhukisha okutsha. Ukubhukisha okuzayo kuya kurhoxiswa kwaye abanini bako bathunyelwe i-imeyile; okudlulileyo kuya kugcinwa."
 }

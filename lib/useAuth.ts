@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { SessionPayload } from "./roles";
+import { loginUrlFor } from "./nextPath";
 
 const SESSION_KEY = "hvps_session";
 
@@ -127,7 +128,7 @@ export async function authFetch(
   if (res.status === 401) {
     clearSession();
     if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.replace("/login");
+      window.location.replace(loginUrlFor(window.location.pathname + window.location.search));
     }
   }
   return res;
@@ -178,7 +179,7 @@ export function useAuth(requiredPermission?: string | string[]) {
   useEffect(() => {
     const s = getSession();
     if (!s) {
-      router.replace("/login");
+      router.replace(loginUrlFor(window.location.pathname + window.location.search));
       return;
     }
     const needed = permissionKey === "" ? [] : permissionKey.split(",");

@@ -1609,7 +1609,6 @@
   "Decline the request": "Weier die versoek",
   "Open the room calendar": "Maak die lokaalkalender oop",
   "Room saved": "Lokaal gestoor",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its existing bookings are kept.": "Onttrek \"{name}\"? Dit sal nie meer vir nuwe besprekings verskyn nie. Die bestaande besprekings word behou.",
   "Bring \"{name}\" back for booking?": "Bring \"{name}\" terug vir besprekings?",
   "\"{name}\" has bookings on record, so it can't be deleted. It will be retired instead, keeping the calendar history. Carry on?": "\"{name}\" het besprekings op rekord, so dit kan nie geskrap word nie. Dit sal eerder onttrek word, en die kalendergeskiedenis word behou. Gaan voort?",
   "Delete \"{name}\"? It has never been booked, so it will be removed completely.": "Skrap \"{name}\"? Dit is nog nooit bespreek nie, so dit sal heeltemal verwyder word.",
@@ -1661,5 +1660,8 @@
   "{base} on {days}": "{base} op {days}",
   "Every {n} months": "Elke {n} maande",
   "{base}, until {date}": "{base}, tot {date}",
-  "{base}, {count} times": "{base}, {count} keer"
+  "{base}, {count} times": "{base}, {count} keer",
+  "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "{n} komende bespreking(s) gekanselleer, maar sommige e-posse aan hulle houers kon nie gestuur word nie.",
+  "{n} upcoming booking(s) cancelled and their holders emailed.": "{n} komende bespreking(s) gekanselleer en hulle houers is per e-pos laat weet.",
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Onttrek \"{name}\"? Dit sal nie meer vir nuwe besprekings verskyn nie. Die komende besprekings word gekanselleer en hulle houers kry 'n e-pos; vorige besprekings word behou."
 }

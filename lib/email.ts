@@ -1294,6 +1294,16 @@ export function sendRoomRequestEmail(
   `);
 }
 
+/** The room itself was taken out of use, so this booking was cancelled. */
+export function sendBookingRoomRetiredEmail(to: string, name: string, f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Cancelled: ${f.roomName} is no longer available, ${f.dateLabel}`, "Room no longer available", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${esc(f.roomName)} has been taken out of use, so your booking below has been cancelled. Please book another room for it.</p>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, CALENDAR_LINK(), "Find another room")}
+  `);
+}
+
 export function sendRoomRequestApprovedEmail(
   to: string,
   requesterName: string,

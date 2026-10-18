@@ -1609,7 +1609,6 @@
   "Decline the request": "Gana kopo",
   "Open the room calendar": "Bula khalendara ya diphaposi",
   "Room saved": "Phaposi e bolokilwe",
-  "Retire \"{name}\"? It stops appearing for new bookings. Its existing bookings are kept.": "Emisa \"{name}\"? E ka se tlhole e tlhaga mo dipeelong tse dintšha. Dipeelo tse di leng teng di tla bolokwa.",
   "Bring \"{name}\" back for booking?": "Busetsa \"{name}\" gore e bewe?",
   "\"{name}\" has bookings on record, so it can't be deleted. It will be retired instead, keeping the calendar history. Carry on?": "\"{name}\" e na le dipeelo tse di kwadilweng, ka jalo ga e kake ya phimolwa. E tla emisiwa boemong jwa moo, mme hisitori ya khalendara e bolokwe. Tswelela?",
   "Delete \"{name}\"? It has never been booked, so it will be removed completely.": "Phimola \"{name}\"? Ga e ise e ke e bewe, ka jalo e tla tlosiwa ka botlalo.",
@@ -1661,5 +1660,8 @@
   "{base} on {days}": "{base} ka {days}",
   "Every {n} months": "Morago ga dikgwedi di le {n}",
   "{base}, until {date}": "{base}, go fitlha {date}",
-  "{base}, {count} times": "{base}, makgetlo a le {count}"
+  "{base}, {count} times": "{base}, makgetlo a le {count}",
+  "{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.": "Dipeelo di le {n} tse di tlang di khanseletswe, mme dimeile dingwe kwa beng ba tsone ga di a kgona go romelwa.",
+  "{n} upcoming booking(s) cancelled and their holders emailed.": "Dipeelo di le {n} tse di tlang di khanseletswe mme beng ba tsone ba romeletswe imeile.",
+  "Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.": "Emisa \"{name}\"? E ka se tlhole e tlhaga mo dipeelong tse dintšha. Dipeelo tse di tlang di tla khanselwa mme beng ba tsone ba romelwe imeile; tse di fetileng di tla bolokwa."
 }

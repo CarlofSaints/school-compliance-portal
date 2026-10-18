@@ -12,7 +12,7 @@ import { notifyRoomRequest } from "@/lib/roomBookingNotify";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requirePermission(req, "book_rooms");
   if (session instanceof NextResponse) return session;
-  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  const limited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
   if (limited) return limited;
   const { id } = await params;
   const body = (await req.json().catch(() => null)) as { roomId?: unknown; date?: unknown } | null;

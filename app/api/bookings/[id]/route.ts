@@ -23,7 +23,7 @@ import { notifyHandover } from "@/lib/roomBookingNotify";
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAnyPermission(req, ["book_rooms", "manage_rooms"]);
   if (session instanceof NextResponse) return session;
-  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  const limited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
   if (limited) return limited;
   const { id } = await params;
   const body = await req.json().catch(() => null);
@@ -56,6 +56,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAnyPermission(req, ["book_rooms", "manage_rooms"]);
   if (session instanceof NextResponse) return session;
+  const limited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
+  if (limited) return limited;
   const { id } = await params;
   const sp = req.nextUrl.searchParams;
   const roomId = sp.get("room");

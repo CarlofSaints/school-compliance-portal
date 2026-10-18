@@ -104,6 +104,18 @@ export function sastToday(now: Date = new Date()): string {
   return new Date(now.getTime() + 2 * 3_600_000).toISOString().slice(0, 10);
 }
 
+/** Minutes since midnight in South Africa right now. */
+export function sastNowMinute(now: Date = new Date()): number {
+  const d = new Date(now.getTime() + 2 * 3_600_000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+/** A start in the past: an earlier day, or earlier today (SAST). */
+export function isPast(date: string, startMinute: number, now: Date = new Date()): boolean {
+  const today = sastToday(now);
+  return date < today || (date === today && startMinute < sastNowMinute(now));
+}
+
 export const DAY_SHORT = [tk("Mon"), tk("Tue"), tk("Wed"), tk("Thu"), tk("Fri"), tk("Sat"), tk("Sun")];
 const MONTH_SHORT = [
   tk("Jan"), tk("Feb"), tk("Mar"), tk("Apr"), tk("May"), tk("Jun"),

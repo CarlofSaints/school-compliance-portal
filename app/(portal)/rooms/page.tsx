@@ -34,7 +34,7 @@ export default function RoomsPage() {
   // Returns the rooms rather than setting them, so the effect below sets state
   // in a callback (react-hooks/set-state-in-effect).
   const loadRooms = useCallback(async (): Promise<RoomRow[] | null> => {
-    const res = await authFetch("/api/rooms");
+    const res = await authFetch("/api/rooms?withUsage=1");
     return res.ok ? res.json() : null;
   }, []);
   const fetchRooms = () => loadRooms().then((r) => r && setRooms(r));
@@ -75,13 +75,22 @@ export default function RoomsPage() {
     }
   };
 
+  // A retired room's upcoming bookings are cancelled and their holders emailed.
+  const cancelledNotice = (res: { cancelledCount: number; emailFailed?: boolean }) =>
+    res.emailFailed
+      ? t("{n} upcoming booking(s) cancelled, but some emails to their holders could not be sent.", { n: res.cancelledCount })
+      : t("{n} upcoming booking(s) cancelled and their holders emailed.", { n: res.cancelledCount });
+
   const toggleActive = async (r: RoomRow) => {
     const msg = r.active
-      ? t("Retire \"{name}\"? It stops appearing for new bookings. Its existing bookings are kept.", { name: r.name })
+      ? t("Retire \"{name}\"? It stops appearing for new bookings. Its upcoming bookings are cancelled and their holders emailed; past ones are kept.", { name: r.name })
       : t("Bring \"{name}\" back for booking?", { name: r.name });
     if (!confirm(msg)) return;
     const ok = await send(`/api/rooms/${r.id}`, "PUT", { name: r.name, capacity: r.capacity, color: r.color, notes: r.notes, active: !r.active });
-    if (ok) fetchRooms();
+    if (ok) {
+      if (ok.cancelledCount > 0) setToast({ message: cancelledNotice(ok), type: ok.emailFailed ? "error" : "success" });
+      fetchRooms();
+    }
   };
 
   const remove = async (r: RoomRow) => {
@@ -92,8 +101,10 @@ export default function RoomsPage() {
     const res = await send(`/api/rooms/${r.id}`, "DELETE");
     if (res) {
       setToast({
-        message: res.retired ? t("{name} has bookings on record, so it was retired instead of deleted.", { name: r.name }) : t("Room deleted"),
-        type: "success",
+        message: res.retired
+          ? `${t("{name} has bookings on record, so it was retired instead of deleted.", { name: r.name })}${res.cancelledCount > 0 ? ` ${cancelledNotice(res)}` : ""}`
+          : t("Room deleted"),
+        type: res.emailFailed ? "error" : "success",
       });
       fetchRooms();
     }

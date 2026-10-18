@@ -2,6 +2,7 @@ import {
   sendBookingConfirmedEmail,
   sendBookingHandedOverEmail,
   sendBookingReminderEmail,
+  sendBookingRoomRetiredEmail,
   sendBookingTakenOverEmail,
   sendRoomRequestApprovedEmail,
   sendRoomRequestDeclinedEmail,
@@ -44,6 +45,18 @@ export async function notifyBookingCreated(first: RoomBooking, room: Room): Prom
     if (!(await sendBookingConfirmedEmail(h.email, h.name, facts(first, room)))) ok = false;
   }
   return ok;
+}
+
+/** A retired room's upcoming bookings were cancelled: tell their holders.
+ *  Returns how many messages failed. */
+export async function notifyRoomRetired(cancelled: RoomBooking[], room: Room): Promise<number> {
+  let failed = 0;
+  for (const b of cancelled) {
+    for (const h of holders(b)) {
+      if (!(await sendBookingRoomRetiredEmail(h.email, h.name, facts(b, room)))) failed++;
+    }
+  }
+  return failed;
 }
 
 /** An edit changed who the room is for: tell both sides, except whoever made
