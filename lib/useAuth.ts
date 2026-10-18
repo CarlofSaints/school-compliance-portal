@@ -271,6 +271,27 @@ export async function apiErrorMessage(
 // is enough. A list matters where a new, narrower permission is introduced
 // alongside an existing broader one - gating on the new key alone would lock
 // out everyone who only holds the old one.
+// Once per page load, bring the drawn copy of the permissions up to date with
+// what the server says now, so the menu shows a new feature or a newly ticked
+// permission without signing out and in. Grants nothing: the server decides
+// every request from the cookie regardless.
+let permissionsRefreshed = false;
+function refreshPermissions(): void {
+  if (permissionsRefreshed || typeof window === "undefined") return;
+  permissionsRefreshed = true;
+  fetch("/api/auth", { credentials: "same-origin" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { permissions?: unknown } | null) => {
+      const current = getSession();
+      if (!current || !d || !Array.isArray(d.permissions)) return;
+      const fresh = d.permissions.filter((p): p is string => typeof p === "string");
+      if ([...fresh].sort().join(",") !== [...current.permissions].sort().join(",")) {
+        updateSession({ permissions: fresh });
+      }
+    })
+    .catch(() => {});
+}
+
 export function useAuth(requiredPermission?: string | string[]) {
   const router = useRouter();
   const [session, setSessionState] = useState<SessionPayload | null>(null);
@@ -306,6 +327,7 @@ export function useAuth(requiredPermission?: string | string[]) {
     }
     setSessionState(s);
     setLoading(false);
+    refreshPermissions();
   }, [router, permissionKey]);
 
   return { session, loading };

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LIMITS, peek, hit, clear, tooMany, ipOf, type Limit } from "@/lib/rateLimit";
 import { getUserByEmail, getUserById, verifyPassword, type User } from "@/lib/userData";
-import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
+import { getRoleById, resolveRolePermissions, requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { afterResponse, actorFromUser } from "@/lib/activityActor";
 import { UNKNOWN_ADDRESS, UNKNOWN_CONNECTION } from "@/lib/activityLabels";
@@ -39,6 +39,16 @@ const UNKNOWN_ADDRESS_LOG: Limit = {
   windowSec: LIMITS.loginIp.windowSec,
   message: "",
 };
+
+// The signed-in person's permissions as the server works them out NOW. The
+// browser keeps a copy from sign-in only to draw the menu; without this, a
+// feature released (or a permission ticked) after someone signed in stayed
+// hidden from them until they signed out and back in (Rooms, 18 Oct).
+export async function GET(req: NextRequest) {
+  const session = await requireLogin(req);
+  if (session instanceof NextResponse) return session;
+  return NextResponse.json({ permissions: session.permissions });
+}
 
 export async function POST(req: NextRequest) {
   if (!fromThisSite(req)) {

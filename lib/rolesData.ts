@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readJson, writeJson } from "./controlData";
-import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS } from "./roles";
+import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS, DEFAULT_PERMISSIONS } from "./roles";
 import { getUserById } from "./userData";
 import {
   SESSION_COOKIE,
@@ -71,8 +71,15 @@ export async function deleteRole(id: string): Promise<boolean> {
 }
 
 // --- Permissions CRUD ---
+// The stored list plus every permission the code defines. A key added in a
+// release (book_rooms, manage_rooms...) used to stay invisible on the Roles
+// page until someone re-ran /api/seed for that school, so on a new release
+// nobody could tick it anywhere. Stored entries win (a school may have
+// renamed one); custom ones are kept.
 export async function getPermissions(): Promise<Permission[]> {
-  return readJson<Permission[]>(PERMISSIONS_PATH, []);
+  const stored = await readJson<Permission[]>(PERMISSIONS_PATH, []);
+  const have = new Set(stored.map((p) => p.key));
+  return [...stored, ...DEFAULT_PERMISSIONS.filter((p) => !have.has(p.key))];
 }
 
 export async function savePermissions(perms: Permission[]): Promise<void> {
