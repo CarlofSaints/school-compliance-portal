@@ -8,6 +8,7 @@ import {
   bookingView,
   bookingsBetween,
   createBooking,
+  getRoom,
   isDate,
   isId,
   parseBookingInput,
@@ -24,6 +25,11 @@ export async function GET(req: NextRequest) {
   if (!isId(room) || !isDate(week)) return NextResponse.json({ error: "Pick a room and a week" }, { status: 400 });
   const monday = weekStart(week);
   const actor = actorOf(session);
+  // A retired or missing room has no calendar, except for room managers.
+  const r = await getRoom(room);
+  if ((!r || !r.active) && !session.permissions.includes("manage_rooms")) {
+    return NextResponse.json({ error: "That room isn't available" }, { status: 404 });
+  }
   const list = await bookingsBetween(room, monday, addDays(monday, 6));
   return NextResponse.json(list.map((b) => bookingView(b, actor)), { headers: { "Cache-Control": "no-store" } });
 }

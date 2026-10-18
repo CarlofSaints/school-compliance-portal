@@ -85,6 +85,7 @@ const WHY: Record<WithdrawReason, string> = {
   given_away: "the room was given to someone else who asked",
   lapsed: "the meeting time has passed",
   room_retired: "the room is no longer available",
+  requester_unable: "you can no longer book rooms in the portal",
 };
 
 /** One email per withdrawn request, to its requester, saying why. Returns
@@ -158,6 +159,12 @@ export async function notifyRoomRequest(b: RoomBooking, room: Room, r: RoomReque
   return delivered;
 }
 
+/** Who the requester is told gave them the room: the holder, or, when a room
+ *  manager answered on the holder's behalf, that manager. */
+export function giverName(before: RoomBooking, by?: { name: string; onBehalf: boolean }): string {
+  return by?.onBehalf ? `${by.name} (a room manager)` : holderLabel(before);
+}
+
 /** The answer, to the requester. On an approve, every holder other than the
  *  one who answered is told too (the booker when the bookee approved, both
  *  when a room manager did): their booking has gone. */
@@ -171,7 +178,7 @@ export async function notifyRequestOutcome(
   const f = { roomName: room?.name ?? "the room", dateLabel: longDateLabel(before.date), timeLabel: slotLabel(before.startMinute, before.endMinute) };
   let ok =
     r.status === "approved"
-      ? await sendRoomRequestApprovedEmail(r.requesterEmail, r.requesterName, holderLabel(before), { ...f, title: after.title })
+      ? await sendRoomRequestApprovedEmail(r.requesterEmail, r.requesterName, giverName(before, by), { ...f, title: after.title })
       : await sendRoomRequestDeclinedEmail(r.requesterEmail, r.requesterName, holderLabel(before), r.declineReason || "", f);
   if (r.status === "approved" && by && room) {
     for (const h of holders(before)) {

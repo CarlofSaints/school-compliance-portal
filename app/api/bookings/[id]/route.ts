@@ -6,6 +6,7 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import {
   actorOf,
   cancelBooking,
+  findBooking,
   getRoom,
   holderLabel,
   isDate,
@@ -35,6 +36,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!isId(id) || !isDate(currentDate)) return NextResponse.json({ error: "That booking no longer exists" }, { status: 404 });
   const parsed = parseBookingInput(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  // An edit that will send email (a new holder, or a move that withdraws
+  // pending requests) also counts against the email limit, like /request.
+  const current = await findBooking(parsed.value.roomId, currentDate, id);
+  if (current) {
+    const holderChange = (parsed.value.bookedForId || null) !== (current.bookedForId ?? null) && parsed.value.bookedForId !== current.bookedById;
+    const move = current.date !== parsed.value.date || current.startMinute !== parsed.value.startMinute || current.endMinute !== parsed.value.endMinute;
+    if (holderChange || (move && current.requests.some((q) => q.status === "pending"))) {
+      const mailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+      if (mailLimited) return mailLimited;
+    }
+  }
 
   const actor = actorOf(session);
   const result = await updateBooking(actor, id, currentDate, { ...parsed.value, recurrence: { ...parsed.value.recurrence, frequency: "none" } });

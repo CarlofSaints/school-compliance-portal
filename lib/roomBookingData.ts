@@ -1,6 +1,7 @@
 import { readJson, updateJson, writeJson, listFilesStrict, NO_CHANGE } from "./controlData";
 import { getUserById } from "./userData";
 import type { SessionPayload } from "./roles";
+import { getRoles, resolveRolePermissions } from "./rolesData";
 import {
   MIN_DURATION,
   DAY_START_MINUTE,
@@ -70,7 +71,7 @@ export interface RoomRequest {
 }
 
 /** Why a pending request stopped being answerable. The requester is emailed. */
-export type WithdrawReason = "cancelled" | "moved" | "given_away" | "lapsed" | "room_retired";
+export type WithdrawReason = "cancelled" | "moved" | "given_away" | "lapsed" | "room_retired" | "requester_unable";
 
 export interface Withdrawal {
   /** The booking as it was before the change. */
@@ -139,6 +140,14 @@ export type Outcome<V = undefined> =
 const ENDED = "That booking has already ended, so it stays as the record.";
 const STARTED = "That meeting has already started, so it can no longer be handed over.";
 const PAST = "That time has already passed. Pick a time from now on.";
+
+type Err = { status: number; error: string };
+
+/** The failure an atomic write recorded, as a result; null when there was none.
+ *  (The write's closure sets it, which TypeScript cannot follow, hence one helper.) */
+function failure(e: Err | null): { ok: false; status: number; error: string } | null {
+  return e ? fail(e.status, e.error) : null;
+}
 
 const fail = (status: number, error: string): { ok: false; status: number; error: string } => ({ ok: false, status, error });
 
@@ -340,10 +349,7 @@ export async function roomHasBookings(roomId: string): Promise<boolean> {
  *  cancelled so the holders can be told. */
 export async function cancelRoomFutureBookings(roomId: string, byName: string, now: Date = new Date()): Promise<RoomBooking[]> {
   const today = sastToday(now);
-  const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
-    .map((f) => f.replace(/\.json$/, ""))
-    .filter((m) => m >= monthOf(today))
-    .sort();
+  const months = await monthsFrom(roomId, monthOf(today));
   const out: RoomBooking[] = [];
   for (const m of months) {
     let hit: RoomBooking[] = [];
@@ -442,6 +448,15 @@ export async function deleteRoom(
 
 // --- Reading bookings ------------------------------------------------------------
 
+/** The room's month files from `fromMonth` on, oldest first. Throws if the
+ *  store cannot be listed (never reads a failure as "no bookings"). */
+async function monthsFrom(roomId: string, fromMonth: string): Promise<string[]> {
+  return (await listFilesStrict(`rooms/bookings/${roomId}`))
+    .map((f) => f.replace(/\.json$/, ""))
+    .filter((m) => m >= fromMonth)
+    .sort();
+}
+
 async function readMonth(roomId: string, month: string): Promise<RoomBooking[]> {
   return readJson<RoomBooking[]>(fileFor(roomId, month), []);
 }
@@ -469,6 +484,14 @@ function clashMessage(roomName: string, slotDate: string, clash: RoomBooking, mo
     `"${clash.title}" by ${clash.bookedForName || clash.bookedByName}` +
     (more > 0 ? ` (and ${more} other date${more === 1 ? "" : "s"})` : "")
   );
+}
+
+/** Whether a user still exists and still holds book_rooms. */
+async function userCanBook(userId: string): Promise<boolean> {
+  const u = await getUserById(userId);
+  if (!u) return false;
+  const role = (await getRoles()).find((r) => r.id === u.role);
+  return resolveRolePermissions(u.role, role).includes("book_rooms");
 }
 
 async function resolveBookedFor(bookedForId: string, ownerId: string) {
@@ -689,10 +712,8 @@ export async function updateBooking(
       }
     }
   }
-  if (error) {
-    const e = error as { status: number; error: string };
-    return fail(e.status, e.error);
-  }
+  const bad = failure(error);
+  if (bad) return bad;
   // 🔴 The room may have been retired or deleted while this was being written
   // (it was read as active before). Put the booking back as it was.
   if (!(await getRoom(room.id))?.active) {
@@ -700,10 +721,19 @@ export async function updateBooking(
     if (fromFile === toFile) {
       await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some(ours) ? list.map((b) => (ours(b) ? before : b)) : NO_CHANGE));
     } else {
-      await updateJson<RoomBooking[]>(toFile, [], (list) => (list.some(ours) ? list.filter((b) => !ours(b)) : NO_CHANGE));
-      await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some((b) => b.id === id) ? NO_CHANGE : [...list, before]));
-      for (const q of before.requests) {
-        await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(before.date), bookingId: id });
+      // Only if our new copy is still exactly ours: if retiring the room
+      // cancelled it meanwhile, bringing the old one back would resurrect a
+      // booking in a retired room. Then the old row stays removed.
+      let removedOurs = false;
+      await updateJson<RoomBooking[]>(toFile, [], (list) => {
+        removedOurs = list.some(ours);
+        return removedOurs ? list.filter((b) => !ours(b)) : NO_CHANGE;
+      });
+      if (removedOurs) {
+        await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some((b) => b.id === id) ? NO_CHANGE : [...list, before]));
+        for (const q of before.requests) {
+          await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(before.date), bookingId: id });
+        }
       }
     }
     return fail(400, "That room isn't available");
@@ -756,10 +786,7 @@ export async function cancelBooking(
 
   if (scope === "series" && booking.seriesId) {
     const from = booking.date;
-    const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
-      .map((f) => f.replace(/\.json$/, ""))
-      .filter((m) => m >= monthOf(from))
-      .sort();
+    const months = await monthsFrom(roomId, monthOf(from));
     for (const m of months) {
       let n = 0;
       let k = 0;
@@ -806,10 +833,8 @@ export async function cancelBooking(
       cancelled.push(cur);
       return list.map((b) => (b.id === id ? cancel(b) : b));
     });
-    if (error) {
-      const e = error as { status: number; error: string };
-      return fail(e.status, e.error);
-    }
+    const bad = failure(error);
+    if (bad) return bad;
   }
   return { ok: true, value: { booking, count, skipped, cancelled, withdrawn: cancelled.flatMap((b) => pendingWithdrawals(b, "cancelled")) } };
 }
@@ -858,19 +883,13 @@ export async function requestRoom(
 
   // One live request per person per SERIES, not per occurrence: asking for
   // each of 52 weekly meetings would be 52 emails to the same holder.
-  if (booking.seriesId) {
-    const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
-      .map((f) => f.replace(/\.json$/, ""))
-      .filter((m) => m >= monthOf(sastToday(nowAt)));
-    const lists = await Promise.all(months.map((m) => readMonth(roomId, m)));
-    const asked = lists
-      .flat()
-      .some((b) => b.seriesId === booking.seriesId && b.status === "confirmed" && b.requests.some((r) => r.requesterId === actor.id && r.status === "pending"));
-    if (asked) return fail(409, "You've already asked for a meeting in this series. Waiting on their reply.");
+  const token = crypto.randomUUID();
+  if (booking.seriesId && !(await claimSeriesAsk(booking.seriesId, actor.id, token))) {
+    return fail(409, "You've already asked for a meeting in this series. Waiting on their reply.");
   }
 
   const request: RoomRequest = {
-    token: crypto.randomUUID(),
+    token,
     requesterId: actor.id,
     requesterName: actor.name,
     requesterEmail: actor.email,
@@ -900,11 +919,36 @@ export async function requestRoom(
     live = { ...cur, requests: [...cur.requests, request] };
     return list.map((b) => (b.id === id ? live : b));
   });
-  if (error) {
-    const e = error as { status: number; error: string };
-    return fail(e.status, e.error);
-  }
+  const bad = failure(error);
+  if (bad) return bad;
   return { ok: true, value: { booking: live, room, request } };
+}
+
+// --- One live ask per person per series -------------------------------------------
+//
+// A marker file per series per person names their live request. Claiming it is
+// ONE updateJson, so two asks at once cannot both pass. No release is needed:
+// a marker whose request is no longer pending (answered, withdrawn, or never
+// written because the ask failed) is simply taken over.
+
+const seriesAskPath = (seriesId: string, userId: string) => `rooms/requests-by-series/${seriesId}/${userId}.json`;
+
+async function requestIsPending(token: string): Promise<boolean> {
+  const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
+  if (!ptr) return false;
+  const b = (await readMonth(ptr.roomId, ptr.month)).find((x) => x.id === ptr.bookingId);
+  return !!b && b.status === "confirmed" && b.requests.some((r) => r.token === token && r.status === "pending");
+}
+
+async function claimSeriesAsk(seriesId: string, userId: string, token: string): Promise<boolean> {
+  let claimed = false;
+  await updateJson<{ token: string } | null>(seriesAskPath(seriesId, userId), null, async (cur) => {
+    claimed = false;
+    if (cur?.token && (await requestIsPending(cur.token))) return NO_CHANGE;
+    claimed = true;
+    return { token };
+  });
+  return claimed;
 }
 
 export interface RequestView {
@@ -955,6 +999,16 @@ export async function respondToRequest(
   const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
   if (!ptr) return fail(404, "That request no longer exists");
 
+  // Approving makes the requester the holder: they must still exist and still
+  // be allowed to book, and their headcount must fit the room as it is now.
+  let requesterUnable = false;
+  let capacity = Infinity;
+  if (decision === "approve") {
+    const req = (await readMonth(ptr.roomId, ptr.month)).find((b) => b.id === ptr.bookingId)?.requests.find((r) => r.token === token);
+    if (req) requesterUnable = !(await userCanBook(req.requesterId));
+    capacity = (await getRoom(ptr.roomId))?.capacity ?? Infinity;
+  }
+
   let error: { status: number; error: string } | null = null;
   let before: RoomBooking | null = null;
   let after: RoomBooking | null = null;
@@ -992,8 +1046,19 @@ export async function respondToRequest(
     // Declining is still allowed, it changes nothing.
     if (decision === "approve" && isPast(cur.date, cur.startMinute, nowAt)) {
       error = { status: 409, error: "That meeting time has already passed, so the request has lapsed." };
-      lapsed = pendingWithdrawals(cur, "lapsed", (r) => r.token !== token);
+      // Every pending ask on a started meeting lapses, not only this one.
+      lapsed = pendingWithdrawals(cur, "lapsed");
+      return list.map((b) => (b.id === cur.id ? { ...b, requests: withdrawAll(b, now), updatedAt: now } : b));
+    }
+    if (decision === "approve" && requesterUnable) {
+      error = { status: 409, error: "The person who asked can no longer book rooms, so their request has been withdrawn." };
+      lapsed = pendingWithdrawals(cur, "requester_unable", (r) => r.token !== token);
       return list.map((b) => (b.id === cur.id ? { ...b, requests: withdrawAll(b, now, (r) => r.token !== token), updatedAt: now } : b));
+    }
+    if (decision === "approve" && req.attendeeCount > capacity) {
+      // Left pending: the holder can still decline it, or the room may be changed back.
+      error = { status: 409, error: `They asked for ${req.attendeeCount} people, but the room now seats ${capacity}.` };
+      return NO_CHANGE;
     }
     answered = decision === "approve"
       ? { ...req, status: "approved", respondedAt: now }
@@ -1024,16 +1089,15 @@ export async function respondToRequest(
             recurrence: null,
             occurrences: 1,
             reminderSentAt: null,
+            remindedEmails: [],
             requests,
             updatedAt: now,
           }
         : { ...cur, requests, updatedAt: now };
     return list.map((b) => (b.id === cur.id ? after! : b));
   });
-  if (error) {
-    const e = error as { status: number; error: string };
-    return { ...fail(e.status, e.error), withdrawn: lapsed };
-  }
+  const bad = failure(error);
+  if (bad) return { ...bad, withdrawn: lapsed };
   return { ok: true, value: { before: before!, after: after!, request: answered!, room: await getRoom(ptr.roomId), onBehalf, withdrawn } };
 }
 
@@ -1044,16 +1108,15 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
   const tomorrow = addDays(sastToday(now), 1);
   const out: { booking: RoomBooking; room: Room }[] = [];
   // A retired room has no calendar; its upcoming bookings were cancelled on retiring.
-  const today = sastToday(now);
   const rooms = (await getRooms()).filter((r) => r.active);
-  const months = [...new Set([monthOf(today), monthOf(tomorrow)])];
+  const months = [monthOf(tomorrow)];
   const lists = await Promise.all(rooms.flatMap((room) => months.map(async (m) => ({ room, list: await readMonth(room.id, m) }))));
   for (const { room, list } of lists) {
     for (const b of list) {
       if (b.status !== "confirmed" || b.reminderSentAt) continue;
-      // Tomorrow's, plus today's that a failed send left half-done (and not started yet).
-      const retry = b.date === today && (b.remindedEmails?.length ?? 0) > 0 && !isPast(b.date, b.startMinute, now);
-      if (b.date === tomorrow || retry) out.push({ booking: b, room });
+      // The day before only. A holder whose send failed is retried by a later run
+      // the same day; on the meeting day itself a "tomorrow" email would be wrong.
+      if (b.date === tomorrow) out.push({ booking: b, room });
     }
   }
   return out;

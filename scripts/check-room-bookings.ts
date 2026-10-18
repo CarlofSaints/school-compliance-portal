@@ -43,6 +43,8 @@ async function main() {
   const { isPast: isPastFn } = await import("../lib/roomBookings");
   type Booking = import("../lib/roomBookingData").RoomBooking;
 
+  // Roles first: approving checks the requester still holds book_rooms.
+  await (await import("../lib/rolesData")).saveRoles((await import("../lib/roles")).DEFAULT_ROLES);
   for (const [id, name] of [["alice", "Alice"], ["bob", "Bob"], ["cara", "Cara"]]) {
     await createUser({ id, name, surname: "Tester", email: `${id}@example.test`, password: "pw", role: "sgb-member", forcePasswordChange: false, tagIds: [] });
   }
@@ -618,6 +620,104 @@ async function main() {
   check("F9 the bookee can still rename it", status(await D.updateBooking(caraA, f9b.id, f9b.date, inp(yard.id, f9b.date, 600, 660, { bookedForId: "cara", title: "Renamed" }))), "ok");
   const f9now = (await D.findBooking(yard.id, f9b.date, f9b.id))!;
   check("F9 picker shown to the booker only", [D.bookingView(f9now, erinA).canChangeHolder, D.bookingView(f9now, caraA).canChangeHolder, D.bookingView(f9now, miaA).canChangeHolder], [true, false, true]);
+
+  // ======================= fifth review =======================
+  const { giverName } = await import("../lib/roomBookingNotify");
+  type RoomT = import("../lib/roomBookingData").Room;
+
+  // V1 a cross-month edit racing a retire that cancelled the new copy: nothing is resurrected
+  const arena = await mkRoom("Arena");
+  const av = await D.createBooking(erinA, inp(arena.id, "2028-04-03", 600, 660, { title: "Old" }));
+  if (!av.ok) throw new Error("create failed");
+  const avb = av.value.bookings[0];
+  const mayKey = `rooms/bookings/${arena.id}/2028-05.json`;
+  let hit5 = false;
+  putHook.put = async (...a: unknown[]) => {
+    const res = await realPut(...a);
+    if (!hit5 && String(a[0]).endsWith(mayKey)) {
+      hit5 = true;
+      const rs = await readJson<RoomT[]>("rooms/rooms.json", []);
+      await writeJson("rooms/rooms.json", rs.map((r) => (r.id === arena.id ? { ...r, active: false } : r)));
+      const may = await readJson<Booking[]>(`rooms/bookings/${arena.id}/2028-05.json`, []);
+      await writeJson(`rooms/bookings/${arena.id}/2028-05.json`, may.map((b) => ({ ...b, status: "cancelled", updatedAt: "retired" })));
+    }
+    return res;
+  };
+  const v1 = await D.updateBooking(erinA, avb.id, avb.date, inp(arena.id, "2028-05-08", 600, 660, { title: "New" }));
+  putHook.put = realPut;
+  check("V1 refused", status(v1), 400);
+  check("V1 old row NOT brought back as confirmed", (await D.findBooking(arena.id, "2028-04-03", avb.id)) === null, true);
+  check("V1 the cancelled new copy stays cancelled", (await D.findBooking(arena.id, "2028-05-08", avb.id))?.status, "cancelled");
+
+  // V2 approving resets who was reminded; no reminder on the meeting day itself
+  const v2 = await D.createBooking(erinA, inp(yard.id, "2028-06-06", 600, 660));
+  if (!v2.ok) throw new Error("create failed");
+  const v2b = v2.value.bookings[0];
+  const v2eve = new Date("2028-06-05T05:00:00Z");
+  await D.claimReminder(v2b, v2eve.toISOString(), null);
+  await D.finishReminder(v2b, v2eve.toISOString(), ["erin@example.test"], true);
+  const v2ask = await D.requestRoom(bob, yard.id, v2b.date, v2b.id, { title: "Bob's", message: "Please", attendeeCount: 1 }, new Date("2028-06-01T00:00:00Z"));
+  if (!v2ask.ok) throw new Error("request failed");
+  await D.respondToRequest(erinA, v2ask.value.request.token, "approve", "", new Date("2028-06-01T00:00:00Z"));
+  const v2after = await D.findBooking(yard.id, v2b.date, v2b.id);
+  check("V2 approve resets the reminder record", [v2after?.reminderSentAt, v2after?.remindedEmails], [null, []]);
+  check("V2 not reminded on the meeting day itself", (await D.bookingsDueForReminder(new Date("2028-06-06T04:00:00Z"))).some((x) => x.booking.id === v2b.id), false);
+
+  // V3 the requester is re-checked when approving
+  await createUser({ id: "gone", name: "Gone", surname: "Viewer", email: "gone@example.test", password: "pw", role: "viewer", forcePasswordChange: false, tagIds: [] });
+  const goneA = actorFromUser({ id: "gone", name: "Gone", surname: "Viewer", email: "gone@example.test" }, ["book_rooms"]); // could book when asking
+  const v3 = await D.createBooking(erinA, inp(yard.id, "2028-07-10", 600, 660));
+  if (!v3.ok) throw new Error("create failed");
+  const v3b = v3.value.bookings[0];
+  const v3ask = await D.requestRoom(goneA, yard.id, v3b.date, v3b.id, { title: "x", message: "y", attendeeCount: 1 });
+  if (!v3ask.ok) throw new Error("request failed");
+  const v3res = await D.respondToRequest(erinA, v3ask.value.request.token, "approve", "");
+  check("V3 requester who can no longer book: refused, request withdrawn with a reason", [status(v3res), !v3res.ok && v3res.withdrawn?.map((w) => w.reason)], [409, ["requester_unable"]]);
+  check("V3 booking stays with the holder", (await D.findBooking(yard.id, v3b.date, v3b.id))?.bookedById, "erin");
+  const tiny = await mkRoom("Tiny");
+  const v3c = await D.createBooking(erinA, inp(tiny.id, "2028-07-11", 600, 660));
+  if (!v3c.ok) throw new Error("create failed");
+  const v3cb = v3c.value.bookings[0];
+  const big = await D.requestRoom(bob, tiny.id, v3cb.date, v3cb.id, { title: "Big", message: "y", attendeeCount: 8 });
+  if (!big.ok) throw new Error("request failed");
+  await D.saveRoom(admin, tiny.id, { name: "Tiny", capacity: 4, color: "#0d9488", notes: "" });
+  check("V3 headcount over the room's capacity now: refused", status(await D.respondToRequest(erinA, big.value.request.token, "approve", "")), 409);
+  check("V3 and the request is left pending", (await D.findBooking(tiny.id, v3cb.date, v3cb.id))?.requests[0].status, "pending");
+
+  // V4 the requester is told a room manager gave them the room
+  check("V4 giver name", [giverName(v3b, { name: "Mia Admin", onBehalf: true }), giverName(v3b, { name: "Erin Member", onBehalf: false })], ["Mia Admin (a room manager)", "Erin Member"]);
+
+  // V5 a late approve lapses EVERY pending request on that meeting
+  const v5 = await D.createBooking(erinA, inp(yard.id, "2028-08-14", 600, 720));
+  if (!v5.ok) throw new Error("create failed");
+  const v5b = v5.value.bookings[0];
+  const v5a = await D.requestRoom(bob, yard.id, v5b.date, v5b.id, { title: "Bob", message: "y", attendeeCount: 1 });
+  await D.requestRoom(cara, yard.id, v5b.date, v5b.id, { title: "Cara", message: "y", attendeeCount: 1 });
+  if (!v5a.ok) throw new Error("request failed");
+  const v5late = await D.respondToRequest(erinA, v5a.value.request.token, "approve", "", new Date("2028-08-14T08:30:00Z"));
+  check("V5 both pending requests lapse", !v5late.ok && v5late.withdrawn?.map((w) => w.request.requesterId).sort(), ["bob", "cara"]);
+
+  // V6 two asks in one series at the same moment: exactly one gets through
+  const v6 = await D.createBooking(erinA, inp(yard.id, "2028-09-04", 600, 660, { recurrence: weekly(2) }));
+  if (!v6.ok) throw new Error("create failed");
+  const [v61, v62] = v6.value.bookings;
+  const [x1, x2] = await Promise.all([
+    D.requestRoom(bob, yard.id, v61.date, v61.id, { title: "a", message: "y", attendeeCount: 1 }),
+    D.requestRoom(bob, yard.id, v62.date, v62.id, { title: "b", message: "y", attendeeCount: 1 }),
+  ]);
+  check("V6 racing asks in one series: exactly one", [x1.ok, x2.ok].filter(Boolean).length, 1);
+  const won = x1.ok ? x1 : x2;
+  if (!won.ok) throw new Error("no winner");
+  await D.respondToRequest(erinA, won.value.request.token, "decline", "Busy");
+  check("V6 once answered, a new ask in the series is allowed", status(await D.requestRoom(bob, yard.id, v62.date, v62.id, { title: "c", message: "y", attendeeCount: 1 })), "ok");
+
+  // V7 an edit that emails counts against the email limit
+  check("V7 edit route applies the email limit", readFileSync("app/api/bookings/[id]/route.ts", "utf8").includes("LIMITS.emailSendUser"), true);
+
+  // V8 the week view of a retired room is refused unless you manage rooms
+  const weekRoute = await import("../app/api/bookings/route");
+  check("V8 retired room week: 404 for a booker", (await weekRoute.GET(get(erin, `/api/bookings?room=${lab.id}&week=2027-12-13`))).status, 404);
+  check("V8 retired room week: open to a room manager", (await weekRoute.GET(get(mia, `/api/bookings?room=${lab.id}&week=2027-12-13`))).status, 200);
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);
