@@ -140,6 +140,7 @@ if (typeof window !== "undefined") {
 }
 
 export function setSession(payload: SessionPayload): void {
+  permissionsRefresh = null;
   signingOut = false;
   redirectingToSignIn = false;
   localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
@@ -154,6 +155,7 @@ export function updateSession(updates: Partial<SessionPayload>): void {
 }
 
 export function clearSession(): void {
+  permissionsRefresh = null;
   localStorage.removeItem(SESSION_KEY);
   emitSessionChange();
 }
@@ -267,44 +269,54 @@ export async function apiErrorMessage(
   }
 }
 
+// Brings the drawn copy of the permissions (and role) up to date with what
+// the server says NOW, so the menu and the page show a new feature or a newly
+// ticked permission without signing out and in. Grants nothing: the server
+// decides every request from the cookie regardless.
+//
+// Kept per USER and for a few seconds only, so several useAuth calls on one
+// page share one request, every navigation after that checks again, and a
+// different person signing in on the same tab never gets the previous
+// person's answer. Resolves to the up-to-date session, or null when it could
+// not be checked (the caller then keeps what it has).
+const REFRESH_REUSE_MS = 5000;
+let permissionsRefresh: { userId: string; at: number; promise: Promise<SessionPayload | null> } | null = null;
+function refreshPermissions(): Promise<SessionPayload | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  const me = getSession();
+  if (!me) return Promise.resolve(null);
+  const cached = permissionsRefresh;
+  if (cached && cached.userId === me.id && Date.now() - cached.at < REFRESH_REUSE_MS) {
+    return cached.promise;
+  }
+  const promise = fetch("/api/auth", { credentials: "same-origin" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((d: { id?: unknown; permissions?: unknown; role?: unknown; roleName?: unknown } | null) => {
+      const current = getSession();
+      // Only for the same person: a cookie for someone else must not
+      // relabel this copy with their permissions.
+      if (!current || !d || d.id !== current.id || !Array.isArray(d.permissions)) return null;
+      const fresh = d.permissions.filter((p): p is string => typeof p === "string");
+      const role = typeof d.role === "string" ? d.role : current.role;
+      const roleName = typeof d.roleName === "string" ? d.roleName : current.roleName;
+      if (
+        [...fresh].sort().join(",") !== [...current.permissions].sort().join(",") ||
+        role !== current.role ||
+        roleName !== current.roleName
+      ) {
+        updateSession({ permissions: fresh, role, roleName });
+      }
+      return getSession();
+    })
+    .catch(() => null);
+  permissionsRefresh = { userId: me.id, at: Date.now(), promise };
+  return promise;
+}
+
 // `requiredPermission` may be a single key or a list, in which case ANY of them
 // is enough. A list matters where a new, narrower permission is introduced
 // alongside an existing broader one - gating on the new key alone would lock
 // out everyone who only holds the old one.
-// Once per page load, bring the drawn copy of the permissions up to date with
-// what the server says now, so the menu shows a new feature or a newly ticked
-// permission without signing out and in. Grants nothing: the server decides
-// every request from the cookie regardless.
-// Resolves to the up-to-date session, or null when it could not be checked.
-// Shared by every useAuth on the page; a failed attempt is retried next time.
-let permissionsRefresh: Promise<SessionPayload | null> | null = null;
-function refreshPermissions(): Promise<SessionPayload | null> {
-  if (typeof window === "undefined") return Promise.resolve(null);
-  if (!permissionsRefresh) {
-    permissionsRefresh = fetch("/api/auth", { credentials: "same-origin" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { id?: unknown; permissions?: unknown } | null) => {
-        const current = getSession();
-        // Only for the same person: a cookie for someone else must not
-        // relabel this copy with their permissions.
-        if (!current || !d || d.id !== current.id || !Array.isArray(d.permissions)) {
-          permissionsRefresh = null;
-          return null;
-        }
-        const fresh = d.permissions.filter((p): p is string => typeof p === "string");
-        if ([...fresh].sort().join(",") !== [...current.permissions].sort().join(",")) {
-          updateSession({ permissions: fresh });
-        }
-        return getSession();
-      })
-      .catch(() => {
-        permissionsRefresh = null;
-        return null;
-      });
-  }
-  return permissionsRefresh;
-}
-
 export function useAuth(requiredPermission?: string | string[]) {
   const router = useRouter();
   const [session, setSessionState] = useState<SessionPayload | null>(null);
@@ -355,7 +367,11 @@ export function useAuth(requiredPermission?: string | string[]) {
     setSessionState(s);
     setLoading(false);
     refreshPermissions().then((fresh) => {
-      if (live && fresh) setSessionState(fresh);
+      if (!live || !fresh) return;
+      // A permission taken away since sign-in: leave the page rather than
+      // show one where every save would fail.
+      if (!allowed(fresh)) router.replace("/dashboard");
+      else setSessionState(fresh);
     });
     return () => {
       live = false;

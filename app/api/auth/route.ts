@@ -47,7 +47,12 @@ const UNKNOWN_ADDRESS_LOG: Limit = {
 export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
-  return NextResponse.json({ id: session.id, permissions: session.permissions });
+  return NextResponse.json({
+    id: session.id,
+    permissions: session.permissions,
+    role: session.role,
+    roleName: session.roleName,
+  });
 }
 
 export async function POST(req: NextRequest) {

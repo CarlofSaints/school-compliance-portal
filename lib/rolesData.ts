@@ -91,7 +91,7 @@ export async function permissionsForDisplay(): Promise<Permission[]> {
 }
 
 export function isBuiltInPermission(key: string): boolean {
-  return DEFAULT_PERMISSIONS.some((p) => p.key === key);
+  return ALL_PERMISSION_KEYS.includes(key);
 }
 
 export async function savePermissions(perms: Permission[]): Promise<void> {
