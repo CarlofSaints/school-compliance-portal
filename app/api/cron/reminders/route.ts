@@ -21,6 +21,7 @@ import {
   getActionSummarySettings,
   sendActionSummary,
 } from "@/lib/actionSummaryData";
+import { runRoomBookingReminders } from "@/lib/roomBookingNotify";
 
 export const maxDuration = 300;
 
@@ -226,9 +227,23 @@ export async function GET(req: NextRequest) {
     detail.push(`Action items summary failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  // --- Meeting room bookings: the day-before reminder ---------------------------
+  // Wrapped on its own, like the summary: a failure must not cost the run log.
+  let roomDue = 0;
+  try {
+    const rooms = await runRoomBookingReminders(now);
+    roomDue = rooms.due;
+    sent += rooms.sent;
+    failed += rooms.failed;
+    detail.push(...rooms.detail);
+  } catch (err) {
+    failed++;
+    detail.push(`Room booking reminders failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   const run = {
     at: new Date().toISOString(),
-    due: due.length + dueActions.length + weeklyDue + summaryDue,
+    due: due.length + dueActions.length + weeklyDue + summaryDue + roomDue,
     sent,
     skipped,
     failed,

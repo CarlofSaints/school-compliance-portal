@@ -24,6 +24,7 @@ const ENTITY_LABELS: Record<ActivityEntity | "all", string> = {
   minutes: tk("Minutes"),
   compliance: tk("Compliance checks"),
   branding: tk("Branding"),
+  room: tk("Rooms & bookings"),
   auth: tk("Sign in"),
   system: tk("System"),
 };

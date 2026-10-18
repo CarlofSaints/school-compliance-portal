@@ -44,6 +44,11 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   { key: "delete_spend", name: "Delete Spend Applications", category: "Spend" },
   // Seeing who is on the portal is separate from being able to change them:
   // view_users opens the Users page read-only, manage_users allows editing.
+  // Booking covers making, editing and cancelling your OWN bookings, and asking
+  // a holder for their room. Anyone who can book sees the calendar.
+  { key: "book_rooms", name: "Book Meeting Rooms", category: "Rooms" },
+  // Set up the rooms themselves, and cancel or edit anybody's booking.
+  { key: "manage_rooms", name: "Manage Meeting Rooms", category: "Rooms" },
   { key: "view_users", name: "View Users", category: "Admin" },
   { key: "manage_users", name: "Manage Users", category: "Admin" },
   { key: "manage_roles", name: "Manage Roles & Permissions", category: "Admin" },
@@ -78,6 +83,7 @@ export const DEFAULT_ROLES: Role[] = [
       "view_compliance_results",
       "check_documents",
       "submit_spend",
+      "book_rooms",
     ],
   },
   {

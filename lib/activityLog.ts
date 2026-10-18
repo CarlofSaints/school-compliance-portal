@@ -35,6 +35,7 @@ export type ActivityEntity =
   | "minutes"
   | "compliance"
   | "branding"
+  | "room"
   | "auth"
   | "system";
 
