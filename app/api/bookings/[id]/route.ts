@@ -16,7 +16,7 @@ import {
   updateBooking,
 } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
-import { notifyCancelledByOther, notifyEdited, notifyHandover, notifyWithdrawn } from "@/lib/roomBookingNotify";
+import { notifyCancelledByOther, notifyEdited, notifyHandover, notifyWithdrawn, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
 
 // A series cancel can email many people, paced.
 export const maxDuration = 300;
@@ -71,6 +71,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const emailed = holderChanged ? await notifyHandover(before, after, room, actor) : true;
   // The other holder(s) are told what changed; the editor is not.
   const changeFailed = await notifyEdited(before, after, room, actor, holderChanged);
+  // Moved, or a new holder: its reminder may now be due before the next run.
+  if (holderChanged || before.date !== after.date || before.startMinute !== after.startMinute) {
+    await remindNowIfBeforeNextRun(after, room).catch((err) => console.error("[rooms] immediate reminder failed:", err));
+  }
   // Anyone who had asked for the old slot is told it moved.
   const lapsedFailed = await notifyWithdrawn(withdrawn, room);
   return NextResponse.json({ ok: true, emailFailed: !emailed || changeFailed > 0 || lapsedFailed > 0 });

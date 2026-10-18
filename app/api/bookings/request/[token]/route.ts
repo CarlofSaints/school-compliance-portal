@@ -5,7 +5,7 @@ import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { actorOf, getRequestView, getRoom as getRequestRoom, holderLabel, logSafeBooking, respondToRequest } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
-import { notifyRequestOutcome, notifyWithdrawn } from "@/lib/roomBookingNotify";
+import { notifyRequestOutcome, notifyWithdrawn, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
 
 // Where the emailed Approve / Decline links land. 🔴 The token only NAMES the
 // request. The reader must be signed in, and only a holder of the booking (or
@@ -62,6 +62,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
   const { before, after, request, room, onBehalf, withdrawn } = result.value;
   const emailed = await notifyRequestOutcome(before, after, room, request, { name: actor.name, email: actor.email, onBehalf });
+  // The new holder's reminder may be due before the next run.
+  if (request.status === "approved" && room) {
+    await remindNowIfBeforeNextRun(after, room).catch((err) => console.error("[rooms] immediate reminder failed:", err));
+  }
   const othersFailed = await notifyWithdrawn(withdrawn, room);
   const where = `${room?.name ?? "a room"} on ${longDateLabel(before.date)} ${slotLabel(before.startMinute, before.endMinute)}`;
   await recordActivity({

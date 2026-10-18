@@ -443,9 +443,22 @@ export default function BookingsPage() {
   const canBook = !!session?.permissions.includes("book_rooms");
   const [rooms, setRooms] = useState<RoomOption[] | null>(null);
   const [roomId, setRoomId] = useState("");
-  const [today] = useState(() => sastToday());
+  const [today, setToday] = useState(() => sastToday());
   // Taken once per visit: past slots are greyed out, and the server refuses them anyway.
-  const [nowMinute] = useState(() => sastNowMinute());
+  const [nowMinute, setNowMinute] = useState(() => sastNowMinute());
+  // Kept current on a long-open page: refreshed every minute (in the timer's
+  // callback) and whenever a slot is clicked, so past slots grey out.
+  const refreshNow = () => {
+    setToday(sastToday());
+    setNowMinute(sastNowMinute());
+  };
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setToday(sastToday());
+      setNowMinute(sastNowMinute());
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, []);
   const slotPast = (day: string, m: number) => day < today || (day === today && m + SLOT_MINUTES <= nowMinute);
   const [monday, setMonday] = useState(() => weekStart(sastToday()));
   const [bookings, setBookings] = useState<BookingView[]>([]);
@@ -577,7 +590,12 @@ export default function BookingsPage() {
                         type="button"
                         disabled={!canBook || slotPast(day, m)}
                         // A slot already under way opens at the next 5 minutes, not at its (past) start.
-                        onClick={() => setNewAt({ date: day, startMinute: day === today && m < nowMinute ? Math.min(DAY_END_MINUTE - MIN_DURATION, Math.ceil((nowMinute + 1) / 5) * 5) : m })}
+                        onClick={() => {
+                          refreshNow();
+                          const nowM = sastNowMinute();
+                          const isToday = day === sastToday();
+                          setNewAt({ date: day, startMinute: isToday && m < nowM ? Math.min(DAY_END_MINUTE - MIN_DURATION, Math.ceil((nowM + 1) / 5) * 5) : m });
+                        }}
                         title={canBook && !slotPast(day, m) ? t("Book {time} on {date}", { time: minuteLabel(m), date: longDateLabel(day, t) }) : undefined}
                         className={`absolute w-full border-b border-gray-100 enabled:hover:bg-primary/5 ${slotPast(day, m) ? "bg-gray-50" : ""}`}
                         style={{ top: m * PX_PER_MIN, height: SLOT_MINUTES * PX_PER_MIN }}

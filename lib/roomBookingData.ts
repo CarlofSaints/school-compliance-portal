@@ -111,7 +111,7 @@ export interface RoomBooking {
   /** Set while a cross-month move is half done: this is the NEW copy, and the
    *  old one may still be in `from`. Readers prefer the old copy until it is
    *  gone; the cron settles a move left like this for MOVE_STALE_MS. */
-  moving?: { from: string; at: number };
+  moving?: { from: string; at: number; token: string };
   /** Holders' addresses the reminder already reached, so a run that
    *  failed for one person retries only that person. */
   remindedEmails?: string[];
@@ -535,27 +535,51 @@ async function readMonth(roomId: string, month: string): Promise<RoomBooking[]> 
  *  by the cron: rolled back if the old copy is still there, finished if not. */
 export const MOVE_STALE_MS = 15 * 60_000;
 
+// Every move in flight is listed here from step 1 until it settles, so the
+// cron reads one small file instead of every booking file.
+interface PendingMove {
+  roomId: string;
+  bookingId: string;
+  /** The month the new copy is in. */
+  month: string;
+  token: string;
+  at: number;
+}
+const MOVES_PENDING_PATH = "rooms/moves-pending.json";
+
+async function addPendingMove(m: PendingMove): Promise<void> {
+  await updateJson<PendingMove[]>(MOVES_PENDING_PATH, [], (list) => [...list.filter((x) => x.token !== m.token), m]);
+}
+
+async function clearPendingMove(token: string): Promise<void> {
+  await updateJson<PendingMove[]>(MOVES_PENDING_PATH, [], (list) => (list.some((x) => x.token === token) ? list.filter((x) => x.token !== token) : NO_CHANGE));
+}
+
+/** The move in flight for a booking, if any (its target month). */
+async function pendingMoveFor(roomId: string, bookingId: string): Promise<PendingMove | null> {
+  return (await readJson<PendingMove[]>(MOVES_PENDING_PATH, [])).find((x) => x.roomId === roomId && x.bookingId === bookingId) ?? null;
+}
+
 export async function settleStaleMoves(now: Date = new Date()): Promise<{ rolledBack: number; finished: number }> {
   let rolledBack = 0;
   let finished = 0;
-  for (const room of await getRooms()) {
-    for (const m of await monthsFrom(room.id, monthOf(addDays(sastToday(now), -62)))) {
-      const list = await readMonthRaw(room.id, m);
-      const stale = list.filter((b) => b.moving && now.getTime() - b.moving.at >= MOVE_STALE_MS);
-      for (const b of stale) {
-        const oldThere = (await readMonthRaw(room.id, b.moving!.from)).some((x) => x.id === b.id);
-        await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (rows) => {
-          const cur = rows.find((x) => x.id === b.id);
-          if (!cur?.moving) return NO_CHANGE;
-          return oldThere ? rows.filter((x) => x.id !== b.id) : rows.map((x) => (x.id === b.id ? touch(x, { moving: undefined }) : x));
-        });
-        if (oldThere) rolledBack++;
-        else {
-          finished++;
-          for (const q of b.requests) await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: m, bookingId: b.id });
-        }
+  const pending = await readJson<PendingMove[]>(MOVES_PENDING_PATH, []);
+  for (const mv of pending.filter((x) => now.getTime() - x.at >= MOVE_STALE_MS)) {
+    const target = (await readMonthRaw(mv.roomId, mv.month)).find((x) => x.id === mv.bookingId && x.moving?.token === mv.token);
+    if (target) {
+      const oldThere = (await readMonthRaw(mv.roomId, target.moving!.from)).some((x) => x.id === mv.bookingId);
+      await updateJson<RoomBooking[]>(fileFor(mv.roomId, mv.month), [], (rows) => {
+        const cur = rows.find((x) => x.id === mv.bookingId && x.moving?.token === mv.token);
+        if (!cur) return NO_CHANGE;
+        return oldThere ? rows.filter((x) => x !== cur) : rows.map((x) => (x === cur ? touch(x, { moving: undefined }) : x));
+      });
+      if (oldThere) rolledBack++;
+      else {
+        finished++;
+        for (const q of target.requests) await writeJson<RequestPointer>(requestPath(q.token), { roomId: mv.roomId, month: mv.month, bookingId: mv.bookingId });
       }
     }
+    await clearPendingMove(mv.token);
   }
   return { rolledBack, finished };
 }
@@ -585,7 +609,7 @@ function clashMessage(roomName: string, slotDate: string, clash: RoomBooking, mo
   );
 }
 
-/** Whether a user still exists and still holds book_rooms. */
+/** A user's permissions from their role, or null if the user no longer exists. */
 async function userPermissions(userId: string): Promise<string[] | null> {
   const u = await getUserById(userId);
   if (!u) return null;
@@ -825,17 +849,28 @@ export async function updateBooking(
     // Different month = different file: add to the new one (with the clash
     // check), then take it out of the old one. If the old one changed
     // meanwhile, the new copy is taken back out.
-    // Step 1: the new copy, marked as moving from the old month.
-    after = { ...after, moving: { from: monthOf(before.date), at: Date.now() } };
+    // Step 1: the new copy, marked as moving from the old month with THIS
+    // edit's own token, listed in the pending-moves index first.
+    const moveToken = crypto.randomUUID();
+    const isMine = (b: RoomBooking) => b.id === id && b.moving?.token === moveToken;
+    after = { ...after, moving: { from: monthOf(before.date), at: Date.now(), token: moveToken } };
+    await addPendingMove({ roomId: room.id, bookingId: id, month: monthOf(input.date), token: moveToken, at: after.moving!.at });
     await updateJson<RoomBooking[]>(toFile, [], (list) => {
       error = null;
+      // 🔴 Another copy of this booking already here (a second edit moving it
+      // at the same time): refuse, never overwrite or later delete it.
+      if (list.some((b) => b.id === id && !isMine(b))) {
+        error = CHANGED;
+        return NO_CHANGE;
+      }
       const c = clashOf(list);
       if (c) {
         error = { status: 409, error: clashMessage(room.name, after.date, c.clash, 0) };
         return NO_CHANGE;
       }
-      return [...list.filter((b) => b.id !== id), after];
+      return [...list.filter((b) => !isMine(b)), after];
     });
+    if (error) await clearPendingMove(moveToken);
     if (!error) {
       try {
         await updateJson<RoomBooking[]>(fromFile, [], (list) => {
@@ -851,13 +886,15 @@ export async function updateBooking(
       } catch (err) {
         // 🔴 The old copy could not be removed: take the new one back out, so
         // the booking is never in two months at once.
-        await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id)).catch((e) =>
-          console.error("[rooms] could not undo a half-moved booking:", e)
-        );
+        // Only this edit's own copy, never another edit's.
+        await updateJson<RoomBooking[]>(toFile, [], (list) => (list.some(isMine) ? list.filter((b) => !isMine(b)) : NO_CHANGE))
+          .then(() => clearPendingMove(moveToken))
+          .catch((e) => console.error("[rooms] could not undo a half-moved booking:", e));
         throw err;
       }
       if (error) {
-        await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id));
+        await updateJson<RoomBooking[]>(toFile, [], (list) => (list.some(isMine) ? list.filter((b) => !isMine(b)) : NO_CHANGE));
+        await clearPendingMove(moveToken);
       } else {
         // Step 3: settle the new copy. It is merged with whatever it holds NOW
         // (a request may have landed on it) and with anything that landed on
@@ -866,13 +903,13 @@ export async function updateBooking(
         // inside the write, so nothing is dropped.
         const fromOld = apply(current);
         await updateJson<RoomBooking[]>(toFile, [], (list) => {
-          const mine = list.find((b) => b.id === id);
+          const mine = list.find(isMine);
           if (!mine) return NO_CHANGE;
-          const known = new Set(mine.requests.map((q) => q.token));
-          const settled = touch(mine, { requests: [...mine.requests, ...fromOld.requests.filter((q) => !known.has(q.token))], moving: undefined });
+          const settled = touch(mine, { requests: mergeRequests(mine.requests, fromOld.requests), moving: undefined });
           after = settled;
-          return list.map((b) => (b.id === id ? settled : b));
+          return list.map((b) => (b === mine ? settled : b));
         });
+        await clearPendingMove(moveToken);
         // The request links point at a month file; follow the booking to its new one.
         for (const q of after.requests) {
           await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(after.date), bookingId: id });
@@ -926,6 +963,18 @@ export async function updateBooking(
 }
 
 // --- Cancel ----------------------------------------------------------------------
+
+/** One list of requests from two copies of a booking. A token on both keeps
+ *  whichever copy answered it most recently (a decline recorded on the old
+ *  copy during a move survives); one still pending on both keeps the first. */
+function mergeRequests(a: RoomRequest[], b: RoomRequest[]): RoomRequest[] {
+  const out = new Map<string, RoomRequest>();
+  for (const q of [...a, ...b]) {
+    const have = out.get(q.token);
+    if (!have || (q.respondedAt ?? "") > (have.respondedAt ?? "")) out.set(q.token, q);
+  }
+  return [...out.values()];
+}
 
 /** Withdraws a booking's pending requests, except any the keep filter says to leave. */
 const withdrawAll = (b: RoomBooking, now: string, keep?: (r: RoomRequest) => boolean): RoomRequest[] =>
@@ -1031,6 +1080,20 @@ export async function cancelBooking(
 
 // --- Ask the holder for the room --------------------------------------------------
 
+/** Makes a request's pointer name the month its booking is really in now:
+ *  it may have moved between the request and the pointer being written. */
+async function fixPointer(roomId: string, bookingId: string, token: string): Promise<void> {
+  const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
+  const holds = async (m: string) => (await readMonthRaw(roomId, m)).some((b) => b.id === bookingId && b.requests.some((q) => q.token === token));
+  if (ptr && (await holds(ptr.month))) return;
+  for (const m of await monthsFrom(roomId, monthOf(addDays(sastToday(), -62)))) {
+    if (await holds(m)) {
+      await writeJson<RequestPointer>(requestPath(token), { roomId, month: m, bookingId });
+      return;
+    }
+  }
+}
+
 interface RequestPointer {
   roomId: string;
   month: string;
@@ -1120,7 +1183,12 @@ export async function requestRoom(
     // pointer behind. If it cannot be written, the request is taken back out:
     // a request nobody can open from its link must not exist.
     try {
-      await writeJson<RequestPointer>(requestPath(request.token), { roomId, month: monthOf(booking.date), bookingId: id });
+      // Where the request was written; if a move of this booking is in flight,
+      // its target (the move rewrites pointers when it settles, but may have
+      // done so a moment before this request landed). Checked again below.
+      const move = await pendingMoveFor(roomId, id);
+      await writeJson<RequestPointer>(requestPath(request.token), { roomId, month: move?.month ?? monthOf(booking.date), bookingId: id });
+      await fixPointer(roomId, id, token);
     } catch (err) {
       await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(booking.date)), [], (list) =>
         list.some((b) => b.requests.some((q) => q.token === token))
@@ -1139,9 +1207,11 @@ export async function requestRoom(
 // --- One live ask per person per series -------------------------------------------
 //
 // A marker file per series per person names their live request. Claiming it is
-// ONE updateJson, so two asks at once cannot both pass. No release is needed:
-// a marker whose request is no longer pending (answered, withdrawn, or never
-// written because the ask failed) is simply taken over.
+// ONE updateJson, so two asks at once cannot both pass. A failed ask releases
+// its marker straight away; a marker whose request is no longer pending
+// (answered, withdrawn, or the meeting started) is taken over, and one whose
+// request cannot be found holds for SERIES_ASK_GRACE_MS, in case it is still
+// being written.
 
 const seriesAskPath = (seriesId: string, userId: string) => `rooms/requests-by-series/${seriesId}/${userId}.json`;
 
@@ -1336,12 +1406,12 @@ export async function respondToRequest(
   return { ok: true, value: { before: before!, after: after!, request: answered!, room: await getRoom(ptr.roomId), onBehalf, withdrawn } };
 }
 
-// --- Day-before reminders ----------------------------------------------------------
+// --- Reminders ------------------------------------------------------------------------
 
-/** Tomorrow's confirmed, not-yet-reminded bookings across every room. */
-/** Bookings to remind now: confirmed, not yet reminded in full, and starting
- *  before an hour after the next run (see remindCutoffMs). A holder whose send failed stays due, so
- *  the next run (if the meeting has not started) tries them again. */
+/** Bookings to remind now: confirmed, not reminded to every holder, and
+ *  starting before an hour after the next run (see remindCutoffMs). A holder
+ *  whose send failed stays due, so the next run (if the meeting has not
+ *  started) tries them again. */
 export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ booking: RoomBooking; room: Room }[]> {
   const today = sastToday(now);
   const out: { booking: RoomBooking; room: Room }[] = [];
@@ -1359,13 +1429,19 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
       const reached = new Set((b.remindedEmails ?? []).map((e) => e.toLowerCase()));
       if (holders(b).every((h) => reached.has(h.email.toLowerCase()))) continue;
       if (b.reminderSentAt && now.getTime() - Date.parse(b.reminderSentAt) < REMINDER_CLAIM_STALE_MS) continue;
-      // From now until an hour after the next run. Already started: too late, skipped.
+      // From now until an hour after the next run. A meeting that started in the
+      // last REMIND_LATE_GRACE_MS and was never reminded at all (the cron fired
+      // late for a 07:00 meeting) still gets it; anything older is too late.
       const at = startsAtMs(b.date, b.startMinute);
-      if (at > now.getTime() && at < cutoff) out.push({ booking: b, room });
+      const neverReminded = (b.remindedEmails ?? []).length === 0;
+      if (at < cutoff && (at > now.getTime() || (neverReminded && at > now.getTime() - REMIND_LATE_GRACE_MS))) out.push({ booking: b, room });
     }
   }
   return out;
 }
+
+/** A meeting this recently started, never reminded, is still reminded. */
+export const REMIND_LATE_GRACE_MS = 15 * 60_000;
 
 /** A reminder claim this old without its finish is a run that died. */
 export const REMINDER_CLAIM_STALE_MS = 15 * 60_000;
@@ -1413,6 +1489,13 @@ export async function claimReminder(b: RoomBooking, stamp: string | null, onlyIf
     claimed = false;
     const cur = list.find((x) => x.id === b.id);
     if (!cur || cur.reminderSentAt !== onlyIf) return NO_CHANGE;
+    // Claiming (not handing back) also needs the row to be what the caller
+    // read: still confirmed, same day, start and holders. Otherwise the email
+    // it is about to send would be about a booking that no longer looks so.
+    if (stamp !== null) {
+      const who = (x: RoomBooking) => holders(x).map((h) => h.email.toLowerCase()).sort().join(",");
+      if (cur.status !== "confirmed" || cur.date !== b.date || cur.startMinute !== b.startMinute || who(cur) !== who(b)) return NO_CHANGE;
+    }
     claimed = true;
     return list.map((x) => (x.id === b.id ? touch(x, { reminderSentAt: stamp }) : x));
   });

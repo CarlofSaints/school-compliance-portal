@@ -228,7 +228,9 @@ export async function runRequestLapses(now: Date = new Date()): Promise<{ lapsed
  *  reminded by the cron: send its reminder now, at booking time. */
 export async function remindNowIfBeforeNextRun(booking: RoomBooking, room: Room, now: Date = new Date()): Promise<boolean> {
   const at = startsAtMs(booking.date, booking.startMinute);
-  if (!(at > now.getTime() && at < nextReminderRunMs(now))) return false;
+  // At or before the next run: a 07:00 meeting booked the day before is
+  // reminded now, not left to a run that may fire a moment after it starts.
+  if (!(at > now.getTime() && at <= nextReminderRunMs(now))) return false;
   const stamp = now.toISOString();
   if (!(await claimReminder(booking, stamp, null))) return false;
   const reached: string[] = [];

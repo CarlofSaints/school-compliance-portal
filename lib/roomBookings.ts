@@ -242,9 +242,9 @@ export function normaliseRecurrence(r: Recurrence): Recurrence {
   return { ...r, count: r.endMode === "count" ? r.count : 1, until: r.endMode === "date" ? r.until : "" };
 }
 
-/** The dates a repeat produces from `start`, capped at MAX_OCCURRENCES. */
-/** `cap` is how many dates to produce at most. The default is the booking
- *  limit; pass a larger one to COUNT what an end date would make. */
+/** The dates a repeat produces from `start`, at most `cap` of them. The
+ *  default is the booking limit; pass a larger one to COUNT what an end date
+ *  would make (recurrenceSize). */
 export function expandRecurrence(start: string, rule: Recurrence, cap: number = MAX_OCCURRENCES): string[] {
   if (rule.frequency === "none") return [start];
   const interval = Math.max(1, Math.floor(rule.interval || 1));

@@ -965,16 +965,20 @@ async function main() {
   const h3 = await D.createBooking(erinA, inp(S8.id, "2029-11-05", 600, 660, { title: "Half moved" }), e8);
   if (!h3.ok) throw new Error("create failed");
   const h3b = h3.value.bookings[0];
-  const ghost = { ...h3b, date: "2029-12-03", moving: { from: "2029-11", at: Date.now() - 20 * 60_000 } };
+  const longAgo = Date.now() - 20 * 60_000;
+  const ghost = { ...h3b, date: "2029-12-03", moving: { from: "2029-11", at: longAgo, token: "tok-ghost" } };
   await writeJson(`rooms/bookings/${S8.id}/2029-12.json`, [ghost]); // as if the request died after step 1
+  await writeJson("rooms/moves-pending.json", [{ roomId: S8.id, bookingId: h3b.id, month: "2029-12", token: "tok-ghost", at: longAgo }]);
   check("H3 the half-moved copy is hidden while the old one exists", (await D.findBooking(S8.id, "2029-12-03", h3b.id)) === null, true);
   check("H3 the calendar shows it once", (await D.bookingsBetween(S8.id, "2029-11-01", "2029-12-31")).filter((b) => b.id === h3b.id).length, 1);
   const settled1 = await D.settleStaleMoves(new Date());
   check("H3 stale move with the old copy still there: rolled back", [settled1.rolledBack >= 1, (await readJson<Booking[]>(`rooms/bookings/${S8.id}/2029-12.json`, [])).length], [true, 0]);
-  const orphan = { ...h3b, id: "orphan-move", date: "2029-12-10", moving: { from: "2029-11", at: Date.now() - 20 * 60_000 } };
+  const orphan = { ...h3b, id: "orphan-move", date: "2029-12-10", moving: { from: "2029-11", at: longAgo, token: "tok-orphan" } };
   await writeJson(`rooms/bookings/${S8.id}/2029-12.json`, [orphan]); // as if it died after step 2
+  await writeJson("rooms/moves-pending.json", [{ roomId: S8.id, bookingId: "orphan-move", month: "2029-12", token: "tok-orphan", at: longAgo }]);
   await D.settleStaleMoves(new Date());
   check("H3 stale move with the old copy gone: finished, flag cleared", (await D.findBooking(S8.id, "2029-12-10", "orphan-move"))?.moving, undefined);
+  check("H3 and the pending-moves index is emptied", (await readJson<unknown[]>("rooms/moves-pending.json", [])).length, 0);
   const h3m = await D.updateBooking(erinA, h3b.id, h3b.date, inp(S8.id, "2030-01-07", 600, 660, { title: "Half moved" }), e8);
   check("H3 a normal move leaves no moving mark", [status(h3m), (await D.findBooking(S8.id, "2030-01-07", h3b.id))?.moving], ["ok", undefined]);
 
@@ -1027,6 +1031,112 @@ async function main() {
 
   // H9 one paced sender, shared with the action items
   check("H9 room mail uses the action items' paced sender", [readFileSync("lib/roomBookingNotify.ts", "utf8").includes("setTimeout"), readFileSync("lib/actionItemNotify.ts", "utf8").includes("export async function sendPaced")], [false, true]);
+
+  // ======================= ninth review =======================
+  const S9 = await mkRoom("Hall Nine");
+  const e9 = new Date("2030-06-01T00:00:00Z");
+  const copies = async (bookingId: string) =>
+    (await Promise.all(["2030-07", "2030-08", "2030-09"].map((m) => readJson<Booking[]>(`rooms/bookings/${S9.id}/${m}.json`, [])))).flat().filter((b) => b.id === bookingId);
+
+  // I1 two cross-month edits of one booking at once: it survives exactly once
+  const i1 = await D.createBooking(erinA, inp(S9.id, "2030-07-01", 600, 660, { title: "Twice moved" }), e9);
+  if (!i1.ok) throw new Error("create failed");
+  const i1b = i1.value.bookings[0];
+  const [m1, m2] = await Promise.all([
+    D.updateBooking(erinA, i1b.id, i1b.date, inp(S9.id, "2030-08-05", 600, 660, { title: "Twice moved" }), e9),
+    D.updateBooking(miaA, i1b.id, i1b.date, inp(S9.id, "2030-08-12", 600, 660, { title: "Twice moved" }), e9),
+  ]);
+  const i1c = await copies(i1b.id);
+  check("I1 concurrent moves to one month: the booking exists exactly once, confirmed", [i1c.length, i1c.filter((b) => b.status === "confirmed").length], [1, 1]);
+  check("I1 and at most one of them succeeded", [m1.ok, m2.ok].filter(Boolean).length <= 1, true);
+  const i1b2 = await D.createBooking(erinA, inp(S9.id, "2030-07-08", 600, 660, { title: "Split moved" }), e9);
+  if (!i1b2.ok) throw new Error("create failed");
+  const i1x = i1b2.value.bookings[0];
+  await Promise.all([
+    D.updateBooking(erinA, i1x.id, i1x.date, inp(S9.id, "2030-08-19", 600, 660, { title: "Split moved" }), e9),
+    D.updateBooking(miaA, i1x.id, i1x.date, inp(S9.id, "2030-09-02", 600, 660, { title: "Split moved" }), e9),
+  ]);
+  check("I1 concurrent moves to two months: still exactly once", (await copies(i1x.id)).length, 1);
+  check("I1 no move left pending", (await readJson<unknown[]>("rooms/moves-pending.json", [])).length, 0);
+
+  // I8 a move is listed in the pending index while in flight
+  const i8 = await D.createBooking(erinA, inp(S9.id, "2030-07-15", 600, 660), e9);
+  if (!i8.ok) throw new Error("create failed");
+  const i8b = i8.value.bookings[0];
+  let seenPending = -1;
+  putHook.put = async (...a: unknown[]) => {
+    if (seenPending < 0 && String(a[0]).endsWith(`rooms/bookings/${S9.id}/2030-07.json`)) {
+      seenPending = (await readJson<{ bookingId: string }[]>("rooms/moves-pending.json", [])).filter((x) => x.bookingId === i8b.id).length;
+    }
+    return realPut(...a);
+  };
+  await D.updateBooking(erinA, i8b.id, i8b.date, inp(S9.id, "2030-08-26", 600, 660), e9);
+  putHook.put = realPut;
+  check("I8 listed while in flight, cleared after", [seenPending, (await readJson<unknown[]>("rooms/moves-pending.json", [])).length], [1, 0]);
+
+  // I5 a decline recorded on the old copy mid-move survives the merge
+  const i5 = await D.createBooking(erinA, inp(S9.id, "2030-07-22", 600, 660), e9);
+  if (!i5.ok) throw new Error("create failed");
+  const i5b = i5.value.bookings[0];
+  const i5q = await D.requestRoom(bob, S9.id, i5b.date, i5b.id, { title: "x", message: "y", attendeeCount: 1 }, e9);
+  if (!i5q.ok) throw new Error("request failed");
+  const undoI5 = injectOnSecondRead(`${S9.id}/2030-07.json`, (b) => ({
+    ...b,
+    requests: b.requests.map((q) => (q.token === i5q.value.request.token ? { ...q, status: "declined" as const, declineReason: "No", respondedAt: "2099-01-01T00:00:00.000Z" } : q)),
+    updatedAt: new Date(Date.parse(b.updatedAt) + 5).toISOString(),
+  }), i5b.id);
+  await D.updateBooking(erinA, i5b.id, i5b.date, inp(S9.id, "2030-09-09", 600, 660), e9);
+  undoI5();
+  check("I5 the later decline wins over the move's withdrawal", (await D.findBooking(S9.id, "2030-09-09", i5b.id))?.requests.find((q) => q.token === i5q.value.request.token)?.status, "declined");
+
+  // I6 the pointer is corrected if the booking moved before it was written
+  const i6 = await D.createBooking(erinA, inp(S9.id, "2030-07-29", 600, 660), e9);
+  if (!i6.ok) throw new Error("create failed");
+  const i6b = i6.value.bookings[0];
+  let relocated = false;
+  putHook.put = async (...a: unknown[]) => {
+    const res = await realPut(...a);
+    if (!relocated && String(a[0]).includes("rooms/requests/")) {
+      relocated = true; // the booking moves (raw, no pointer rewrite) right after the pointer is written
+      const jul = await readJson<Booking[]>(`rooms/bookings/${S9.id}/2030-07.json`, []);
+      const row = jul.find((b) => b.id === i6b.id)!;
+      await writeJson(`rooms/bookings/${S9.id}/2030-07.json`, jul.filter((b) => b.id !== i6b.id));
+      const sep = await readJson<Booking[]>(`rooms/bookings/${S9.id}/2030-09.json`, []);
+      await writeJson(`rooms/bookings/${S9.id}/2030-09.json`, [...sep, { ...row, date: "2030-09-16" }]);
+    }
+    return res;
+  };
+  const i6q = await D.requestRoom(bob, S9.id, i6b.date, i6b.id, { title: "x", message: "y", attendeeCount: 1 }, e9);
+  putHook.put = realPut;
+  if (!i6q.ok) throw new Error("request failed");
+  const i6v = await D.getRequestView(erinA, i6q.value.request.token);
+  check("I6 the request link still opens after the booking moved", i6v.ok && i6v.value.booking.date, "2030-09-16");
+
+  // I2 a 07:00 meeting booked the day before is reminded at once; a late cron still catches a never-reminded one
+  const { remindNowIfBeforeNextRun: remindNow } = await import("../lib/roomBookingNotify");
+  const i2 = await D.createBooking(erinA, inp(S9.id, "2030-10-08", 420, 480), e9); // Tue 07:00
+  if (!i2.ok) throw new Error("create failed");
+  check("I2 07:00 meeting booked the day before at 15:00: reminded at once", await remindNow(i2.value.bookings[0], S9, new Date("2030-10-07T13:00:00Z")), true);
+  const i2b = await D.createBooking(erinA, inp(S9.id, "2030-10-09", 420, 480), e9); // Wed 07:00, never reminded
+  if (!i2b.ok) throw new Error("create failed");
+  const lateFire = new Date("2030-10-09T05:10:00Z"); // the cron fires 10 minutes late
+  check("I2 late cron: a meeting started 10 minutes ago, never reminded, is still due", (await D.bookingsDueForReminder(lateFire)).some((x) => x.booking.id === i2b.value.bookings[0].id), true);
+  check("I2 but not 30 minutes after it started", (await D.bookingsDueForReminder(new Date("2030-10-09T05:30:00Z"))).some((x) => x.booking.id === i2b.value.bookings[0].id), false);
+
+  // I3 edits that move or re-hold, and approves, also remind at once when due before the next run
+  check("I3 edit route reminds at once", readFileSync("app/api/bookings/[id]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room)"), true);
+  check("I3 approve route reminds at once", readFileSync("app/api/bookings/request/[token]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room)"), true);
+
+  // I4 a reminder claim refuses a booking that changed since it was read
+  const i4 = await D.createBooking(erinA, inp(S9.id, "2030-11-04", 600, 660), e9);
+  const i4m = await D.createBooking(erinA, inp(S9.id, "2030-11-05", 600, 660), e9);
+  if (!i4.ok || !i4m.ok) throw new Error("create failed");
+  const read4 = i4.value.bookings[0];
+  await D.cancelBooking(erinA, S9.id, read4.date, read4.id, "one", e9);
+  check("I4 cancelled between read and claim: not claimed", await D.claimReminder(read4, "2030-11-04T05:00:00.000Z", null), false);
+  const read4m = i4m.value.bookings[0];
+  await D.updateBooking(erinA, read4m.id, read4m.date, inp(S9.id, read4m.date, 720, 780), e9);
+  check("I4 moved within the month between read and claim: not claimed", await D.claimReminder(read4m, "2030-11-05T05:00:00.000Z", null), false);
 
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
