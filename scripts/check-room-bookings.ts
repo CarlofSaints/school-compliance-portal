@@ -506,6 +506,119 @@ async function main() {
     "/account?changePassword=1",
   ]);
 
+  // ======================= fourth review =======================
+  const { normaliseRecurrence } = await import("../lib/roomBookings");
+  const { readFileSync } = await import("node:fs");
+  const { runRoomBookingReminders: runRem } = await import("../lib/roomBookingNotify");
+  const caraA = actorFromUser({ id: "cara", name: "Cara", surname: "Tester", email: "cara@example.test" }, ["book_rooms"]);
+  const ring = await mkRoom("Ring");
+
+  // F1 "Never" with leftover end-on-date fields still saves
+  const stale = { frequency: "none", interval: 1, weekdays: [], endMode: "date", count: 10, until: "" };
+  check("F1 server ignores end fields when it does not repeat", D.parseBookingInput({ roomId: ring.id, title: "x", date: "2027-12-06", startMinute: 600, endMinute: 660, attendeeCount: 1, recurrence: stale }).ok, true);
+  check("F1 client normalises Never", normaliseRecurrence(stale as import("../lib/roomBookings").Recurrence), { frequency: "none", interval: 1, weekdays: [], endMode: "count", count: 1, until: "" });
+
+  // F2 every holder other than the actor is told
+  const forSarah = await D.createBooking(erinA, inp(ring.id, "2027-12-07", 600, 660, { bookedForId: "cara" }));
+  if (!forSarah.ok) throw new Error("create failed");
+  const fs1 = forSarah.value.bookings[0];
+  const selfCancel = await D.cancelBooking(erinA, ring.id, fs1.date, fs1.id, "one");
+  if (!selfCancel.ok) throw new Error("cancel failed");
+  outbox.length = 0;
+  await notifyCancelledByOther(selfCancel.value.cancelled, ring, erinA);
+  check("F2 Jane cancels what she booked for Sarah: Sarah told, Jane not", [mailTo("cara@example.test", "Cancelled by"), mailTo("erin@example.test", "Cancelled by")], [1, 0]);
+  const forSarah2 = await D.createBooking(erinA, inp(ring.id, "2027-12-08", 600, 660, { bookedForId: "cara" }));
+  if (!forSarah2.ok) throw new Error("create failed");
+  const fs2 = forSarah2.value.bookings[0];
+  const ask2 = await D.requestRoom(bob, ring.id, fs2.date, fs2.id, { title: "Bob's", message: "Please", attendeeCount: 1 });
+  if (!ask2.ok) throw new Error("request failed");
+  const sarahYes = await D.respondToRequest(caraA, ask2.value.request.token, "approve", "");
+  if (!sarahYes.ok) throw new Error("approve failed");
+  outbox.length = 0;
+  await notifyRequestOutcome(sarahYes.value.before, sarahYes.value.after, sarahYes.value.room, sarahYes.value.request, { name: caraA.name, email: caraA.email, onBehalf: sarahYes.value.onBehalf });
+  check("F2 Sarah approves: Jane (the booker) told, Sarah not", [mailTo("erin@example.test", "was given to"), mailTo("cara@example.test", "was given to")], [1, 0]);
+
+  // F3 one pending request per person per series
+  const rs = await D.createBooking(erinA, inp(ring.id, "2027-12-13", 600, 660, { recurrence: weekly(3) }));
+  if (!rs.ok) throw new Error("create failed");
+  const [rs1, rs2] = rs.value.bookings;
+  check("F3 first ask in a series", status(await D.requestRoom(bob, ring.id, rs1.date, rs1.id, { title: "x", message: "y", attendeeCount: 1 })), "ok");
+  check("F3 second ask in the same series refused", status(await D.requestRoom(bob, ring.id, rs2.date, rs2.id, { title: "x", message: "y", attendeeCount: 1 })), 409);
+  check("F3 request route also applies the email limit", readFileSync("app/api/bookings/[id]/request/route.ts", "utf8").includes("LIMITS.emailSendUser"), true);
+
+  // F4 retiring cancels only meetings that have not started
+  const dome = await mkRoom("Dome");
+  const morning = new Date("2027-12-10T04:00:00Z"); // 06:00 SAST
+  const ended = await D.createBooking(erinA, inp(dome.id, "2027-12-10", 420, 480), morning); // 07:00-08:00
+  const under = await D.createBooking(erinA, inp(dome.id, "2027-12-10", 540, 660), morning); // 09:00-11:00
+  const laterToday = await D.createBooking(erinA, inp(dome.id, "2027-12-10", 900, 960), morning); // 15:00-16:00
+  if (!ended.ok || !under.ok || !laterToday.ok) throw new Error("create failed");
+  const at10 = new Date("2027-12-10T08:00:00Z"); // 10:00 SAST
+  const gone = await D.cancelRoomFutureBookings(dome.id, "Admin", at10);
+  check("F4 only the meeting not yet started is cancelled", gone.map((b) => b.id), [laterToday.value.bookings[0].id]);
+
+  // F5 + F8 reminders per holder: a holder already reached is not sent it again
+  const rem2 = await D.createBooking(erinA, inp(ring.id, "2027-12-21", 600, 660, { bookedForId: "cara" }));
+  if (!rem2.ok) throw new Error("create failed");
+  const r2b = rem2.value.bookings[0];
+  const eve = new Date("2027-12-20T05:00:00Z");
+  const stamp2 = eve.toISOString();
+  await D.claimReminder(r2b, stamp2, null);
+  await D.finishReminder(r2b, stamp2, ["erin@example.test"], false); // as if Cara's send had failed
+  check("F5 half-reminded booking is due again", (await D.bookingsDueForReminder(eve)).some((x) => x.booking.id === r2b.id), true);
+  outbox.length = 0;
+  await runRem(eve);
+  check("F5 retry reaches only the holder who missed it", [mailTo("cara@example.test", "Tomorrow"), mailTo("erin@example.test", "Tomorrow")], [1, 0]);
+  check("F5 then it is done", (await D.findBooking(ring.id, r2b.date, r2b.id))?.remindedEmails?.sort(), ["cara@example.test", "erin@example.test"]);
+
+  // F6 a booking written while the room is deleted is taken back out
+  const ringKey = `rooms/bookings/${ring.id}/2028-01.json`;
+  const dropRoom = async () => {
+    const rs = await readJson<import("../lib/roomBookingData").Room[]>("rooms/rooms.json", []);
+    await writeJson("rooms/rooms.json", rs.filter((r) => r.id !== ring.id));
+  };
+  let dropped = false;
+  putHook.put = async (...a: unknown[]) => {
+    const res = await realPut(...a);
+    if (!dropped && String(a[0]).endsWith(ringKey)) {
+      dropped = true;
+      await dropRoom();
+    }
+    return res;
+  };
+  const racing = await D.createBooking(erinA, inp(ring.id, "2028-01-10", 600, 660, { title: "Racer" }));
+  putHook.put = realPut;
+  check("F6 create racing a delete is refused", status(racing), 400);
+  check("F6 and its write is rolled back", (await readJson<Booking[]>(ringKey, [])).filter((b) => b.title === "Racer").length, 0);
+  // and an edit racing a retire is put back as it was
+  const plaza = await mkRoom("Plaza");
+  const pe = await D.createBooking(erinA, inp(plaza.id, "2028-02-07", 600, 660, { title: "Before" }));
+  if (!pe.ok) throw new Error("create failed");
+  const peb = pe.value.bookings[0];
+  const plazaKey = `rooms/bookings/${plaza.id}/2028-02.json`;
+  let retired = false;
+  putHook.put = async (...a: unknown[]) => {
+    const res = await realPut(...a);
+    if (!retired && String(a[0]).endsWith(plazaKey)) {
+      retired = true;
+      const rs = await readJson<import("../lib/roomBookingData").Room[]>("rooms/rooms.json", []);
+      await writeJson("rooms/rooms.json", rs.map((r) => (r.id === plaza.id ? { ...r, active: false } : r)));
+    }
+    return res;
+  };
+  const racingEdit = await D.updateBooking(erinA, peb.id, peb.date, inp(plaza.id, peb.date, 600, 720, { title: "After" }));
+  putHook.put = realPut;
+  check("F6 edit racing a retire is refused and undone", [status(racingEdit), (await D.findBooking(plaza.id, peb.date, peb.id))?.title], [400, "Before"]);
+
+  // F9 only the booker (or a room manager) changes who it is for
+  const f9 = await D.createBooking(erinA, inp(yard.id, "2028-03-06", 600, 660, { bookedForId: "cara" }));
+  if (!f9.ok) throw new Error("create failed");
+  const f9b = f9.value.bookings[0];
+  check("F9 the bookee cannot re-assign it", status(await D.updateBooking(caraA, f9b.id, f9b.date, inp(yard.id, f9b.date, 600, 660, { bookedForId: "bob" }))), 403);
+  check("F9 the bookee can still rename it", status(await D.updateBooking(caraA, f9b.id, f9b.date, inp(yard.id, f9b.date, 600, 660, { bookedForId: "cara", title: "Renamed" }))), "ok");
+  const f9now = (await D.findBooking(yard.id, f9b.date, f9b.id))!;
+  check("F9 picker shown to the booker only", [D.bookingView(f9now, erinA).canChangeHolder, D.bookingView(f9now, caraA).canChangeHolder, D.bookingView(f9now, miaA).canChangeHolder], [true, false, true]);
+
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);
 }

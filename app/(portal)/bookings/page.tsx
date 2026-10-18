@@ -19,6 +19,7 @@ import {
   describeRecurrence,
   durationLabel,
   expandRecurrence,
+  normaliseRecurrence,
   labelToMinute,
   endMinuteFromLabel,
   longDateLabel,
@@ -225,7 +226,7 @@ function BookingForm({
       endMinute: endMin,
       attendeeCount,
       bookedForId,
-      recurrence: existing ? undefined : { ...recurrence, count: recurrence.endMode === "count" ? recurrence.count : 1 },
+      recurrence: existing ? undefined : normaliseRecurrence(recurrence),
       ...(existing ? { currentDate: existing.date } : {}),
     };
     const res = await authFetch(existing ? `/api/bookings/${existing.id}` : "/api/bookings", {
@@ -278,6 +279,8 @@ function BookingForm({
         <span className="font-medium">{t("Number of attendees")}</span>
         <input type="number" min={1} max={room.capacity} value={attendeeCount} onChange={(e) => setAttendeeCount(Math.max(1, Math.floor(Number(e.target.value)) || 1))} className={`${inputCls} mt-1 block w-28`} />
       </label>
+      {/* Who it is for is the booker's (or a room manager's) call; the person it is for can change the rest. */}
+      {(!existing || existing.canChangeHolder) && (
       <div>
         <span className="font-medium">{t("Who is the room for?")}</span>
         <p className="mb-2 text-xs text-gray-500">
@@ -287,6 +290,7 @@ function BookingForm({
         </p>
         <HolderPicker people={people} excludeId={owner} defaultLabel={defaultLabel} value={bookedForId} onChange={setBookedForId} t={t} />
       </div>
+      )}
       {existing ? (
         existing.recurrence && (
           <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
@@ -464,22 +468,29 @@ export default function BookingsPage() {
   const roomKey = room?.id ?? "";
   // Returns the week rather than setting it, so the effect sets state in a
   // callback (react-hooks/set-state-in-effect).
-  const fetchWeek = useCallback(async (): Promise<BookingView[] | null> => {
+  const fetchWeek = useCallback(async (): Promise<BookingView[] | "error" | null> => {
     if (!roomKey) return null;
-    const res = await authFetch(`/api/bookings?room=${encodeURIComponent(roomKey)}&week=${monday}`);
-    return res.ok ? res.json() : null;
+    try {
+      const res = await authFetch(`/api/bookings?room=${encodeURIComponent(roomKey)}&week=${monday}`);
+      return res.ok ? await res.json() : "error";
+    } catch {
+      return "error";
+    }
   }, [roomKey, monday]);
   // Only the newest fetch may land: flicking quickly between rooms or weeks
-  // must not let a slow, older answer paint the wrong week.
+  // must not let a slow, older answer paint the wrong week. A failed fetch
+  // empties the grid and says so, rather than leaving the last week showing.
   const fetchSeq = useRef(0);
-  const loadWeek = () => {
-    const mine = ++fetchSeq.current;
-    return fetchWeek().then((b) => b && mine === fetchSeq.current && setBookings(b));
+  const [weekError, setWeekError] = useState(false);
+  const apply = (mine: number) => (b: BookingView[] | "error" | null) => {
+    if (b === null || mine !== fetchSeq.current) return;
+    setWeekError(b === "error");
+    setBookings(b === "error" ? [] : b);
   };
+  const loadWeek = () => fetchWeek().then(apply(++fetchSeq.current));
 
   useEffect(() => {
-    const mine = ++fetchSeq.current;
-    fetchWeek().then((b) => b && mine === fetchSeq.current && setBookings(b));
+    fetchWeek().then(apply(++fetchSeq.current));
   }, [fetchWeek]);
 
   const done = (message: string, error = false) => {
@@ -534,6 +545,7 @@ export default function BookingsPage() {
             </div>
           </div>
 
+          {weekError && <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{t("Could not load this week's bookings. Try again.")}</p>}
           <div ref={scrollRef} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-auto max-h-[70vh]">
             <div className="min-w-[820px]">
               <div className="sticky top-0 z-10 grid grid-cols-[64px_repeat(7,1fr)] border-b border-gray-200 bg-gray-50">

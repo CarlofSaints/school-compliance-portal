@@ -215,6 +215,13 @@ export const DEFAULT_RECURRENCE: Recurrence = {
   until: "",
 };
 
+/** What is sent for a repeat: "Never" drops whatever end fields the form
+ *  still holds, so switching back to Never always saves. */
+export function normaliseRecurrence(r: Recurrence): Recurrence {
+  if (r.frequency === "none") return { ...DEFAULT_RECURRENCE, count: 1 };
+  return { ...r, count: r.endMode === "count" ? r.count : 1, until: r.endMode === "date" ? r.until : "" };
+}
+
 /** The dates a repeat produces from `start`, capped at MAX_OCCURRENCES. */
 export function expandRecurrence(start: string, rule: Recurrence): string[] {
   if (rule.frequency === "none") return [start];

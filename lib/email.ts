@@ -1355,7 +1355,7 @@ export function sendBookingGivenAwayEmail(
 ): Promise<boolean> {
   return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} was given to ${requesterName}`, "Booking handed over", (P) => `
     <p style="color:#333;">Dear ${esc(holderName)},</p>
-    <p style="color:#333;">${esc(requesterName)} asked for the room you had booked, and ${esc(managerName)} agreed on your behalf. The slot is now theirs.</p>
+    <p style="color:#333;">${esc(requesterName)} asked for the room you had booked, and ${esc(managerName)} agreed to hand it over. The slot is now theirs.</p>
     ${bookingFactsBlock(f)}
     ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
   `);

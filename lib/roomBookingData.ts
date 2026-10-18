@@ -104,6 +104,9 @@ export interface RoomBooking {
   occurrences: number;
   status: "confirmed" | "cancelled";
   reminderSentAt: string | null;
+  /** Holders' addresses the day-before reminder already reached, so a run that
+   *  failed for one person retries only that person. */
+  remindedEmails?: string[];
   requests: RoomRequest[];
   createdAt: string;
   updatedAt: string;
@@ -190,6 +193,8 @@ export function bookingView(b: RoomBooking, actor: Actor) {
     isMine: mine,
     // An ended booking is the record: nobody edits or cancels it.
     canEdit: (mine || canManageRooms(actor)) && !hasEnded(b.date, b.endMinute),
+    // Who it is for is the booker's call (or a room manager's), not the bookee's.
+    canChangeHolder: b.bookedById === actor.id || canManageRooms(actor),
   };
 }
 
@@ -255,6 +260,8 @@ function parseRecurrence(v: unknown): Parsed<Recurrence> {
   if (typeof v !== "object") return { ok: false, error: "Invalid repeat" };
   const r = v as Record<string, unknown>;
   if (!["none", "daily", "weekly", "monthly"].includes(r.frequency as string)) return { ok: false, error: "Invalid repeat frequency" };
+  // "Never" repeats: whatever the hidden end fields still say is irrelevant.
+  if (r.frequency === "none") return parseRecurrence(null);
   if (!isInt(r.interval, 1, 12)) return { ok: false, error: "Repeat every 1 to 12" };
   if (!Array.isArray(r.weekdays) || r.weekdays.length > 7 || !r.weekdays.every((d) => isInt(d, 0, 6)))
     return { ok: false, error: "Invalid repeat weekdays" };
@@ -344,7 +351,8 @@ export async function cancelRoomFutureBookings(roomId: string, byName: string, n
       hit = [];
       const stamp = new Date().toISOString();
       const next = list.map((b) => {
-        if (b.status !== "confirmed" || b.date < today) return b;
+        // Only meetings that have not started: one under way carries on, an ended one is the record.
+        if (b.status !== "confirmed" || isPast(b.date, b.startMinute, now)) return b;
         hit.push(b);
         return { ...b, status: "cancelled" as const, requests: withdrawAll(b, stamp), cancelledAt: stamp, cancelledByName: byName, updatedAt: stamp };
       });
@@ -549,6 +557,12 @@ export async function createBooking(actor: Actor, input: BookingInput, nowAt: Da
     }
     written.push(month);
   }
+  // 🔴 The room may have been retired or deleted while this was being written
+  // (deleteRoom retires first, then deletes). If so, take the booking back out.
+  if (!(await getRoom(room.id))?.active) {
+    await undo(written);
+    return fail(400, "That room isn't available");
+  }
   return { ok: true, value: { bookings, room } };
 }
 
@@ -589,6 +603,8 @@ export async function updateBooking(
   // Leaving an under-way meeting's times alone is fine; moving one INTO the past is not.
   if ((before.date !== input.date || before.startMinute !== input.startMinute) && isPast(input.date, input.startMinute, nowAt)) return fail(400, PAST);
   const holderChanged = (forWho.person?.id ?? null) !== before.bookedForId;
+  if (holderChanged && before.bookedById !== actor.id && !canManageRooms(actor))
+    return fail(403, "Only the person who made the booking can change who it is for");
   const now = new Date().toISOString();
   const after: RoomBooking = {
     ...before,
@@ -602,6 +618,7 @@ export async function updateBooking(
     bookedForEmail: forWho.person?.email ?? null,
     // A moved or re-held booking gets its day-before reminder again.
     reminderSentAt: moved || holderChanged ? null : before.reminderSentAt,
+    remindedEmails: moved || holderChanged ? [] : before.remindedEmails,
     // Somebody who asked for the OLD slot did not ask for this one.
     requests: moved
       ? withdrawAll(before, now)
@@ -675,6 +692,21 @@ export async function updateBooking(
   if (error) {
     const e = error as { status: number; error: string };
     return fail(e.status, e.error);
+  }
+  // 🔴 The room may have been retired or deleted while this was being written
+  // (it was read as active before). Put the booking back as it was.
+  if (!(await getRoom(room.id))?.active) {
+    const ours = (b: RoomBooking) => b.id === id && b.updatedAt === after.updatedAt;
+    if (fromFile === toFile) {
+      await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some(ours) ? list.map((b) => (ours(b) ? before : b)) : NO_CHANGE));
+    } else {
+      await updateJson<RoomBooking[]>(toFile, [], (list) => (list.some(ours) ? list.filter((b) => !ours(b)) : NO_CHANGE));
+      await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some((b) => b.id === id) ? NO_CHANGE : [...list, before]));
+      for (const q of before.requests) {
+        await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(before.date), bookingId: id });
+      }
+    }
+    return fail(400, "That room isn't available");
   }
   return { ok: true, value: { before, after, room, holderChanged, withdrawn: moved ? pendingWithdrawals(before, "moved") : [] } };
 }
@@ -823,6 +855,19 @@ export async function requestRoom(
   const room = await getRoom(roomId);
   if (!room || !room.active) return fail(404, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} only seats ${room.capacity}`);
+
+  // One live request per person per SERIES, not per occurrence: asking for
+  // each of 52 weekly meetings would be 52 emails to the same holder.
+  if (booking.seriesId) {
+    const months = (await listFilesStrict(`rooms/bookings/${roomId}`))
+      .map((f) => f.replace(/\.json$/, ""))
+      .filter((m) => m >= monthOf(sastToday(nowAt)));
+    const lists = await Promise.all(months.map((m) => readMonth(roomId, m)));
+    const asked = lists
+      .flat()
+      .some((b) => b.seriesId === booking.seriesId && b.status === "confirmed" && b.requests.some((r) => r.requesterId === actor.id && r.status === "pending"));
+    if (asked) return fail(409, "You've already asked for a meeting in this series. Waiting on their reply.");
+  }
 
   const request: RoomRequest = {
     token: crypto.randomUUID(),
@@ -999,12 +1044,29 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
   const tomorrow = addDays(sastToday(now), 1);
   const out: { booking: RoomBooking; room: Room }[] = [];
   // A retired room has no calendar; its upcoming bookings were cancelled on retiring.
-  for (const room of (await getRooms()).filter((r) => r.active)) {
-    for (const b of await readMonth(room.id, monthOf(tomorrow))) {
-      if (b.date === tomorrow && b.status === "confirmed" && !b.reminderSentAt) out.push({ booking: b, room });
+  const today = sastToday(now);
+  const rooms = (await getRooms()).filter((r) => r.active);
+  const months = [...new Set([monthOf(today), monthOf(tomorrow)])];
+  const lists = await Promise.all(rooms.flatMap((room) => months.map(async (m) => ({ room, list: await readMonth(room.id, m) }))));
+  for (const { room, list } of lists) {
+    for (const b of list) {
+      if (b.status !== "confirmed" || b.reminderSentAt) continue;
+      // Tomorrow's, plus today's that a failed send left half-done (and not started yet).
+      const retry = b.date === today && (b.remindedEmails?.length ?? 0) > 0 && !isPast(b.date, b.startMinute, now);
+      if (b.date === tomorrow || retry) out.push({ booking: b, room });
     }
   }
   return out;
+}
+
+/** After sending: records who it reached. Done only when every holder has it;
+ *  otherwise the stamp is handed back so the next run retries the rest. */
+export async function finishReminder(b: RoomBooking, stamp: string, remindedEmails: string[], allDone: boolean): Promise<void> {
+  await updateJson<RoomBooking[]>(fileFor(b.roomId, monthOf(b.date)), [], (list) => {
+    const cur = list.find((x) => x.id === b.id);
+    if (!cur || cur.reminderSentAt !== stamp) return NO_CHANGE;
+    return list.map((x) => (x.id === b.id ? { ...x, remindedEmails, reminderSentAt: allDone ? stamp : null } : x));
+  });
 }
 
 /** Stamps the reminder BEFORE sending, in one guarded write, so two

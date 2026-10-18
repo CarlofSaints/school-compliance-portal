@@ -14,9 +14,9 @@ import {
 import {
   bookingsDueForReminder,
   claimReminder,
+  finishReminder,
   holderLabel,
   holders,
-  isHolder,
   pendingWithdrawals,
   type Room,
   type RoomBooking,
@@ -122,11 +122,11 @@ export async function notifyRoomRetired(cancelled: RoomBooking[], room: Room): P
   return failed + (await notifyWithdrawn(cancelled.flatMap((b) => pendingWithdrawals(b, "room_retired")), room));
 }
 
-/** Someone who does not hold a booking (a room manager) cancelled it: ONE
- *  email per holder, the person it was for included. Returns failures. */
+/** Bookings were cancelled: ONE email to each holder other than whoever did
+ *  it (Jane cancelling what she booked for Sarah tells Sarah; a room manager
+ *  tells both). Returns failures. */
 export async function notifyCancelledByOther(cancelled: RoomBooking[], room: Room, by: { id: string; name: string; email: string }): Promise<number> {
-  const notMine = cancelled.filter((b) => !isHolder(b, by.id));
-  const jobs = [...byHolder(notMine, by.email)].map(([email, h]) => () =>
+  const jobs = [...byHolder(cancelled, by.email)].map(([email, h]) => () =>
     sendBookingsCancelledEmail(email, h.name, room.name, "by_manager", by.name, h.bookings.map(line))
   );
   return sendPaced(jobs);
@@ -158,8 +158,9 @@ export async function notifyRoomRequest(b: RoomBooking, room: Room, r: RoomReque
   return delivered;
 }
 
-/** The answer, to the requester. When a room manager approved on the holders'
- *  behalf, the holders are told too: their booking has gone. */
+/** The answer, to the requester. On an approve, every holder other than the
+ *  one who answered is told too (the booker when the bookee approved, both
+ *  when a room manager did): their booking has gone. */
 export async function notifyRequestOutcome(
   before: RoomBooking,
   after: RoomBooking,
@@ -172,7 +173,7 @@ export async function notifyRequestOutcome(
     r.status === "approved"
       ? await sendRoomRequestApprovedEmail(r.requesterEmail, r.requesterName, holderLabel(before), { ...f, title: after.title })
       : await sendRoomRequestDeclinedEmail(r.requesterEmail, r.requesterName, holderLabel(before), r.declineReason || "", f);
-  if (r.status === "approved" && by?.onBehalf && room) {
+  if (r.status === "approved" && by && room) {
     for (const h of holders(before)) {
       if (same(h.email, by.email)) continue;
       if (!(await sendBookingGivenAwayEmail(h.email, h.name, by.name, r.requesterName, facts(before, room)))) ok = false;
@@ -195,14 +196,21 @@ export async function runRoomBookingReminders(now: Date = new Date()): Promise<{
       detail.push(`Room ${room.name} "${booking.title}": already reminded by another run`);
       continue;
     }
+    // Per holder: someone already reminded is not sent it again on a retry.
+    const reached = new Set((booking.remindedEmails ?? []).map((e) => e.toLowerCase()));
+    const todo = holders(booking).filter((h) => !reached.has(h.email.toLowerCase()));
     let ok = 0;
-    for (const h of holders(booking)) {
-      if (await sendBookingReminderEmail(h.email, h.name, facts(booking, room))) ok++;
-      else failed++;
+    for (let i = 0; i < todo.length; i++) {
+      if (i > 0 || sent + failed > 0) await sleep(SEND_GAP_MS);
+      if (await sendBookingReminderEmail(todo[i].email, todo[i].name, facts(booking, room))) {
+        ok++;
+        reached.add(todo[i].email.toLowerCase());
+      } else failed++;
     }
     sent += ok;
-    if (ok === 0) await claimReminder(booking, null, stamp).catch(() => false);
-    detail.push(`Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${ok} of ${holders(booking).length}`);
+    const allDone = holders(booking).every((h) => reached.has(h.email.toLowerCase()));
+    await finishReminder(booking, stamp, [...reached], allDone);
+    detail.push(`Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${ok} of ${todo.length}${allDone ? "" : ", will retry the rest"}`);
   }
   return { due: due.length, sent, failed, detail };
 }

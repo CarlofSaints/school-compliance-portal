@@ -1674,5 +1674,6 @@
   "You wrote:": "Ubhale:",
   "You have the room. It is booked in your name.": "Unalo igumbi. Libhukwe egameni lakho.",
   "{holder} kept the room.": "U-{holder} ugcine igumbi.",
-  "Waiting for {holder} to answer. You will get an email either way.": "Kulindwe u-{holder} ukuthi aphendule. Uzothola i-imeyili noma kunjani."
+  "Waiting for {holder} to answer. You will get an email either way.": "Kulindwe u-{holder} ukuthi aphendule. Uzothola i-imeyili noma kunjani.",
+  "Could not load this week's bookings. Try again.": "Akukwazanga ukulayisha ukubhuka kwaleli sonto. Zama futhi."
 }
