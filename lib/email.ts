@@ -1231,3 +1231,254 @@ export async function sendActionSummaryEmail(
   const bare = buildActionSummaryEmail(b, recipientName, { ...e, noAttachment: true }).html;
   return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare);
 }
+
+// --- Meeting room bookings ------------------------------------------------------
+//
+// Ported from the COLAB hub. Every one goes ONLY to people who are party to the
+// booking: its holders (who booked it, and who it is for) or whoever asked for
+// the room. Dates and times arrive already written out.
+
+export interface RoomBookingEmailFacts {
+  roomName: string;
+  title: string;
+  dateLabel: string;
+  timeLabel: string;
+  attendeeCount: number;
+  bookedForName?: string | null;
+  bookedByName?: string | null;
+  recurrenceLabel?: string | null;
+  occurrences?: number;
+}
+
+function bookingRow(label: string, value: string): string {
+  return `<p style="margin:6px 0 0;color:#333;"><strong>${label}:</strong> ${esc(value)}</p>`;
+}
+
+function bookingFactsBlock(f: RoomBookingEmailFacts): string {
+  return `
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      ${bookingRow("Room", f.roomName)}
+      ${bookingRow("Meeting", f.title)}
+      ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
+      ${bookingRow("Attendees", String(f.attendeeCount))}
+      ${f.bookedForName ? bookingRow("Booked for", f.bookedForName) : ""}
+      ${f.bookedForName && f.bookedByName ? bookingRow("Booked by", f.bookedByName) : ""}
+      ${f.recurrenceLabel ? bookingRow("Repeats", f.occurrences && f.occurrences > 1 ? `${f.recurrenceLabel} (${f.occurrences} bookings)` : f.recurrenceLabel) : ""}
+    </div>`;
+}
+
+function bookingButton(PRIMARY: string, href: string, label: string): string {
+  return `<a href="${href}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">${label}</a>`;
+}
+
+async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string) => string): Promise<boolean> {
+  const b = await resolveBranding();
+  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary)), b.replyTo);
+}
+
+const CALENDAR_LINK = () => `${SITE_URL}/bookings`;
+
+export function sendBookingConfirmedEmail(to: string, name: string, f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Room booked: ${f.roomName}, ${f.dateLabel}`, "Booking confirmed", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Your meeting room is booked. Here are the details:</p>
+    ${bookingFactsBlock(f)}
+    <p style="color:#666;font-size:13px;">If someone else needs the room they can ask you for it from the calendar. You will get an email, and nothing changes unless you agree.</p>
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
+/** One email listing what changed on a booking someone else edited. */
+export function sendBookingChangedEmail(to: string, name: string, editorName: string, changes: string[], f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Booking changed: ${f.roomName}, ${f.dateLabel}`, "Booking changed", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${esc(editorName)} changed this booking:</p>
+    <ul style="background:#f4f4f5;padding:16px 16px 16px 32px;border-radius:6px;margin:16px 0;color:#333;">
+      ${changes.map((c) => `<li style="margin:4px 0;">${esc(c)}</li>`).join("")}
+    </ul>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
+/** `when` comes from the meeting's actual date: a reminder sent on the day says today. */
+export function sendBookingReminderEmail(to: string, name: string, f: RoomBookingEmailFacts, when: "today" | "tomorrow" = "tomorrow"): Promise<boolean> {
+  const word = when === "today" ? "Today" : "Tomorrow";
+  return sendBookingMail(to, `${word}: ${f.roomName}, ${f.title}`, `Room booking ${when}`, (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">A reminder that you have a meeting room booked ${when}.</p>
+    ${bookingFactsBlock(f)}
+    <p style="color:#666;font-size:13px;">If you no longer need it, please cancel it so someone else can use the room.</p>
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
+/** To the person an edit made the room FOR. */
+export function sendBookingHandedOverEmail(
+  to: string,
+  name: string,
+  previousHolderName: string,
+  changedByName: string,
+  f: RoomBookingEmailFacts
+): Promise<boolean> {
+  return sendBookingMail(to, `${f.roomName} is now booked for you, ${f.dateLabel}`, "Booking changed hands", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${esc(changedByName)} has changed who this meeting room is for. It was for <strong>${esc(previousHolderName)}</strong>. It is now for you.</p>
+    ${bookingFactsBlock(f)}
+    <p style="color:#666;font-size:13px;">You will get the reminder before the meeting, and any request for the room comes to you. If this is not right, speak to whoever made the change, or cancel it from the calendar.</p>
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
+/** To the person the room is no longer for. The booker stays a holder whoever
+ *  the room is for, so the two cases need different copy. */
+export function sendBookingTakenOverEmail(
+  to: string,
+  name: string,
+  newHolderName: string,
+  changedByName: string,
+  stillHolderAsBooker: boolean,
+  f: RoomBookingEmailFacts
+): Promise<boolean> {
+  const standing = stillHolderAsBooker
+    ? `You booked this room, so you are still on it: you will get the reminder before the meeting, and any request for the room still comes to you as well as to ${esc(newHolderName)}. It is simply no longer held in your name.`
+    : `The booking still stands, as shown above. It is just no longer in your name: you will not get the reminder for it, and requests for the room will go to ${esc(newHolderName)} instead. If you still need the room, you can ask for it back from the calendar.`;
+  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} is no longer booked for you`, "Booking changed hands", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${esc(changedByName)} has changed who this meeting room is for. It was for you. It is now for <strong>${esc(newHolderName)}</strong>.</p>
+    ${bookingFactsBlock(f)}
+    <p style="color:#666;font-size:13px;">${standing}</p>
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
+/** "May I have the room?" to the current holder. Both links open a page in the
+ *  portal that needs a sign-in; nothing is answered from the email itself. */
+export function sendRoomRequestEmail(
+  to: string,
+  holderName: string,
+  requesterName: string,
+  requesterMeeting: string,
+  message: string,
+  yourMeeting: string,
+  token: string,
+  f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
+): Promise<boolean> {
+  const link = `${SITE_URL}/bookings/request/${encodeURIComponent(token)}`;
+  return sendBookingMail(to, `${requesterName} is asking for ${f.roomName}, ${f.dateLabel}`, "Can they have the room?", (P) => `
+    <p style="color:#333;">Dear ${esc(holderName)},</p>
+    <p style="color:#333;">${esc(requesterName)} is asking for the room you have booked. Nothing changes unless you say yes.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      ${bookingRow("Your booking", yourMeeting)}
+      ${bookingRow("Room", f.roomName)}
+      ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
+      ${bookingRow("They need it for", requesterMeeting)}
+    </div>
+    <p style="color:#333;">Their reason:</p>
+    <blockquote style="margin:0 0 16px;padding:8px 12px;border-left:4px solid ${P};background:#fafafa;color:#333;">${esc(message)}</blockquote>
+    ${bookingButton(P, `${link}?action=approve`, "Let them have it")}
+    <p style="margin:16px 0 0;"><a href="${link}?action=decline" style="color:${P};">Or decline, and say why</a></p>
+    <p style="color:#666;font-size:13px;">You will need to be signed in to the portal to answer.</p>
+  `);
+}
+
+/** How many cancelled bookings one email lists; the rest are counted. */
+export const CANCELLED_LIST_CAP = 20;
+export function cappedList(lines: string[]): { shown: string[]; more: number } {
+  const shown = lines.slice(0, CANCELLED_LIST_CAP);
+  return { shown, more: lines.length - shown.length };
+}
+
+/** ONE email to a person listing several of their cancelled bookings in a
+ *  room (a room retired, or a manager cancelling a series), not one per date. */
+export function sendBookingsCancelledEmail(
+  to: string,
+  name: string,
+  roomName: string,
+  why: "room_retired" | "by_manager",
+  managerName: string,
+  lines: string[]
+): Promise<boolean> {
+  const { shown, more } = cappedList(lines);
+  const intro =
+    why === "room_retired"
+      ? `${esc(roomName)} has been taken out of use, so ${lines.length === 1 ? "your booking below has" : "your bookings below have"} been cancelled. Please book another room.`
+      : `${esc(managerName)} has cancelled ${lines.length === 1 ? "your booking" : "your bookings"} in ${esc(roomName)} listed below.`;
+  const subject =
+    why === "room_retired"
+      ? `Cancelled: ${roomName} is no longer available`
+      : `Cancelled by ${managerName}: ${lines.length === 1 ? "your booking" : `${lines.length} bookings`} in ${roomName}`;
+  return sendBookingMail(to, subject, why === "room_retired" ? "Room no longer available" : "Booking cancelled", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${intro}</p>
+    <ul style="background:#f4f4f5;padding:16px 16px 16px 32px;border-radius:6px;margin:16px 0;color:#333;">
+      ${shown.map((l) => `<li style="margin:4px 0;">${esc(l)}</li>`).join("")}
+      ${more > 0 ? `<li style="margin:4px 0;list-style:none;">and ${more} more</li>` : ""}
+    </ul>
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+  `);
+}
+
+/** The requester's ask can no longer be answered, and why. */
+export function sendRoomRequestWithdrawnEmail(
+  to: string,
+  requesterName: string,
+  why: string,
+  f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
+): Promise<boolean> {
+  return sendBookingMail(to, `Your request for ${f.roomName}, ${f.dateLabel}, has lapsed`, "Request no longer needed", (P) => `
+    <p style="color:#333;">Dear ${esc(requesterName)},</p>
+    <p style="color:#333;">Your request for ${esc(f.roomName)} on ${esc(f.dateLabel)} at ${esc(f.timeLabel)} can no longer be answered: ${esc(why)}.</p>
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+  `);
+}
+
+/** A room manager agreed to a request on the holder's behalf. */
+export function sendBookingGivenAwayEmail(
+  to: string,
+  holderName: string,
+  managerName: string,
+  requesterName: string,
+  f: RoomBookingEmailFacts
+): Promise<boolean> {
+  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} was given to ${requesterName}`, "Booking handed over", (P) => `
+    <p style="color:#333;">Dear ${esc(holderName)},</p>
+    <p style="color:#333;">${esc(requesterName)} asked for the room you had booked, and ${esc(managerName)} agreed to hand it over. The slot is now theirs.</p>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+  `);
+}
+
+export function sendRoomRequestApprovedEmail(
+  to: string,
+  requesterName: string,
+  holderName: string,
+  f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel" | "title">
+): Promise<boolean> {
+  return sendBookingMail(to, `You have ${f.roomName}, ${f.dateLabel}`, "Request approved", (P) => `
+    <p style="color:#333;">Dear ${esc(requesterName)},</p>
+    <p style="color:#333;">${esc(holderName)} has given you the room. It is booked in your name, so there is nothing further to do.</p>
+    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+      ${bookingRow("Room", f.roomName)}
+      ${bookingRow("Meeting", f.title)}
+      ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
+    </div>
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
+export function sendRoomRequestDeclinedEmail(
+  to: string,
+  requesterName: string,
+  holderName: string,
+  reason: string,
+  f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
+): Promise<boolean> {
+  return sendBookingMail(to, `${holderName} declined your request for ${f.roomName}, ${f.dateLabel}`, "Request declined", (P) => `
+    <p style="color:#333;">Dear ${esc(requesterName)},</p>
+    <p style="color:#333;">${esc(holderName)} declined your request for ${esc(f.roomName)} on ${esc(f.dateLabel)} at ${esc(f.timeLabel)}. The booking stays as it is.</p>
+    <p style="color:#333;">Their reason:</p>
+    <blockquote style="margin:0 0 16px;padding:8px 12px;border-left:4px solid ${P};background:#fafafa;color:#333;">${esc(reason)}</blockquote>
+    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+  `);
+}

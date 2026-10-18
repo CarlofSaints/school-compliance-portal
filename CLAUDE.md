@@ -24,6 +24,23 @@ The near-identical names bite. `school-compliance` in Vercel is the marketing
 site, connected Jun 20 to its own repo; it has no cron and no portal routes.
 Portal env vars go on the two `*-compliance` school projects only.
 
+## Meeting room bookings (2026-10-18, branch `room-bookings`, ported from the COLAB hub)
+Rooms (`/rooms`, `manage_rooms`) and a week calendar (`/bookings`, `book_rooms` or
+`manage_rooms`). Clash check, repeats (daily/weekly/monthly, max 52), edit one
+occurrence, cancel one or the series (this and every upcoming one; past ones kept),
+book on someone's behalf, "ask the holder for the room" (`/bookings/request/<token>`,
+sign-in required, the token only names the request), booking emails + reminders on
+the existing `/api/cron/reminders` (07:00 run: everything later today and tomorrow before
+08:00; a meeting booked to start before the next run is reminded at once). Any hour of
+the day is bookable; the grid opens at 07:00.
+- Storage: `rooms/rooms.json`, `rooms/bookings/<roomId>/<YYYY-MM>.json` (clash check +
+  insert in ONE updateJson), `rooms/requests/<token>.json` (pointer; the request
+  itself lives on the booking). Logic in `lib/roomBookingData.ts`, maths in
+  `lib/roomBookings.ts`, emails in `lib/roomBookingNotify.ts` + `lib/email.ts`.
+- Check: `npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-room-bookings.ts`.
+- New keys need `/api/seed?secret=…` re-run, then tick `book_rooms` / `manage_rooms`
+  on the Roles page (Super Admin gets them automatically).
+
 ## Approval workflow + spend grid (2026-08-30, 9 commits, pushed to main → both projects auto-deployed)
 `961162e` → `a80f2ef`. `tsc --noEmit` and `next build` both clean.
 

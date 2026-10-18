@@ -33,6 +33,9 @@ function meta(pathname, f) {
 }
 
 async function put(pathname, body, opts = {}) {
+  // Read the body BEFORE the checks: an await between the check and the set
+  // let two racing creates both pass, which the real store never allows.
+  const bytes = await toBytes(body);
   const existing = store.get(pathname);
   if (opts.ifMatch && (!existing || existing.etag !== opts.ifMatch)) {
     throw new BlobPreconditionFailedError("fake blob: precondition failed");
@@ -42,7 +45,7 @@ async function put(pathname, body, opts = {}) {
   }
   let name = pathname;
   if (opts.addRandomSuffix) name = pathname.replace(/(\.[^./]+)?$/, (ext) => `-${Math.random().toString(36).slice(2, 8)}${ext || ""}`);
-  const f = { bytes: await toBytes(body), etag: `"e${++etagSeq}"`, contentType: opts.contentType || "application/octet-stream", uploadedAt: new Date() };
+  const f = { bytes, etag: `"e${++etagSeq}"`, contentType: opts.contentType || "application/octet-stream", uploadedAt: new Date() };
   store.set(name, f);
   return meta(name, f);
 }
