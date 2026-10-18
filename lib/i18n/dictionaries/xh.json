@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Uguqulelo alukwazanga ukwenziwa ngoku.",
   "Translate into {language}": "Guqulela kwi-{language}",
   "Machine translation. The English is the official version.": "Uguqulelo lomatshini. IsiNgesi yinguqulelo esemthethweni.",
-  "Translating. A long document can take a minute or two…": "Kuyaguqulelwa. Uxwebhu olude lunokuthatha umzuzu okanye emibini…"
+  "Translating. A long document can take a minute or two…": "Kuyaguqulelwa. Uxwebhu olude lunokuthatha umzuzu okanye emibini…",
+  "This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.": "Olu xwebhu lunamaphepha amalunga no-{pages}. Ukuluguqulela kwi-{language} kuxabisa iikhredithi ezi-{credits}. Isikolo sakho sineekhredithi ezi-{balance}.",
+  "Translate ({credits} credits)": "Guqulela (iikhredithi ezi-{credits})",
+  "Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.": "Isikolo sakho sifuna iikhredithi zokuguqulela ezongezelelweyo. Iikhredithi zixabisa i-R100 nge-10, aziphelelwa lixesha, kwaye zongezwa yi-School Compliance. Cela umlawuli wakho ukuba aqhagamshelane nathi.",
+  "Once translated, anyone at your school can read it in {language} for free.": "Xa sele luguqulelwe, nabani na esikolweni sakho angalufunda nge-{language} simahla."
 }

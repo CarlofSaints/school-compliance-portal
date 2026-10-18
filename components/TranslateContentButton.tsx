@@ -1,46 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useLocale, useT } from "@/components/I18nProvider";
 import { LOCALES } from "@/lib/i18n/locales";
 
-// The paid add-on: the school's own document (a policy, a set of minutes) in
-// the language picked top right. Hidden in English and for schools without
-// the add-on. A document already translated is served from storage, free.
+// The school's own document (a policy, a set of minutes) in the language
+// picked top right, paid with translation credits. Hidden in English. A
+// document already translated is served from storage, free; a new one shows
+// its cost in credits first and only spends them on "Translate".
 export default function TranslateContentButton({ kind, id }: { kind: "policy" | "minutes"; id: string }) {
   const t = useT();
   const locale = useLocale();
-  const [enabled, setEnabled] = useState(false);
+  const [quote, setQuote] = useState<{ credits: number; pages: number; balance: number } | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (locale === "en") return;
-    authFetch("/api/translate")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setEnabled(Boolean(d?.enabled)))
-      .catch(() => setEnabled(false));
-  }, [locale]);
-
-  if (locale === "en" || !enabled) return null;
+  if (locale === "en") return null;
   const language = LOCALES.find((l) => l.code === locale)?.label ?? locale;
 
-  const run = async () => {
+  const run = async (confirm: boolean) => {
     setOpen(true);
     setBusy(true);
     setError("");
     setText("");
+    setQuote(null);
     try {
       const res = await authFetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, id }),
+        body: JSON.stringify({ kind, id, confirm }),
       });
       if (!res.ok) setError(await apiErrorMessage(res, t("The translation could not be done just now.")));
-      else setText((await res.json()).text);
+      else {
+        const d = await res.json();
+        if (d.quote) setQuote(d.quote);
+        else setText(d.text);
+      }
     } catch {
       setError(t("The translation could not be done just now."));
     } finally {
@@ -51,7 +49,7 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
   return (
     <>
       <button
-        onClick={run}
+        onClick={() => run(false)}
         className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
       >
         {t("Translate into {language}", { language })}
@@ -81,6 +79,33 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
             </div>
             <div className="px-6 py-4 overflow-auto text-sm text-gray-800 whitespace-pre-wrap">
               {busy && t("Translating. A long document can take a minute or two…")}
+              {quote && (
+                <div className="space-y-3">
+                  <p>
+                    {t("This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.", {
+                      pages: quote.pages,
+                      language,
+                      credits: quote.credits,
+                      balance: quote.balance,
+                    })}
+                  </p>
+                  {quote.balance >= quote.credits ? (
+                    <button
+                      onClick={() => run(true)}
+                      className="bg-primary text-white px-4 py-2 rounded-lg text-sm"
+                    >
+                      {t("Translate ({credits} credits)", { credits: quote.credits })}
+                    </button>
+                  ) : (
+                    <p className="text-amber-700">
+                      {t("Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.")}
+                    </p>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    {t("Once translated, anyone at your school can read it in {language} for free.", { language })}
+                  </p>
+                </div>
+              )}
               {error && <p className="text-red-600">{error}</p>}
               {text}
             </div>

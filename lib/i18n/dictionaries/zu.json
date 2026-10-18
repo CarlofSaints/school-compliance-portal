@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Ukuhumusha akukwazanga ukwenziwa okwamanje.",
   "Translate into {language}": "Humushela ku-{language}",
   "Machine translation. The English is the official version.": "Ukuhumusha ngomshini. Okwesi-English yikho okusemthethweni.",
-  "Translating. A long document can take a minute or two…": "Kuyahumusha. Umbhalo omude ungathatha umzuzu noma emibili…"
+  "Translating. A long document can take a minute or two…": "Kuyahumusha. Umbhalo omude ungathatha umzuzu noma emibili…",
+  "This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.": "Lo mbhalo unamakhasi angaba ngu-{pages}. Ukuwuhumushela ku-{language} kubiza amakhredithi angu-{credits}. Isikole sakho sinamakhredithi angu-{balance}.",
+  "Translate ({credits} credits)": "Humusha (amakhredithi angu-{credits})",
+  "Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.": "Isikole sakho sidinga amakhredithi okuhumusha engeziwe. Amakhredithi abiza u-R100 ngama-10, awaphelelwa yisikhathi, futhi angezwa yi-School Compliance. Cela umphathi wakho ukuthi axhumane nathi.",
+  "Once translated, anyone at your school can read it in {language} for free.": "Uma usuhunyushiwe, noma ubani esikoleni sakho angawufunda nge-{language} mahhala."
 }

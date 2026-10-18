@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Die vertaling kon nie nou gedoen word nie.",
   "Translate into {language}": "Vertaal na {language}",
   "Machine translation. The English is the official version.": "Masjienvertaling. Die Engelse weergawe is die amptelike een.",
-  "Translating. A long document can take a minute or two…": "Besig om te vertaal. 'n Lang dokument kan 'n minuut of twee neem…"
+  "Translating. A long document can take a minute or two…": "Besig om te vertaal. 'n Lang dokument kan 'n minuut of twee neem…",
+  "This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.": "Hierdie dokument is omtrent {pages} bladsye. Om dit in {language} te vertaal kos {credits} krediete. Jou skool het {balance} krediete.",
+  "Translate ({credits} credits)": "Vertaal ({credits} krediete)",
+  "Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.": "Jou skool het meer vertaalkrediete nodig. Krediete kos R100 vir 10, verval nooit nie en word deur School Compliance bygevoeg. Vra jou administrateur om ons te kontak.",
+  "Once translated, anyone at your school can read it in {language} for free.": "Sodra dit vertaal is, kan enigiemand by jou skool dit gratis in {language} lees."
 }

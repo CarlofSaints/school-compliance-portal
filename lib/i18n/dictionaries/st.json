@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Phetolelo ha e kgone ho etswa hona jwale.",
   "Translate into {language}": "Fetolela ho {language}",
   "Machine translation. The English is the official version.": "Phetolelo ya motjhine. Senyesemane ke sona sa semmuso.",
-  "Translating. A long document can take a minute or two…": "Ho a fetolelwa. Tokomane e telele e ka nka motsotso kapa e mmedi…"
+  "Translating. A long document can take a minute or two…": "Ho a fetolelwa. Tokomane e telele e ka nka motsotso kapa e mmedi…",
+  "This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.": "Tokomane ena e na le maqephe a ka bang {pages}. Ho e fetolela ho {language} ho bitsa dikhrediti tse {credits}. Sekolo sa hao se na le dikhrediti tse {balance}.",
+  "Translate ({credits} credits)": "Fetolela (dikhrediti tse {credits})",
+  "Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.": "Sekolo sa hao se hloka dikhrediti tse ding tsa phetolelo. Dikhrediti di bitsa R100 bakeng sa tse 10, ha di fele nako, mme di kenngwa ke School Compliance. Kopa motsamaisi wa hao ho ikopanya le rona.",
+  "Once translated, anyone at your school can read it in {language} for free.": "Ha e se e fetoletswe, mang kapa mang sekolong sa hao a ka e bala ka {language} mahala."
 }

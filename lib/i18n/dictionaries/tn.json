@@ -1518,5 +1518,9 @@
   "The translation could not be done just now.": "Thanolo ga e kgone go dirwa jaanong.",
   "Translate into {language}": "Ranola ka {language}",
   "Machine translation. The English is the official version.": "Thanolo ya motšhine. Seesimane ke sone sa semmuso.",
-  "Translating. A long document can take a minute or two…": "Go a ranolwa. Tokomane e telele e ka tsaya motsotso kgotsa e mebedi…"
+  "Translating. A long document can take a minute or two…": "Go a ranolwa. Tokomane e telele e ka tsaya motsotso kgotsa e mebedi…",
+  "This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.": "Tokumente e e na le ditsebe di ka nna {pages}. Go e ranolela mo {language} go tura dikhrediti di le {credits}. Sekolo sa gago se na le dikhrediti di le {balance}.",
+  "Translate ({credits} credits)": "Ranola (dikhrediti di le {credits})",
+  "Your school needs more translation credits. Credits cost R100 for 10, never expire, and are added by School Compliance. Ask your administrator to contact us.": "Sekolo sa gago se tlhoka dikhrediti tse dingwe tsa thanolo. Dikhrediti di tura R100 ka tse 10, ga di fele nako, mme di tsenngwa ke School Compliance. Kopa motsamaisi wa gago go ikgolaganya le rona.",
+  "Once translated, anyone at your school can read it in {language} for free.": "Fa e sena go ranolwa, mongwe le mongwe kwa sekolong sa gago a ka e bala ka {language} mahala."
 }

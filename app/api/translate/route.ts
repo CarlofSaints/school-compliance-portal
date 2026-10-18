@@ -10,9 +10,12 @@ import { documentHash } from "@/lib/minutesSigning";
 import { ATTENDANCE_STATUS_LABELS } from "@/lib/minutes";
 import { extractTextFromBuffer } from "@/lib/pdfParser";
 import {
-  getAddon,
-  getUsage,
+  creditsFor,
+  getCredits,
+  pdfBlock,
+  pdfPages,
   storedTranslation,
+  textPages,
   translateContent,
   type ContentKind,
 } from "@/lib/contentTranslation";
@@ -21,24 +24,14 @@ import {
 // Vercel Pro ceiling.
 export const maxDuration = 800;
 
-// Whether to show the Translate button, and how much of the month is left.
-export async function GET(req: NextRequest) {
-  const session = await requireLogin(req);
-  if (session instanceof NextResponse) return session;
-  const addon = await getAddon();
-  return NextResponse.json({
-    enabled: addon.enabled,
-    used: addon.enabled ? await getUsage() : 0,
-    cap: addon.monthlyCap,
-  });
-}
-
-// { kind: "policy" | "minutes", id } -> the document in the visitor's language.
+// { kind: "policy" | "minutes", id } -> the stored translation, or else a
+// quote { credits, pages, balance } for a new one. Send again with
+// confirm: true to spend the credits and translate.
 export async function POST(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
 
-  let body: { kind?: unknown; id?: unknown } = {};
+  let body: { kind?: unknown; id?: unknown; confirm?: unknown } = {};
   try {
     body = await req.json();
   } catch {
@@ -55,7 +48,7 @@ export async function POST(req: NextRequest) {
   // have it translated, and gets the same 404 as for one that does not exist.
   let title: string;
   let sourceHash: string;
-  let source: () => Promise<Anthropic.ContentBlockParam[]>;
+  let source: () => Promise<{ content: Anthropic.ContentBlockParam[]; pages: number }>;
   if (kind === "policy") {
     if (!session.permissions.includes("download_policies")) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -69,9 +62,10 @@ export async function POST(req: NextRequest) {
       const file = await downloadPolicyFile(id, version.version, version.ext);
       if (!file) throw new Error("Policy file missing");
       if (version.ext.toLowerCase() === "pdf") {
-        return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: file.toString("base64") } }];
+        return { content: [pdfBlock(file)], pages: await pdfPages(file) };
       }
-      return [{ type: "text", text: await extractTextFromBuffer(file, version.ext) }];
+      const text = await extractTextFromBuffer(file, version.ext);
+      return { content: [{ type: "text", text }], pages: textPages(text) };
     };
   } else {
     const record = await getMinutes(id);
@@ -80,30 +74,48 @@ export async function POST(req: NextRequest) {
     }
     title = record.title;
     sourceHash = documentHash(record);
-    source = async () => [
-      {
-        type: "text",
-        text: [...record.sections]
-          .sort((a, b) => a.order - b.order)
-          .map((s) => {
-            const rows = (s.attendees || [])
-              .map((r) => `- ${r.position}: ${r.name}${r.status ? ` (${ATTENDANCE_STATUS_LABELS[r.status]})` : ""}`)
-              .join("\n");
-            return `# ${s.title}\n${[s.body, rows, s.responsible ? `Responsible: ${s.responsible}` : ""].filter(Boolean).join("\n")}`;
-          })
-          .join("\n\n"),
-      },
-    ];
+    source = async () => {
+      const text = [...record.sections]
+        .sort((a, b) => a.order - b.order)
+        .map((s) => {
+          const rows = (s.attendees || [])
+            .map((r) => `- ${r.position}: ${r.name}${r.status ? ` (${ATTENDANCE_STATUS_LABELS[r.status]})` : ""}`)
+            .join("\n");
+          return `# ${s.title}\n${[s.body, rows, s.responsible ? `Responsible: ${s.responsible}` : ""].filter(Boolean).join("\n")}`;
+        })
+        .join("\n\n");
+      return { content: [{ type: "text", text }], pages: textPages(text) };
+    };
   }
 
   const stored = await storedTranslation(kind as ContentKind, id, locale, sourceHash);
   if (stored) return NextResponse.json(stored);
 
+  let loaded: Awaited<ReturnType<typeof source>>;
+  try {
+    loaded = await source();
+  } catch (err) {
+    console.error("[translate] could not read the source", kind, id, err);
+    return NextResponse.json({ error: "This document could not be read for translation." }, { status: 502 });
+  }
+  const credits = creditsFor(loaded.pages);
+  if (body.confirm !== true) {
+    return NextResponse.json({ quote: { credits, pages: loaded.pages, balance: await getCredits() } });
+  }
+
   // Only a NEW translation is a paid AI call, so only that is rate limited.
   const limited = await enforce([[LIMITS.translateUser, session.id]]);
   if (limited) return limited;
 
-  const result = await translateContent({ kind: kind as ContentKind, id, locale, sourceHash, title, source });
+  const result = await translateContent({
+    kind: kind as ContentKind,
+    id,
+    locale,
+    sourceHash,
+    title,
+    credits,
+    content: loaded.content,
+  });
   return result.ok
     ? NextResponse.json(result)
     : NextResponse.json({ error: result.error }, { status: result.status });
