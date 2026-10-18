@@ -13,7 +13,7 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
     console.error("Refusing to run: @vercel/blob is the REAL store.");
     process.exit(1);
   }
-  const { savePermissions, getPermissions } = await import("../lib/rolesData");
+  const { savePermissions, permissionsForDisplay: getPermissions, getPermissions: getStored } = await import("../lib/rolesData");
   const { DEFAULT_PERMISSIONS } = await import("../lib/roles");
   // An old school: one renamed stock permission and one custom one, nothing else.
   await savePermissions([
@@ -27,6 +27,7 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
     ["every code permission listed", DEFAULT_PERMISSIONS.every((p) => keys.includes(p.key))],
     ["custom kept", keys.includes("custom_x")],
     ["no duplicates", new Set(keys).size === keys.length],
+    ["stored list untouched (seed/add/delete use it)", (await getStored()).length === 2],
     ["school's rename wins", (await getPermissions()).find((p) => p.key === "view_dashboard")?.name === "Renamed by the school"],
   ].filter(([, ok]) => !ok);
   for (const [n] of fails) console.log("FAIL", n);

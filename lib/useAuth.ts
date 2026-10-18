@@ -275,21 +275,34 @@ export async function apiErrorMessage(
 // what the server says now, so the menu shows a new feature or a newly ticked
 // permission without signing out and in. Grants nothing: the server decides
 // every request from the cookie regardless.
-let permissionsRefreshed = false;
-function refreshPermissions(): void {
-  if (permissionsRefreshed || typeof window === "undefined") return;
-  permissionsRefreshed = true;
-  fetch("/api/auth", { credentials: "same-origin" })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((d: { permissions?: unknown } | null) => {
-      const current = getSession();
-      if (!current || !d || !Array.isArray(d.permissions)) return;
-      const fresh = d.permissions.filter((p): p is string => typeof p === "string");
-      if ([...fresh].sort().join(",") !== [...current.permissions].sort().join(",")) {
-        updateSession({ permissions: fresh });
-      }
-    })
-    .catch(() => {});
+// Resolves to the up-to-date session, or null when it could not be checked.
+// Shared by every useAuth on the page; a failed attempt is retried next time.
+let permissionsRefresh: Promise<SessionPayload | null> | null = null;
+function refreshPermissions(): Promise<SessionPayload | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (!permissionsRefresh) {
+    permissionsRefresh = fetch("/api/auth", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { id?: unknown; permissions?: unknown } | null) => {
+        const current = getSession();
+        // Only for the same person: a cookie for someone else must not
+        // relabel this copy with their permissions.
+        if (!current || !d || d.id !== current.id || !Array.isArray(d.permissions)) {
+          permissionsRefresh = null;
+          return null;
+        }
+        const fresh = d.permissions.filter((p): p is string => typeof p === "string");
+        if ([...fresh].sort().join(",") !== [...current.permissions].sort().join(",")) {
+          updateSession({ permissions: fresh });
+        }
+        return getSession();
+      })
+      .catch(() => {
+        permissionsRefresh = null;
+        return null;
+      });
+  }
+  return permissionsRefresh;
 }
 
 export function useAuth(requiredPermission?: string | string[]) {
@@ -321,13 +334,32 @@ export function useAuth(requiredPermission?: string | string[]) {
       return;
     }
     const needed = permissionKey === "" ? [] : permissionKey.split(",");
-    if (needed.length > 0 && !needed.some((p) => s.permissions.includes(p))) {
-      router.replace("/dashboard");
-      return;
+    const allowed = (x: SessionPayload) => needed.length === 0 || needed.some((p) => x.permissions.includes(p));
+    let live = true;
+    if (!allowed(s)) {
+      // The copy may simply be older than a permission ticked since sign-in:
+      // ask the server before sending them away.
+      refreshPermissions().then((fresh) => {
+        if (!live) return;
+        if (fresh && allowed(fresh)) {
+          setSessionState(fresh);
+          setLoading(false);
+        } else {
+          router.replace("/dashboard");
+        }
+      });
+      return () => {
+        live = false;
+      };
     }
     setSessionState(s);
     setLoading(false);
-    refreshPermissions();
+    refreshPermissions().then((fresh) => {
+      if (live && fresh) setSessionState(fresh);
+    });
+    return () => {
+      live = false;
+    };
   }, [router, permissionKey]);
 
   return { session, loading };

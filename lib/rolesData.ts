@@ -71,15 +71,27 @@ export async function deleteRole(id: string): Promise<boolean> {
 }
 
 // --- Permissions CRUD ---
-// The stored list plus every permission the code defines. A key added in a
-// release (book_rooms, manage_rooms...) used to stay invisible on the Roles
-// page until someone re-ran /api/seed for that school, so on a new release
-// nobody could tick it anywhere. Stored entries win (a school may have
-// renamed one); custom ones are kept.
+/** The school's STORED list, as saved. Seeding, adding and deleting work on
+ *  this; the Roles page shows permissionsForDisplay(). */
 export async function getPermissions(): Promise<Permission[]> {
-  const stored = await readJson<Permission[]>(PERMISSIONS_PATH, []);
+  return readJson<Permission[]>(PERMISSIONS_PATH, []);
+}
+
+/**
+ * What the Roles page lists: the stored list plus every permission the code
+ * defines. A key added in a release (book_rooms, manage_rooms...) used to stay
+ * untickable until someone re-ran /api/seed for that school, and for every
+ * new school too. Read-only: nothing is written, so a stock permission's
+ * name still follows the code. Stored entries win; custom ones are kept.
+ */
+export async function permissionsForDisplay(): Promise<Permission[]> {
+  const stored = await getPermissions();
   const have = new Set(stored.map((p) => p.key));
   return [...stored, ...DEFAULT_PERMISSIONS.filter((p) => !have.has(p.key))];
+}
+
+export function isBuiltInPermission(key: string): boolean {
+  return DEFAULT_PERMISSIONS.some((p) => p.key === key);
 }
 
 export async function savePermissions(perms: Permission[]): Promise<void> {
