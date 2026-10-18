@@ -22,6 +22,13 @@ import { readJson, readJsonTolerant, writeJson, listFiles } from "./controlData"
 //
 //   activity/2026-09/2026-09-05T12:34:56.789Z-a1b2c3.json
 //
+// Sign-ins and sign-outs (entity "auth") go in their OWN partition,
+// activity-auth/<month>/, because there are far more of them than of
+// everything else and every view reads a whole month. The default view reads
+// activity/ only; the "Sign in" filter reads activity-auth/; the month export
+// reads both. 🔴 activity-auth is a sibling of activity/, never inside it:
+// activityMonths() treats every folder under activity/ as a month.
+//
 // ---------------------------------------------------------------------------
 
 export type ActivityEntity =
@@ -67,8 +74,10 @@ function monthOf(iso: string): string {
   return iso.slice(0, 7); // YYYY-MM
 }
 
+const folderFor = (entity?: ActivityEntity) => (entity === "auth" ? "activity-auth" : "activity");
+
 function pathFor(entry: ActivityEntry): string {
-  return `activity/${monthOf(entry.at)}/${entry.at}-${entry.id.slice(0, 6)}.json`;
+  return `${folderFor(entry.entity)}/${monthOf(entry.at)}/${entry.at}-${entry.id.slice(0, 6)}.json`;
 }
 
 /**
@@ -126,10 +135,22 @@ export function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-/** Months with at least one entry, newest first. */
+/** Months with at least one entry (in either partition), newest first. */
 export async function activityMonths(): Promise<string[]> {
-  const months = await listFiles("activity");
-  return months.filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
+  const [main, auth] = await Promise.all([listFiles("activity"), listFiles("activity-auth")]);
+  return [...new Set([...main, ...auth])].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
+}
+
+/** One partition's month, newest first. */
+async function readMonth(folder: string, month: string): Promise<ActivityEntry[]> {
+  const files = await listFiles(`${folder}/${month}`);
+  // The pathname starts with the ISO timestamp, so this is chronological.
+  // Reversed for the grid, because an audit log is read newest first.
+  const ordered = [...files].sort().reverse();
+  const loaded = await Promise.all(
+    ordered.map((name) => readJsonTolerant<ActivityEntry | null>(`${folder}/${month}/${name}`, null))
+  );
+  return loaded.filter((e): e is ActivityEntry => e !== null);
 }
 
 /**
@@ -146,18 +167,9 @@ export async function readActivity(
   const month = query.month || currentMonth();
   const availableMonths = await activityMonths();
 
-  const files = await listFiles(`activity/${month}`);
-  // The pathname starts with the ISO timestamp, so this is chronological.
-  // Reversed for the grid, because an audit log is read newest first.
-  const ordered = [...files].sort().reverse();
-
-  const loaded = await Promise.all(
-    ordered.map((name) =>
-      readJsonTolerant<ActivityEntry | null>(`activity/${month}/${name}`, null)
-    )
-  );
-
-  let entries = loaded.filter((e): e is ActivityEntry => e !== null);
+  // "auth" reads its own partition; everything else reads the main one,
+  // so the default view never downloads a month of sign-ins.
+  let entries = await readMonth(folderFor(query.entity), month);
 
   if (query.entity) entries = entries.filter((e) => e.entity === query.entity);
   if (query.actorId) entries = entries.filter((e) => e.actorId === query.actorId);
@@ -182,10 +194,11 @@ export async function readActivity(
   };
 }
 
-/** Every entry for a month, for export. No paging, no limit. */
+/** Every entry for a month, BOTH partitions merged by time, newest first,
+ *  for export. No paging, no limit. */
 export async function exportActivity(month: string): Promise<ActivityEntry[]> {
-  const page = await readActivity({ month, limit: Number.MAX_SAFE_INTEGER });
-  return page.entries;
+  const [main, auth] = await Promise.all([readMonth("activity", month), readMonth("activity-auth", month)]);
+  return [...main, ...auth].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
 
 /** CSV, oldest first, because that is how an audit trail is read end to end. */

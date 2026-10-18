@@ -22,7 +22,6 @@ interface UserRecord {
   createdAt: string;
   tagIds?: string[];
   roleName?: string;
-  lastSignInAt?: string | null;
 }
 
 interface RoleRecord {
@@ -83,13 +82,33 @@ export default function UsersPage() {
   // it from the user form.
   const [positions, setPositions] = useState<string[]>([]);
   const canManage = session?.permissions.includes("manage_users") ?? false;
-  // The API only sends lastSignInAt to someone who may read the sign-ins.
-  const showSignIns = users.some((u) => "lastSignInAt" in u);
+  // Last sign-in per user id, fetched ONCE per page load and apart from the
+  // user list (which refetches after every edit). Same gate as the Sign-ins
+  // view: anyone it refuses, or a failed read, simply gets no column.
+  const [lastSignIn, setLastSignIn] = useState<Record<string, string> | null>(null);
+  const showSignIns = lastSignIn !== null;
+  const signedIn = !!session;
+  useEffect(() => {
+    if (!signedIn) return;
+    let live = true;
+    authFetch("/api/activity/signins")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { rows?: { userId: string; lastAt?: string }[] };
+        const map: Record<string, string> = {};
+        for (const r of data.rows || []) if (r.lastAt) map[r.userId] = r.lastAt;
+        if (live) setLastSignIn(map);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [signedIn]);
 
   const fetchData = useCallback(async () => {
     const [usersRes, rolesRes, peopleRes, tagsRes, positionsRes] =
       await Promise.all([
-        authFetch("/api/users?withSignIns=1"),
+        authFetch("/api/users"),
         authFetch("/api/roles"),
         authFetch("/api/people"),
         authFetch("/api/tags"),
@@ -476,8 +495,8 @@ export default function UsersPage() {
                   </td>
                   {showSignIns && (
                     <td className="px-6 py-4 text-gray-600 text-xs whitespace-nowrap">
-                      {user.lastSignInAt
-                        ? new Date(user.lastSignInAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                      {lastSignIn?.[user.id]
+                        ? new Date(lastSignIn[user.id]).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
                         : "-"}
                     </td>
                   )}

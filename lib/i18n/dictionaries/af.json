@@ -1531,5 +1531,7 @@
   "No sign-in recorded since {date}": "Geen aanmelding aangeteken sedert {date} nie",
   "No sign-in recorded yet": "Nog geen aanmelding aangeteken nie",
   "Unknown address": "Onbekende adres",
-  "Unknown connection": "Onbekende verbinding"
+  "Unknown connection": "Onbekende verbinding",
+  "Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.": "Aanmeldings en afmeldings word nie hier gelys nie. Kies Meld aan in die filter, of maak die Aanmeldings-oortjie oop.",
+  "1 person has never signed in.": "1 persoon het nog nooit aangemeld nie."
 }

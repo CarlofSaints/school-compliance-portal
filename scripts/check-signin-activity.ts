@@ -38,8 +38,8 @@ async function main() {
   const { createUser, getUserById } = await import("../lib/userData");
   const { createSessionToken, SESSION_COOKIE } = await import("../lib/session");
   const { tenantScope } = await import("../lib/tenantContext");
-  const { readActivity } = await import("../lib/activityLog");
-  const { readSignInStats, buildSignInRows, deviceOf, sastDay, countSignIn, trackingSince } = await import("../lib/signinLog");
+  const { readActivity, exportActivity, recordActivity, activityMonths } = await import("../lib/activityLog");
+  const { readSignInStats, buildSignInRows, deviceOf, sastDay, countSignIn, trackingSince, maskTypedEmail } = await import("../lib/signinLog");
   const { LIMITS } = await import("../lib/rateLimit");
   const auth = await import("../app/api/auth/route");
   const changePw = await import("../app/api/auth/change-password/route");
@@ -102,6 +102,11 @@ async function main() {
   const tz = buildSignInRows([{ id: "tz", name: "T", surname: "Z", email: "tz@t", createdAt: "2026-10-18T11:00:00+02:00" }], {}, "2026-10-18T10:00:00.000Z");
   check(tz[0].never === false && tz[0].noneSinceTracking === true, "createdAt vs tracking date compared as instants, not text");
 
+  console.log("\nTyped addresses are masked, never stored raw");
+  check(maskTypedEmail("  jane.doe@hvps.co.za ") === "j***@hvps.co.za", `address masked (${maskTypedEmail("jane.doe@hvps.co.za")})`);
+  check(maskTypedEmail("Hunter2!secret") === "not an email address", "a non-address is not kept at all");
+  check(maskTypedEmail("x".repeat(300) + "@a.co") === "not an email address", "an over-long string is not kept");
+
   console.log("\nGood sign-in");
   check((await trackingSince()) === null, "no tracking date before the first sign-in");
   let res = await signIn(member.email, "pw-member-SECRET");
@@ -135,8 +140,7 @@ async function main() {
 
   console.log("\nUnknown email: one entry per connection per window");
   ipSeq = 5;
-  const longTyped = "  nobody@example.test" + "x".repeat(300) + "  ";
-  res = await signIn(longTyped, "whatever-SECRET");
+  res = await signIn("  nobody@example.test  ", "whatever-SECRET");
   check(res.status === 401, `HTTP ${res.status}`);
   check(lastQueued >= 1, "unknown-address logging ran after the response");
   for (let i = 0; i < 4; i++) await signIn(`other${i}@example.test`, "whatever-SECRET");
@@ -144,13 +148,27 @@ async function main() {
   const unk = entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId);
   check(unk.length === 1, `5 unknown-address attempts from one connection -> 1 entry (got ${unk.length})`);
   const typedFirst = String(unk[0]?.detail?.firstTypedEmail || "");
-  check(typedFirst.startsWith("nobody@example.test") && typedFirst.length <= 120, "no actorId; first typed address trimmed + capped, in detail", typedFirst);
+  check(typedFirst === "n***@example.test", "no actorId; first typed address kept MASKED, in detail", typedFirst);
   check(unk[0]?.actorName === "Unknown address" && !unk[0]?.summary.includes("nobody@"), "Who is the fixed 'Unknown address'; typed text not in actorName or summary", JSON.stringify(unk[0]));
-  await signIn("from-elsewhere@example.test", "whatever-SECRET", "10.0.0.6");
+  // Somebody types their password into the email box, from another connection.
+  await signIn("Hunter2!MyRealSECRETpassword", "whatever-SECRET", "10.0.0.6");
   entries = await authEntries();
-  check(entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId).length === 2, "a second connection gets its own entry");
+  const second = entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId);
+  check(second.length === 2, "a second connection gets its own entry");
+  check(second.some((e) => e.detail?.firstTypedEmail === "not an email address"), "a password typed as the email is kept only as 'not an email address'");
   st = await readSignInStats();
   check(Object.keys(st).every((k) => ["member", "admin", "newbie"].includes(k)), "unknown addresses NOT tallied");
+
+  console.log("\nA sign-in that fails to build its cookie is not logged");
+  const okBefore = (await authEntries()).filter((e) => e.action === "auth.sign_in").length;
+  const tallyBefore = total((await readSignInStats()).member?.days);
+  const secret = process.env.AUTH_SECRET;
+  delete process.env.AUTH_SECRET; // createSessionToken now throws
+  res = await signIn(member.email, "pw-member-SECRET", "10.0.0.60");
+  process.env.AUTH_SECRET = secret;
+  check(res.status === 500, `the sign-in 500s (HTTP ${res.status})`);
+  check((await authEntries()).filter((e) => e.action === "auth.sign_in").length === okBefore, "no auth.sign_in entry for it");
+  check(total((await readSignInStats()).member?.days) === tallyBefore, "and no tally");
 
   console.log("\nSeveral sign-ins");
   ipSeq = 3;
@@ -215,6 +233,17 @@ async function main() {
   check(res.status === 200, `change-password HTTP ${res.status}`);
   check((await authEntries()).some((e) => e.action === "auth.password_changed" && e.actorId === "member"), "auth.password_changed logged");
 
+  console.log("\nSign-ins have their own partition");
+  await recordActivity({ actorName: "Someone", action: "spend.approved", entity: "spend", summary: "approved something" });
+  const keysNow = [...store.keys()];
+  check(keysNow.some((k) => /\/activity-auth\/\d{4}-\d{2}\//.test(k)) && !keysNow.some((k) => /\/activity\/\d{4}-\d{2}\//.test(k) && k.includes("auth")), "auth entries stored under activity-auth/<month>/, not activity/");
+  const def = await readActivity({ limit: 10000 });
+  check(def.entries.length === 1 && def.entries.every((e) => e.entity !== "auth"), `the default view reads only non-auth entries (${def.entries.length})`);
+  check((await activityMonths()).length === 1, "activityMonths unaffected (one month, no stray folder)");
+  const exp = await exportActivity(def.month);
+  const sorted = [...exp].every((e, i) => i === 0 || exp[i - 1].at >= e.at);
+  check(exp.some((e) => e.entity === "auth") && exp.some((e) => e.entity === "spend") && sorted, `the month export has both, newest first (${exp.length})`);
+
   console.log("\nAPIs");
   // The password change re-keyed member's session, so sign the cookie with the new hash.
   res = await signins.GET(req("GET", "/api/activity/signins", { as: (await getUserById("member"))! }));
@@ -222,14 +251,11 @@ async function main() {
   res = await signins.GET(req("GET", "/api/activity/signins", { as: admin }));
   const body = await res.json();
   check(res.status === 200 && body.rows?.length === 5 && body.since === since, `admin gets 4 users + 1 removed, and the tracking date (HTTP ${res.status}, ${body.rows?.length} rows)`);
-  const plain = (await (await usersRoute.GET(req("GET", "/api/users", { as: admin }))).json()) as Record<string, unknown>[];
-  check(plain.length > 0 && plain.every((u) => !("lastSignInAt" in u)), "/api/users does not read sign-ins by default");
-  const withS = (await (await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: admin }))).json()) as { id: string; lastSignInAt?: string | null }[];
-  check(!!withS.find((u) => u.id === "member")?.lastSignInAt && withS.find((u) => u.id === "late")?.lastSignInAt === null, "/api/users?withSignIns=1 adds lastSignInAt");
+  const plain = (await (await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: admin }))).json()) as Record<string, unknown>[];
+  check(plain.length > 0 && plain.every((u) => !("lastSignInAt" in u)), "/api/users never carries sign-in data (Admin > Users fetches it separately, once)");
   const viewer = await mk("viewer2", "users-viewer");
-  res = await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: viewer }));
-  const vRows = (await res.json()) as Record<string, unknown>[];
-  check(res.status === 200 && vRows.every((u) => !("lastSignInAt" in u)), "view_users WITHOUT the activity permission gets no sign-in data, even with ?withSignIns=1");
+  res = await signins.GET(req("GET", "/api/activity/signins", { as: viewer }));
+  check(res.status === 403, `view_users WITHOUT the activity permission is refused the sign-ins (HTTP ${res.status}), so no column`);
 
   console.log("\nmeta.json is only touched on a user's FIRST tally");
   const metaKey = [...store.keys()].find((k) => k.endsWith("signins/meta.json"))!;

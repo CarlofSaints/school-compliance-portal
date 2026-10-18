@@ -210,6 +210,11 @@ export default function ActivityPage() {
         />
       </div>
 
+      {entity !== "auth" && (
+        <p className="text-xs text-gray-400 mb-2">
+          {t("Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.")}
+        </p>
+      )}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -316,7 +321,9 @@ function SignInsView() {
       <p className="text-sm text-gray-500 mb-3">
         {t("Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.")}
         {never > 0 && (
-          <span className="ml-2 text-risk-medium">{t("{count} people have never signed in.", { count: never })}</span>
+          <span className="ml-2 text-risk-medium">
+            {never === 1 ? t("1 person has never signed in.") : t("{count} people have never signed in.", { count: never })}
+          </span>
         )}
       </p>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">

@@ -396,26 +396,24 @@ export async function listFiles(dirPath: string): Promise<string[]> {
 /** listFiles, but a storage error is THROWN rather than read as an empty
  *  folder, for callers where "nothing there" would be a wrong answer. */
 export async function listFilesStrict(dirPath: string): Promise<string[]> {
-  {
-    const { prefix: tenantPrefix, token } = await scope();
-    // Resolved ONCE. The old version rebuilt the prefix inside the map, so
-    // every row paid for it; now it is also an await, which cannot go there.
-    const prefix = tenantPrefix + dirPath + "/";
+  const { prefix: tenantPrefix, token } = await scope();
+  // Resolved ONCE. The old version rebuilt the prefix inside the map, so
+  // every row paid for it; now it is also an await, which cannot go there.
+  const prefix = tenantPrefix + dirPath + "/";
 
-    // A Set, because the same child appears once per blob beneath it.
-    const names = new Set<string>();
-    let cursor: string | undefined;
-    do {
-      const result = await list({ prefix, limit: 1000, cursor, token });
-      for (const b of result.blobs) {
-        const full = b.pathname;
-        const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
-        const name = relative.split("/")[0];
-        if (name) names.add(name);
-      }
-      cursor = result.hasMore ? result.cursor : undefined;
-    } while (cursor);
+  // A Set, because the same child appears once per blob beneath it.
+  const names = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const result = await list({ prefix, limit: 1000, cursor, token });
+    for (const b of result.blobs) {
+      const full = b.pathname;
+      const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
+      const name = relative.split("/")[0];
+      if (name) names.add(name);
+    }
+    cursor = result.hasMore ? result.cursor : undefined;
+  } while (cursor);
 
-    return [...names];
-  }
+  return [...names];
 }

@@ -1531,5 +1531,7 @@
   "No sign-in recorded since {date}": "Akukho kungena kurekhodiweyo ukususela ngo-{date}",
   "No sign-in recorded yet": "Akukho kungena kurekhodiweyo okwangoku",
   "Unknown address": "Idilesi engaziwayo",
-  "Unknown connection": "Unxibelelwano olungaziwayo"
+  "Unknown connection": "Unxibelelwano olungaziwayo",
+  "Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.": "Ukungena nokuphuma akudweliswanga apha. Khetha u-Ngena kwisihluzi, okanye uvule ithebhu ethi Ukungena.",
+  "1 person has never signed in.": "Umntu omnye akakaze angene."
 }

@@ -3,8 +3,8 @@ import { LIMITS, peek, hit, clear, tooMany, ipOf, type Limit } from "@/lib/rateL
 import { getUserByEmail, getUserById, verifyPassword, type User } from "@/lib/userData";
 import { getRoleById, resolveRolePermissions } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
-import { clientIp, afterResponse } from "@/lib/activityActor";
-import { countSignIn, deviceOf } from "@/lib/signinLog";
+import { clientIp, afterResponse, actorFromUser } from "@/lib/activityActor";
+import { countSignIn, deviceOf, maskTypedEmail, sastIso } from "@/lib/signinLog";
 import { SessionPayload } from "@/lib/roles";
 import {
   SESSION_COOKIE,
@@ -65,15 +65,11 @@ export async function POST(req: NextRequest) {
     const limitKey = ipOf(req);
     const ip = clientIp(req);
     const device = deviceOf(req.headers.get("user-agent"));
-    // What was typed, for detail only. Never the actor or summary: it is
-    // a stranger's input and would forge the "Who" column. Capped.
-    const typed = String(email).trim().slice(0, 120);
-    const actorOf = (u: User) => ({
-      actorId: u.id,
-      actorName: `${u.name} ${u.surname}`.trim() || u.email,
-      actorEmail: u.email,
-      ip,
-    });
+    // What was typed, for detail only, and MASKED (people type their
+    // password here). Never the actor or summary: it is a stranger's input
+    // and would forge the "Who" column.
+    const typed = maskTypedEmail(email);
+    const actorOf = (u: User) => actorFromUser(req, u);
 
     // Rate limits: every attempt counts against the connection; WRONG
     // passwords count against the address, whether or not it has an account,
@@ -104,6 +100,8 @@ export async function POST(req: NextRequest) {
     if (!user) {
       await hit(LIMITS.loginAccount, account);
       await afterResponse(async () => {
+        // Read first: only the first attempt in a window writes the marker.
+        if (!(await peek(UNKNOWN_ADDRESS_LOG, limitKey)).ok) return;
         const marker = await hit(UNKNOWN_ADDRESS_LOG, limitKey);
         if (marker.count !== 1) return;
         await recordActivity({
@@ -138,7 +136,7 @@ export async function POST(req: NextRequest) {
         ]);
         // The wrong password that locks the account, logged once per lock.
         if (accountHit.count === LIMITS.loginAccount.max) {
-          const until = sastTime(Date.now() + accountHit.retryAfter * 1000);
+          const until = sastIso(Date.now() + accountHit.retryAfter * 1000).slice(11, 16);
           await recordActivity({
             ...actorOf(user),
             action: "auth.sign_in_blocked",
@@ -168,6 +166,20 @@ export async function POST(req: NextRequest) {
       permissions: resolveRolePermissions(user.role, role),
     };
 
+    // The cookie IS the sign-in now. `session` in the body is only what the
+    // pages draw (name, menu); the server never believes it.
+    const { key: tenantKey } = await tenantScope();
+    const res = NextResponse.json({
+      session,
+      forcePasswordChange: user.forcePasswordChange,
+    });
+    res.cookies.set(
+      SESSION_COOKIE,
+      createSessionToken(user, tenantKey),
+      sessionCookieOptions(isHttps(req))
+    );
+    // Queued only now the reply with the cookie exists: a sign-in that failed
+    // to build one must not be logged as signed in.
     await afterResponse(() =>
       Promise.all([
         recordActivity({
@@ -181,19 +193,6 @@ export async function POST(req: NextRequest) {
         countSignIn(user, "ok", ip, device),
       ])
     );
-
-    // The cookie IS the sign-in now. `session` in the body is only what the
-    // pages draw (name, menu); the server never believes it.
-    const { key: tenantKey } = await tenantScope();
-    const res = NextResponse.json({
-      session,
-      forcePasswordChange: user.forcePasswordChange,
-    });
-    res.cookies.set(
-      SESSION_COOKIE,
-      createSessionToken(user, tenantKey),
-      sessionCookieOptions(isHttps(req))
-    );
     return res;
   } catch {
     return NextResponse.json(
@@ -201,11 +200,6 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-/** "14:35", in SAST (UTC+2). */
-function sastTime(ms: number): string {
-  return new Date(ms + 2 * 60 * 60 * 1000).toISOString().slice(11, 16);
 }
 
 // Sign out. Clears the cookie; the page clears its own copy of the session.
@@ -219,7 +213,6 @@ export async function DELETE(req: NextRequest) {
   // signature check, no retries. A failure only means the sign-out goes
   // unlogged, never that it is slowed down or refused.
   const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const ip = clientIp(req);
   const device = deviceOf(req.headers.get("user-agent"));
   await afterResponse(async () => {
     try {
@@ -228,10 +221,7 @@ export async function DELETE(req: NextRequest) {
       const { key: tenantKey } = await tenantScope();
       if (!token || !user || !verifySessionToken(token, user, tenantKey)) return;
       await recordActivity({
-        actorId: user.id,
-        actorName: `${user.name} ${user.surname}`.trim() || user.email,
-        actorEmail: user.email,
-        ip,
+        ...actorFromUser(req, user),
         action: "auth.sign_out",
         entity: "auth",
         entityId: user.id,

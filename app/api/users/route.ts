@@ -8,8 +8,6 @@ import {
   roleExists,
 } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
-import { readSignInStats } from "@/lib/signinLog";
-import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityLog";
 import { sendWelcomeEmail } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
 
@@ -21,23 +19,12 @@ export async function GET(req: NextRequest) {
   ]);
   if (session instanceof NextResponse) return session;
 
-  // Sign-in data only when asked (Admin > Users), only for someone who may
-  // also read the Sign-ins view (the same gate), and never fatal: without it
-  // the page just shows no Last sign-in column.
-  const withSignIns =
-    req.nextUrl.searchParams.get("withSignIns") === "1" &&
-    ACTIVITY_VIEW_PERMISSIONS.some((k) => session.permissions.includes(k));
-  const [users, roles, stats] = await Promise.all([
-    getUsers(),
-    getRoles(),
-    withSignIns ? readSignInStats().catch(() => null) : null,
-  ]);
+  const [users, roles] = await Promise.all([getUsers(), getRoles()]);
   // The role NAME is included so a read-only viewer, who cannot call
   // /api/roles, still sees "SGB Admin" rather than a raw role id.
   const safe = users.map(({ password, ...u }) => ({
     ...u,
     roleName: roles.find((r) => r.id === u.role)?.name || u.role,
-    ...(stats ? { lastSignInAt: stats[u.id]?.lastAt || null } : {}),
   }));
   return NextResponse.json(safe);
 }

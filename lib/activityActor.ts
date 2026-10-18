@@ -42,6 +42,19 @@ export function actorFrom(req: NextRequest, session: SessionPayload): Actor {
   };
 }
 
+/** The "who" for a known user without a session (signing in, a reset link). */
+export function actorFromUser(
+  req: NextRequest,
+  user: { id: string; name: string; surname: string; email: string }
+): Actor {
+  return {
+    actorId: user.id,
+    actorName: `${user.name} ${user.surname}`.trim() || user.email,
+    actorEmail: user.email,
+    ip: clientIp(req),
+  };
+}
+
 // Writes queued outside a request (the check scripts call route handlers
 // directly, where after() has no request to attach to).
 const pendingOutsideRequest: Promise<unknown>[] = [];

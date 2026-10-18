@@ -1531,5 +1531,7 @@
   "No sign-in recorded since {date}": "Ga go na go tsena go go kwadilweng go simolola ka {date}",
   "No sign-in recorded yet": "Ga go ise go nne le go tsena go go kwadilweng",
   "Unknown address": "Aterese e e sa itsiweng",
-  "Unknown connection": "Kgolagano e e sa itsiweng"
+  "Unknown connection": "Kgolagano e e sa itsiweng",
+  "Sign-ins and sign-outs are not listed here. Choose Sign in in the filter, or open the Sign-ins tab.": "Go tsena le go tswa ga go kwalwa fa. Tlhopha Tsena mo sesefong, kgotsa o bule thebe ya Go tsena.",
+  "1 person has never signed in.": "Motho a le mongwe ga a ise a tsene."
 }

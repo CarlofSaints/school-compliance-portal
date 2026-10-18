@@ -1,4 +1,5 @@
-import { readJson, updateJson, listFilesStrict, NO_CHANGE } from "./controlData";
+import { readJson, readJsonTolerant, updateJson, listFilesStrict, NO_CHANGE } from "./controlData";
+import { isPlausibleEmail } from "./emailIdentity";
 
 // ---------------------------------------------------------------------------
 // "How often does each person sign in?"
@@ -37,9 +38,28 @@ const SAST_MS = 2 * 60 * 60 * 1000;
 const userPath = (id: string) => `signins/users/${id}.json`;
 const META_PATH = "signins/meta.json";
 
+/** An instant as SAST wall-clock time, ISO-shaped ("YYYY-MM-DDTHH:MM..."). */
+export function sastIso(ms: number): string {
+  return new Date(ms + SAST_MS).toISOString();
+}
+
 /** The SAST calendar day of an instant, as "YYYY-MM-DD". */
 export function sastDay(ms: number): string {
-  return new Date(ms + SAST_MS).toISOString().slice(0, 10);
+  return sastIso(ms).slice(0, 10);
+}
+
+/**
+ * What may be kept of what somebody typed into the email box.
+ *
+ * 🔴 Never the raw text: people type their PASSWORD into the email box. A
+ * plausible address is kept masked ("j***@hvps.co.za"); anything else is
+ * kept only as the fact that it was not an address.
+ */
+export function maskTypedEmail(typed: unknown): string {
+  const s = String(typed ?? "").trim();
+  if (!isPlausibleEmail(s)) return "not an email address";
+  const at = s.lastIndexOf("@");
+  return `${s[0]}***@${s.slice(at + 1).slice(0, 100)}`;
 }
 
 /** "Chrome on Windows". Best effort, and never more than a short label. */
@@ -113,11 +133,12 @@ export async function countSignIn(
   }
 }
 
-/** Every user's tally, by user id, read in parallel. THROWS on a storage
- *  error: an empty answer would read as "nobody has signed in". */
+/** Every user's tally, by user id, read in parallel. The LISTING throws on a
+ *  storage error (an empty answer would read as "nobody has signed in"); one
+ *  unreadable file is skipped rather than failing the whole view. */
 export async function readSignInStats(): Promise<Record<string, SignInStat>> {
   const ids = (await listFilesStrict("signins/users")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
-  const stats = await Promise.all(ids.map((id) => readJson<SignInStat | null>(userPath(id), null)));
+  const stats = await Promise.all(ids.map((id) => readJsonTolerant<SignInStat | null>(userPath(id), null)));
   const out: Record<string, SignInStat> = {};
   ids.forEach((id, i) => {
     if (stats[i]) out[id] = stats[i]!;

@@ -4,7 +4,7 @@ import { getUserByEmail } from "@/lib/userData";
 import { createResetToken, RESET_TTL_MS } from "@/lib/passwordReset";
 import { sendPasswordResetLinkEmail, isEmailConfigured } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
-import { clientIp } from "@/lib/activityActor";
+import { actorFromUser, afterResponse } from "@/lib/activityActor";
 import { deviceOf } from "@/lib/signinLog";
 
 // Unauthenticated by design — the whole point is that the caller cannot log in.
@@ -66,17 +66,18 @@ export async function POST(req: NextRequest) {
     }
     // Only for a real account: an unknown address is not logged here, or the
     // log would fill with whatever a stranger types into a public form.
-    await recordActivity({
-      actorId: user.id,
-      actorName: `${user.name} ${user.surname}`.trim() || user.email,
-      actorEmail: user.email,
-      ip: clientIp(req),
-      action: "auth.password_reset_requested",
-      entity: "auth",
-      entityId: user.id,
-      summary: "Asked for a password reset link",
-      detail: { device: deviceOf(req.headers.get("user-agent")) },
-    });
+    // After the reply, like sign-in: the log cannot change how long it takes.
+    const actor = actorFromUser(req, user);
+    await afterResponse(() =>
+      recordActivity({
+        ...actor,
+        action: "auth.password_reset_requested",
+        entity: "auth",
+        entityId: user.id,
+        summary: "Asked for a password reset link",
+        detail: { device: deviceOf(req.headers.get("user-agent")) },
+      })
+    );
     return same;
   } catch (err) {
     console.error("[forgot-password] Failed:", err);
