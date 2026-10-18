@@ -71,6 +71,8 @@ export interface RoomRequest {
    *  an approve the requester holds it and the old holder does not. */
   holderIds?: string[];
   holderName?: string;
+  /** Who answered it, so they can still see the outcome after handing over. */
+  answeredById?: string;
 }
 
 /** Why a pending request stopped being answerable. The requester is emailed. */
@@ -284,16 +286,40 @@ export interface RoomInput {
   notes: string;
 }
 
+/** A new room: name and capacity required, colour and notes defaulted. */
 export function parseRoomInput(body: unknown): Parsed<RoomInput> {
   const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
-  const name = text(b.name, 60, true, "Room name");
-  if (typeof name !== "string") return { ok: false, ...name };
-  if (!isInt(b.capacity, 1, 500)) return { ok: false, error: "Capacity must be a whole number from 1 to 500" };
-  const color = b.color === undefined || b.color === "" ? "#0d9488" : b.color;
-  if (typeof color !== "string" || !HEX.test(color)) return { ok: false, error: "Pick a colour" };
-  const notes = text(b.notes, 300, false, "Notes");
-  if (typeof notes !== "string") return { ok: false, ...notes };
-  return { ok: true, value: { name, capacity: b.capacity, color, notes } };
+  const part = parseRoomUpdate({ ...b, color: b.color === undefined || b.color === "" ? "#0d9488" : b.color, notes: b.notes ?? "" });
+  if (!part.ok) return part;
+  if (part.value.name === undefined) return { ok: false, error: "Room name is required" };
+  if (part.value.capacity === undefined) return { ok: false, error: "Capacity must be a whole number from 1 to 500" };
+  return { ok: true, value: part.value as RoomInput };
+}
+
+/** An edit: only the fields present in the body are checked and written; an
+ *  absent colour or notes stays as it is (no defaults on update). */
+export function parseRoomUpdate(body: unknown): Parsed<Partial<RoomInput>> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Partial<RoomInput> = {};
+  if ("name" in b) {
+    const name = text(b.name, 60, true, "Room name");
+    if (typeof name !== "string") return { ok: false, ...name };
+    out.name = name;
+  }
+  if ("capacity" in b) {
+    if (!isInt(b.capacity, 1, 500)) return { ok: false, error: "Capacity must be a whole number from 1 to 500" };
+    out.capacity = b.capacity;
+  }
+  if ("color" in b) {
+    if (typeof b.color !== "string" || !HEX.test(b.color)) return { ok: false, error: "Pick a colour" };
+    out.color = b.color;
+  }
+  if ("notes" in b) {
+    const notes = text(b.notes, 300, false, "Notes");
+    if (typeof notes !== "string") return { ok: false, ...notes };
+    out.notes = notes;
+  }
+  return { ok: true, value: out };
 }
 
 export interface BookingInput {
@@ -802,7 +828,10 @@ export async function updateBooking(
       before.title !== input.title || before.date !== input.date || before.startMinute !== input.startMinute ||
       before.endMinute !== input.endMinute || before.attendeeCount !== input.attendeeCount;
     const otherHolder = holders(before).some((h) => h.email.toLowerCase() !== actor.email.toLowerCase());
-    const willEmail = holderChanged || (moved && before.requests.some((r) => r.status === "pending")) || (changed && otherHolder);
+    // A move or re-hold also sends the reminder at once if it now starts before
+    // the next run's cutoff (remindNowIfBeforeNextRun).
+    const remindsNow = (moved || holderChanged) && startsAtMs(input.date, input.startMinute) < remindCutoffMs(nowAt);
+    const willEmail = holderChanged || (moved && before.requests.some((r) => r.status === "pending")) || (changed && otherHolder) || remindsNow;
     if (!(await beforeWrite(willEmail))) return fail(429, "Too many emails");
   }
 
@@ -1310,6 +1339,8 @@ export interface RequestView {
   canAnswer: boolean;
   /** The meeting has started: nobody can answer any more. */
   started: boolean;
+  /** Seen by someone who answered it but no longer holds it: outcome only. */
+  readOnly: boolean;
   viewerRole: "holder" | "requester" | "manager";
 }
 
@@ -1328,16 +1359,19 @@ export async function getRequestView(actor: Actor, token: string): Promise<Outco
   const booking = (await readMonth(ptr.roomId, ptr.month)).find((b) => b.id === ptr.bookingId);
   const request = booking?.requests.find((r) => r.token === token);
   if (!booking || !request) return fail(404, "That request no longer exists");
-  // Access and wording come from who held it WHEN ASKED (recorded on the
-  // request), so the old holder can still open their link after an approve,
-  // and the requester, who now holds it, still reads as the requester.
+  // Access: whoever holds the booking NOW, the requester, room managers. A
+  // holder who has since handed it over loses access, except that whoever
+  // answered may still see the outcome (read only, without the message).
   const isRequester = request.requesterId === actor.id;
-  const wasHolder = (request.holderIds ?? []).includes(actor.id) || isHolder(booking, actor.id);
-  if (!isRequester && !wasHolder && !canManageRooms(actor)) return fail(403, "Only the people holding this room can answer this");
+  const holdsNow = isHolder(booking, actor.id);
+  const answeredIt = request.answeredById === actor.id;
+  const manager = canManageRooms(actor);
+  if (!isRequester && !holdsNow && !manager && !answeredIt) return fail(403, "Only the people holding this room can answer this");
+  const readOnly = !isRequester && !holdsNow && !manager;
   const started = isPast(booking.date, booking.startMinute);
-  const canAnswer = request.status === "pending" && !started && mayAnswer(actor, booking, request);
-  const viewerRole = isRequester ? "requester" : wasHolder ? "holder" : "manager";
-  return { ok: true, value: { booking, request, room: await getRoom(ptr.roomId), canAnswer, started, viewerRole } };
+  const canAnswer = !readOnly && request.status === "pending" && !started && mayAnswer(actor, booking, request);
+  const viewerRole = isRequester ? "requester" : holdsNow || answeredIt ? "holder" : "manager";
+  return { ok: true, value: { booking, request, room: await getRoom(ptr.roomId), canAnswer, started, viewerRole, readOnly } };
 }
 
 /** The holder's answer. Approving hands the slot over IN PLACE: same room and
@@ -1416,8 +1450,8 @@ export async function respondToRequest(
       return NO_CHANGE;
     }
     answered = decision === "approve"
-      ? { ...req, status: "approved", respondedAt: now }
-      : { ...req, status: "declined", declineReason: reason.trim().slice(0, 1000), respondedAt: now };
+      ? { ...req, status: "approved", respondedAt: now, answeredById: actor.id }
+      : { ...req, status: "declined", declineReason: reason.trim().slice(0, 1000), respondedAt: now, answeredById: actor.id };
     // Approving gives the slot away, so every other pending ask for it lapses.
     const requests = (decision === "approve" ? withdrawAll(cur, now, (r) => r.token === token) : cur.requests).map((r) =>
       r.token === token ? answered! : r
@@ -1489,7 +1523,7 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
 }
 
 /** A meeting this recently started, never reminded, is still reminded. */
-export const REMIND_LATE_GRACE_MS = 15 * 60_000;
+export const REMIND_LATE_GRACE_MS = 45 * 60_000; // Vercel can fire the 07:00 cron up to ~30 min late
 
 /** A reminder claim this old without its finish is a run that died. */
 export const REMINDER_CLAIM_STALE_MS = 15 * 60_000;
@@ -1500,21 +1534,22 @@ export async function lapseStartedRequests(now: Date = new Date()): Promise<{ wi
   const today = sastToday(now);
   const months = [...new Set([addDays(today, -31), today].map(monthOf))];
   const out: { withdrawn: Withdrawal[]; room: Room }[] = [];
-  for (const room of await getRooms()) {
-    for (const m of months) {
-      let hit: Withdrawal[] = [];
-      await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (list) => {
-        hit = [];
-        const stamp = new Date().toISOString();
-        const next = list.map((b) => {
-          if (b.status !== "confirmed" || !b.requests.some((r) => r.status === "pending") || !isPast(b.date, b.startMinute, now)) return b;
-          hit.push(...pendingWithdrawals(b, "lapsed"));
-          return touch(b, { requests: withdrawAll(b, stamp) });
-        });
-        return hit.length ? next : NO_CHANGE;
+  const due = (b: RoomBooking) => b.status === "confirmed" && b.requests.some((r) => r.status === "pending") && isPast(b.date, b.startMinute, now);
+  // Read every room's months at once; write only the files that hold one.
+  const reads = await Promise.all((await getRooms()).flatMap((room) => months.map(async (m) => ({ room, m, list: await readMonthRaw(room.id, m) }))));
+  for (const { room, m } of reads.filter((r) => r.list.some(due))) {
+    let hit: Withdrawal[] = [];
+    await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (list) => {
+      hit = [];
+      const stamp = new Date().toISOString();
+      const next = list.map((b) => {
+        if (!due(b)) return b;
+        hit.push(...pendingWithdrawals(b, "lapsed"));
+        return touch(b, { requests: withdrawAll(b, stamp) });
       });
-      if (hit.length) out.push({ withdrawn: hit, room });
-    }
+      return hit.length ? next : NO_CHANGE;
+    });
+    if (hit.length) out.push({ withdrawn: hit, room });
   }
   return out;
 }

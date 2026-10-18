@@ -11,7 +11,8 @@
 // all"). The calendar draws the whole day and opens scrolled to SCROLL_TO.
 // ---------------------------------------------------------------------------
 
-import { tk, type T } from "./i18n/translate";
+import { makeT, tk, type T } from "./i18n/translate";
+import { schoolNow, schoolToday } from "./actionSummary";
 import { addDays } from "./actionItems";
 
 export const DAY_START_MINUTE = 0;
@@ -24,8 +25,8 @@ export const MIN_DURATION = 5;
 /** How many occurrences a repeat may produce, as in COLAB. */
 export const MAX_OCCURRENCES = 52;
 
-const plain: T = (s, vars) =>
-  vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)) : s;
+// The untranslated (English) labels: the portal's own translator with no dictionary.
+const plain: T = makeT({});
 
 /** "08:30" from 510. 1440 reads "24:00". */
 export function minuteLabel(m: number): string {
@@ -102,13 +103,14 @@ export function monthOf(key: string): string {
 }
 
 /** Today in South Africa (UTC+2, no daylight saving). */
+/** Today in South Africa: the portal's one rule (lib/actionSummary.ts). */
 export function sastToday(now: Date = new Date()): string {
-  return new Date(now.getTime() + 2 * 3_600_000).toISOString().slice(0, 10);
+  return schoolToday(now);
 }
 
 /** Minutes since midnight in South Africa right now. */
 export function sastNowMinute(now: Date = new Date()): number {
-  const d = new Date(now.getTime() + 2 * 3_600_000);
+  const d = schoolNow(now);
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 

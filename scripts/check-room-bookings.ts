@@ -455,7 +455,8 @@ async function main() {
 
   // T1 after the hand-over: roles and access come from who held it when asked
   check("T1 request records who held it", samAsk.value.request.holderIds, ["erin"]);
-  check("T1 old holder can still open it, as holder", (await roleOf(erin)).viewerRole, "holder");
+  // (Final review: access is current holders + requester + managers; Erin handed over and did not answer.)
+  check("T1 a holder who handed over, and did not answer, loses access", (await reqRoute.GET(get(erin, `/api/bookings/request/${samAsk.value.request.token}`), { params: Promise.resolve({ token: samAsk.value.request.token }) })).status, 403);
   check("T1 requester (now holding it) still reads as requester", (await roleOf(sam)).viewerRole, "requester");
   check("T1 holder name is the original holder", (await roleOf(sam)).holderName, "Erin Member");
 
@@ -1037,7 +1038,7 @@ async function main() {
   check("H8 pointer failure throws and takes the request back out", [h8fail, (await D.findBooking(S8.id, h8b.date, h8b.id))?.requests.some((q) => q.requesterId === "cara")], ["threw", false]);
 
   // H9 one paced sender, shared with the action items
-  check("H9 room mail uses the action items' paced sender", [readFileSync("lib/roomBookingNotify.ts", "utf8").includes("SEND_GAP_MS"), readFileSync("lib/roomBookingNotify.ts", "utf8").includes("await sendPaced("), readFileSync("lib/actionItemNotify.ts", "utf8").includes("export async function sendPaced")], [false, true, true]);
+  check("H9 room mail paces with the action items' pause, no copy of its own", [readFileSync("lib/roomBookingNotify.ts", "utf8").includes("SEND_GAP_MS"), readFileSync("lib/roomBookingNotify.ts", "utf8").includes('import { pause } from "./actionItemNotify"'), readFileSync("lib/actionItemNotify.ts", "utf8").includes("export function pause")], [false, true, true]);
 
   // ======================= ninth review =======================
   const S9 = await mkRoom("Hall Nine");
@@ -1128,7 +1129,8 @@ async function main() {
   if (!i2b.ok) throw new Error("create failed");
   const lateFire = new Date("2030-10-09T05:10:00Z"); // the cron fires 10 minutes late
   check("I2 late cron: a meeting started 10 minutes ago, never reminded, is still due", (await D.bookingsDueForReminder(lateFire)).some((x) => x.booking.id === i2b.value.bookings[0].id), true);
-  check("I2 but not 30 minutes after it started", (await D.bookingsDueForReminder(new Date("2030-10-09T05:30:00Z"))).some((x) => x.booking.id === i2b.value.bookings[0].id), false);
+  check("I2 still due 30 minutes after it started (the cron can fire ~30 min late)", (await D.bookingsDueForReminder(new Date("2030-10-09T05:30:00Z"))).some((x) => x.booking.id === i2b.value.bookings[0].id), true);
+  check("I2 but not 50 minutes after it started", (await D.bookingsDueForReminder(new Date("2030-10-09T05:50:00Z"))).some((x) => x.booking.id === i2b.value.bookings[0].id), false);
 
   // I3 edits that move or re-hold, and approves, also remind at once when due before the next run
   check("I3 edit route reminds at once", readFileSync("app/api/bookings/[id]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room, mail)"), true);
@@ -1226,6 +1228,85 @@ async function main() {
   const roomsRoute = readFileSync("app/api/rooms/route.ts", "utf8");
   const roomRoute = readFileSync("app/api/rooms/[id]/route.ts", "utf8");
   check("J9 rooms write limit and conditional email limit", [roomsRoute.includes("LIMITS.bookingWriteUser"), (roomRoute.match(/LIMITS.bookingWriteUser/g) ?? []).length, roomRoute.includes("(await upcomingBookings(id)).length > 0")], [true, 2, true]);
+
+  // ======================= final review =======================
+  const { schoolToday } = await import("../lib/actionSummary");
+  const SK = await mkRoom("Hall Final");
+  const SK2 = await mkRoom("Hall Final Two");
+  const eK = new Date("2031-08-01T00:00:00Z");
+
+  // K1 one booking's reminder failing does not stop the others; it is handed back
+  const k1a = await D.createBooking(erinA, inp(SK.id, "2031-09-02", 600, 660), eK);
+  const k1b = await D.createBooking(erinA, inp(SK2.id, "2031-09-02", 600, 660, { title: "Survivor" }), eK);
+  if (!k1a.ok || !k1b.ok) throw new Error("create failed");
+  let k1writes = 0;
+  putHook.put = async (...a: unknown[]) => {
+    if (String(a[0]).endsWith(`rooms/bookings/${SK.id}/2031-09.json`)) {
+      k1writes++;
+      if (k1writes === 2) throw new Error("store down"); // the claim lands, the finish fails, the hand-back lands
+    }
+    return realPut(...a);
+  };
+  outbox.length = 0;
+  const k1 = await quiet(() => runRem(new Date("2031-09-02T05:00:00Z")));
+  putHook.put = realPut;
+  check("K1 the other booking is still reminded", outbox.some((m) => m.subject.includes("Survivor")), true);
+  check("K1 the failure is logged per booking", k1.detail.some((d) => d.includes("reminder failed")), true);
+  check("K1 the failed one is handed back (no claim left)", (await D.findBooking(SK.id, "2031-09-02", k1a.value.bookings[0].id))?.reminderSentAt ?? null, null);
+
+  // K2 a 07:10 meeting booked at 06:50 is reminded at once (the cron may fire late)
+  const k2 = await D.createBooking(erinA, inp(SK.id, "2031-09-09", 430, 490), eK); // 07:10
+  if (!k2.ok) throw new Error("create failed");
+  check("K2 06:50 booking for 07:10: reminded at once", (await viaMail((q) => remindNow(k2.value.bookings[0], SK, q, new Date("2031-09-09T04:50:00Z")))).reminded, true);
+
+  // K3 an edit writes only the fields sent: no defaults on update
+  const k3 = D.parseRoomUpdate({ name: "Only the name" });
+  check("K3 partial update parses only the name", k3.ok && Object.keys(k3.value), ["name"]);
+  const k3room = await mkRoom("Keep My Colour");
+  await D.saveRoom(admin, k3room.id, { color: "#4f46e5", notes: "Projector" });
+  const k3r = await D.saveRoom(admin, k3room.id, (k3 as { value: { name: string } }).value);
+  check("K3 colour and notes survive a name-only edit", k3r.ok && [k3r.value.room.name, k3r.value.room.color, k3r.value.room.notes], ["Only the name", "#4f46e5", "Projector"]);
+  check("K3 a create still needs name and capacity", D.parseRoomInput({ name: "No capacity" }).ok, false);
+
+  // K4 who answered may still see the outcome (read only, no message); a holder who did not, may not
+  const k4 = await D.createBooking(erinA, inp(SK.id, "2031-09-16", 600, 660, { bookedForId: "cara" }), eK);
+  if (!k4.ok) throw new Error("create failed");
+  const k4b = k4.value.bookings[0];
+  const k4q = await D.requestRoom(bob, SK.id, k4b.date, k4b.id, { title: "Bob", message: "PRIVATE NOTE", attendeeCount: 1 }, eK);
+  if (!k4q.ok) throw new Error("request failed");
+  await D.respondToRequest(erinA, k4q.value.request.token, "approve", "", eK);
+  const k4erin = await D.getRequestView(erinA, k4q.value.request.token);
+  check("K4 the answerer sees the outcome, read only", k4erin.ok && [k4erin.value.readOnly, k4erin.value.canAnswer, k4erin.value.request.status], [true, false, "approved"]);
+  check("K4 the old co-holder who did not answer: no access", status(await D.getRequestView(caraA, k4q.value.request.token)), 403);
+  check("K4 the request page hides the message when read only", readFileSync("app/api/bookings/request/[token]/route.ts", "utf8").includes('message: readOnly ? "" : request.message'), true);
+
+  // K5 willEmail counts the immediate reminder an edit will send
+  const k5 = await D.createBooking(erinA, inp(SK.id, "2031-09-30", 600, 660), eK);
+  if (!k5.ok) throw new Error("create failed");
+  const k5b = k5.value.bookings[0];
+  const k5seen: boolean[] = [];
+  await D.updateBooking(erinA, k5b.id, k5b.date, inp(SK.id, "2031-09-23", 450, 510), new Date("2031-09-22T13:00:00Z"), async (w) => (k5seen.push(w), true)); // moved to tomorrow 07:30
+  check("K5 a move that triggers the immediate reminder counts as emailing", k5seen, [true]);
+
+  // K6 the queue sends without settle(): nothing hangs
+  check("K6 a queued message goes even if settle is never called", await new MailQueue().add(async () => true), true);
+
+  // K7 one SAST "today"
+  const { sastToday: st } = await import("../lib/roomBookings");
+  check("K7 sastToday is the portal's schoolToday", [st(new Date("2031-01-01T22:30:00Z")), schoolToday(new Date("2031-01-01T22:30:00Z"))], ["2031-01-02", "2031-01-02"]);
+
+  // K9 the lapse pass reads first and writes only files that need it
+  let lapseWrites = 0;
+  putHook.put = async (...a: unknown[]) => {
+    if (String(a[0]).includes("rooms/bookings/")) lapseWrites++;
+    return realPut(...a);
+  };
+  await D.lapseStartedRequests(new Date("2031-12-01T00:00:00Z"));
+  const firstPass = lapseWrites;
+  lapseWrites = 0;
+  await D.lapseStartedRequests(new Date("2031-12-01T00:00:00Z"));
+  putHook.put = realPut;
+  check("K9 a second lapse pass with nothing left writes no booking file", [firstPass >= 0, lapseWrites], [true, 0]);
 
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

@@ -115,10 +115,12 @@ export default function RoomRequestPage() {
                 </div>
               ))}
             </dl>
-            <div>
-              <p className="mb-1 text-gray-500">{role === "requester" ? t("You wrote:") : t("{name} says:", { name: detail.requesterName })}</p>
-              <blockquote className="rounded-lg border-l-4 border-primary bg-gray-50 px-3 py-2">{detail.message}</blockquote>
-            </div>
+            {detail.message && (
+              <div>
+                <p className="mb-1 text-gray-500">{role === "requester" ? t("You wrote:") : t("{name} says:", { name: detail.requesterName })}</p>
+                <blockquote className="rounded-lg border-l-4 border-primary bg-gray-50 px-3 py-2">{detail.message}</blockquote>
+              </div>
+            )}
 
             {detail.status !== "pending" ? (
               <div className="rounded-lg bg-gray-50 px-3 py-3">

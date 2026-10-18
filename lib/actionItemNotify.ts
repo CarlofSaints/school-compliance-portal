@@ -16,20 +16,11 @@ import { sendActionAssignedEmail, sendActionReminderEmail } from "./email";
 // goes out one at a time with a breath in between.
 export const SEND_GAP_MS = 600;
 
+/** Shared with the room-booking mail queue (lib/roomBookingNotify.ts). */
 export function pause(): Promise<void> {
   return new Promise((r) => setTimeout(r, SEND_GAP_MS));
 }
 
-/** Sends one after another with the pause between. Returns how many failed.
- *  Shared with the room-booking mail (lib/roomBookingNotify.ts). */
-export async function sendPaced(jobs: (() => Promise<boolean>)[]): Promise<number> {
-  let failed = 0;
-  for (let i = 0; i < jobs.length; i++) {
-    if (i > 0) await pause();
-    if (!(await jobs[i]())) failed++;
-  }
-  return failed;
-}
 
 // The facts every action email shows, built once so the assignment mail and the
 // chase cannot describe the same action differently.

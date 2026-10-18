@@ -3,7 +3,7 @@ import { requirePermission } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { actorOf, deleteRoom, getRoom, isId, parseRoomInput, saveRoom, upcomingBookings } from "@/lib/roomBookingData";
+import { actorOf, deleteRoom, getRoom, isId, parseRoomUpdate, saveRoom, upcomingBookings } from "@/lib/roomBookingData";
 import { MailQueue, notifyRoomRetired } from "@/lib/roomBookingNotify";
 
 // Retiring a room emails every holder (one each) and every waiting requester, paced.
@@ -22,8 +22,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const active = (body as { active?: unknown })?.active;
   if (active !== undefined && typeof active !== "boolean") return NextResponse.json({ error: "Invalid active flag" }, { status: 400 });
   // { active } alone retires or brings back without touching anything else.
-  const onlyActive = !!body && typeof body === "object" && Object.keys(body).length === 1 && active !== undefined;
-  const parsed = onlyActive ? ({ ok: true, value: {} } as const) : parseRoomInput(body);
+  // Only the fields sent are checked and written (no defaults on an edit).
+  const parsed = parseRoomUpdate(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const writeLimited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
   if (writeLimited) return writeLimited;

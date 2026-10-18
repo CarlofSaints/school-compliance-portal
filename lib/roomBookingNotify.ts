@@ -27,55 +27,38 @@ import {
   type Withdrawal,
   type WithdrawReason,
 } from "./roomBookingData";
-import { describeRecurrence, longDateLabel, nextReminderRunMs, sastToday, slotLabel, startsAtMs } from "./roomBookings";
-import { pause, sendPaced } from "./actionItemNotify";
+import { describeRecurrence, longDateLabel, remindCutoffMs, sastToday, slotLabel, startsAtMs } from "./roomBookings";
+import { pause } from "./actionItemNotify";
 
 // The booking emails COLAB sends, wired to the portal's mailer. Nobody outside
 // the booking is ever written to.
 //
-// 🔴 Every email a request sends goes through ONE MailQueue: the notify
-// functions below only queue their messages, and the route sends the lot,
-// paced with the action items' sender (lib/actionItemNotify.ts sendPaced), so
-// a request that emails ten people never bursts at the provider.
-
-type Job = { run: () => Promise<boolean>; done: (ok: boolean) => void };
+// 🔴 Every email a request sends goes through ONE MailQueue: a serial chain
+// with the action items' pause (lib/actionItemNotify.ts) between messages, so
+// a request that emails ten people never bursts at the provider. Each message
+// starts as soon as it is queued and its turn comes, so nothing waits on the
+// caller: a forgotten settle() cannot hang a send.
 
 export class MailQueue {
-  private jobs: Job[] = [];
+  private tail: Promise<unknown> = Promise.resolve();
   private sentAny = false;
 
-  /** Queues one message; the promise says whether it went, once it is sent. */
+  /** Queues one message; resolves to whether it went, once its turn has run. */
   add(run: () => Promise<boolean>): Promise<boolean> {
-    return new Promise((done) => this.jobs.push({ run, done }));
-  }
-
-  /** Sends everything queued so far, paced (and paced from the last batch). */
-  private async flush(): Promise<void> {
-    const batch = this.jobs.splice(0);
-    if (batch.length === 0) return;
-    if (this.sentAny) await pause();
-    this.sentAny = true;
-    await sendPaced(
-      batch.map((j) => async () => {
-        const ok = await j.run().catch(() => false);
-        j.done(ok);
-        return ok;
-      })
-    );
-  }
-
-  /** Runs the given notify tasks to the end, sending what they queue (in
-   *  batches, as they queue it: a reminder retry queues later). */
-  async settle<T extends unknown[]>(...tasks: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
-    let finished = false;
-    const all = Promise.all(tasks).finally(() => {
-      finished = true;
+    const next = this.tail.then(async () => {
+      if (this.sentAny) await pause();
+      this.sentAny = true;
+      return run().catch(() => false);
     });
-    while (!finished) {
-      if (this.jobs.length) await this.flush();
-      else await new Promise((r) => setTimeout(r, 5));
-    }
-    return (await all) as T;
+    this.tail = next;
+    return next;
+  }
+
+  /** Waits for the given notify tasks, and everything queued, to finish. */
+  async settle<T extends unknown[]>(...tasks: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
+    const results = (await Promise.all(tasks)) as T;
+    await this.tail;
+    return results;
   }
 }
 
@@ -300,8 +283,8 @@ async function sendClaimedReminder(
   return { sent, unreached };
 }
 
-/** A meeting that starts at or before the next reminder run would never be
- *  reminded by the cron: remind it now. A failed holder is retried once,
+/** A meeting that starts before the next reminder run (plus an hour, for a
+ *  late cron) might never be reminded by the cron: remind it now. A failed holder is retried once,
  *  shortly; resolves to { reminded, unreached }. */
 export async function remindNowIfBeforeNextRun(
   booking: RoomBooking,
@@ -311,8 +294,10 @@ export async function remindNowIfBeforeNextRun(
   /** The sender, swappable in the checks to make a send fail. */
   send: ReminderSender = sendBookingReminderEmail
 ): Promise<{ reminded: boolean; unreached: number }> {
+  // Up to an hour after the next run: the cron can fire late (Vercel allows
+  // ~30 min), so a 07:10 meeting booked at 06:50 is reminded now, not missed.
   const at = startsAtMs(booking.date, booking.startMinute);
-  if (!(at > now.getTime() && at <= nextReminderRunMs(now))) return { reminded: false, unreached: 0 };
+  if (!(at > now.getTime() && at < remindCutoffMs(now))) return { reminded: false, unreached: 0 };
   const stamp = now.toISOString();
   if (!(await claimReminder(booking, stamp, null))) return { reminded: false, unreached: 0 };
   const { unreached } = await sendClaimedReminder(booking, room, stamp, now, mail, true, send);
@@ -339,16 +324,30 @@ export async function runRoomBookingReminders(now: Date = new Date(), mail: Mail
       continue;
     }
     tasks.push(
-      sendClaimedReminder(booking, room, stamp, now, mail, false).then((r) => {
-        detail.push(
-          `Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${r.sent}` +
-            (r.unreached ? `, ${r.unreached} not reached (tried again on the next run if the meeting has not started)` : "")
-        );
-        return r;
-      })
+      (async () => {
+        let finished = false;
+        try {
+          const r = await sendClaimedReminder(booking, room, stamp, now, mail, false);
+          finished = true;
+          detail.push(
+            `Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${r.sent}` +
+              (r.unreached ? `, ${r.unreached} not reached (tried again on the next run if the meeting has not started)` : "")
+          );
+          return r;
+        } catch (err) {
+          detail.push(`Room ${room.name} "${booking.title}" ${booking.date}: reminder failed: ${err instanceof Error ? err.message : String(err)}`);
+          throw err;
+        } finally {
+          // A claim that never finished is handed back, so the next run tries again.
+          if (!finished) await claimReminder(booking, null, stamp).catch(() => false);
+        }
+      })()
     );
   }
-  const [results] = await mail.settle(Promise.all(tasks));
-  const list = results as { sent: number; unreached: number }[];
-  return { due: due.length, sent: list.reduce((n, r) => n + r.sent, 0), failed: list.reduce((n, r) => n + r.unreached, 0), detail };
+  // One booking's failure does not stop the others.
+  const settled = await Promise.allSettled(tasks);
+  await mail.settle();
+  const ok = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
+  const broken = settled.length - ok.length;
+  return { due: due.length, sent: ok.reduce((n, r) => n + r.sent, 0), failed: ok.reduce((n, r) => n + r.unreached, 0) + broken, detail };
 }

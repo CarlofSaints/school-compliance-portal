@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const { token } = await params;
   const result = await getRequestView(actorOf(session), token);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  const { booking, request, room, canAnswer, started, viewerRole } = result.value;
+  const { booking, request, room, canAnswer, started, viewerRole, readOnly } = result.value;
   return NextResponse.json(
     {
       status: booking.status === "confirmed" || request.status !== "pending" ? request.status : "withdrawn",
@@ -26,7 +26,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       started,
       requesterName: request.requesterName,
       requesterMeeting: request.title,
-      message: request.message,
+      // Someone who answered but no longer holds it sees the outcome only.
+      message: readOnly ? "" : request.message,
+      readOnly,
       attendeeCount: request.attendeeCount,
       declineReason: request.declineReason ?? null,
       roomName: room?.name ?? "",

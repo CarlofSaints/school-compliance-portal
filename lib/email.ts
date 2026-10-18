@@ -1215,7 +1215,6 @@ export function sendBookingConfirmedEmail(to: string, name: string, f: RoomBooki
   `);
 }
 
-/** `when` comes from the meeting's actual date: a reminder sent on the day says today. */
 /** One email listing what changed on a booking someone else edited. */
 export function sendBookingChangedEmail(to: string, name: string, editorName: string, changes: string[], f: RoomBookingEmailFacts): Promise<boolean> {
   return sendBookingMail(to, `Booking changed: ${f.roomName}, ${f.dateLabel}`, "Booking changed", (P) => `
@@ -1229,6 +1228,7 @@ export function sendBookingChangedEmail(to: string, name: string, editorName: st
   `);
 }
 
+/** `when` comes from the meeting's actual date: a reminder sent on the day says today. */
 export function sendBookingReminderEmail(to: string, name: string, f: RoomBookingEmailFacts, when: "today" | "tomorrow" = "tomorrow"): Promise<boolean> {
   const word = when === "today" ? "Today" : "Tomorrow";
   return sendBookingMail(to, `${word}: ${f.roomName}, ${f.title}`, `Room booking ${when}`, (P) => `
@@ -1309,15 +1309,15 @@ export function sendRoomRequestEmail(
   `);
 }
 
-/** The room itself was taken out of use, so this booking was cancelled. */
-/** ONE email to a person listing several of their cancelled bookings in a
- *  room (a room retired, or a manager cancelling a series), not one per date.
- *  The list is capped; the rest are counted. */
+/** How many cancelled bookings one email lists; the rest are counted. */
 export const CANCELLED_LIST_CAP = 20;
 export function cappedList(lines: string[]): { shown: string[]; more: number } {
   const shown = lines.slice(0, CANCELLED_LIST_CAP);
   return { shown, more: lines.length - shown.length };
 }
+
+/** ONE email to a person listing several of their cancelled bookings in a
+ *  room (a room retired, or a manager cancelling a series), not one per date. */
 export function sendBookingsCancelledEmail(
   to: string,
   name: string,
