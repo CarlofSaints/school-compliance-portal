@@ -43,8 +43,13 @@ async function main() {
   check("11 pages cost 2 credits", T.creditsFor(11), 2);
   check("30 pages cost 3 credits", T.creditsFor(30), 3);
   check("3,001 characters is 2 pages", T.textPages("x".repeat(3001)), 2);
-  const fakePdf = Buffer.from("<< /Type /Pages /Count 2 >> << /Type /Page >> << /Type/Page >>", "latin1");
-  check("PDF page objects are counted, the /Pages root is not", await T.pdfPages(fakePdf), 2);
+  // A re-saved PDF: 3 page objects (one stale copy) under a page tree of 2.
+  const fakePdf = Buffer.from(
+    "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >> << /Type /Page >> << /Type/Page >> << /Type /Page >>",
+    "latin1"
+  );
+  check("PDF pages come from the page tree, not stale page objects", await T.pdfPages(fakePdf), 2);
+  check("/Count before /Type is read too", await T.pdfPages(Buffer.from("<< /Count 7 /Type /Pages >>", "latin1")), 7);
 
   let r = await T.translateContent(req("v1"));
   check("no credits: refused with 402", r.ok ? "ok" : r.status, 402);

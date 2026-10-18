@@ -33,12 +33,18 @@ const CHARS_PER_PAGE = 3000;
 export const textPages = (text: string) => Math.max(1, Math.ceil(text.length / CHARS_PER_PAGE));
 
 /**
- * Pages in a PDF. Counts the page objects; a PDF that hides them inside
- * compressed object streams counts 0 there, so that one falls back to the
- * model's own token count (free to ask) at about 2,000 tokens a page.
+ * Pages in a PDF: the /Count on its page tree (the root holds the largest).
+ * Not the page objects themselves, which re-saved PDFs keep stale copies of.
+ * A PDF that hides its page tree inside compressed object streams has no
+ * readable /Count, so that one falls back to the model's own token count
+ * (free to ask) at about 2,000 tokens a page.
  */
 export async function pdfPages(file: Buffer): Promise<number> {
-  const counted = (file.toString("latin1").match(/\/Type\s*\/Page(?![a-zA-Z])/g) || []).length;
+  const raw = file.toString("latin1");
+  const counts = [
+    ...raw.matchAll(/\/Type\s*\/Pages\b[^>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]*?\/Type\s*\/Pages\b/g),
+  ].map((m) => Number(m[1] || m[2]));
+  const counted = Math.max(0, ...counts);
   if (counted > 0) return counted;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -177,8 +183,10 @@ async function translateClaimed(opts: Parameters<typeof translateContent>[0]): P
   try {
     text = await callModel(locale, opts.title, opts.content);
   } catch (err) {
-    await addCredits(opts.credits);
     console.error("[translate] failed", kind, id, locale, err);
+    await addCredits(opts.credits).catch((e) =>
+      console.error("[translate] 🔴 REFUND FAILED, add back by hand:", opts.credits, "credits", e)
+    );
     return {
       ok: false,
       status: 502,
@@ -228,6 +236,10 @@ async function callModel(
           content: [...content, { type: "text", text: `Translate the document "${title}" above into ${language}.` }],
         },
       ],
+    }, {
+      // Stopped by us well inside the route's 800s, so the catch runs and the
+      // credits go back. A run Vercel kills itself would keep them.
+      signal: AbortSignal.timeout(700_000),
     })
     .finalMessage();
 

@@ -9,6 +9,7 @@ export default function PlatformTranslationAddon({ schoolKey }: { schoolKey: str
   const [balance, setBalance] = useState<number | null>(null);
   const [add, setAdd] = useState("10");
   const [msg, setMsg] = useState("");
+  const [saving, setSaving] = useState(false);
   const url = `/api/platform/schools/${schoolKey}/translation`;
 
   useEffect(() => {
@@ -19,17 +20,27 @@ export default function PlatformTranslationAddon({ schoolKey }: { schoolKey: str
   }, [url]);
 
   const save = async () => {
+    // One press, one top-up: a double-click must not add the credits twice.
+    if (saving) return;
+    setSaving(true);
     setMsg("");
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ add: Number(add) }),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) setMsg(d.error || "Could not save.");
-    else {
-      setBalance(d.balance);
-      setMsg("Saved.");
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ add: Number(add) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) setMsg(d.error || "Could not save.");
+      else {
+        setBalance(d.balance);
+        setMsg(`Added ${add}. New balance ${d.balance}.`);
+        setAdd("");
+      }
+    } catch {
+      setMsg("Could not save.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -51,7 +62,7 @@ export default function PlatformTranslationAddon({ schoolKey }: { schoolKey: str
           className="ml-1 w-20 border border-gray-200 rounded px-2 py-1 text-sm"
         />
       </label>
-      <button onClick={save} disabled={balance === null} className="bg-primary text-white px-4 py-2 rounded-lg disabled:opacity-50">
+      <button onClick={save} disabled={balance === null || saving || !add}className="bg-primary text-white px-4 py-2 rounded-lg disabled:opacity-50">
         Add credits
       </button>
       {msg && <span className="text-xs text-gray-500">{msg}</span>}

@@ -58,13 +58,23 @@ export async function POST(req: NextRequest) {
     if (!policy || !version) return NextResponse.json({ error: "Policy not found" }, { status: 404 });
     title = policy.name;
     sourceHash = `v${version.version}`;
+    const ext = version.ext.toLowerCase().replace(".", "");
+    // Only what can be read as text. Anything else would be priced (and
+    // translated) as raw bytes.
+    if (!["pdf", "docx", "txt", "md"].includes(ext)) {
+      return NextResponse.json(
+        { error: "Only PDF, Word (.docx) and text policies can be translated." },
+        { status: 400 }
+      );
+    }
     source = async () => {
       const file = await downloadPolicyFile(id, version.version, version.ext);
       if (!file) throw new Error("Policy file missing");
-      if (version.ext.toLowerCase() === "pdf") {
+      if (ext === "pdf") {
         return { content: [pdfBlock(file)], pages: await pdfPages(file) };
       }
       const text = await extractTextFromBuffer(file, version.ext);
+      if (!text.trim() || text.startsWith("[Could not extract")) throw new Error("No readable text");
       return { content: [{ type: "text", text }], pages: textPages(text) };
     };
   } else {
@@ -90,6 +100,9 @@ export async function POST(req: NextRequest) {
 
   const stored = await storedTranslation(kind as ContentKind, id, locale, sourceHash);
   if (stored) return NextResponse.json(stored);
+
+  const quoteLimited = await enforce([[LIMITS.translateQuoteUser, session.id]]);
+  if (quoteLimited) return quoteLimited;
 
   let loaded: Awaited<ReturnType<typeof source>>;
   try {

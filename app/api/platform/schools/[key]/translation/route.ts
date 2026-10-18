@@ -30,8 +30,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ key
   } catch {
     // Refused below.
   }
-  const add = Number(body.add);
-  if (!Number.isInteger(add) || add === 0 || Math.abs(add) > 1000) {
+  const add = body.add;
+  if (typeof add !== "number" || !Number.isInteger(add) || add === 0 || Math.abs(add) > 1000) {
     return NextResponse.json({ error: "add must be a whole number of credits, -1000 to 1000, not 0" }, { status: 400 });
   }
 
