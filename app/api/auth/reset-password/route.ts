@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserById, updateUser } from "@/lib/userData";
 import { parseResetToken, verifyResetToken } from "@/lib/passwordReset";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFromUser, afterResponse } from "@/lib/activityActor";
+import { deviceOf } from "@/lib/signinLog";
 
 const EXPIRED = "That reset link has expired. Please request a new one.";
 const INVALID =
@@ -80,6 +83,21 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // After the reply, so a logging problem can never fail the request.
+    const actor = { ...actorFromUser(req, updated), ip: ipOf(req) };
+    const at = new Date().toISOString();
+    await afterResponse(() =>
+      recordActivity({
+        at,
+        ...actor,
+        action: "auth.password_reset",
+        entity: "password",
+        entityId: updated.id,
+        summary: "Set a new password from an emailed reset link",
+        detail: { device: deviceOf(req.headers.get("user-agent")) },
+      })
+    );
 
     // The new hash re-keys the signature, so this token and every other one
     // ever issued for the account is now dead. Nothing to clean up.

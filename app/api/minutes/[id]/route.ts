@@ -6,6 +6,8 @@ import {
   updateMinutes,
   deleteMinutes,
   MinutesLockedError,
+  MinutesConflictError,
+  type TextSaveInfo,
 } from "@/lib/minutesData";
 import {
   checkPeriod,
@@ -19,6 +21,9 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
 const CAN_MANAGE = ["manage_minutes", "manage_users"];
+
+// One "Edited minutes" log line per person per set of minutes per 5 minutes.
+const EDIT_LOG_WINDOW_MS = 5 * 60_000;
 
 export async function GET(
   req: NextRequest,
@@ -148,12 +153,26 @@ export async function PATCH(
         : rebuilt;
     }
 
-    const saved = await updateMinutes(id, updates);
+    // 🔴 The words the editor started from. Checked INSIDE the atomic update,
+    // against the copy being written over, so two people editing at once
+    // cannot both "win": the second is told and shown the first one's text.
+    // Reviews and signatures do not move textUpdatedAt, so they never count.
+    // Older records have none yet: textBase falls back to updatedAt, as the
+    // page does. A save with no base at all (a page still running older code)
+    // is taken as before.
+    // The check, the "last edited by" stamp and the log marker all happen in
+    // updateMinutes, on the copy being written.
+    const info: TextSaveInfo = {
+      baseTextUpdatedAt: typeof body.baseTextUpdatedAt === "string" ? body.baseTextUpdatedAt : undefined,
+      editedBy: { id: session.id, name: `${session.name} ${session.surname}`.trim() },
+      logWindowMs: EDIT_LOG_WINDOW_MS,
+    };
+    const saved = await updateMinutes(id, updates, info);
     if (!saved) {
       return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
     }
 
-    await recordActivity({
+    if (info.logIt) await recordActivity({
       ...actorFrom(req, session),
       action: "minutes.updated",
       entity: "minutes",
@@ -164,10 +183,23 @@ export async function PATCH(
 
     // What was SAVED, not a re-read. A read straight after a write can serve
     // the previous copy, which makes a correct save look like it failed.
-    return NextResponse.json(saved);
+    // Shaped like GET, so the page's "what is signed" reference stays.
+    const hash = documentHash(saved);
+    return NextResponse.json({ ...saved, documentHash: hash, documentRef: shortHash(hash) });
   } catch (err) {
     if (err instanceof MinutesLockedError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
+    }
+    if (err instanceof MinutesConflictError) {
+      const hash = documentHash(err.current);
+      return NextResponse.json(
+        {
+          error: err.message,
+          conflict: true,
+          current: { ...err.current, documentHash: hash, documentRef: shortHash(hash) },
+        },
+        { status: 409 }
+      );
     }
     console.error("[minutes] Update failed:", err);
     return NextResponse.json({ error: "Could not save." }, { status: 500 });

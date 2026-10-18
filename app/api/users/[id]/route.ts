@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { deleteSignInStats } from "@/lib/signinLog";
 import { requirePermission, roleWithinReach, roleExists, maySelfTag, sameIds } from "@/lib/rolesData";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
@@ -62,6 +63,20 @@ export async function PUT(
       updates.email = email;
     }
     if (typeof body.forcePasswordChange === "boolean") updates.forcePasswordChange = body.forcePasswordChange;
+    if (
+      typeof body.canSpendTranslationCredits === "boolean" &&
+      body.canSpendTranslationCredits !== !!existing.canSpendTranslationCredits
+    ) {
+      // Same rule as tags: spending the school's prepaid credits is authority,
+      // and nobody grants authority to themselves.
+      if (id === session.id && !maySelfTag(session)) {
+        return NextResponse.json(
+          { error: "You cannot let yourself spend translation credits. Ask a Super Admin." },
+          { status: 403 }
+        );
+      }
+      updates.canSpendTranslationCredits = body.canSpendTranslationCredits;
+    }
     if (Array.isArray(body.tagIds)) {
       const tagIds = body.tagIds.filter((t: unknown): t is string => typeof t === "string");
       if (!sameIds(tagIds, existing.tagIds)) {
@@ -119,5 +134,7 @@ export async function DELETE(
   if (!deleted) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+  // Their sign-in tally goes with them (erasure). Never fails the delete.
+  await deleteSignInStats(id);
   return NextResponse.json({ success: true });
 }

@@ -116,6 +116,15 @@ export async function runAsTenant<T>(
 }
 
 /**
+ * Runs `fn` under a scope THIS request already resolved (tenantScope()).
+ * For work that runs after the response (after()), which must not resolve
+ * the school again from headers it may no longer have.
+ */
+export function runInScope<T>(scope: TenantScope, fn: () => Promise<T>): Promise<T> {
+  return override.run(scope, fn);
+}
+
+/**
  * Runs `fn` against the PLATFORM's own control store, under `_platform/`.
  *
  * For the one kind of data that belongs to no school: rate-limit counters for

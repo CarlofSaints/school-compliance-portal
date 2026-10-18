@@ -7,9 +7,10 @@ import {
   saveOriginalFile,
   type MinutesRecord,
 } from "@/lib/minutesData";
-import { checkPeriod, type MeetingPeriod } from "@/lib/minutes";
+import { attendeesFromRegister, checkPeriod, withApologiesSection, type MeetingPeriod } from "@/lib/minutes";
 import { getTemplate, sectionsFromTemplate } from "@/lib/minutesTemplates";
 import { getPeople } from "@/lib/peopleData";
+import { getUsers } from "@/lib/userData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { v4 as uuidv4 } from "uuid";
@@ -38,6 +39,17 @@ export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
   return NextResponse.json(await readableMinutes(session, await listMinutes()));
+}
+
+// The register with each linked login's CURRENT name, the same rule as the
+// People directory, so new minutes and "Fill from People register" agree.
+// A register that cannot be read gives an empty list rather than blocking.
+async function registerWithNames(): Promise<{ position: string; name: string }[]> {
+  const [people, users] = await Promise.all([getPeople().catch(() => []), getUsers().catch(() => [])]);
+  return people.map((p) => {
+    const linked = p.userId ? users.find((u) => u.id === p.userId) : undefined;
+    return { position: p.position, name: linked ? `${linked.name} ${linked.surname}`.trim() : p.name };
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -93,18 +105,23 @@ export async function POST(req: NextRequest) {
       // all, so column 3 only ever said the position. Grouped, because two
       // people genuinely share a seat. A register that cannot be read must
       // not stop minutes being started, so it falls back to positions.
-      const holders = new Map<string, string>();
-      for (const p of await getPeople().catch(() => [])) {
-        const position = (p.position || "").trim();
-        const name = (p.name || "").trim();
-        if (!position || !name) continue;
-        holders.set(position, holders.has(position) ? `${holders.get(position)}, ${name}` : name);
-      }
+      const holders = new Map(
+        attendeesFromRegister(await registerWithNames()).map((r) => [r.position, r.name])
+      );
       sections = sectionsFromTemplate(template, holders);
     } else if (startBlank) {
-      // No template chosen and nothing uploaded: one empty section, so the
-      // secretary has somewhere to type rather than a page with no controls.
-      sections = [{ id: uuidv4(), title: "Notes", body: "", order: 1 }];
+      // No template chosen and nothing uploaded: the attendance list with
+      // everyone on the People register (Carl: "just list everyone", the
+      // Apology / Not Present ticks do the rest), then an empty section to
+      // type in. A register that cannot be read gives an empty list.
+      // SGB only: the register is the governing body, so FINCOM or other
+      // minutes would list people who were never part of that meeting. They
+      // get the list empty, one click from "Fill from People register".
+      const everyone = body === "sgb" ? attendeesFromRegister(await registerWithNames()) : [];
+      sections = withApologiesSection([
+        { id: uuidv4(), title: "Attendance", body: "", order: 1, kind: "attendance", attendees: everyone },
+        { id: uuidv4(), title: "Notes", body: "", order: 2 },
+      ]);
     }
 
     const record = await createMinutes({

@@ -178,6 +178,7 @@ const navItems: NavItem[] = [
       { label: tk("Minutes Admin"), href: "/admin/minutes", permission: "manage_users" },
       { label: tk("School Branding"), href: "/admin/branding", permission: "manage_users" },
       { label: tk("Weekly Update"), href: "/admin/weekly-update", permission: "manage_users" },
+      { label: tk("Translation Credits"), href: "/admin/translation-credits", permission: "manage_users" },
       {
         label: tk("Action Summary Email"),
         href: "/admin/action-summary",
@@ -224,8 +225,12 @@ export default function Sidebar() {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    router.push("/login");
+    // A page with unsaved work may cancel (its person chose to stay).
+    const ok = await signOut({
+      confirmOtherTabs: () =>
+        window.confirm(t("You have unsaved minutes open in another tab. Sign out anyway and lose them?")),
+    });
+    if (ok) router.push("/login");
   };
 
   return (

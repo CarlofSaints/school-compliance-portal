@@ -4,8 +4,8 @@ import { LOCALES, type Locale } from "./i18n/locales";
 
 // ---------------------------------------------------------------------------
 // Translating a SCHOOL'S OWN content (a policy, a set of minutes) into the
-// visitor's language. A paid add-on, R100/month, switched on per school by
-// Carl on /platform/<key>.
+// visitor's language. Paid with translation CREDITS the school buys
+// (R100 for 10, never expire). Carl adds them on /platform/<key>.
 //
 // The site's own buttons and labels are NOT this: those are stored
 // dictionaries (lib/i18n). This is for text the school wrote, which no
@@ -14,76 +14,88 @@ import { LOCALES, type Locale } from "./i18n/locales";
 // 🔴 Translated ONCE per document version per language, then stored. Every
 // later reader of that version in that language gets the stored copy and
 // costs nothing. A new policy version or an edited set of minutes changes the
-// source hash, so the next request translates again (and counts again).
+// source hash, so the next request translates again (and costs again).
 //
 // All storage goes through controlData, which is already scoped to the
-// current school, so one school's translations and usage never reach another.
+// current school, so one school's translations and credits never reach another.
 // ---------------------------------------------------------------------------
 
-export const ADDON_PRICE_RAND = 100;
-export const DEFAULT_MONTHLY_CAP = 20;
+import { PAGES_PER_CREDIT } from "./creditPack";
+export { CREDIT_PACK, PAGES_PER_CREDIT } from "./creditPack";
 
-export interface TranslationAddon {
-  enabled: boolean;
-  /** New translations per calendar month. Stored copies do not count. */
-  monthlyCap: number;
-  changedAt?: string;
-  changedBy?: string;
+/** A long document costs more: one credit per started block of 10 pages. */
+export function creditsFor(pages: number): number {
+  return Math.max(1, Math.ceil(pages / PAGES_PER_CREDIT));
 }
 
-const ADDON_PATH = "settings/translation-addon.json";
-const OFF: TranslationAddon = { enabled: false, monthlyCap: DEFAULT_MONTHLY_CAP };
+// Roughly one printed page of plain text.
+const CHARS_PER_PAGE = 3000;
+export const textPages = (text: string) => Math.max(1, Math.ceil(text.length / CHARS_PER_PAGE));
 
-export async function getAddon(): Promise<TranslationAddon> {
-  const saved = await readJson<TranslationAddon>(ADDON_PATH, OFF);
-  // HVPS and Jeppe are single-school projects with no /platform page, so the
-  // add-on is switched on there with an env var instead. 🔴 Never on the
-  // multi-tenant app (it holds the control store token), where it would hand
-  // every school the paid add-on, and never over an explicit saved choice.
-  if (
-    !saved.enabled &&
-    !saved.changedAt &&
-    process.env.TRANSLATION_ADDON === "1" &&
-    !process.env.CONTROL_BLOB_READ_WRITE_TOKEN
-  ) {
-    return { ...saved, enabled: true };
-  }
-  return saved;
-}
-
-export async function saveAddon(addon: TranslationAddon): Promise<void> {
-  await writeJson(ADDON_PATH, addon);
-}
-
-// SAST month, so the allowance resets at midnight in South Africa, not UTC.
-export function usageMonth(now = new Date()): string {
-  return new Date(now.getTime() + 2 * 3600_000).toISOString().slice(0, 7);
-}
-
-const usagePath = (month: string) => `translations/usage/${month}.json`;
-
-export async function getUsage(month = usageMonth()): Promise<number> {
-  return (await readJson<{ count: number }>(usagePath(month), { count: 0 })).count;
-}
-
-/** Takes one from this month's allowance, atomically. The month charged, or
- *  null when it is used up. */
-async function reserve(cap: number): Promise<string | null> {
-  const month = usageMonth();
-  let ok = false;
-  await updateJson<{ count: number }>(usagePath(month), { count: 0 }, (u) => {
-    if (u.count >= cap) return NO_CHANGE;
-    ok = true;
-    return { count: u.count + 1 };
+/**
+ * Pages in a PDF: the /Count on its page tree (the root holds the largest).
+ * Not the page objects themselves, which re-saved PDFs keep stale copies of.
+ * A PDF that hides its page tree inside compressed object streams has no
+ * readable /Count, so that one falls back to the model's own token count
+ * (free to ask) at about 2,000 tokens a page.
+ */
+export async function pdfPages(file: Buffer): Promise<number> {
+  const raw = file.toString("latin1");
+  const counts = [
+    ...raw.matchAll(/\/Type\s*\/Pages\b[^>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]*?\/Type\s*\/Pages\b/g),
+  ].map((m) => Number(m[1] || m[2]));
+  const counted = Math.max(0, ...counts);
+  if (counted > 0) return counted;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  const { input_tokens } = await new Anthropic({ apiKey }).messages.countTokens({
+    model: MODEL,
+    messages: [{ role: "user", content: [pdfBlock(file)] }],
   });
-  return ok ? month : null;
+  return Math.max(1, Math.ceil(input_tokens / 2000));
 }
 
-/** Gives the reservation back to the month it was taken from. */
-async function release(month: string): Promise<void> {
-  await updateJson<{ count: number }>(usagePath(month), { count: 0 }, (u) =>
-    u.count > 0 ? { count: u.count - 1 } : NO_CHANGE
-  );
+export const pdfBlock = (file: Buffer): Anthropic.ContentBlockParam => ({
+  type: "document",
+  source: { type: "base64", media_type: "application/pdf", data: file.toString("base64") },
+});
+
+const MODEL = "claude-opus-5-5";
+
+interface Credits {
+  balance: number;
+  updatedAt?: string;
+}
+
+const CREDITS_PATH = "settings/translation-credits.json";
+
+export async function getCredits(): Promise<number> {
+  return (await readJson<Credits>(CREDITS_PATH, { balance: 0 })).balance;
+}
+
+/** Carl's top-up (or correction, when negative). Never below 0. The new
+ *  balance, and how many credits actually moved (a correction larger than
+ *  the balance only removes what is there). */
+export async function addCredits(n: number): Promise<{ balance: number; applied: number }> {
+  let balance = 0;
+  let applied = 0;
+  await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
+    balance = Math.max(0, c.balance + n);
+    applied = balance - c.balance;
+    return { balance, updatedAt: new Date().toISOString() };
+  });
+  return { balance, applied };
+}
+
+/** Takes n credits, atomically. False when the school has fewer. */
+async function spend(n: number): Promise<boolean> {
+  let ok = false;
+  await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
+    if (c.balance < n) return NO_CHANGE;
+    ok = true;
+    return { balance: c.balance - n, updatedAt: new Date().toISOString() };
+  });
+  return ok;
 }
 
 export type ContentKind = "policy" | "minutes";
@@ -101,7 +113,7 @@ export type TranslateOutcome =
 const storePath = (kind: ContentKind, id: string, locale: Locale) =>
   `translations/${kind}/${id}/${locale}.json`;
 
-/** The stored copy for exactly this source, or null. Free: no AI, no allowance. */
+/** The stored copy for exactly this source, or null. Free: no AI, no credits. */
 export async function storedTranslation(
   kind: ContentKind,
   id: string,
@@ -116,9 +128,8 @@ export async function storedTranslation(
 
 /**
  * The stored translation if there is one for this exact source, otherwise a
- * new one (if the add-on is on and the month has allowance left).
- * `source` is only called when a new translation is actually needed, so a
- * stored hit never downloads the policy file.
+ * new one, paid with `credits` (the route quotes them first from the page
+ * count). Failed translations give the credits back.
  */
 export async function translateContent(opts: {
   kind: ContentKind;
@@ -126,19 +137,14 @@ export async function translateContent(opts: {
   locale: Locale;
   sourceHash: string;
   title: string;
-  source: () => Promise<Anthropic.ContentBlockParam[]>;
+  credits: number;
+  content: Anthropic.ContentBlockParam[];
+  /** Epoch ms by which the model must have finished, so the refund below
+   *  still runs before the platform kills the request. */
+  deadline: number;
 }): Promise<TranslateOutcome> {
   const { kind, id, locale, sourceHash } = opts;
   if (locale === "en") return { ok: false, status: 400, error: "Pick a language other than English first." };
-
-  const addon = await getAddon();
-  if (!addon.enabled) {
-    return {
-      ok: false,
-      status: 403,
-      error: "Translating school documents is an add-on. Ask your administrator to contact School Compliance to switch it on.",
-    };
-  }
 
   const stored = await storedTranslation(kind, id, locale, sourceHash);
   if (stored) return stored;
@@ -149,7 +155,7 @@ export async function translateContent(opts: {
     return { ok: false, status: 409, error: "This document is being translated right now. Try again in a minute or two." };
   }
   try {
-    return await translateClaimed(opts, addon.monthlyCap);
+    return await translateClaimed(opts);
   } finally {
     await writeJson(inFlightPath(kind, id, locale), null).catch(() => {});
   }
@@ -170,30 +176,24 @@ async function claimInFlight(kind: ContentKind, id: string, locale: Locale): Pro
   return ok;
 }
 
-async function translateClaimed(
-  opts: Parameters<typeof translateContent>[0],
-  cap: number
-): Promise<TranslateOutcome> {
+async function translateClaimed(opts: Parameters<typeof translateContent>[0]): Promise<TranslateOutcome> {
   const { kind, id, locale, sourceHash } = opts;
   // Re-checked under the claim: the run that held it may have just stored it.
   const stored = await storedTranslation(kind, id, locale, sourceHash);
   if (stored) return stored;
 
-  const month = await reserve(cap);
-  if (!month) {
-    return {
-      ok: false,
-      status: 429,
-      error: `Your school has used all ${cap} document translations for this month. Documents already translated can still be read.`,
-    };
+  if (!(await spend(opts.credits))) {
+    return { ok: false, status: 402, error: "Your school does not have enough translation credits for this document." };
   }
 
   let text: string;
   try {
-    text = await callModel(locale, opts.title, await opts.source());
+    text = await callModel(locale, opts.title, opts.content, opts.deadline);
   } catch (err) {
-    await release(month);
     console.error("[translate] failed", kind, id, locale, err);
+    await addCredits(opts.credits).catch((e) =>
+      console.error("[translate] 🔴 REFUND FAILED, add back by hand:", opts.credits, "credits", e)
+    );
     return {
       ok: false,
       status: 502,
@@ -216,7 +216,8 @@ class TranslationError extends Error {}
 async function callModel(
   locale: Locale,
   title: string,
-  content: Anthropic.ContentBlockParam[]
+  content: Anthropic.ContentBlockParam[],
+  deadline: number
 ): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -227,7 +228,7 @@ async function callModel(
   // Streamed: a long policy can take minutes to write out in full.
   const message = await client.messages
     .stream({
-      model: "claude-opus-5-5",
+      model: MODEL,
       max_tokens: 64000,
       // Translation needs little reasoning; low effort keeps a long document
       // inside the function's time limit and the cost down.
@@ -243,6 +244,11 @@ async function callModel(
           content: [...content, { type: "text", text: `Translate the document "${title}" above into ${language}.` }],
         },
       ],
+    }, {
+      // Stopped by us before the route's 800s, counted from the start of the
+      // request, so the catch runs and the credits go back. A run Vercel
+      // kills itself would keep them.
+      signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
     })
     .finalMessage();
 

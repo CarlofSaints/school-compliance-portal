@@ -6,6 +6,7 @@ import {
   getRoles,
   roleWithinReach,
   roleExists,
+  maySelfTag,
 } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
 import { sendWelcomeEmail } from "@/lib/email";
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, surname, email, password, role, forcePasswordChange, sendEmail, tagIds } = body;
+    const { name, surname, email, password, role, forcePasswordChange, sendEmail, tagIds, canSpendTranslationCredits } = body;
 
     if (!name || !surname || !email || !password || !role) {
       return NextResponse.json(
@@ -75,6 +76,10 @@ export async function POST(req: NextRequest) {
       role,
       forcePasswordChange: forcePasswordChange ?? true,
       tagIds: Array.isArray(tagIds) ? tagIds : [],
+      // Same rule as the Users screen edit: only a Super Admin hands out the
+      // right to spend the school's credits, so nobody can grant it to a
+      // second account of their own.
+      canSpendTranslationCredits: canSpendTranslationCredits === true && maySelfTag(session),
     });
 
     // The account is already created and stored, so a mail failure must not
