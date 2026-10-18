@@ -1527,5 +1527,7 @@
   "Last 7 days": "Laaste 7 dae",
   "Last 30 days": "Laaste 30 dae",
   "Wrong passwords (30 days)": "Verkeerde wagwoorde (30 dae)",
-  "(removed)": "(verwyder)"
+  "(removed)": "(verwyder)",
+  "No sign-in recorded since {date}": "Geen aanmelding aangeteken sedert {date} nie",
+  "No sign-in recorded yet": "Nog geen aanmelding aangeteken nie"
 }

@@ -3,6 +3,7 @@ import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserById, updateUser } from "@/lib/userData";
 import { parseResetToken, verifyResetToken } from "@/lib/passwordReset";
 import { recordActivity } from "@/lib/activityLog";
+import { clientIp } from "@/lib/activityActor";
 import { deviceOf } from "@/lib/signinLog";
 
 const EXPIRED = "That reset link has expired. Please request a new one.";
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
       actorId: updated.id,
       actorName: `${updated.name} ${updated.surname}`.trim() || updated.email,
       actorEmail: updated.email,
-      ip: ipOf(req),
+      ip: clientIp(req),
       action: "auth.password_reset",
       entity: "auth",
       entityId: updated.id,

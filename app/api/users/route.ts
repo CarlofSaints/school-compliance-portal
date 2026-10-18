@@ -8,7 +8,7 @@ import {
   roleExists,
 } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
-import { readSignInSummaries, lastSignIns } from "@/lib/signinLog";
+import { readSignInStats } from "@/lib/signinLog";
 import { sendWelcomeEmail } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
 
@@ -20,14 +20,20 @@ export async function GET(req: NextRequest) {
   ]);
   if (session instanceof NextResponse) return session;
 
-  const [users, roles, summaries] = await Promise.all([getUsers(), getRoles(), readSignInSummaries()]);
-  const lastAt = lastSignIns(summaries);
+  // Sign-in data only when asked (Admin > Users), and never fatal: without
+  // it the page just shows no Last sign-in values.
+  const withSignIns = req.nextUrl.searchParams.get("withSignIns") === "1";
+  const [users, roles, stats] = await Promise.all([
+    getUsers(),
+    getRoles(),
+    withSignIns ? readSignInStats().catch(() => null) : null,
+  ]);
   // The role NAME is included so a read-only viewer, who cannot call
   // /api/roles, still sees "SGB Admin" rather than a raw role id.
   const safe = users.map(({ password, ...u }) => ({
     ...u,
     roleName: roles.find((r) => r.id === u.role)?.name || u.role,
-    lastSignInAt: lastAt[u.id] || null,
+    ...(stats ? { lastSignInAt: stats[u.id]?.lastAt || null } : {}),
   }));
   return NextResponse.json(safe);
 }

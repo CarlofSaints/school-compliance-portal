@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission } from "@/lib/rolesData";
 import { getUsers } from "@/lib/userData";
-import { readSignInSummaries, buildSignInRows } from "@/lib/signinLog";
+import { readSignInStats, trackingSince, buildSignInRows } from "@/lib/signinLog";
 
 // The Sign-ins view on the Activity page. Same ANY-of gate as /api/activity,
 // so exactly the people who can read the log can read this.
@@ -11,6 +11,6 @@ export async function GET(req: NextRequest) {
   const session = await requireAnyPermission(req, CAN_VIEW);
   if (session instanceof NextResponse) return session;
 
-  const [users, summaries] = await Promise.all([getUsers(), readSignInSummaries()]);
-  return NextResponse.json({ rows: buildSignInRows(users, summaries) });
+  const [users, stats, since] = await Promise.all([getUsers(), readSignInStats(), trackingSince()]);
+  return NextResponse.json({ rows: buildSignInRows(users, stats, since), since });
 }

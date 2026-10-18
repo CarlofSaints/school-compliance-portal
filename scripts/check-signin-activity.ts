@@ -1,6 +1,6 @@
 // Sign-in tracking: every sign-in, failed sign-in, block, sign-out and
-// password change lands in the activity log, and the monthly tally at
-// signins/<YYYY-MM>.json counts them right.
+// password change lands in the activity log, and the per-user tally at
+// signins/users/<userId>.json counts them right.
 //
 // Drives the REAL route handlers against the in-memory fake blob store, so it
 // can never touch a real school:
@@ -39,11 +39,12 @@ async function main() {
   const { createSessionToken, SESSION_COOKIE } = await import("../lib/session");
   const { tenantScope } = await import("../lib/tenantContext");
   const { readActivity } = await import("../lib/activityLog");
-  const { readSignInSummaries, buildSignInRows, deviceOf } = await import("../lib/signinLog");
+  const { readSignInStats, buildSignInRows, deviceOf, sastDay, countSignIn, trackingSince } = await import("../lib/signinLog");
   const { LIMITS } = await import("../lib/rateLimit");
   const auth = await import("../app/api/auth/route");
   const changePw = await import("../app/api/auth/change-password/route");
   const signins = await import("../app/api/activity/signins/route");
+  const usersRoute = await import("../app/api/users/route");
   const { key: tenantKey } = await tenantScope();
 
   await saveRoles(DEFAULT_ROLES);
@@ -54,20 +55,23 @@ async function main() {
   await mk("newbie", "viewer", true);
 
   let ipSeq = 1;
-  function req(method: string, path: string, opts: { json?: unknown; ip?: string; as?: { id: string; password: string } } = {}) {
+  function req(method: string, path: string, opts: { json?: unknown; ip?: string; fwd?: string; as?: { id: string; password: string } } = {}) {
+    const ip = opts.ip || `10.0.0.${ipSeq}`;
     const headers: Record<string, string> = {
       host: HOST,
       origin: `http://${HOST}`,
       "user-agent": UA,
-      "x-real-ip": opts.ip || `10.0.0.${ipSeq}`,
+      "x-real-ip": ip,
+      "x-forwarded-for": opts.fwd || ip,
     };
     if (opts.as) headers.cookie = `${SESSION_COOKIE}=${createSessionToken(opts.as, tenantKey)}`;
     if (opts.json !== undefined) headers["content-type"] = "application/json";
     return new NextRequest(`http://${HOST}${path}`, { method, headers, body: opts.json === undefined ? undefined : JSON.stringify(opts.json) });
   }
-  const signIn = (email: string, password: string, ip?: string) => auth.POST(req("POST", "/api/auth", { json: { email, password }, ip }));
+  const signIn = (email: string, password: string, ip?: string, fwd?: string) =>
+    auth.POST(req("POST", "/api/auth", { json: { email, password }, ip, fwd }));
   const authEntries = async () => (await readActivity({ entity: "auth", limit: 10000 })).entries;
-  const summary = async () => (await readSignInSummaries())[0] || {};
+  const total = (days: Record<string, number> = {}) => Object.values(days).reduce((a, n) => a + n, 0);
 
   console.log("deviceOf");
   check(deviceOf(UA) === "Chrome on Windows", `Chrome UA -> "${deviceOf(UA)}"`);
@@ -75,51 +79,81 @@ async function main() {
   check(deviceOf("Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/141.0 Safari/537.36 Edg/141.0") === "Edge on Windows", "Edge on Windows");
   check(deviceOf(null) === "Unknown device", "no UA -> Unknown device");
 
+  console.log("\nSAST days and windows");
+  check(sastDay(Date.parse("2026-10-18T22:30:00Z")) === "2026-10-19", "22:30 UTC is the NEXT day in SAST");
+  check(sastDay(Date.parse("2026-10-18T21:59:00Z")) === "2026-10-18", "21:59 UTC is still the same SAST day");
+  const one = { x: { name: "X", email: "x@t", days: { "2026-10-12": 1 }, failedDays: {} } };
+  check(buildSignInRows([], one, null, Date.parse("2026-10-18T21:00:00Z"))[0].last7 === 1, "12 Oct is inside the 7 days ending SAST 18 Oct");
+  check(buildSignInRows([], one, null, Date.parse("2026-10-18T22:30:00Z"))[0].last7 === 0, "12 Oct is outside the 7 days ending SAST 19 Oct");
+
   console.log("\nGood sign-in");
+  check((await trackingSince()) === null, "no tracking date before the first sign-in");
   let res = await signIn(member.email, "pw-member-SECRET");
   check(res.status === 200, `HTTP ${res.status}`);
   let entries = await authEntries();
   const ok = entries.filter((e) => e.action === "auth.sign_in");
   check(ok.length === 1 && ok[0].actorId === "member" && ok[0].ip === "10.0.0.1" && ok[0].detail?.device === "Chrome on Windows", "one auth.sign_in entry with actor, ip and device", JSON.stringify(ok));
-  let sum = await summary();
-  check(sum.member?.count === 1 && sum.member?.lastIp === "10.0.0.1" && sum.member?.lastDevice === "Chrome on Windows" && !!sum.member?.lastAt, "summary count 1 + last ip/device", JSON.stringify(sum.member));
+  let st = await readSignInStats();
+  check(total(st.member?.days) === 1 && st.member?.lastIp === "10.0.0.1" && st.member?.lastDevice === "Chrome on Windows" && !!st.member?.lastAt, "per-user tally: 1 sign-in + last ip/device", JSON.stringify(st.member));
+  const keys = [...store.keys()];
+  check(keys.some((k) => k.endsWith("signins/users/member.json")), "stored at signins/users/<userId>.json");
+  check(!keys.some((k) => /signins\/\d{4}-\d{2}\.json$/.test(k)), "no school-wide monthly tally file");
+  const since = await trackingSince();
+  check(!!since, `tracking date written on the first sign-in (${since})`);
+
+  console.log("\nIP is the same source as other activity entries (x-forwarded-for first)");
+  await signIn(member.email, "pw-member-SECRET", "10.0.0.50", "203.0.113.7");
+  entries = await authEntries();
+  check(entries.some((e) => e.action === "auth.sign_in" && e.ip === "203.0.113.7"), "entry ip is the forwarded client address");
 
   console.log("\nWrong password");
   ipSeq = 2;
   res = await signIn(member.email, "wrong-guess-SECRET");
   check(res.status === 401, `HTTP ${res.status}`);
   entries = await authEntries();
-  const bad = entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "member");
-  check(bad.length === 1, "one auth.sign_in_failed naming the user");
-  sum = await summary();
-  check(sum.member?.failed === 1 && sum.member?.count === 1, "summary failed 1, count still 1", JSON.stringify(sum.member));
+  check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "member").length === 1, "one auth.sign_in_failed naming the user");
+  st = await readSignInStats();
+  check(total(st.member?.failedDays) === 1 && total(st.member?.days) === 2, "tally: failed 1, sign-ins still 2", JSON.stringify(st.member));
 
-  console.log("\nUnknown email");
+  console.log("\nUnknown email: one entry per connection per window");
+  ipSeq = 5;
   const longTyped = "  nobody@example.test" + "x".repeat(300) + "  ";
   res = await signIn(longTyped, "whatever-SECRET");
   check(res.status === 401, `HTTP ${res.status}`);
+  for (let i = 0; i < 4; i++) await signIn(`other${i}@example.test`, "whatever-SECRET");
   entries = await authEntries();
   const unk = entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId);
-  check(unk.length === 1 && unk[0].actorName.startsWith("nobody@example.test") && unk[0].actorName.length <= 120 && !unk[0].actorName.startsWith(" "), "logged without actorId, typed address trimmed + capped", JSON.stringify(unk[0]?.actorName));
-  sum = await summary();
-  check(Object.keys(sum).every((k) => ["member", "admin", "newbie"].includes(k)), "unknown address NOT in the summary");
+  check(unk.length === 1, `5 unknown-address attempts from one connection -> 1 entry (got ${unk.length})`);
+  const typedFirst = String(unk[0]?.detail?.firstTypedEmail || "");
+  check(typedFirst.startsWith("nobody@example.test") && typedFirst.length <= 120, "no actorId; first typed address trimmed + capped", typedFirst);
+  await signIn("from-elsewhere@example.test", "whatever-SECRET", "10.0.0.6");
+  entries = await authEntries();
+  check(entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId).length === 2, "a second connection gets its own entry");
+  st = await readSignInStats();
+  check(Object.keys(st).every((k) => ["member", "admin", "newbie"].includes(k)), "unknown addresses NOT tallied");
 
   console.log("\nSeveral sign-ins");
   ipSeq = 3;
-  for (let i = 0; i < 3; i++) await signIn(member.email, "pw-member-SECRET");
+  for (let i = 0; i < 2; i++) await signIn(member.email, "pw-member-SECRET");
   await signIn(admin.email, "pw-admin-SECRET");
-  sum = await summary();
-  check(sum.member?.count === 4 && sum.admin?.count === 1, `member 4, admin 1 (got ${sum.member?.count}, ${sum.admin?.count})`);
-  const rows = buildSignInRows(
-    [admin, member, { id: "newbie", name: "newbie", surname: "Tester", email: "newbie@example.test", forcePasswordChange: true }],
-    await readSignInSummaries()
-  );
+  st = await readSignInStats();
+  check(total(st.member?.days) === 4 && total(st.admin?.days) === 1, `member 4, admin 1 (got ${total(st.member?.days)}, ${total(st.admin?.days)})`);
+  const late = await mk("late", "viewer", true);
+  let rows = buildSignInRows([admin, member, (await getUserById("newbie"))!, late], st, since);
   const m = rows.find((r) => r.userId === "member");
   check(m?.last7 === 4 && m?.last30 === 4 && m?.failed30 === 1, "rows: member last7 4, last30 4, failed30 1", JSON.stringify(m));
-  check(rows.find((r) => r.userId === "newbie")?.never === true && rows.find((r) => r.userId === "member")?.never === false, "newbie flagged never signed in");
-  // A day outside the windows must not count.
-  const old = buildSignInRows([], [{ x: { name: "X", email: "x@t", count: 2, failed: 0, days: { "2000-01-01": 2 }, failedDays: {} } }]);
-  check(old[0].last7 === 0 && old[0].last30 === 0 && old[0].removed, "old days are outside 7/30 windows; unknown id marked removed");
+  const newbie = rows.find((r) => r.userId === "newbie");
+  check(newbie?.never === false && newbie?.noneSinceTracking === true, "user created BEFORE tracking: 'no sign-in recorded since', not 'never'");
+  check(rows.find((r) => r.userId === "late")?.never === true, "user created AFTER tracking with no sign-in: never signed in");
+  check(rows.filter((r) => r.never).length === 1, "only the new user counts towards 'never signed in'");
+  rows = buildSignInRows([], { x: { name: "X", email: "x@t", days: { "2000-01-01": 2 }, failedDays: {} } }, since);
+  check(rows[0].last7 === 0 && rows[0].last30 === 0 && rows[0].removed && !rows[0].never, "old days outside 7/30 windows; unknown id marked removed");
+
+  console.log("\nOnly the last 31 days are kept");
+  await countSignIn({ id: "trim", name: "T", email: "t@t" }, "ok", "1.1.1.1", "x", "2026-08-01T10:00:00.000Z");
+  await countSignIn({ id: "trim", name: "T", email: "t@t" }, "ok", "1.1.1.1", "x", "2026-10-18T10:00:00.000Z");
+  st = await readSignInStats();
+  check(JSON.stringify(st.trim?.days) === JSON.stringify({ "2026-10-18": 1 }), "a day older than 31 days is dropped", JSON.stringify(st.trim?.days));
 
   console.log("\nAccount lock (5 wrong passwords) logs once");
   ipSeq = 4;
@@ -127,6 +161,7 @@ async function main() {
   entries = await authEntries();
   const locks = entries.filter((e) => e.action === "auth.sign_in_blocked" && e.detail?.reason === "account_locked");
   check(locks.length === 1, `one account_locked entry (got ${locks.length})`);
+  check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "admin").length === 5, "each of the 5 known-user wrong passwords is logged");
 
   console.log("\nIP limit: blocked attempts log at most once per window");
   const flood = "10.9.9.9";
@@ -134,24 +169,38 @@ async function main() {
   for (let i = 0; i < LIMITS.loginIp.max + 6; i++) statuses.push((await signIn(`bot${i}@example.test`, "x-SECRET", flood)).status);
   check(statuses.filter((s) => s === 429).length === 6, `6 refused with 429 (got ${statuses.filter((s) => s === 429).length})`);
   entries = await authEntries();
-  const blocked = entries.filter((e) => e.action === "auth.sign_in_blocked" && e.ip === flood);
-  check(blocked.length === 1, `one auth.sign_in_blocked for the IP (got ${blocked.length})`);
+  check(entries.filter((e) => e.action === "auth.sign_in_blocked" && e.ip === flood).length === 1, "one auth.sign_in_blocked for the IP");
+  check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.ip === flood).length === 1, "the flood's 20 unknown addresses -> 1 failed entry");
 
-  console.log("\nSign-out and password change");
-  await auth.DELETE(req("DELETE", "/api/auth", { as: member }));
+  console.log("\nSign-out");
+  const outs = async () => (await authEntries()).filter((e) => e.action === "auth.sign_out").length;
+  const before = await outs();
+  const t0 = Date.now();
+  res = await auth.DELETE(req("DELETE", "/api/auth", { as: { id: "member", password: "not-the-real-hash" } }));
+  const ms = Date.now() - t0;
+  check(res.status === 200 && /sc_session=;/.test(res.headers.get("set-cookie") || ""), "forged cookie: still signed out (cookie cleared)", res.headers.get("set-cookie") || "");
+  check(ms < 500, `forged cookie: no retry delay (${ms} ms)`);
+  check((await outs()) === before, "forged cookie: nothing logged");
+  res = await auth.DELETE(req("DELETE", "/api/auth", { as: member }));
+  check(res.status === 200 && (await outs()) === before + 1, "real sign-out logged once");
+  check((await authEntries()).some((e) => e.action === "auth.sign_out" && e.actorId === "member"), "auth.sign_out names the user");
+
+  console.log("\nPassword change");
   res = await changePw.POST(req("POST", "/api/auth/change-password", { as: member, json: { currentPassword: "pw-member-SECRET", newPassword: "new-pw-SECRET-2" } }));
   check(res.status === 200, `change-password HTTP ${res.status}`);
-  entries = await authEntries();
-  check(entries.some((e) => e.action === "auth.sign_out" && e.actorId === "member"), "auth.sign_out logged");
-  check(entries.some((e) => e.action === "auth.password_changed" && e.actorId === "member"), "auth.password_changed logged");
+  check((await authEntries()).some((e) => e.action === "auth.password_changed" && e.actorId === "member"), "auth.password_changed logged");
 
-  console.log("\nSign-ins API");
+  console.log("\nAPIs");
   // The password change re-keyed member's session, so sign the cookie with the new hash.
   res = await signins.GET(req("GET", "/api/activity/signins", { as: (await getUserById("member"))! }));
-  check(res.status === 403, `refused for a member without the activity permission (HTTP ${res.status})`);
+  check(res.status === 403, `sign-ins refused for a member without the activity permission (HTTP ${res.status})`);
   res = await signins.GET(req("GET", "/api/activity/signins", { as: admin }));
   const body = await res.json();
-  check(res.status === 200 && body.rows?.length === 3, `admin gets 3 rows (HTTP ${res.status})`);
+  check(res.status === 200 && body.rows?.length === 5 && body.since === since, `admin gets 4 users + 1 removed, and the tracking date (HTTP ${res.status}, ${body.rows?.length} rows)`);
+  const plain = (await (await usersRoute.GET(req("GET", "/api/users", { as: admin }))).json()) as Record<string, unknown>[];
+  check(plain.length > 0 && plain.every((u) => !("lastSignInAt" in u)), "/api/users does not read sign-ins by default");
+  const withS = (await (await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: admin }))).json()) as { id: string; lastSignInAt?: string | null }[];
+  check(!!withS.find((u) => u.id === "member")?.lastSignInAt && withS.find((u) => u.id === "late")?.lastSignInAt === null, "/api/users?withSignIns=1 adds lastSignInAt");
 
   console.log("\nNo password anywhere in storage");
   const dump = [...store.values()].map((f) => Buffer.from(f.bytes).toString("utf8")).join("\n");

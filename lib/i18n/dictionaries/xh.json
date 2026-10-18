@@ -1527,5 +1527,7 @@
   "Last 7 days": "Iintsuku ezi-7 ezidlulileyo",
   "Last 30 days": "Iintsuku ezingama-30 ezidlulileyo",
   "Wrong passwords (30 days)": "Iipassword ezingachanekanga (iintsuku ezingama-30)",
-  "(removed)": "(isusiwe)"
+  "(removed)": "(isusiwe)",
+  "No sign-in recorded since {date}": "Akukho kungena kurekhodiweyo ukususela ngo-{date}",
+  "No sign-in recorded yet": "Akukho kungena kurekhodiweyo okwangoku"
 }

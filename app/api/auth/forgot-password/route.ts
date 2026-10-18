@@ -4,6 +4,7 @@ import { getUserByEmail } from "@/lib/userData";
 import { createResetToken, RESET_TTL_MS } from "@/lib/passwordReset";
 import { sendPasswordResetLinkEmail, isEmailConfigured } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
+import { clientIp } from "@/lib/activityActor";
 import { deviceOf } from "@/lib/signinLog";
 
 // Unauthenticated by design — the whole point is that the caller cannot log in.
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
       actorId: user.id,
       actorName: `${user.name} ${user.surname}`.trim() || user.email,
       actorEmail: user.email,
-      ip: ipOf(req),
+      ip: clientIp(req),
       action: "auth.password_reset_requested",
       entity: "auth",
       entityId: user.id,

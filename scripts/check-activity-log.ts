@@ -100,5 +100,19 @@ console.log("\nDetail is preserved for the auditor");
   checkThat("the action key is in the file", csv.includes("spend.approved.override"));
 }
 
+console.log("\nFormula injection is neutralised in every field");
+{
+  const cells = activityToCsv([
+    entry({ actorName: "=HYPERLINK(\"http://evil.test\")", actorEmail: "+27 evil", summary: "-1+1", ip: "@SUM(A1)", entityId: "\tx", action: "\r=1" }),
+  ]).split("\r\n")[1];
+  checkThat("= cell gets a leading quote", cells.includes("\"'=HYPERLINK("));
+  checkThat("+ cell gets a leading quote", cells.includes("\"'+27 evil\""));
+  checkThat("- cell gets a leading quote", cells.includes("\"'-1+1\""));
+  checkThat("@ cell gets a leading quote", cells.includes("\"'@SUM(A1)\""));
+  checkThat("tab cell gets a leading quote", cells.includes("\"'\tx\""));
+  checkThat("CR cell gets a leading quote", activityToCsv([entry({ action: "\r=1" })]).includes("\"'\r=1\""));
+  checkThat("an ordinary cell is left alone", activityToCsv([entry()]).includes("\"Dee Schoultz\""));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -272,6 +272,7 @@ export default function ActivityPage() {
 function SignInsView() {
   const t = useT();
   const [rows, setRows] = useState<SignInRow[] | null>(null);
+  const [since, setSince] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const { sortKey, sortDir, toggle, sort } = useTableSort<SignInRow>("lastAt", "desc");
 
@@ -281,7 +282,9 @@ function SignInsView() {
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
-        if (live) setRows(data.rows || []);
+        if (!live) return;
+        setRows(data.rows || []);
+        setSince(data.since || null);
       })
       .catch(() => {
         if (live) setFailed(true);
@@ -341,6 +344,12 @@ function SignInsView() {
                     </>
                   ) : r.never ? (
                     <span className="text-risk-medium text-xs">{t("Never signed in")}</span>
+                  ) : r.noneSinceTracking ? (
+                    <span className="text-gray-400 text-xs">
+                      {since
+                        ? t("No sign-in recorded since {date}", { date: new Date(since).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) })
+                        : t("No sign-in recorded yet")}
+                    </span>
                   ) : (
                     <span className="text-gray-300 text-xs">-</span>
                   )}

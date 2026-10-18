@@ -1,4 +1,4 @@
-import { readJsonTolerant, updateJson, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, updateJson, listFiles, NO_CHANGE } from "./controlData";
 
 // ---------------------------------------------------------------------------
 // "How often does each person sign in?"
@@ -7,35 +7,40 @@ import { readJsonTolerant, updateJson, listFiles } from "./controlData";
 // which is the record. This is the tally beside it, so the Sign-ins view does
 // not have to read every auth entry of every month to count them.
 //
-//   signins/2026-10.json  { "<userId>": { name, email, count, failed, ... } }
+//   signins/users/<userId>.json  { name, email, lastAt, lastIp, lastDevice, days, failedDays }
+//   signins/meta.json            { since }  when this school's tracking began
 //
 // 🔴 NOT under activity/: activityMonths() treats every folder there as a month.
 //
-// One small file per month, changed through updateJson so two people signing
-// in at the same moment are both counted. Months are UTC, the same as the
-// activity log's, so a sign-in lands in the same month in both.
+// ONE FILE PER USER, so a sign-in only ever contends with the same person
+// signing in at the same moment (updateJson settles that), never with the
+// rest of the school. Days are SAST (UTC+2) and only the last 31 are kept, so
+// a file stays a few hundred bytes for good.
 // Unknown email addresses are NOT tallied (they are in the log): keyed by what
-// a stranger typed, this file would grow with every address a bot tries.
+// a stranger typed, this folder would grow with every address a bot tries.
 // ---------------------------------------------------------------------------
 
 export interface SignInStat {
   name: string;
   email: string;
-  /** Successful sign-ins this month. */
-  count: number;
-  /** Wrong passwords this month. */
-  failed: number;
   lastAt?: string;
   lastIp?: string;
   lastDevice?: string;
-  /** Per UTC day ("YYYY-MM-DD"), so 7 and 30 day counts are exact. */
+  /** Sign-ins per SAST day ("YYYY-MM-DD"), last 31 days only. */
   days: Record<string, number>;
+  /** Wrong passwords per SAST day, last 31 days only. */
   failedDays: Record<string, number>;
 }
 
-export type SignInSummary = Record<string, SignInStat>;
+const KEEP_DAYS = 31;
+const SAST_MS = 2 * 60 * 60 * 1000;
+const userPath = (id: string) => `signins/users/${id}.json`;
+const META_PATH = "signins/meta.json";
 
-const pathFor = (month: string) => `signins/${month}.json`;
+/** The SAST calendar day of an instant, as "YYYY-MM-DD". */
+export function sastDay(ms: number): string {
+  return new Date(ms + SAST_MS).toISOString().slice(0, 10);
+}
 
 /** "Chrome on Windows". Best effort, and never more than a short label. */
 export function deviceOf(ua: string | null | undefined): string {
@@ -62,47 +67,63 @@ export function deviceOf(ua: string | null | undefined): string {
   return browser || os || "Unknown device";
 }
 
+function bump(days: Record<string, number>, day: string, oldest: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [d, n] of Object.entries(days)) if (d >= oldest) out[d] = n;
+  out[day] = (out[day] || 0) + 1;
+  return out;
+}
+
 /** Counts one sign-in (or wrong password) for a known user. NEVER THROWS. */
 export async function countSignIn(
   user: { id: string; name: string; surname?: string; email: string },
   outcome: "ok" | "failed",
-  ip: string,
+  ip: string | undefined,
   device: string,
   at = new Date().toISOString()
 ): Promise<void> {
-  const day = at.slice(0, 10);
+  const ms = Date.parse(at);
+  const day = sastDay(ms);
+  const oldest = sastDay(ms - (KEEP_DAYS - 1) * 86400000);
   try {
-    await updateJson<SignInSummary>(pathFor(at.slice(0, 7)), {}, (sum) => {
-      const s: SignInStat = sum[user.id] || { name: "", email: "", count: 0, failed: 0, days: {}, failedDays: {} };
-      s.name = `${user.name} ${user.surname || ""}`.trim() || user.email;
-      s.email = user.email;
-      if (outcome === "ok") {
-        s.count++;
-        s.days[day] = (s.days[day] || 0) + 1;
-        s.lastAt = at;
-        s.lastIp = ip;
-        s.lastDevice = device;
-      } else {
-        s.failed++;
-        s.failedDays[day] = (s.failedDays[day] || 0) + 1;
-      }
-      sum[user.id] = s;
-      return sum;
-    });
+    await Promise.all([
+      updateJson<SignInStat | null>(userPath(user.id), null, (cur) => {
+        const s: SignInStat = cur || { name: "", email: "", days: {}, failedDays: {} };
+        s.name = `${user.name} ${user.surname || ""}`.trim() || user.email;
+        s.email = user.email;
+        if (outcome === "ok") {
+          s.days = bump(s.days || {}, day, oldest);
+          s.lastAt = at;
+          s.lastIp = ip;
+          s.lastDevice = device;
+        } else {
+          s.failedDays = bump(s.failedDays || {}, day, oldest);
+        }
+        return s;
+      }),
+      // Written once, the first time anybody at the school is counted. After
+      // that it is a read and NO_CHANGE: no write, so no contention.
+      updateJson<{ since: string } | null>(META_PATH, null, (cur) => (cur ? NO_CHANGE : { since: at })),
+    ]);
   } catch (err) {
     console.error("[signins] Could not count:", outcome, err);
   }
 }
 
-/** Every month's summary, newest first.
- *  shortcut: reads all months (one small file each); page by month if a school runs for decades. */
-export async function readSignInSummaries(): Promise<SignInSummary[]> {
-  const months = (await listFiles("signins"))
-    .map((f) => f.replace(/\.json$/, ""))
-    .filter((m) => /^\d{4}-\d{2}$/.test(m))
-    .sort()
-    .reverse();
-  return Promise.all(months.map((m) => readJsonTolerant<SignInSummary>(pathFor(m), {})));
+/** Every user's tally, by user id, read in parallel. */
+export async function readSignInStats(): Promise<Record<string, SignInStat>> {
+  const ids = (await listFiles("signins/users")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+  const stats = await Promise.all(ids.map((id) => readJsonTolerant<SignInStat | null>(userPath(id), null)));
+  const out: Record<string, SignInStat> = {};
+  ids.forEach((id, i) => {
+    if (stats[i]) out[id] = stats[i]!;
+  });
+  return out;
+}
+
+/** When this school's sign-ins started being counted. Null before the first one. */
+export async function trackingSince(): Promise<string | null> {
+  return (await readJson<{ since: string } | null>(META_PATH, null))?.since || null;
 }
 
 export interface SignInRow {
@@ -115,59 +136,43 @@ export interface SignInRow {
   last7: number;
   last30: number;
   failed30: number;
-  /** Still on the welcome password and never seen signing in. */
+  /** Created after tracking began and never seen signing in. */
   never: boolean;
+  /** Created before tracking began, and no sign-in seen since. */
+  noneSinceTracking: boolean;
   /** No longer a user (the sign-ins are history, so they stay). */
   removed: boolean;
 }
 
-/** The latest sign-in per user id, across every month. */
-export function lastSignIns(summaries: SignInSummary[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const sum of summaries)
-    for (const [id, s] of Object.entries(sum))
-      if (s.lastAt && (!out[id] || s.lastAt > out[id])) out[id] = s.lastAt;
-  return out;
-}
-
 /** One row per user for the Sign-ins view. Pure, so the check script can test it. */
 export function buildSignInRows(
-  users: { id: string; name: string; surname: string; email: string; forcePasswordChange: boolean }[],
-  summaries: SignInSummary[],
-  now = new Date()
+  users: { id: string; name: string; surname: string; email: string; createdAt: string }[],
+  stats: Record<string, SignInStat>,
+  since: string | null,
+  now = Date.now()
 ): SignInRow[] {
-  const dayAgo = (n: number) => new Date(now.getTime() - n * 86400000).toISOString().slice(0, 10);
-  const from7 = dayAgo(6);
-  const from30 = dayAgo(29);
-  const sumFrom = (days: Record<string, number>, from: string) =>
+  const from7 = sastDay(now - 6 * 86400000);
+  const from30 = sastDay(now - 29 * 86400000);
+  const sumFrom = (days: Record<string, number> = {}, from: string) =>
     Object.entries(days).reduce((a, [d, n]) => (d >= from ? a + n : a), 0);
-
-  const rows = new Map<string, SignInRow>();
-  const blank = (userId: string, name: string, email: string, removed: boolean): SignInRow => ({
-    userId, name, email, last7: 0, last30: 0, failed30: 0, never: false, removed,
-  });
-  for (const u of users) rows.set(u.id, blank(u.id, `${u.name} ${u.surname}`.trim() || u.email, u.email, false));
-
-  for (const sum of summaries) {
-    for (const [id, s] of Object.entries(sum)) {
-      let row = rows.get(id);
-      if (!row) {
-        row = blank(id, s.name, s.email, true);
-        rows.set(id, row);
-      }
-      row.last7 += sumFrom(s.days || {}, from7);
-      row.last30 += sumFrom(s.days || {}, from30);
-      row.failed30 += sumFrom(s.failedDays || {}, from30);
-      if (s.lastAt && (!row.lastAt || s.lastAt > row.lastAt)) {
-        row.lastAt = s.lastAt;
-        row.lastIp = s.lastIp;
-        row.lastDevice = s.lastDevice;
-      }
-    }
-  }
-  for (const u of users) {
-    const row = rows.get(u.id)!;
-    row.never = !row.lastAt && u.forcePasswordChange;
-  }
-  return [...rows.values()];
+  const row = (userId: string, name: string, email: string, removed: boolean, createdAt?: string): SignInRow => {
+    const s = stats[userId];
+    const seen = !!s?.lastAt;
+    // Only someone created after counting began can truly be "never": anyone
+    // older may well have signed in before there was anything to count it.
+    const after = !!since && !!createdAt && createdAt >= since;
+    return {
+      userId, name, email, removed,
+      lastAt: s?.lastAt, lastIp: s?.lastIp, lastDevice: s?.lastDevice,
+      last7: sumFrom(s?.days, from7),
+      last30: sumFrom(s?.days, from30),
+      failed30: sumFrom(s?.failedDays, from30),
+      never: !seen && !removed && after,
+      noneSinceTracking: !seen && !removed && !after,
+    };
+  };
+  const rows = users.map((u) => row(u.id, `${u.name} ${u.surname}`.trim() || u.email, u.email, false, u.createdAt));
+  const known = new Set(users.map((u) => u.id));
+  for (const [id, s] of Object.entries(stats)) if (!known.has(id)) rows.push(row(id, s.name, s.email, true));
+  return rows;
 }

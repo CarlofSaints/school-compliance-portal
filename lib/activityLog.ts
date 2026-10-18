@@ -187,7 +187,11 @@ export async function exportActivity(month: string): Promise<ActivityEntry[]> {
 export function activityToCsv(entries: ActivityEntry[]): string {
   const rows = [...entries].reverse();
   const esc = (v: unknown) => {
-    const s = v == null ? "" : String(v);
+    let s = v == null ? "" : String(v);
+    // Formula injection: Excel runs a cell starting with = + - @ (or a tab /
+    // CR before one). A sign-in typed by a stranger reaches this file, so
+    // every such cell gets a leading quote and opens as plain text.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     // Quote everything: a summary can contain a comma, a quote or a newline,
     // and a CSV that breaks on one row loses the rest of the file.
     return `"${s.replace(/"/g, '""')}"`;

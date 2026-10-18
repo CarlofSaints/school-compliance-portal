@@ -5,7 +5,6 @@ import { SESSION_COOKIE, createSessionToken, sessionCookieOptions, isHttps } fro
 import { tenantScope } from "@/lib/tenantContext";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { ipOf } from "@/lib/rateLimit";
 import { deviceOf } from "@/lib/signinLog";
 
 export async function POST(req: NextRequest) {
@@ -50,7 +49,6 @@ export async function POST(req: NextRequest) {
     if (updated) {
       await recordActivity({
         ...actorFrom(req, session),
-        ip: ipOf(req),
         action: "auth.password_changed",
         entity: "auth",
         entityId: session.id,

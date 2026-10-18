@@ -87,7 +87,7 @@ export default function UsersPage() {
   const fetchData = useCallback(async () => {
     const [usersRes, rolesRes, peopleRes, tagsRes, positionsRes] =
       await Promise.all([
-        authFetch("/api/users"),
+        authFetch("/api/users?withSignIns=1"),
         authFetch("/api/roles"),
         authFetch("/api/people"),
         authFetch("/api/tags"),
