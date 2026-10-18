@@ -4,7 +4,7 @@ import { requireLogin } from "@/lib/rolesData";
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions, isHttps } from "@/lib/session";
 import { tenantScope } from "@/lib/tenantContext";
 import { recordActivity } from "@/lib/activityLog";
-import { actorFrom } from "@/lib/activityActor";
+import { actorFrom, afterResponse } from "@/lib/activityActor";
 import { deviceOf } from "@/lib/signinLog";
 
 export async function POST(req: NextRequest) {
@@ -47,14 +47,18 @@ export async function POST(req: NextRequest) {
     });
 
     if (updated) {
-      await recordActivity({
-        ...actorFrom(req, session),
-        action: "auth.password_changed",
-        entity: "auth",
-        entityId: session.id,
-        summary: "Changed their password",
-        detail: { device: deviceOf(req.headers.get("user-agent")) },
-      });
+      const actor = actorFrom(req, session);
+      const device = deviceOf(req.headers.get("user-agent"));
+      await afterResponse(() =>
+        recordActivity({
+          ...actor,
+          action: "auth.password_changed",
+          entity: "auth",
+          entityId: session.id,
+          summary: "Changed their password",
+          detail: { device },
+        })
+      );
     }
 
     // A session is signed against the password hash, so the cookie this

@@ -112,6 +112,10 @@ console.log("\nFormula injection is neutralised in every field");
   checkThat("tab cell gets a leading quote", cells.includes("\"'\tx\""));
   checkThat("CR cell gets a leading quote", activityToCsv([entry({ action: "\r=1" })]).includes("\"'\r=1\""));
   checkThat("an ordinary cell is left alone", activityToCsv([entry()]).includes("\"Dee Schoultz\""));
+  const nums = activityToCsv([entry({ summary: "-500", actorEmail: "+27 82 123 4567", entityId: "-12.5" })]).split("\r\n")[1];
+  checkThat("a negative number is left alone", nums.includes("\"-500\""));
+  checkThat("a phone number is left alone", nums.includes("\"+27 82 123 4567\""));
+  checkThat("a negative decimal is left alone", nums.includes("\"-12.5\""));
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);

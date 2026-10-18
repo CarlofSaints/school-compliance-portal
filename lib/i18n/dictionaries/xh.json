@@ -1533,5 +1533,6 @@
   "Unknown address": "Idilesi engaziwayo",
   "Unknown connection": "Unxibelelwano olungaziwayo",
   "1 person has never signed in.": "Umntu omnye akakaze angene.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Ukungena, ukungena okungaphumelelanga nokuphuma akudweliswanga apha: khetha u-Ngena kwisihluzi, okanye uvule ithebhu ethi Ukungena. Utshintsho nokusetwa ngokutsha kweepassword kudweliswe apha."
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Ukungena, ukungena okungaphumelelanga nokuphuma akudweliswanga apha: khetha u-Ngena kwisihluzi, okanye uvule ithebhu ethi Ukungena. Utshintsho nokusetwa ngokutsha kweepassword kudweliswe apha.",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Ukungena, ukungena okungaphumelelanga nokuphuma kuphela. Utshintsho nokusetwa ngokutsha kweepassword kudweliswe phantsi kwe-Yonke into."
 }

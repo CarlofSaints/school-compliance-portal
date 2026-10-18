@@ -26,8 +26,8 @@ import { readJson, readJsonTolerant, writeJson, listFiles, listFolders } from ".
 // activity-auth/<month>/, because there are far more of them than of
 // everything else and every view reads a whole month. Password changes and
 // resets stay in activity/: they are security events an auditor looks for.
-// The default view reads activity/ only; the "Sign in" filter reads both
-// (auth entries only); the month export reads both. 🔴 activity-auth is a sibling of activity/, never inside it:
+// The default view reads activity/ only (password events show there); the
+// "Sign in" filter reads activity-auth/ only; the month export reads both. 🔴 activity-auth is a sibling of activity/, never inside it:
 // activityMonths() treats every folder under activity/ as a month.
 //
 // ---------------------------------------------------------------------------
@@ -168,10 +168,10 @@ export async function readActivity(
   query: ActivityQuery = {}
 ): Promise<ActivityPage> {
   const month = query.month || currentMonth();
-  // "auth" reads both partitions (sign-ins AND password events); everything
-  // else reads the main one, so the default view never downloads a month of
-  // sign-ins. The month list matches what the view reads.
-  const folders = query.entity === "auth" ? ["activity", "activity-auth"] : ["activity"];
+  // "auth" (the Sign in filter) reads the sign-in partition only; everything
+  // else reads the main one, so neither view downloads the other's month.
+  // The month list matches what the view reads.
+  const folders = query.entity === "auth" ? ["activity-auth"] : ["activity"];
   const [availableMonths, ...parts] = await Promise.all([
     activityMonths(folders),
     ...folders.map((f) => readMonth(f, month)),
@@ -218,9 +218,10 @@ export function activityToCsv(entries: ActivityEntry[]): string {
   const esc = (v: unknown) => {
     let s = v == null ? "" : String(v);
     // Formula injection: Excel runs a cell starting with = + - @ (or a tab /
-    // CR before one). A sign-in typed by a stranger reaches this file, so
-    // every such cell gets a leading quote and opens as plain text.
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    // CR before one), and a stranger's input reaches this file. Such a cell
+    // gets a leading quote and opens as plain text. A plain number or phone
+    // number ("-500", "+27 82 123 4567") is left exactly as it is.
+    if (/^[=@\t\r]/.test(s) || (/^[+-]/.test(s) && !/^[+-]?[\d\s.,()]+$/.test(s))) s = "'" + s;
     // Quote everything: a summary can contain a comma, a quote or a newline,
     // and a CSV that breaks on one row loses the rest of the file.
     return `"${s.replace(/"/g, '""')}"`;

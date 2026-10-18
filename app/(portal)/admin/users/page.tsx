@@ -494,7 +494,7 @@ export default function UsersPage() {
                   {showSignIns && (
                     <td className="px-6 py-4 text-gray-600 text-xs whitespace-nowrap">
                       {lastSignIn?.[user.id]
-                        ? new Date(lastSignIn[user.id]).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                        ? new Date(lastSignIn[user.id]).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
                         : "-"}
                     </td>
                   )}

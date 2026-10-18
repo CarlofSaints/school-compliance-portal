@@ -45,6 +45,7 @@ function toneFor(action: string): string {
 function whenLabel(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -104,6 +105,10 @@ export default function ActivityPage() {
       setTotal(data.total || 0);
       setMonths(data.availableMonths || []);
       if (!month && data.month) setMonth(data.month);
+      // The filter changed to a view whose months do not include this one:
+      // jump to its newest month rather than show an empty page.
+      const avail: string[] = data.availableMonths || [];
+      if (month && avail.length && !avail.includes(month)) setMonth(avail[0]);
     } finally {
       setBusy(false);
     }
@@ -205,11 +210,11 @@ export default function ActivityPage() {
         />
       </div>
 
-      {entity !== "auth" && (
-        <p className="text-xs text-gray-400 mb-2">
-          {t("Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.")}
-        </p>
-      )}
+      <p className="text-xs text-gray-400 mb-2">
+        {entity === "auth"
+          ? t("Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.")
+          : t("Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.")}
+      </p>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -273,8 +278,9 @@ export default function ActivityPage() {
   );
 }
 
-// Who signs in and how often. One row per user, from the monthly tallies
-// (lib/signinLog.ts); every single sign-in is also in the log tab.
+// Who signs in and how often. One row per user, from each user's own tally
+// file (lib/signinLog.ts); every single sign-in is also in the log, under the
+// Sign in filter.
 function SignInsView() {
   const t = useT();
   const [rows, setRows] = useState<SignInRow[] | null>(null);
@@ -355,7 +361,7 @@ function SignInsView() {
                   ) : r.noneSinceTracking ? (
                     <span className="text-gray-400 text-xs">
                       {since
-                        ? t("No sign-in recorded since {date}", { date: new Date(since).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) })
+                        ? t("No sign-in recorded since {date}", { date: new Date(since).toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short", year: "numeric" }) })
                         : t("No sign-in recorded yet")}
                     </span>
                   ) : (

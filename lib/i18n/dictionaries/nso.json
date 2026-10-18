@@ -1533,5 +1533,6 @@
   "Unknown address": "Aterese ye e sa tsebjwego",
   "Unknown connection": "Kgokagano ye e sa tsebjwego",
   "1 person has never signed in.": "Motho o tee ga se a ka a tsena.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Go tsena, go tsena mo go paletšwego le go tšwa ga go ngwalwa mo: kgetha Tsena go sefe, goba o bule thepe ya Go tsena. Diphetogo le go bewa leswa ga mantšu a sephiri di ngwalwa mo."
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Go tsena, go tsena mo go paletšwego le go tšwa ga go ngwalwa mo: kgetha Tsena go sefe, goba o bule thepe ya Go tsena. Diphetogo le go bewa leswa ga mantšu a sephiri di ngwalwa mo.",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Go tsena, go tsena mo go paletšwego le go tšwa fela. Diphetogo le go bewa leswa ga mantšu a sephiri di ngwadilwe ka fase ga Tšohle."
 }

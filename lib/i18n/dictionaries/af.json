@@ -1533,5 +1533,6 @@
   "Unknown address": "Onbekende adres",
   "Unknown connection": "Onbekende verbinding",
   "1 person has never signed in.": "1 persoon het nog nooit aangemeld nie.",
-  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Aanmeldings, mislukte aanmeldings en afmeldings word nie hier gelys nie: kies Meld aan in die filter, of maak die Aanmeldings-oortjie oop. Wagwoordveranderings en -herstellings word hier gelys."
+  "Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab. Password changes and resets are listed here.": "Aanmeldings, mislukte aanmeldings en afmeldings word nie hier gelys nie: kies Meld aan in die filter, of maak die Aanmeldings-oortjie oop. Wagwoordveranderings en -herstellings word hier gelys.",
+  "Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are listed under Everything.": "Slegs aanmeldings, mislukte aanmeldings en afmeldings. Wagwoordveranderings en -herstellings word onder Alles gelys."
 }

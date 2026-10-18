@@ -1,5 +1,6 @@
 import { readJson, readJsonTolerant, updateJson, listFilesStrict, NO_CHANGE } from "./controlData";
 import { isPlausibleEmail } from "./emailIdentity";
+import { tenantScope } from "./tenantContext";
 
 // ---------------------------------------------------------------------------
 // "How often does each person sign in?"
@@ -37,6 +38,14 @@ const KEEP_DAYS = 31;
 const SAST_MS = 2 * 60 * 60 * 1000;
 const userPath = (id: string) => `signins/users/${id}.json`;
 const META_PATH = "signins/meta.json";
+// Schools whose meta.json this instance knows exists. Per instance on purpose:
+// it only skips a read, it never decides anything.
+const metaSeen = new Set<string>();
+
+/** For check scripts: act like a fresh serverless instance. */
+export function forgetTrackingCache(): void {
+  metaSeen.clear();
+}
 
 /** An instant as SAST wall-clock time, ISO-shaped ("YYYY-MM-DDTHH:MM..."). */
 export function sastIso(ms: number): string {
@@ -123,10 +132,13 @@ export async function countSignIn(
       }
       return s;
     });
-    // Only a person's FIRST tally can be the school's first, so meta.json is
-    // touched then and never again for them (NO_CHANGE if it already exists).
-    if (created) {
+    // The school's tracking date, write-once. Ensured on a user's first tally,
+    // and again whenever this instance has not yet seen it exist, so a failed
+    // first write is repaired by the next sign-in. Once seen, never re-read.
+    const { key } = await tenantScope();
+    if (created || !metaSeen.has(key)) {
       await updateJson<{ since: string } | null>(META_PATH, null, (cur) => (cur ? NO_CHANGE : { since: at }));
+      metaSeen.add(key);
     }
   } catch (err) {
     console.error("[signins] Could not count:", outcome, err);

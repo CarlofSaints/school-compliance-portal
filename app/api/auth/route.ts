@@ -58,8 +58,7 @@ export async function POST(req: NextRequest) {
     // an address with an account answer slower than one without.
     // Logged as the address the limiter counted, so an investigator sees
     // the one that was actually counted or locked.
-    const limitKey = ipOf(req);
-    const ip = limitKey;
+    const ip = ipOf(req);
     const device = deviceOf(req.headers.get("user-agent"));
     // What was typed, for detail only, and MASKED (people type their
     // password here). Never the actor or summary: it is a stranger's input
@@ -70,7 +69,7 @@ export async function POST(req: NextRequest) {
     // Rate limits: every attempt counts against the connection; WRONG
     // passwords count against the address, whether or not it has an account,
     // so the lock cannot be used to find out which addresses exist.
-    const ipHit = await hit(LIMITS.loginIp, limitKey);
+    const ipHit = await hit(LIMITS.loginIp, ip);
     if (!ipHit.ok) {
       // Only the FIRST refusal in a window is logged, so a bot hammering the
       // form cannot flood the log.
@@ -97,8 +96,8 @@ export async function POST(req: NextRequest) {
       await hit(LIMITS.loginAccount, account);
       await afterResponse(async () => {
         // Read first: only the first attempt in a window writes the marker.
-        if (!(await peek(UNKNOWN_ADDRESS_LOG, limitKey)).ok) return;
-        const marker = await hit(UNKNOWN_ADDRESS_LOG, limitKey);
+        if (!(await peek(UNKNOWN_ADDRESS_LOG, ip)).ok) return;
+        const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
         if (marker.count !== 1) return;
         await recordActivity({
           actorName: UNKNOWN_ADDRESS,
@@ -210,25 +209,22 @@ export async function DELETE(req: NextRequest) {
   // unlogged, never that it is slowed down or refused.
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const device = deviceOf(req.headers.get("user-agent"));
+  // afterResponse never throws and logs its own failures.
   await afterResponse(async () => {
-    try {
-      const claims = readSessionClaims(token);
-      const user = claims ? await getUserById(claims.u) : undefined;
-      const { key: tenantKey } = await tenantScope();
-      if (!token || !user || !verifySessionToken(token, user, tenantKey)) return;
-      await recordActivity({
-        ...actorFromUser(req, user),
-        ip: ipOf(req),
-        action: "auth.sign_out",
-        entity: "auth",
-        entityId: user.id,
-        summary: "Signed out",
-        detail: { device },
-      });
-    } catch (err) {
-      console.error("[auth] Could not log sign-out:", err);
-    }
-  }).catch(() => {});
+    const claims = readSessionClaims(token);
+    const user = claims ? await getUserById(claims.u) : undefined;
+    const { key: tenantKey } = await tenantScope();
+    if (!token || !user || !verifySessionToken(token, user, tenantKey)) return;
+    await recordActivity({
+      ...actorFromUser(req, user),
+      ip: ipOf(req),
+      action: "auth.sign_out",
+      entity: "auth",
+      entityId: user.id,
+      summary: "Signed out",
+      detail: { device },
+    });
+  });
   const res = NextResponse.json({ success: true });
   res.cookies.set(SESSION_COOKIE, "", {
     ...sessionCookieOptions(isHttps(req), 0),

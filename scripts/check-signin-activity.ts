@@ -39,7 +39,7 @@ async function main() {
   const { createSessionToken, SESSION_COOKIE } = await import("../lib/session");
   const { tenantScope } = await import("../lib/tenantContext");
   const { readActivity, exportActivity, recordActivity, activityMonths } = await import("../lib/activityLog");
-  const { readSignInStats, buildSignInRows, deviceOf, sastDay, countSignIn, trackingSince, maskTypedEmail } = await import("../lib/signinLog");
+  const { readSignInStats, buildSignInRows, deviceOf, sastDay, countSignIn, trackingSince, maskTypedEmail, forgetTrackingCache } = await import("../lib/signinLog");
   const { LIMITS } = await import("../lib/rateLimit");
   const auth = await import("../app/api/auth/route");
   const changePw = await import("../app/api/auth/change-password/route");
@@ -239,8 +239,9 @@ async function main() {
 
   console.log("\nPassword change");
   res = await changePw.POST(req("POST", "/api/auth/change-password", { as: member, json: { currentPassword: "pw-member-SECRET", newPassword: "new-pw-SECRET-2" } }));
+  check((await flushAfterResponse()) === 1, "change-password logs through afterResponse");
   check(res.status === 200, `change-password HTTP ${res.status}`);
-  check((await authEntries()).some((e) => e.action === "auth.password_changed" && e.actorId === "member"), "auth.password_changed logged");
+  check((await readActivity({ limit: 10000 })).entries.some((e) => e.action === "auth.password_changed" && e.actorId === "member"), "auth.password_changed logged (main log)");
 
   console.log("\nSign-ins have their own partition");
   await recordActivity({ actorName: "Someone", action: "spend.approved", entity: "spend", summary: "approved something" });
@@ -251,7 +252,8 @@ async function main() {
   check(def.entries.some((e) => e.entity === "spend") && def.entries.every((e) => !partitioned.includes(e.action)), `the default view has no sign-in/out entries (${def.entries.length})`);
   check(def.entries.some((e) => e.action === "auth.password_changed"), "password changes stay in the main log");
   const authView = await readActivity({ entity: "auth", limit: 10000 });
-  check(authView.entries.some((e) => e.action === "auth.sign_in") && authView.entries.some((e) => e.action === "auth.password_changed") && authView.entries.every((e) => e.entity === "auth"), "the Sign in filter shows both partitions' auth entries");
+  check(authView.entries.some((e) => e.action === "auth.sign_in") && authView.entries.every((e) => partitioned.includes(e.action)), "the Sign in filter shows only sign-in/out entries (activity-auth/ only)");
+  check(!authView.entries.some((e) => e.action === "auth.password_changed"), "password events are not in the Sign in filter (they are under Everything)");
   const folded0 = blob.__foldedCalls();
   check((await activityMonths()).length === 1 && blob.__foldedCalls() > folded0, "activityMonths uses a folder-only listing (one month, no stray folder)");
   // A sign-in in a month with nothing else in it.
@@ -280,11 +282,20 @@ async function main() {
   res = await signins.GET(req("GET", "/api/activity/signins?lastOnly=1", { as: viewer }));
   check(res.status === 403, `... and refused lastOnly too (HTTP ${res.status})`);
 
-  console.log("\nmeta.json is only touched on a user's FIRST tally");
+  console.log("\nmeta.json is write-once, repaired if missing, and not re-read once seen");
   const metaKey = [...store.keys()].find((k) => k.endsWith("signins/meta.json"))!;
   store.delete(metaKey);
-  await signIn(admin.email, "pw-admin-SECRET", "10.0.0.70");
-  check(!store.has(metaKey), "an existing user's sign-in does not read or write meta.json");
+  res = await signIn(member.email, "new-pw-SECRET-2", "10.0.0.70");
+  check(res.status === 200, `an existing user signs in (HTTP ${res.status})`);
+  check(!store.has(metaKey), "once seen, an existing user's sign-in does not read or write meta.json");
+  forgetTrackingCache(); // a fresh instance, after a first write that failed
+  res = await signIn(member.email, "new-pw-SECRET-2", "10.0.0.72");
+  check(store.has(metaKey), "a missing meta.json is repaired by the next sign-in on a fresh instance");
+  const sinceNow = await trackingSince();
+  forgetTrackingCache();
+  res = await signIn(member.email, "new-pw-SECRET-2", "10.0.0.73");
+  check((await trackingSince()) === sinceNow, "and it stays write-once");
+  store.delete(metaKey);
   const fresh = await mk("fresh", "viewer");
   await signIn(fresh.email, "pw-fresh-SECRET", "10.0.0.71");
   check(store.has(metaKey), "a user's first ever tally writes meta.json if it is missing");

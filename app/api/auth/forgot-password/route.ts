@@ -66,7 +66,9 @@ export async function POST(req: NextRequest) {
     }
     // Only for a real account: an unknown address is not logged here, or the
     // log would fill with whatever a stranger types into a public form.
-    // After the reply, like sign-in: the log cannot change how long it takes.
+    // After the reply, so a logging problem can never fail the request. (Not
+    // a timing measure here: sending the email already makes a real account
+    // answer slower than an unknown address.)
     const actor = actorFromUser(req, user);
     await afterResponse(() =>
       recordActivity({

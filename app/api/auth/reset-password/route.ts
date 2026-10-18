@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // After the reply, like sign-in: the log cannot change how long it takes.
+    // After the reply, so a logging problem can never fail the request.
     const actor = actorFromUser(req, updated);
     await afterResponse(() =>
       recordActivity({
