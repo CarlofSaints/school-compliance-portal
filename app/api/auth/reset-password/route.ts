@@ -86,8 +86,10 @@ export async function POST(req: NextRequest) {
 
     // After the reply, so a logging problem can never fail the request.
     const actor = { ...actorFromUser(req, updated), ip: ipOf(req) };
+    const at = new Date().toISOString();
     await afterResponse(() =>
       recordActivity({
+        at,
         ...actor,
         action: "auth.password_reset",
         entity: "password",

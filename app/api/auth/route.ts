@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
   }
   try {
     const { email, password } = await req.json();
+    // The moment it happened, not the moment the deferred log write runs.
+    const at = new Date().toISOString();
     if (!email || !password) {
       return NextResponse.json(
         { error: "Email and password are required" },
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
       if (ipHit.count === LIMITS.loginIp.max + 1) {
         await afterResponse(() =>
           recordActivity({
+            at,
             actorName: UNKNOWN_CONNECTION,
             ip,
             action: "auth.sign_in_blocked",
@@ -104,12 +107,13 @@ export async function POST(req: NextRequest) {
         const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
         if (marker.count !== 1) return;
         await recordActivity({
+          at,
           actorName: UNKNOWN_ADDRESS,
           ip,
           action: "auth.sign_in_failed",
           entity: "auth",
           summary: `Failed sign-in for an unknown address (further ones from this connection in the next ${UNKNOWN_ADDRESS_LOG.windowSec / 60} minutes are not logged)`,
-          detail: { reason: "unknown_email", firstTypedEmail: typed, attemptsFromConnection: ipHit.count, device },
+          detail: { reason: "unknown_email", firstTypedEmail: typed, allSignInAttemptsFromThisConnectionInWindow: ipHit.count, device },
         });
       });
       return NextResponse.json(
@@ -127,6 +131,7 @@ export async function POST(req: NextRequest) {
       await afterResponse(async () => {
         await Promise.all([
           recordActivity({
+            at,
             ...actorOf(user),
             action: "auth.sign_in_failed",
             entity: "auth",
@@ -134,12 +139,13 @@ export async function POST(req: NextRequest) {
             summary: "Failed sign-in: wrong password",
             detail: { reason: "wrong_password", device },
           }),
-          countSignIn(user, "failed", ip, device),
+          countSignIn(user, "failed", ip, device, at),
         ]);
         // The wrong password that locks the account, logged once per lock.
         if (accountHit.count === LIMITS.loginAccount.max) {
           const until = sastIso(lockedUntil).slice(11, 16);
           await recordActivity({
+            at,
             ...actorOf(user),
             action: "auth.sign_in_blocked",
             entity: "auth",
@@ -185,6 +191,7 @@ export async function POST(req: NextRequest) {
     await afterResponse(() =>
       Promise.all([
         recordActivity({
+          at,
           ...actorOf(user),
           action: "auth.sign_in",
           entity: "auth",
@@ -192,7 +199,7 @@ export async function POST(req: NextRequest) {
           summary: "Signed in",
           detail: { device },
         }),
-        countSignIn(user, "ok", ip, device),
+        countSignIn(user, "ok", ip, device, at),
       ])
     );
     return res;
@@ -215,6 +222,7 @@ export async function DELETE(req: NextRequest) {
   // signature check, no retries. A failure only means the sign-out goes
   // unlogged, never that it is slowed down or refused.
   const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const at = new Date().toISOString();
   const device = deviceOf(req.headers.get("user-agent"));
   // afterResponse never throws and logs its own failures.
   await afterResponse(async () => {
@@ -223,6 +231,7 @@ export async function DELETE(req: NextRequest) {
     const { key: tenantKey } = await tenantScope();
     if (!token || !user || !verifySessionToken(token, user, tenantKey)) return;
     await recordActivity({
+      at,
       ...actorFromUser(req, user),
       ip: ipOf(req),
       action: "auth.sign_out",

@@ -146,6 +146,13 @@ export async function countSignIn(
       }
       return s;
     });
+    // Deleted while this write was in flight: erase what it just created.
+    if (!(await getUserById(user.id))) {
+      await deleteFileStrict(userPath(user.id)).catch((err) =>
+        console.error("[signins] Could not erase the tally of a user deleted mid-write", user.id, err)
+      );
+      return;
+    }
     // The school's tracking date, write-once. Ensured on a user's first tally,
     // and again whenever this instance has not yet seen it exist, so a failed
     // first write is repaired by the next sign-in. Once seen, never re-read.
@@ -200,8 +207,6 @@ export interface SignInRow {
   never: boolean;
   /** Created before tracking began, and no sign-in seen since. */
   noneSinceTracking: boolean;
-  /** No longer a user (the sign-ins are history, so they stay). */
-  removed: boolean;
 }
 
 /** One row per user for the Sign-ins view. Pure, so the check script can test it. */
@@ -215,24 +220,23 @@ export function buildSignInRows(
   const from30 = sastDay(now - 29 * 86400000);
   const sumFrom = (days: Record<string, number> = {}, from: string) =>
     Object.entries(days).reduce((a, [d, n]) => (d >= from ? a + n : a), 0);
-  const row = (userId: string, name: string, email: string, removed: boolean, createdAt?: string): SignInRow => {
+  const row = (userId: string, name: string, email: string, createdAt: string): SignInRow => {
     const s = stats[userId];
     const seen = !!s?.lastAt;
     // Only someone created after counting began can truly be "never": anyone
     // older may well have signed in before there was anything to count it.
-    const after = !!since && !!createdAt && Date.parse(createdAt) >= Date.parse(since);
+    const after = !!since && Date.parse(createdAt) >= Date.parse(since);
     return {
-      userId, name, email, removed,
+      userId, name, email,
       lastAt: s?.lastAt, lastIp: s?.lastIp, lastDevice: s?.lastDevice,
       last7: sumFrom(s?.days, from7),
       last30: sumFrom(s?.days, from30),
       failed30: sumFrom(s?.failedDays, from30),
-      never: !seen && !removed && after,
-      noneSinceTracking: !seen && !removed && !after,
+      never: !seen && after,
+      noneSinceTracking: !seen && !after,
     };
   };
-  const rows = users.map((u) => row(u.id, `${u.name} ${u.surname}`.trim() || u.email, u.email, false, u.createdAt));
-  const known = new Set(users.map((u) => u.id));
-  for (const [id, s] of Object.entries(stats)) if (!known.has(id)) rows.push(row(id, s.name, s.email, true));
-  return rows;
+  // Current users only: a deleted user's tally is erased with them, and any
+  // file left behind by a failed delete is ignored.
+  return users.map((u) => row(u.id, `${u.name} ${u.surname}`.trim() || u.email, u.email, u.createdAt));
 }

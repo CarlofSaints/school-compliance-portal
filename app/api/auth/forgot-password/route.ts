@@ -70,8 +70,10 @@ export async function POST(req: NextRequest) {
     // a timing measure here: sending the email already makes a real account
     // answer slower than an unknown address.)
     const actor = { ...actorFromUser(req, user), ip: ipOf(req) };
+    const at = new Date().toISOString();
     await afterResponse(() =>
       recordActivity({
+        at,
         ...actor,
         action: "auth.password_reset_requested",
         entity: "password",

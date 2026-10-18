@@ -77,6 +77,13 @@ export default function ActivityPage() {
   const [month, setMonth] = useState<string>("");
   const [entity, setEntity] = useState<ActivityEntity | "all">("all");
   const [search, setSearch] = useState("");
+  // What is actually searched for: the box, once typing pauses, so typing
+  // does not send a request per keystroke.
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(true);
   const [view, setView] = useState<"log" | "signins">("log");
@@ -95,7 +102,7 @@ export default function ActivityPage() {
       const qs = new URLSearchParams();
       if (month) qs.set("month", month);
       if (entity !== "all") qs.set("entity", entity);
-      if (search.trim()) qs.set("search", search.trim());
+      if (query) qs.set("search", query);
       qs.set("limit", String(PAGE_SIZE));
       qs.set("offset", String(page * PAGE_SIZE));
 
@@ -117,7 +124,7 @@ export default function ActivityPage() {
     } finally {
       if (mine === latest.current) setBusy(false);
     }
-  }, [session, month, entity, search, page]);
+  }, [session, month, entity, query, page]);
 
   useEffect(() => {
     load();
@@ -351,7 +358,6 @@ function SignInsView() {
                 <td className="px-4 py-3">
                   <div className="text-dark">
                     {r.name}
-                    {r.removed && <span className="ml-2 text-xs text-gray-400">{t("(removed)")}</span>}
                   </div>
                   <div className="text-xs text-gray-400">{r.email}</div>
                 </td>

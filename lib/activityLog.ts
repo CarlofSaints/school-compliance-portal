@@ -147,15 +147,21 @@ function normalise(e: ActivityEntry): ActivityEntry {
   return e.entity === "auth" && e.action.startsWith("auth.password") ? { ...e, entity: "password" } : e;
 }
 
-async function readMonth(folder: string, month: string): Promise<ActivityEntry[]> {
-  const files = await listFiles(`${folder}/${month}`);
-  // The pathname starts with the ISO timestamp, so this is chronological.
-  // Reversed for the grid, because an audit log is read newest first.
-  const ordered = [...files].sort().reverse();
+/** A month's file names, newest first. The pathname starts with the ISO
+ *  timestamp, so a reversed sort is newest first. */
+async function monthNames(folder: string, month: string): Promise<string[]> {
+  return [...(await listFiles(`${folder}/${month}`))].sort().reverse();
+}
+
+async function readNames(folder: string, month: string, names: string[]): Promise<ActivityEntry[]> {
   const loaded = await Promise.all(
-    ordered.map((name) => readJsonTolerant<ActivityEntry | null>(`${folder}/${month}/${name}`, null))
+    names.map((name) => readJsonTolerant<ActivityEntry | null>(`${folder}/${month}/${name}`, null))
   );
   return loaded.filter((e): e is ActivityEntry => e !== null).map(normalise);
+}
+
+async function readMonth(folder: string, month: string): Promise<ActivityEntry[]> {
+  return readNames(folder, month, await monthNames(folder, month));
 }
 
 /**
@@ -170,6 +176,22 @@ export async function readActivity(
   query: ActivityQuery = {}
 ): Promise<ActivityPage> {
   const month = query.month || currentMonth();
+  const offset = query.offset ?? 0;
+  const limit = query.limit ?? 100;
+
+  // The Sign in filter with nothing to match on reads only the page it shows:
+  // a month of sign-ins can be thousands of files, and the listing alone
+  // gives the total and the order.
+  if (query.entity === "auth" && !query.search && !query.actorId) {
+    const [months, names] = await Promise.all([activityMonths(["activity-auth"]), monthNames("activity-auth", month)]);
+    return {
+      entries: await readNames("activity-auth", month, names.slice(offset, offset + limit)),
+      total: names.length,
+      month,
+      availableMonths: [...new Set([currentMonth(), ...months])].sort().reverse(),
+    };
+  }
+
   // "auth" (the Sign in filter) reads the sign-in partition only; everything
   // else reads the main one, so neither view downloads the other's month.
   // Month lists: the Sign in filter lists its own months; every other view
@@ -204,8 +226,6 @@ export async function readActivity(
   }
 
   const total = entries.length;
-  const offset = query.offset ?? 0;
-  const limit = query.limit ?? 100;
   return {
     entries: entries.slice(offset, offset + limit),
     total,

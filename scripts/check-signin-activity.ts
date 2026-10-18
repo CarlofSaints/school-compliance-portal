@@ -25,12 +25,13 @@ const check = (ok: boolean, label: string, extra = "") => {
 
 async function main() {
   const { createRequire } = await import("module");
-  const blob = createRequire(__filename)("@vercel/blob") as { __fakeStore?: () => Map<string, { bytes: Uint8Array }>; __foldedCalls: () => number };
+  const blob = createRequire(__filename)("@vercel/blob") as { __fakeStore?: () => Map<string, { bytes: Uint8Array }>; __foldedCalls: () => number; __getCalls: () => number };
   if (typeof blob.__fakeStore !== "function") {
     console.error("Refusing to run: @vercel/blob is the REAL store. Run with --import ./scripts/fake-blob/register.mjs");
     process.exit(1);
   }
   const store = blob.__fakeStore();
+  const getCalls = () => blob.__getCalls();
 
   const { NextRequest } = await import("next/server");
   const { DEFAULT_ROLES } = await import("../lib/roles");
@@ -98,8 +99,9 @@ async function main() {
   check(sastDay(Date.parse("2026-10-18T22:30:00Z")) === "2026-10-19", "22:30 UTC is the NEXT day in SAST");
   check(sastDay(Date.parse("2026-10-18T21:59:00Z")) === "2026-10-18", "21:59 UTC is still the same SAST day");
   const one = { x: { name: "X", email: "x@t", days: { "2026-10-12": 1 }, failedDays: {} } };
-  check(buildSignInRows([], one, null, Date.parse("2026-10-18T21:00:00Z"))[0].last7 === 1, "12 Oct is inside the 7 days ending SAST 18 Oct");
-  check(buildSignInRows([], one, null, Date.parse("2026-10-18T22:30:00Z"))[0].last7 === 0, "12 Oct is outside the 7 days ending SAST 19 Oct");
+  const xUser = [{ id: "x", name: "X", surname: "", email: "x@t", createdAt: "2026-01-01T00:00:00.000Z" }];
+  check(buildSignInRows(xUser, one, null, Date.parse("2026-10-18T21:00:00Z"))[0].last7 === 1, "12 Oct is inside the 7 days ending SAST 18 Oct");
+  check(buildSignInRows(xUser, one, null, Date.parse("2026-10-18T22:30:00Z"))[0].last7 === 0, "12 Oct is outside the 7 days ending SAST 19 Oct");
   // 11:00+02:00 is 09:00Z, BEFORE a 10:00Z start, though it sorts after it as text.
   const tz = buildSignInRows([{ id: "tz", name: "T", surname: "Z", email: "tz@t", createdAt: "2026-10-18T11:00:00+02:00" }], {}, "2026-10-18T10:00:00.000Z");
   check(tz[0].never === false && tz[0].noneSinceTracking === true, "createdAt vs tracking date compared as instants, not text");
@@ -123,6 +125,7 @@ async function main() {
   check(ok.length === 1 && ok[0].actorId === "member" && ok[0].ip === "10.0.0.1" && ok[0].detail?.device === "Chrome on Windows", "one auth.sign_in entry with actor, ip and device", JSON.stringify(ok));
   let st = await readSignInStats();
   check(total(st.member?.days) === 1 && st.member?.lastIp === "10.0.0.1" && st.member?.lastDevice === "Chrome on Windows" && !!st.member?.lastAt, "per-user tally: 1 sign-in + last ip/device", JSON.stringify(st.member));
+  check(ok[0]?.at === st.member?.lastAt, "the log entry and the tally carry the same event time, captured in the handler");
   const keys = [...store.keys()];
   check(keys.some((k) => k.endsWith("signins/users/member.json")), "stored at signins/users/<userId>.json");
   check(!keys.some((k) => /signins\/\d{4}-\d{2}\.json$/.test(k)), "no school-wide monthly tally file");
@@ -164,6 +167,7 @@ async function main() {
   check(unk.length === 1, `5 unknown-address attempts from one connection -> 1 entry (got ${unk.length})`);
   const typedFirst = String(unk[0]?.detail?.firstTypedEmail || "");
   check(typedFirst === "n***@example.test", "no actorId; first typed address kept MASKED, in detail", typedFirst);
+  check(typeof unk[0]?.detail?.allSignInAttemptsFromThisConnectionInWindow === "number" && !("attemptsFromConnection" in (unk[0]?.detail || {})), "the attempt count is labelled as ALL sign-in attempts from the connection in the window");
   check(unk[0]?.actorName === "Unknown address" && !unk[0]?.summary.includes("nobody@"), "Who is the fixed 'Unknown address'; typed text not in actorName or summary", JSON.stringify(unk[0]));
   // Somebody types their password into the email box, from another connection.
   await signIn("Hunter2!MyRealSECRETpassword", "whatever-SECRET", "10.0.0.6");
@@ -199,8 +203,9 @@ async function main() {
   check(newbie?.never === false && newbie?.noneSinceTracking === true, "user created BEFORE tracking: 'no sign-in recorded since', not 'never'");
   check(rows.find((r) => r.userId === "late")?.never === true, "user created AFTER tracking with no sign-in: never signed in");
   check(rows.filter((r) => r.never).length === 1, "only the new user counts towards 'never signed in'");
-  rows = buildSignInRows([], { x: { name: "X", email: "x@t", days: { "2000-01-01": 2 }, failedDays: {} } }, since);
-  check(rows[0].last7 === 0 && rows[0].last30 === 0 && rows[0].removed && !rows[0].never, "old days outside 7/30 windows; unknown id marked removed");
+  rows = buildSignInRows(xUser, { x: { name: "X", email: "x@t", days: { "2000-01-01": 2 }, failedDays: {} } }, since);
+  check(rows[0].last7 === 0 && rows[0].last30 === 0, "old days are outside the 7/30 windows");
+  check(buildSignInRows([], { gone: { name: "G", email: "g@t", days: {}, failedDays: {} } }, since).length === 0, "a tally whose user is gone is not listed");
 
   console.log("\nOnly the last 31 days are kept");
   await mk("trim", "viewer");
@@ -295,7 +300,8 @@ async function main() {
   check(res.status === 403, `sign-ins refused for a member without the activity permission (HTTP ${res.status})`);
   res = await signins.GET(req("GET", "/api/activity/signins", { as: admin }));
   const body = await res.json();
-  check(res.status === 200 && body.rows?.length === 5 && body.since === since, `admin gets 4 users + 1 removed, and the tracking date (HTTP ${res.status}, ${body.rows?.length} rows)`);
+  const userCount = ((await (await usersRoute.GET(req("GET", "/api/users", { as: admin }))).json()) as unknown[]).length;
+  check(res.status === 200 && body.rows?.length === userCount && body.since === since, `admin gets one row per current user, and the tracking date (HTTP ${res.status}, ${body.rows?.length}/${userCount} rows)`);
   const plain = (await (await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: admin }))).json()) as Record<string, unknown>[];
   check(plain.length > 0 && plain.every((u) => !("lastSignInAt" in u)), "/api/users never carries sign-in data (Admin > Users fetches it separately, once)");
   res = await signins.GET(req("GET", "/api/activity/signins?lastOnly=1", { as: admin }));
@@ -324,6 +330,23 @@ async function main() {
   const fresh = await mk("fresh", "viewer");
   await signIn(fresh.email, "pw-fresh-SECRET", "10.0.0.71");
   check(store.has(metaKey), "a user's first ever tally writes meta.json if it is missing");
+
+  console.log("\nThe Sign in filter reads only the page it shows");
+  const fullAuth = (await exportActivity(currentMonth())).filter((e) => ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"].includes(e.action));
+  const reads0 = getCalls();
+  const pageOne = await readActivity({ entity: "auth", limit: 2, offset: 1 });
+  const reads = getCalls() - reads0;
+  check(pageOne.total === fullAuth.length && pageOne.entries.length === 2, `total from the listing, 2 entries read (${pageOne.total}/${fullAuth.length})`);
+  check(pageOne.entries[0].id === fullAuth[1].id && pageOne.entries[1].id === fullAuth[2].id, "and they are the right ones, newest first after the offset");
+  check(reads === 2, `only the shown entries are downloaded (${reads} reads of ${fullAuth.length})`);
+
+  console.log("\nA sign-in tallied while the user is being deleted leaves no file");
+  const racer = await mk("racer", "viewer");
+  await Promise.all([
+    countSignIn(racer, "ok", "1.1.1.1", "x"),
+    userItemRoute.DELETE(req("DELETE", "/api/users/racer", { as: admin }), { params: Promise.resolve({ id: "racer" }) }),
+  ]);
+  check(![...store.keys()].some((k) => k.endsWith("signins/users/racer.json")), "signins/users/racer.json does not exist afterwards");
 
   console.log("\nDeleting a user erases their tally");
   const freshKey = [...store.keys()].find((k) => k.endsWith("signins/users/fresh.json"));

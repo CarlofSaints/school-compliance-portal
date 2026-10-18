@@ -47,7 +47,10 @@ async function put(pathname, body, opts = {}) {
   return meta(name, f);
 }
 
+let getCalls = 0;
+
 async function get(urlOrPath) {
+  getCalls++;
   const p = pathOf(urlOrPath);
   const f = store.get(p);
   if (!f) return null;
@@ -96,8 +99,13 @@ function __fakeStore() {
 }
 
 /** Test helper: how many folded-mode listings have been made. */
+/** Test helper: how many get() reads have been made. */
+function __getCalls() {
+  return getCalls;
+}
+
 function __foldedCalls() {
   return foldedCalls;
 }
 
-module.exports = { BlobError, BlobNotFoundError, BlobPreconditionFailedError, put, get, head, list, del, __fakeStore, __foldedCalls };
+module.exports = { BlobError, BlobNotFoundError, BlobPreconditionFailedError, put, get, head, list, del, __fakeStore, __foldedCalls, __getCalls };

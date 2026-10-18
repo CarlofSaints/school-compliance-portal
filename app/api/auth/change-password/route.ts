@@ -49,9 +49,11 @@ export async function POST(req: NextRequest) {
 
     if (updated) {
       const actor = { ...actorFrom(req, session), ip: ipOf(req) };
+      const at = new Date().toISOString();
       const device = deviceOf(req.headers.get("user-agent"));
       await afterResponse(() =>
         recordActivity({
+          at,
           ...actor,
           action: "auth.password_changed",
           entity: "password",
