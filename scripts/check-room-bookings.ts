@@ -40,6 +40,13 @@ async function main() {
   const { readJson } = await import("../lib/controlData");
   const { createUser } = await import("../lib/userData");
   const { runRoomBookingReminders } = await import("../lib/roomBookingNotify");
+  const { MailQueue } = await import("../lib/roomBookingNotify");
+  // Every room email goes through one paced queue per request; the checks do the same.
+  const viaMail = async <T,>(f: (q: InstanceType<typeof MailQueue>) => Promise<T>): Promise<T> => {
+    const q = new MailQueue();
+    const [r] = await q.settle(f(q));
+    return r as T;
+  };
   const { isPast: isPastFn } = await import("../lib/roomBookings");
   type Booking = import("../lib/roomBookingData").RoomBooking;
 
@@ -254,7 +261,7 @@ async function main() {
   check("#3 upcoming booking now cancelled", (await D.findBooking(hall.id, "2027-12-20", fut.value.bookings[0].id))?.status, "cancelled");
   check("#3 past booking kept", (await D.findBooking(hall.id, "2026-01-05", old.value.bookings[0].id))?.status, "confirmed");
   const { notifyRoomRetired } = await import("../lib/roomBookingNotify");
-  check("#3 holders emailed (no failures)", ret.ok && (await notifyRoomRetired(ret.value.cancelled, ret.value.room)), 0);
+  check("#3 holders emailed (no failures)", ret.ok && (await viaMail((q) => notifyRoomRetired(ret.value.cancelled, ret.value.room, q))), 0);
 
   // #2 + #9 deleting fails closed when the store cannot be listed
   const errLogFirst = console.error;
@@ -443,7 +450,7 @@ async function main() {
   check("T7 another manager can approve", onBehalf.ok && onBehalf.value.onBehalf, true);
   if (!onBehalf.ok) throw new Error("approve failed");
   outbox.length = 0;
-  await notifyRequestOutcome(onBehalf.value.before, onBehalf.value.after, onBehalf.value.room, onBehalf.value.request, { name: miaA.name, email: miaA.email, onBehalf: true });
+  await viaMail((q) => notifyRequestOutcome(onBehalf.value.before, onBehalf.value.after, onBehalf.value.room, onBehalf.value.request, { name: miaA.name, email: miaA.email, onBehalf: true }, q));
   check("T7 the holder is emailed that it was given away", mailTo("erin@example.test", "was given to"), 1);
 
   // T1 after the hand-over: roles and access come from who held it when asked
@@ -461,8 +468,8 @@ async function main() {
   if (!mCancel.ok) throw new Error("cancel failed");
   check("T2 cancel reports the withdrawn request", mCancel.value.withdrawn.map((w) => [w.request.requesterId, w.reason]), [["bob", "cancelled"]]);
   outbox.length = 0;
-  await notifyWithdrawn(mCancel.value.withdrawn, yard);
-  await notifyCancelledByOther(mCancel.value.cancelled, yard, miaA);
+  await viaMail((q) => notifyWithdrawn(mCancel.value.withdrawn, yard, q));
+  await viaMail((q) => notifyCancelledByOther(mCancel.value.cancelled, yard, miaA, q));
   check("T2 requester emailed on cancel", mailTo("bob@example.test", "has lapsed"), 1);
   check("T2 manager cancel emails the booker AND the person it was for", [mailTo("erin@example.test", "Cancelled by"), mailTo("cara@example.test", "Cancelled by")], [1, 1]);
 
@@ -496,7 +503,7 @@ async function main() {
   const qret = await D.saveRoom(admin, quad.id, { name: "Quad", capacity: 10, color: "#0d9488", notes: "", active: false });
   if (!qret.ok) throw new Error("retire failed");
   outbox.length = 0;
-  const qFailed = await notifyRoomRetired(qret.value.cancelled, qret.value.room);
+  const qFailed = await viaMail((q) => notifyRoomRetired(qret.value.cancelled, qret.value.room, q));
   check("T3 three bookings, one email each to Erin and Cara", [qret.value.cancelled.length, mailTo("erin@example.test", "no longer available"), mailTo("cara@example.test", "no longer available"), outbox.length, qFailed], [3, 1, 1, 2, 0]);
   check("T3 the list is capped", [cappedList(Array.from({ length: 25 }, (_, i) => String(i))).shown.length, cappedList(Array.from({ length: 25 }, (_, i) => String(i))).more], [20, 5]);
 
@@ -530,7 +537,7 @@ async function main() {
   const selfCancel = await D.cancelBooking(erinA, ring.id, fs1.date, fs1.id, "one");
   if (!selfCancel.ok) throw new Error("cancel failed");
   outbox.length = 0;
-  await notifyCancelledByOther(selfCancel.value.cancelled, ring, erinA);
+  await viaMail((q) => notifyCancelledByOther(selfCancel.value.cancelled, ring, erinA, q));
   check("F2 Jane cancels what she booked for Sarah: Sarah told, Jane not", [mailTo("cara@example.test", "Cancelled by"), mailTo("erin@example.test", "Cancelled by")], [1, 0]);
   const forSarah2 = await D.createBooking(erinA, inp(ring.id, "2027-12-08", 600, 660, { bookedForId: "cara" }));
   if (!forSarah2.ok) throw new Error("create failed");
@@ -540,7 +547,7 @@ async function main() {
   const sarahYes = await D.respondToRequest(caraA, ask2.value.request.token, "approve", "");
   if (!sarahYes.ok) throw new Error("approve failed");
   outbox.length = 0;
-  await notifyRequestOutcome(sarahYes.value.before, sarahYes.value.after, sarahYes.value.room, sarahYes.value.request, { name: caraA.name, email: caraA.email, onBehalf: sarahYes.value.onBehalf });
+  await viaMail((q) => notifyRequestOutcome(sarahYes.value.before, sarahYes.value.after, sarahYes.value.room, sarahYes.value.request, { name: caraA.name, email: caraA.email, onBehalf: sarahYes.value.onBehalf }, q));
   check("F2 Sarah approves: Jane (the booker) told, Sarah not", [mailTo("erin@example.test", "was given to"), mailTo("cara@example.test", "was given to")], [1, 0]);
 
   // F3 one pending request per person per series
@@ -797,7 +804,7 @@ async function main() {
   const w5r = await D.respondToRequest(miaA, w5q.value.request.token, "decline", "Board needs it");
   if (!w5r.ok) throw new Error("decline failed");
   outbox.length = 0;
-  await notifyRequestOutcome(w5r.value.before, w5r.value.after, w5r.value.room, w5r.value.request, { name: miaA.name, email: miaA.email, onBehalf: w5r.value.onBehalf });
+  await viaMail((q) => notifyRequestOutcome(w5r.value.before, w5r.value.after, w5r.value.room, w5r.value.request, { name: miaA.name, email: miaA.email, onBehalf: w5r.value.onBehalf }, q));
   check("W5 decline email names the room manager", outbox.filter((m) => m.to === "bob@example.test" && m.subject.startsWith("Mia Admin (a room manager) declined")).length, 1);
 
   // W6 a booking for someone whose login was since deleted stays editable
@@ -936,12 +943,12 @@ async function main() {
   const h1e = await D.updateBooking(erinA, h1b.id, h1b.date, inp(S8.id, h1b.date, 600, 720, { bookedForId: "cara", title: "Plan B" }), e8);
   if (!h1e.ok) throw new Error("edit failed");
   outbox.length = 0;
-  await notifyEdited(h1e.value.before, h1e.value.after, S8, erinA, h1e.value.holderChanged);
+  await viaMail((q) => notifyEdited(h1e.value.before, h1e.value.after, S8, erinA, h1e.value.holderChanged, q));
   check("H1 holder edit: the other holder told, the editor not", [mailTo("cara@example.test", "Booking changed"), mailTo("erin@example.test", "Booking changed")], [1, 0]);
   const h1m = await D.updateBooking(miaA, h1b.id, h1b.date, inp(S8.id, h1b.date, 600, 720, { bookedForId: "cara", title: "Plan C" }), e8);
   if (!h1m.ok) throw new Error("edit failed");
   outbox.length = 0;
-  await notifyEdited(h1m.value.before, h1m.value.after, S8, miaA, false);
+  await viaMail((q) => notifyEdited(h1m.value.before, h1m.value.after, S8, miaA, false, q));
   check("H1 manager edit: both holders told, one email each", [mailTo("cara@example.test", "Booking changed"), mailTo("erin@example.test", "Booking changed"), mailTo("mia@example.test", "Booking changed")], [1, 1, 0]);
 
   // H2 reminder timing with one 07:00 run a day
@@ -958,8 +965,8 @@ async function main() {
   if (!h2d.ok) throw new Error("create failed");
   outbox.length = 0;
   const bookedAt = new Date("2029-10-16T13:00:00Z"); // Tue 15:00: next run Wed 07:00, after the meeting starts
-  check("H2 booked after the run for before the next run: reminded straight away", [await remindNowIfBeforeNextRun(h2d.value.bookings[0], S8, bookedAt), mailTo("erin@example.test", "Tomorrow: Hall Eight")], [true, 1]);
-  check("H2 a later meeting waits for the cron", await remindNowIfBeforeNextRun(h2b.value.bookings[0], S8, bookedAt), false);
+  check("H2 booked after the run for before the next run: reminded straight away", [(await viaMail((q) => remindNowIfBeforeNextRun(h2d.value.bookings[0], S8, q, bookedAt))).reminded, mailTo("erin@example.test", "Tomorrow: Hall Eight")], [true, 1]);
+  check("H2 a later meeting waits for the cron", (await viaMail((q) => remindNowIfBeforeNextRun(h2b.value.bookings[0], S8, q, bookedAt))).reminded, false);
 
   // H3 crash-safe moves: a half-done move shows once and is settled by the cron
   const h3 = await D.createBooking(erinA, inp(S8.id, "2029-11-05", 600, 660, { title: "Half moved" }), e8);
@@ -1030,7 +1037,7 @@ async function main() {
   check("H8 pointer failure throws and takes the request back out", [h8fail, (await D.findBooking(S8.id, h8b.date, h8b.id))?.requests.some((q) => q.requesterId === "cara")], ["threw", false]);
 
   // H9 one paced sender, shared with the action items
-  check("H9 room mail uses the action items' paced sender", [readFileSync("lib/roomBookingNotify.ts", "utf8").includes("setTimeout"), readFileSync("lib/actionItemNotify.ts", "utf8").includes("export async function sendPaced")], [false, true]);
+  check("H9 room mail uses the action items' paced sender", [readFileSync("lib/roomBookingNotify.ts", "utf8").includes("SEND_GAP_MS"), readFileSync("lib/roomBookingNotify.ts", "utf8").includes("await sendPaced("), readFileSync("lib/actionItemNotify.ts", "utf8").includes("export async function sendPaced")], [false, true, true]);
 
   // ======================= ninth review =======================
   const S9 = await mkRoom("Hall Nine");
@@ -1116,7 +1123,7 @@ async function main() {
   const { remindNowIfBeforeNextRun: remindNow } = await import("../lib/roomBookingNotify");
   const i2 = await D.createBooking(erinA, inp(S9.id, "2030-10-08", 420, 480), e9); // Tue 07:00
   if (!i2.ok) throw new Error("create failed");
-  check("I2 07:00 meeting booked the day before at 15:00: reminded at once", await remindNow(i2.value.bookings[0], S9, new Date("2030-10-07T13:00:00Z")), true);
+  check("I2 07:00 meeting booked the day before at 15:00: reminded at once", (await viaMail((q) => remindNow(i2.value.bookings[0], S9, q, new Date("2030-10-07T13:00:00Z")))).reminded, true);
   const i2b = await D.createBooking(erinA, inp(S9.id, "2030-10-09", 420, 480), e9); // Wed 07:00, never reminded
   if (!i2b.ok) throw new Error("create failed");
   const lateFire = new Date("2030-10-09T05:10:00Z"); // the cron fires 10 minutes late
@@ -1124,8 +1131,8 @@ async function main() {
   check("I2 but not 30 minutes after it started", (await D.bookingsDueForReminder(new Date("2030-10-09T05:30:00Z"))).some((x) => x.booking.id === i2b.value.bookings[0].id), false);
 
   // I3 edits that move or re-hold, and approves, also remind at once when due before the next run
-  check("I3 edit route reminds at once", readFileSync("app/api/bookings/[id]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room)"), true);
-  check("I3 approve route reminds at once", readFileSync("app/api/bookings/request/[token]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room)"), true);
+  check("I3 edit route reminds at once", readFileSync("app/api/bookings/[id]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room, mail)"), true);
+  check("I3 approve route reminds at once", readFileSync("app/api/bookings/request/[token]/route.ts", "utf8").includes("remindNowIfBeforeNextRun(after, room, mail)"), true);
 
   // I4 a reminder claim refuses a booking that changed since it was read
   const i4 = await D.createBooking(erinA, inp(S9.id, "2030-11-04", 600, 660), e9);
@@ -1137,6 +1144,88 @@ async function main() {
   const read4m = i4m.value.bookings[0];
   await D.updateBooking(erinA, read4m.id, read4m.date, inp(S9.id, read4m.date, 720, 780), e9);
   check("I4 moved within the month between read and claim: not claimed", await D.claimReminder(read4m, "2030-11-05T05:00:00.000Z", null), false);
+
+  // ======================= tenth review =======================
+  const { sastToday: today10, addDays: add10 } = await import("../lib/roomBookings");
+  const S10 = await mkRoom("Hall Ten");
+  const e10 = new Date("2031-01-01T00:00:00Z");
+
+  // J1 one paced queue per request: messages go out one by one with the gap
+  const times: number[] = [];
+  const paceQ = new MailQueue();
+  const stamp1 = () => (times.push(Date.now()), Promise.resolve(true));
+  await paceQ.settle(Promise.all([paceQ.add(stamp1), paceQ.add(stamp1)]), Promise.all([paceQ.add(stamp1)]));
+  check("J1 three queued messages from two tasks go out paced (>= 550 ms apart)", times.length === 3 && times[1] - times[0] >= 550 && times[2] - times[1] >= 550, true);
+  check("J1 routes use the queue, not hand-rolled loops", ["app/api/bookings/route.ts", "app/api/bookings/[id]/route.ts", "app/api/bookings/[id]/request/route.ts", "app/api/bookings/request/[token]/route.ts", "app/api/rooms/[id]/route.ts"].every((f) => readFileSync(f, "utf8").includes("new MailQueue()")), true);
+
+  // J2 a failed immediate reminder is retried once, shortly
+  const j2 = await D.createBooking(erinA, inp(S10.id, "2031-01-15", 420, 480, { bookedForId: "cara" }), e10); // Wed 07:00
+  if (!j2.ok) throw new Error("create failed");
+  let caraTries = 0;
+  const flaky = async (to: string) => (to === "cara@example.test" ? ++caraTries > 1 : true);
+  const j2r = await viaMail((q) => remindNow(j2.value.bookings[0], S10, q, new Date("2031-01-14T13:00:00Z"), flaky));
+  check("J2 Cara's first send failed, the retry reached her", [j2r.reminded, j2r.unreached, caraTries], [true, 0, 2]);
+  const j2b = await D.createBooking(erinA, inp(S10.id, "2031-01-16", 420, 480, { bookedForId: "cara" }), e10);
+  if (!j2b.ok) throw new Error("create failed");
+  const j2r2 = await viaMail((q) => remindNow(j2b.value.bookings[0], S10, q, new Date("2031-01-15T13:00:00Z"), async (to: string) => to !== "cara@example.test"));
+  check("J2 still failing after the retry: reported", j2r2.unreached, 1);
+  check("J2 and the cron's late grace covers that partly-reminded booking", (await D.bookingsDueForReminder(new Date("2031-01-16T05:05:00Z"))).some((x) => x.booking.id === j2b.value.bookings[0].id), true);
+
+  // J3 when no holder could be told, the request is withdrawn and the series freed
+  const j3 = await D.createBooking(erinA, inp(S10.id, "2031-02-03", 600, 660, { recurrence: weekly(2) }), e10);
+  if (!j3.ok) throw new Error("create failed");
+  const [j31, j32] = j3.value.bookings;
+  const j3q = await D.requestRoom(bob, S10.id, j31.date, j31.id, { title: "x", message: "y", attendeeCount: 1 }, e10);
+  if (!j3q.ok) throw new Error("request failed");
+  const j3w = await D.withdrawRequest(j3q.value.request.token, "holder_unreachable");
+  check("J3 withdrawn with the reason", [j3w?.reason, (await D.findBooking(S10.id, j31.date, j31.id))?.requests[0].status], ["holder_unreachable", "withdrawn"]);
+  check("J3 and the series is free to ask again", status(await D.requestRoom(bob, S10.id, j32.date, j32.id, { title: "x", message: "y", attendeeCount: 1 }, e10)), "ok");
+  check("J3 the request route withdraws when nobody was reached", readFileSync("app/api/bookings/[id]/request/route.ts", "utf8").includes('withdrawRequest(request.token, "holder_unreachable")'), true);
+
+  // J4 a half-moved booking is cancelled once (both copies marked, counted once)
+  const j4 = await D.createBooking(erinA, inp(S10.id, "2031-03-03", 600, 660, { recurrence: weekly(2) }), e10);
+  if (!j4.ok) throw new Error("create failed");
+  const [j41] = j4.value.bookings;
+  const halfCopy = { ...j41, date: "2031-04-07", moving: { from: "2031-03", at: Date.now(), token: "tok-j4" } };
+  await writeJson(`rooms/bookings/${S10.id}/2031-04.json`, [halfCopy]);
+  const j4c = await D.cancelBooking(erinA, S10.id, j41.date, j41.id, "series", e10);
+  check("J4 series cancel counts the half-moved booking once", j4c.ok && [j4c.value.count, j4c.value.cancelled.map((b) => b.id).filter((x) => x === j41.id).length], [2, 1]);
+  check("J4 both copies are marked cancelled", (await readJson<Booking[]>(`rooms/bookings/${S10.id}/2031-04.json`, [])).map((b) => b.status), ["cancelled"]);
+
+  // J5 no request while a move of the booking is in flight
+  const j5 = await D.createBooking(erinA, inp(S10.id, "2031-05-05", 600, 660), e10);
+  if (!j5.ok) throw new Error("create failed");
+  const j5b = j5.value.bookings[0];
+  await writeJson("rooms/moves-pending.json", [{ roomId: S10.id, bookingId: j5b.id, month: "2031-06", token: "tok-j5", at: Date.now() }]);
+  const j5r = await D.requestRoom(bob, S10.id, j5b.date, j5b.id, { title: "x", message: "y", attendeeCount: 1 }, e10);
+  await writeJson("rooms/moves-pending.json", []);
+  check("J5 refused while it is being moved", [status(j5r), !j5r.ok && j5r.error], [409, "This booking is being changed, try again in a moment."]);
+
+  // J6 once the meeting has started, nobody can answer
+  const yday = add10(today10(), -1);
+  const j6 = await D.createBooking(erinA, inp(S10.id, yday, 600, 660), new Date(Date.now() - 3 * 86_400_000));
+  if (!j6.ok) throw new Error("create failed");
+  const j6b = j6.value.bookings[0];
+  const j6q = await D.requestRoom(bob, S10.id, j6b.date, j6b.id, { title: "x", message: "y", attendeeCount: 1 }, new Date(Date.now() - 3 * 86_400_000));
+  if (!j6q.ok) throw new Error("request failed");
+  const j6v = await D.getRequestView(erinA, j6q.value.request.token);
+  check("J6 started meeting: shown as started, no answer buttons", j6v.ok && [j6v.value.started, j6v.value.canAnswer], [true, false]);
+
+  // J7 lowering capacity below a booking's headcount does not lock its holder out
+  const j7room = await mkRoom("Shrinking");
+  const j7 = await D.createBooking(erinA, inp(j7room.id, "2031-07-07", 600, 660, { attendeeCount: 8 }), e10);
+  if (!j7.ok) throw new Error("create failed");
+  await D.saveRoom(admin, j7room.id, { name: "Shrinking", capacity: 4, color: "#0d9488", notes: "" });
+  const j7b = j7.value.bookings[0];
+  check("J7 the holder can still rename it", status(await D.updateBooking(erinA, j7b.id, j7b.date, inp(j7room.id, j7b.date, 600, 660, { attendeeCount: 8, title: "Renamed" }), e10)), "ok");
+  check("J7 but not raise the headcount past the room", status(await D.updateBooking(erinA, j7b.id, j7b.date, inp(j7room.id, j7b.date, 600, 660, { attendeeCount: 9 }), e10)), 400);
+  check("J7 the manager is told how many now exceed it", (await D.upcomingBookings(j7room.id)).filter((b) => b.attendeeCount > 4).length, 1);
+  check("J7 the rooms PUT reports it", readFileSync("app/api/rooms/[id]/route.ts", "utf8").includes("overCapacity"), true);
+
+  // J9 rooms routes: write limit on POST/PUT/DELETE; email limit only when it will email
+  const roomsRoute = readFileSync("app/api/rooms/route.ts", "utf8");
+  const roomRoute = readFileSync("app/api/rooms/[id]/route.ts", "utf8");
+  check("J9 rooms write limit and conditional email limit", [roomsRoute.includes("LIMITS.bookingWriteUser"), (roomRoute.match(/LIMITS.bookingWriteUser/g) ?? []).length, roomRoute.includes("(await upcomingBookings(id)).length > 0")], [true, 2, true]);
 
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

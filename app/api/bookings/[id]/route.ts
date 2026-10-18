@@ -16,7 +16,7 @@ import {
   updateBooking,
 } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
-import { notifyCancelledByOther, notifyEdited, notifyHandover, notifyWithdrawn, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
+import { MailQueue, notifyCancelledByOther, notifyEdited, notifyHandover, notifyWithdrawn, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
 
 // A series cancel can email many people, paced.
 export const maxDuration = 300;
@@ -68,16 +68,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     detail: { before: logSafeBooking(before), after: logSafeBooking(after) },
   });
 
-  const emailed = holderChanged ? await notifyHandover(before, after, room, actor) : true;
-  // The other holder(s) are told what changed; the editor is not.
-  const changeFailed = await notifyEdited(before, after, room, actor, holderChanged);
-  // Moved, or a new holder: its reminder may now be due before the next run.
-  if (holderChanged || before.date !== after.date || before.startMinute !== after.startMinute) {
-    await remindNowIfBeforeNextRun(after, room).catch((err) => console.error("[rooms] immediate reminder failed:", err));
-  }
-  // Anyone who had asked for the old slot is told it moved.
-  const lapsedFailed = await notifyWithdrawn(withdrawn, room);
-  return NextResponse.json({ ok: true, emailFailed: !emailed || changeFailed > 0 || lapsedFailed > 0 });
+  // Everything this edit emails goes out through one paced queue: the hand-over,
+  // what changed (to the other holders, not the editor), the requesters of the
+  // old slot, and the reminder if it is now due before the next run.
+  const mail = new MailQueue();
+  const remind = holderChanged || before.date !== after.date || before.startMinute !== after.startMinute;
+  const [emailed, changeFailed, lapsedFailed, reminder] = await mail.settle(
+    holderChanged ? notifyHandover(before, after, room, actor, mail) : Promise.resolve(true),
+    notifyEdited(before, after, room, actor, holderChanged, mail),
+    notifyWithdrawn(withdrawn, room, mail),
+    remind ? remindNowIfBeforeNextRun(after, room, mail).catch(() => ({ reminded: false, unreached: 1 })) : Promise.resolve({ reminded: false, unreached: 0 })
+  );
+  return NextResponse.json({ ok: true, emailFailed: !emailed || changeFailed > 0 || lapsedFailed > 0 || reminder.unreached > 0 });
 }
 
 // DELETE /api/bookings/<id>?room=<roomId>&date=<its date>&scope=one|series
@@ -118,6 +120,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   // A room manager cancelling someone else's booking tells its holders (the
   // person it was for included), and every requester waiting on it is told.
   const room = await getRoom(roomId);
-  const failed = (room ? await notifyCancelledByOther(cancelled, room, actor) : 0) + (await notifyWithdrawn(withdrawn, room));
-  return NextResponse.json({ ok: true, count, skipped, emailFailed: failed > 0 });
+  const mail = new MailQueue();
+  const [a, b] = await mail.settle(room ? notifyCancelledByOther(cancelled, room, actor, mail) : Promise.resolve(0), notifyWithdrawn(withdrawn, room, mail));
+  return NextResponse.json({ ok: true, count, skipped, emailFailed: a + b > 0 });
 }

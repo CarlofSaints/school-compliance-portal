@@ -5,7 +5,7 @@ import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { actorOf, getRequestView, getRoom as getRequestRoom, holderLabel, logSafeBooking, respondToRequest } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
-import { notifyRequestOutcome, notifyWithdrawn, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
+import { MailQueue, notifyRequestOutcome, notifyWithdrawn, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
 
 // Where the emailed Approve / Decline links land. 🔴 The token only NAMES the
 // request. The reader must be signed in, and only a holder of the booking (or
@@ -18,11 +18,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const { token } = await params;
   const result = await getRequestView(actorOf(session), token);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-  const { booking, request, room, canAnswer, viewerRole } = result.value;
+  const { booking, request, room, canAnswer, started, viewerRole } = result.value;
   return NextResponse.json(
     {
       status: booking.status === "confirmed" || request.status !== "pending" ? request.status : "withdrawn",
       canAnswer,
+      started,
       requesterName: request.requesterName,
       requesterMeeting: request.title,
       message: request.message,
@@ -57,16 +58,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const result = await respondToRequest(actor, token, body.decision, reason);
   if (!result.ok) {
     // A late approve lapses the request: its requester is still told.
-    if (result.withdrawn?.length) await notifyWithdrawn(result.withdrawn, await getRequestRoom(result.withdrawn[0].booking.roomId));
+    if (result.withdrawn?.length) {
+      const mail = new MailQueue();
+      await mail.settle(notifyWithdrawn(result.withdrawn, await getRequestRoom(result.withdrawn[0].booking.roomId), mail));
+    }
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
   const { before, after, request, room, onBehalf, withdrawn } = result.value;
-  const emailed = await notifyRequestOutcome(before, after, room, request, { name: actor.name, email: actor.email, onBehalf });
-  // The new holder's reminder may be due before the next run.
-  if (request.status === "approved" && room) {
-    await remindNowIfBeforeNextRun(after, room).catch((err) => console.error("[rooms] immediate reminder failed:", err));
-  }
-  const othersFailed = await notifyWithdrawn(withdrawn, room);
+  // One paced queue: the answer, the old holders, the other requesters, and
+  // the new holder's reminder if it is due before the next run.
+  const mail = new MailQueue();
+  const [emailed, othersFailed] = await mail.settle(
+    notifyRequestOutcome(before, after, room, request, { name: actor.name, email: actor.email, onBehalf }, mail),
+    notifyWithdrawn(withdrawn, room, mail),
+    request.status === "approved" && room ? remindNowIfBeforeNextRun(after, room, mail).catch(() => ({ reminded: false, unreached: 1 })) : Promise.resolve({ reminded: false, unreached: 0 })
+  );
   const where = `${room?.name ?? "a room"} on ${longDateLabel(before.date)} ${slotLabel(before.startMinute, before.endMinute)}`;
   await recordActivity({
     ...actorFrom(req, session),

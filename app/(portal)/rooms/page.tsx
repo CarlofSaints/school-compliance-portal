@@ -70,7 +70,12 @@ export default function RoomsPage() {
     setSaving(false);
     if (ok) {
       setEditing(null);
-      setToast({ message: t("Room saved"), type: "success" });
+      // Lowering the capacity is allowed; the manager is told which bookings now exceed it.
+      setToast(
+        ok.overCapacity > 0
+          ? { message: t("Room saved. {n} upcoming booking(s) have more attendees than the room now seats.", { n: ok.overCapacity }), type: "error" }
+          : { message: t("Room saved"), type: "success" }
+      );
       fetchRooms();
     }
   };

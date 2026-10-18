@@ -74,7 +74,7 @@ export interface RoomRequest {
 }
 
 /** Why a pending request stopped being answerable. The requester is emailed. */
-export type WithdrawReason = "cancelled" | "moved" | "given_away" | "lapsed" | "room_retired" | "requester_unable";
+export type WithdrawReason = "cancelled" | "moved" | "given_away" | "lapsed" | "room_retired" | "requester_unable" | "holder_unreachable";
 
 export interface Withdrawal {
   /** The booking as it was before the change. */
@@ -146,6 +146,7 @@ export type Outcome<V = undefined> =
 
 const ENDED = "That booking has already ended, so it stays as the record.";
 const STARTED = "That meeting has already started, so it can no longer be handed over.";
+const BEING_CHANGED = "This booking is being changed, try again in a moment.";
 const PAST = "That time has already passed. Pick a time from now on.";
 
 type Err = { status: number; error: string };
@@ -414,7 +415,13 @@ export async function cancelRoomFutureBookings(roomId: string, byName: string, n
     });
     out.push(...hit);
   }
-  return out;
+  // A half-moved booking has a copy in two months: both are marked cancelled,
+  // but it is ONE booking (one email, one count).
+  return dedupeById(out);
+}
+
+function dedupeById(list: RoomBooking[]): RoomBooking[] {
+  return [...new Map(list.map((b) => [b.id, b])).values()];
 }
 
 export async function saveRoom(
@@ -773,7 +780,9 @@ export async function updateBooking(
   if (hasEnded(before.date, before.endMinute, nowAt)) return fail(400, ENDED);
   const room = await getRoom(before.roomId);
   if (!room || !room.active) return fail(400, "That room isn't available");
-  if (input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}`);
+  // Only when the headcount changes: a room lowered below an existing booking's
+  // headcount must not stop its holder renaming or moving it.
+  if (input.attendeeCount !== before.attendeeCount && input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}`);
 
   const forWho = await resolveBookedFor(input.bookedForId, before.bookedById, before);
   if (!forWho.ok) return fail(400, "That person can't be booked for");
@@ -1045,10 +1054,14 @@ export async function cancelBooking(
         });
         return n === 0 ? NO_CHANGE : next;
       });
-      count += n;
       skipped += k;
       cancelled.push(...hit);
     }
+    // Counted by booking, not by row: a half-moved one is in two files.
+    const unique = dedupeById(cancelled);
+    cancelled.length = 0;
+    cancelled.push(...unique);
+    count = unique.length;
     // Nothing cancelled: because the caller holds none of what is left (403),
     // or because what is left was already cancelled or has ended (409).
     if (count === 0) return skipped > 0 ? fail(403, "Only the people holding this room can cancel it") : fail(409, "Nothing left to cancel in this series");
@@ -1133,6 +1146,9 @@ export async function requestRoom(
   const room = await getRoom(roomId);
   if (!room || !room.active) return fail(404, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} only seats ${room.capacity}`);
+  // While a move of this booking is in flight its old copy is about to go, so
+  // a request landing there could be lost. Refuse until it has settled.
+  if (booking.moving || (await pendingMoveFor(roomId, id))) return fail(409, BEING_CHANGED);
 
   // One live request per person per SERIES, not per occurrence: asking for
   // each of 52 weekly meetings would be 52 emails to the same holder.
@@ -1163,6 +1179,10 @@ export async function requestRoom(
       const cur = list.find((b) => b.id === id);
       if (!cur || cur.status !== "confirmed") {
         error = { status: 404, error: "That booking is no longer live" };
+        return NO_CHANGE;
+      }
+      if (cur.moving) {
+        error = { status: 409, error: BEING_CHANGED };
         return NO_CHANGE;
       }
       // One live request per person per booking, so nobody can flood an inbox.
@@ -1258,11 +1278,38 @@ async function releaseSeriesAsk(seriesId: string, userId: string, token: string)
   await updateJson<SeriesAsk | null>(seriesAskPath(seriesId, userId), null, (cur) => (cur?.token === token ? null : NO_CHANGE));
 }
 
+/** Withdraws one pending request (and frees its series marker). Used when no
+ *  holder could be emailed about it. Returns it as a withdrawal, or null. */
+export async function withdrawRequest(token: string, reason: WithdrawReason): Promise<Withdrawal | null> {
+  const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
+  if (!ptr) return null;
+  let w: Withdrawal | null = null;
+  await updateJson<RoomBooking[]>(fileFor(ptr.roomId, ptr.month), [], (list) => {
+    w = null;
+    const b = list.find((x) => x.id === ptr.bookingId);
+    const req = b?.requests.find((q) => q.token === token && q.status === "pending");
+    if (!b || !req) return NO_CHANGE;
+    w = { booking: b, request: req, reason };
+    return list.map((x) => (x === b ? touch(x, { requests: withdrawAll(x, new Date().toISOString(), (q) => q.token !== token) }) : x));
+  });
+  const done = w as Withdrawal | null;
+  if (done?.booking.seriesId) await releaseSeriesAsk(done.booking.seriesId, done.request.requesterId, token).catch(() => {});
+  return done;
+}
+
+/** Upcoming (not yet started) confirmed bookings in a room. */
+export async function upcomingBookings(roomId: string, now: Date = new Date()): Promise<RoomBooking[]> {
+  const lists = await Promise.all((await monthsFrom(roomId, monthOf(sastToday(now)))).map((m) => readMonth(roomId, m)));
+  return lists.flat().filter((b) => b.status === "confirmed" && !isPast(b.date, b.startMinute, now));
+}
+
 export interface RequestView {
   booking: RoomBooking;
   request: RoomRequest;
   room: Room | null;
   canAnswer: boolean;
+  /** The meeting has started: nobody can answer any more. */
+  started: boolean;
   viewerRole: "holder" | "requester" | "manager";
 }
 
@@ -1287,9 +1334,10 @@ export async function getRequestView(actor: Actor, token: string): Promise<Outco
   const isRequester = request.requesterId === actor.id;
   const wasHolder = (request.holderIds ?? []).includes(actor.id) || isHolder(booking, actor.id);
   if (!isRequester && !wasHolder && !canManageRooms(actor)) return fail(403, "Only the people holding this room can answer this");
-  const canAnswer = request.status === "pending" && mayAnswer(actor, booking, request);
+  const started = isPast(booking.date, booking.startMinute);
+  const canAnswer = request.status === "pending" && !started && mayAnswer(actor, booking, request);
   const viewerRole = isRequester ? "requester" : wasHolder ? "holder" : "manager";
-  return { ok: true, value: { booking, request, room: await getRoom(ptr.roomId), canAnswer, viewerRole } };
+  return { ok: true, value: { booking, request, room: await getRoom(ptr.roomId), canAnswer, started, viewerRole } };
 }
 
 /** The holder's answer. Approving hands the slot over IN PLACE: same room and
@@ -1430,11 +1478,11 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
       if (holders(b).every((h) => reached.has(h.email.toLowerCase()))) continue;
       if (b.reminderSentAt && now.getTime() - Date.parse(b.reminderSentAt) < REMINDER_CLAIM_STALE_MS) continue;
       // From now until an hour after the next run. A meeting that started in the
-      // last REMIND_LATE_GRACE_MS and was never reminded at all (the cron fired
-      // late for a 07:00 meeting) still gets it; anything older is too late.
+      // last REMIND_LATE_GRACE_MS without every holder reminded (the cron fired
+      // late for a 07:00 meeting, or a send failed) still gets it, for the
+      // holders not yet reached; anything older is too late.
       const at = startsAtMs(b.date, b.startMinute);
-      const neverReminded = (b.remindedEmails ?? []).length === 0;
-      if (at < cutoff && (at > now.getTime() || (neverReminded && at > now.getTime() - REMIND_LATE_GRACE_MS))) out.push({ booking: b, room });
+      if (at < cutoff && at > now.getTime() - REMIND_LATE_GRACE_MS) out.push({ booking: b, room });
     }
   }
   return out;

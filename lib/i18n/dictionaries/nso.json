@@ -1675,5 +1675,7 @@
   "{holder} kept the room.": "{holder} o bolokile phapoši.",
   "Waiting for {holder} to answer. You will get an email either way.": "Re letile {holder} gore a arabe. O tla hwetša imeile go sa šetšwe karabo.",
   "Could not load this week's bookings. Try again.": "Ga go a kgonega go laiša dipukelo tša beke ye. Leka gape.",
-  "That repeat makes {n} bookings; the most is {max}. Pick an earlier end date.": "Poeletšo yeo e dira dipukelo tše {n}; tše dintši kudu ke {max}. Kgetha letšatši la go fela la pele."
+  "That repeat makes {n} bookings; the most is {max}. Pick an earlier end date.": "Poeletšo yeo e dira dipukelo tše {n}; tše dintši kudu ke {max}. Kgetha letšatši la go fela la pele.",
+  "This meeting has already started, so the request can no longer be answered.": "Kopano ye e šetše e thomile, ka fao kgopelo e ka se sa arabja.",
+  "Room saved. {n} upcoming booking(s) have more attendees than the room now seats.": "Phapoši e bolokilwe. Dipukelo tše {n} tše di tlago di na le batšea karolo ba bantši go feta madulo a phapoši bjale."
 }

@@ -30,10 +30,56 @@ import {
 import { describeRecurrence, longDateLabel, nextReminderRunMs, sastToday, slotLabel, startsAtMs } from "./roomBookings";
 import { pause, sendPaced } from "./actionItemNotify";
 
-// The booking emails COLAB sends, wired to the portal's mailer. Each returns
-// false (or a failure count) when a message that was due did not go, so the
-// route can say so rather than imply somebody was told. Nobody outside the
-// booking is ever written to.
+// The booking emails COLAB sends, wired to the portal's mailer. Nobody outside
+// the booking is ever written to.
+//
+// 🔴 Every email a request sends goes through ONE MailQueue: the notify
+// functions below only queue their messages, and the route sends the lot,
+// paced with the action items' sender (lib/actionItemNotify.ts sendPaced), so
+// a request that emails ten people never bursts at the provider.
+
+type Job = { run: () => Promise<boolean>; done: (ok: boolean) => void };
+
+export class MailQueue {
+  private jobs: Job[] = [];
+  private sentAny = false;
+
+  /** Queues one message; the promise says whether it went, once it is sent. */
+  add(run: () => Promise<boolean>): Promise<boolean> {
+    return new Promise((done) => this.jobs.push({ run, done }));
+  }
+
+  /** Sends everything queued so far, paced (and paced from the last batch). */
+  private async flush(): Promise<void> {
+    const batch = this.jobs.splice(0);
+    if (batch.length === 0) return;
+    if (this.sentAny) await pause();
+    this.sentAny = true;
+    await sendPaced(
+      batch.map((j) => async () => {
+        const ok = await j.run().catch(() => false);
+        j.done(ok);
+        return ok;
+      })
+    );
+  }
+
+  /** Runs the given notify tasks to the end, sending what they queue (in
+   *  batches, as they queue it: a reminder retry queues later). */
+  async settle<T extends unknown[]>(...tasks: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
+    let finished = false;
+    const all = Promise.all(tasks).finally(() => {
+      finished = true;
+    });
+    while (!finished) {
+      if (this.jobs.length) await this.flush();
+      else await new Promise((r) => setTimeout(r, 5));
+    }
+    return (await all) as T;
+  }
+}
+
+const failures = (results: boolean[]) => results.filter((ok) => !ok).length;
 
 function facts(b: RoomBooking, room: Room): RoomBookingEmailFacts {
   return {
@@ -48,9 +94,6 @@ function facts(b: RoomBooking, room: Room): RoomBookingEmailFacts {
     occurrences: b.occurrences,
   };
 }
-
-// Bulk sends use the action items' paced sender (600 ms apart), so a room with
-// many bookings does not hit the provider all at once.
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
@@ -78,51 +121,50 @@ const WHY: Record<WithdrawReason, string> = {
   lapsed: "the meeting time has passed",
   room_retired: "the room is no longer available",
   requester_unable: "you can no longer book rooms in the portal",
+  holder_unreachable: "we could not reach the holder by email. Please ask again",
 };
 
-/** One email per withdrawn request, to its requester, saying why. Returns
+/** One email per withdrawn request, to its requester, saying why. Resolves to
  *  how many failed. */
-export async function notifyWithdrawn(withdrawn: Withdrawal[], room: Room | null): Promise<number> {
+export function notifyWithdrawn(withdrawn: Withdrawal[], room: Room | null, mail: MailQueue): Promise<number> {
   const name = room?.name ?? "the room";
-  return sendPaced(
-    withdrawn.map((w) => () =>
-      sendRoomRequestWithdrawnEmail(w.request.requesterEmail, w.request.requesterName, WHY[w.reason], {
-        roomName: name,
-        dateLabel: longDateLabel(w.booking.date),
-        timeLabel: slotLabel(w.booking.startMinute, w.booking.endMinute),
-      })
+  return Promise.all(
+    withdrawn.map((w) =>
+      mail.add(() =>
+        sendRoomRequestWithdrawnEmail(w.request.requesterEmail, w.request.requesterName, WHY[w.reason], {
+          roomName: name,
+          dateLabel: longDateLabel(w.booking.date),
+          timeLabel: slotLabel(w.booking.startMinute, w.booking.endMinute),
+        })
+      )
     )
-  );
+  ).then(failures);
 }
 
-/** Confirmation to both holders, once per booking or series. */
-export async function notifyBookingCreated(first: RoomBooking, room: Room): Promise<boolean> {
-  let ok = true;
-  for (const h of holders(first)) {
-    if (!(await sendBookingConfirmedEmail(h.email, h.name, facts(first, room)))) ok = false;
-  }
-  return ok;
+/** Confirmation to both holders, once per booking or series. Resolves true if all went. */
+export function notifyBookingCreated(first: RoomBooking, room: Room, mail: MailQueue): Promise<boolean> {
+  return Promise.all(holders(first).map((h) => mail.add(() => sendBookingConfirmedEmail(h.email, h.name, facts(first, room))))).then(
+    (r) => failures(r) === 0
+  );
 }
 
 /** A retired room's upcoming bookings were cancelled: ONE email per holder
- *  listing their dates, then one per withdrawn request. Returns how many
- *  messages failed. */
-export async function notifyRoomRetired(cancelled: RoomBooking[], room: Room): Promise<number> {
-  const jobs = [...byHolder(cancelled)].map(([email, h]) => () =>
-    sendBookingsCancelledEmail(email, h.name, room.name, "room_retired", "", h.bookings.map(line))
-  );
-  const failed = await sendPaced(jobs);
-  return failed + (await notifyWithdrawn(cancelled.flatMap((b) => pendingWithdrawals(b, "room_retired")), room));
+ *  listing their dates, then one per withdrawn request. Resolves to failures. */
+export function notifyRoomRetired(cancelled: RoomBooking[], room: Room, mail: MailQueue): Promise<number> {
+  const holdersMail = Promise.all(
+    [...byHolder(cancelled)].map(([email, h]) => mail.add(() => sendBookingsCancelledEmail(email, h.name, room.name, "room_retired", "", h.bookings.map(line))))
+  ).then(failures);
+  const asked = notifyWithdrawn(cancelled.flatMap((b) => pendingWithdrawals(b, "room_retired")), room, mail);
+  return Promise.all([holdersMail, asked]).then(([a, b]) => a + b);
 }
 
 /** Bookings were cancelled: ONE email to each holder other than whoever did
  *  it (Jane cancelling what she booked for Sarah tells Sarah; a room manager
- *  tells both). Returns failures. */
-export async function notifyCancelledByOther(cancelled: RoomBooking[], room: Room, by: { id: string; name: string; email: string }): Promise<number> {
-  const jobs = [...byHolder(cancelled, by.email)].map(([email, h]) => () =>
-    sendBookingsCancelledEmail(email, h.name, room.name, "by_manager", by.name, h.bookings.map(line))
-  );
-  return sendPaced(jobs);
+ *  tells both). Resolves to failures. */
+export function notifyCancelledByOther(cancelled: RoomBooking[], room: Room, by: { id: string; name: string; email: string }, mail: MailQueue): Promise<number> {
+  return Promise.all(
+    [...byHolder(cancelled, by.email)].map(([email, h]) => mail.add(() => sendBookingsCancelledEmail(email, h.name, room.name, "by_manager", by.name, h.bookings.map(line))))
+  ).then(failures);
 }
 
 /** What an edit changed, as lines for the email ("When: was X, now Y"). */
@@ -137,47 +179,45 @@ export function editChanges(before: RoomBooking, after: RoomBooking): string[] {
 }
 
 /** An edit to the title, time or headcount: ONE email, old vs new, to every
- *  holder other than the editor (the other holder of a two-holder booking, or
- *  both when a room manager edited). Someone already getting a hand-over email
- *  for this edit is not sent this as well. Returns failures. */
-export async function notifyEdited(
+ *  holder other than the editor. Someone already getting a hand-over email for
+ *  this edit is not sent this as well. Resolves to failures. */
+export function notifyEdited(
   before: RoomBooking,
   after: RoomBooking,
   room: Room,
   editor: { name: string; email: string },
-  holderChanged: boolean
+  holderChanged: boolean,
+  mail: MailQueue
 ): Promise<number> {
   const changes = editChanges(before, after);
-  if (changes.length === 0) return 0;
+  if (changes.length === 0) return Promise.resolve(0);
   const handedOver = holderChanged ? new Set([before, after].map((b) => (b.bookedForEmail || b.bookedByEmail).toLowerCase())) : new Set<string>();
   const to = holders(after).filter((h) => !same(h.email, editor.email) && !handedOver.has(h.email.toLowerCase()));
-  return sendPaced(to.map((h) => () => sendBookingChangedEmail(h.email, h.name, editor.name, changes, facts(after, room))));
+  return Promise.all(to.map((h) => mail.add(() => sendBookingChangedEmail(h.email, h.name, editor.name, changes, facts(after, room))))).then(failures);
 }
 
 /** An edit changed who the room is for: tell both sides, except whoever made
- *  the change (they know). */
-export async function notifyHandover(before: RoomBooking, after: RoomBooking, room: Room, changedBy: { name: string; email: string }): Promise<boolean> {
+ *  the change (they know). Resolves true if all went. */
+export function notifyHandover(before: RoomBooking, after: RoomBooking, room: Room, changedBy: { name: string; email: string }, mail: MailQueue): Promise<boolean> {
   const prev = { name: before.bookedForName || before.bookedByName, email: before.bookedForEmail || before.bookedByEmail };
   const next = { name: after.bookedForName || after.bookedByName, email: after.bookedForEmail || after.bookedByEmail };
-  let ok = true;
+  const sends: Promise<boolean>[] = [];
   if (!same(next.email, changedBy.email)) {
-    if (!(await sendBookingHandedOverEmail(next.email, next.name, prev.name, changedBy.name, facts(after, room)))) ok = false;
+    sends.push(mail.add(() => sendBookingHandedOverEmail(next.email, next.name, prev.name, changedBy.name, facts(after, room))));
   }
   if (!same(prev.email, changedBy.email) && !same(prev.email, next.email)) {
     const stillHolderAsBooker = before.bookedForEmail === null;
-    if (!(await sendBookingTakenOverEmail(prev.email, prev.name, next.name, changedBy.name, stillHolderAsBooker, facts(after, room)))) ok = false;
+    sends.push(mail.add(() => sendBookingTakenOverEmail(prev.email, prev.name, next.name, changedBy.name, stillHolderAsBooker, facts(after, room))));
   }
-  return ok;
+  return Promise.all(sends).then((r) => failures(r) === 0);
 }
 
-/** The ask goes to both holders; either may answer. True if anyone got it. */
-export async function notifyRoomRequest(b: RoomBooking, room: Room, r: RoomRequest): Promise<boolean> {
-  let delivered = false;
+/** The ask goes to both holders; either may answer. Resolves true if anyone got it. */
+export function notifyRoomRequest(b: RoomBooking, room: Room, r: RoomRequest, mail: MailQueue): Promise<boolean> {
   const f = facts(b, room);
-  for (const h of holders(b)) {
-    if (await sendRoomRequestEmail(h.email, h.name, r.requesterName, r.title, r.message, b.title, r.token, f)) delivered = true;
-  }
-  return delivered;
+  return Promise.all(holders(b).map((h) => mail.add(() => sendRoomRequestEmail(h.email, h.name, r.requesterName, r.title, r.message, b.title, r.token, f)))).then(
+    (res) => res.some(Boolean)
+  );
 }
 
 /** Who the requester is told answered (gave them the room, or declined): the
@@ -187,59 +227,96 @@ export function giverName(before: RoomBooking, by?: { name: string; onBehalf: bo
 }
 
 /** The answer, to the requester. On an approve, every holder other than the
- *  one who answered is told too (the booker when the bookee approved, both
- *  when a room manager did): their booking has gone. */
-export async function notifyRequestOutcome(
+ *  one who answered is told too: their booking has gone. Resolves true if all went. */
+export function notifyRequestOutcome(
   before: RoomBooking,
   after: RoomBooking,
   room: Room | null,
   r: RoomRequest,
-  by?: { name: string; email: string; onBehalf: boolean }
+  by: { name: string; email: string; onBehalf: boolean } | undefined,
+  mail: MailQueue
 ): Promise<boolean> {
   const f = { roomName: room?.name ?? "the room", dateLabel: longDateLabel(before.date), timeLabel: slotLabel(before.startMinute, before.endMinute) };
-  let ok =
-    r.status === "approved"
-      ? await sendRoomRequestApprovedEmail(r.requesterEmail, r.requesterName, giverName(before, by), { ...f, title: after.title })
-      : await sendRoomRequestDeclinedEmail(r.requesterEmail, r.requesterName, giverName(before, by), r.declineReason || "", f);
+  const sends = [
+    mail.add(() =>
+      r.status === "approved"
+        ? sendRoomRequestApprovedEmail(r.requesterEmail, r.requesterName, giverName(before, by), { ...f, title: after.title })
+        : sendRoomRequestDeclinedEmail(r.requesterEmail, r.requesterName, giverName(before, by), r.declineReason || "", f)
+    ),
+  ];
   if (r.status === "approved" && by && room) {
     for (const h of holders(before)) {
       if (same(h.email, by.email)) continue;
-      if (!(await sendBookingGivenAwayEmail(h.email, h.name, by.name, r.requesterName, facts(before, room)))) ok = false;
+      sends.push(mail.add(() => sendBookingGivenAwayEmail(h.email, h.name, by.name, r.requesterName, facts(before, room))));
     }
   }
-  return ok;
+  return Promise.all(sends).then((res) => failures(res) === 0);
 }
 
 /** Lapses unanswerable requests on meetings that have started, and tells each
  *  requester. Run from the daily cron. */
-export async function runRequestLapses(now: Date = new Date()): Promise<{ lapsed: number; failed: number; detail: string[] }> {
-  let lapsed = 0;
-  let failed = 0;
-  const detail: string[] = [];
-  for (const { withdrawn, room } of await lapseStartedRequests(now)) {
-    lapsed += withdrawn.length;
-    failed += await notifyWithdrawn(withdrawn, room);
-    detail.push(`Room ${room.name}: ${withdrawn.length} unanswered request(s) lapsed, the meeting had started`);
-  }
-  return { lapsed, failed, detail };
+export async function runRequestLapses(now: Date = new Date(), mail: MailQueue = new MailQueue()): Promise<{ lapsed: number; failed: number; detail: string[] }> {
+  const groups = await lapseStartedRequests(now);
+  const [counts] = await mail.settle(Promise.all(groups.map(({ withdrawn, room }) => notifyWithdrawn(withdrawn, room, mail))));
+  return {
+    lapsed: groups.reduce((n, g) => n + g.withdrawn.length, 0),
+    failed: (counts as number[]).reduce((a, b) => a + b, 0),
+    detail: groups.map(({ withdrawn, room }) => `Room ${room.name}: ${withdrawn.length} unanswered request(s) lapsed, the meeting had started`),
+  };
 }
 
-/** A meeting that starts before the next reminder run would never be
- *  reminded by the cron: send its reminder now, at booking time. */
-export async function remindNowIfBeforeNextRun(booking: RoomBooking, room: Room, now: Date = new Date()): Promise<boolean> {
-  const at = startsAtMs(booking.date, booking.startMinute);
-  // At or before the next run: a 07:00 meeting booked the day before is
-  // reminded now, not left to a run that may fire a moment after it starts.
-  if (!(at > now.getTime() && at <= nextReminderRunMs(now))) return false;
-  const stamp = now.toISOString();
-  if (!(await claimReminder(booking, stamp, null))) return false;
-  const reached: string[] = [];
-  for (const h of holders(booking)) {
-    if (reached.length) await pause();
-    if (await sendBookingReminderEmail(h.email, h.name, facts(booking, room), booking.date === sastToday(now) ? "today" : "tomorrow")) reached.push(h.email.toLowerCase());
+/** How long a failed immediate reminder waits before its one retry. */
+export const REMIND_RETRY_MS = 2_000;
+
+/** Sends a claimed reminder to the holders not yet reached, records who it
+ *  reached, and resolves to how many are still unreached. With `retry`, a
+ *  failure is tried once more after REMIND_RETRY_MS. */
+type ReminderSender = typeof sendBookingReminderEmail;
+
+async function sendClaimedReminder(
+  booking: RoomBooking,
+  room: Room,
+  stamp: string,
+  now: Date,
+  mail: MailQueue,
+  retry: boolean,
+  send: ReminderSender = sendBookingReminderEmail
+): Promise<{ sent: number; unreached: number }> {
+  const reached = new Set((booking.remindedEmails ?? []).map((e) => e.toLowerCase()));
+  const when = booking.date === sastToday(now) ? "today" : "tomorrow";
+  const sendTo = async (list: { name: string; email: string }[]) => {
+    const results = await Promise.all(list.map((h) => mail.add(() => send(h.email, h.name, facts(booking, room), when))));
+    list.forEach((h, i) => results[i] && reached.add(h.email.toLowerCase()));
+    return results.filter(Boolean).length;
+  };
+  const todo = () => holders(booking).filter((h) => !reached.has(h.email.toLowerCase()));
+  let sent = await sendTo(todo());
+  if (retry && todo().length > 0) {
+    await new Promise((r) => setTimeout(r, REMIND_RETRY_MS));
+    sent += await sendTo(todo());
   }
-  await finishReminder(booking, stamp, reached, reached.length === holders(booking).length);
-  return true;
+  const unreached = todo().length;
+  await finishReminder(booking, stamp, [...reached], unreached === 0);
+  return { sent, unreached };
+}
+
+/** A meeting that starts at or before the next reminder run would never be
+ *  reminded by the cron: remind it now. A failed holder is retried once,
+ *  shortly; resolves to { reminded, unreached }. */
+export async function remindNowIfBeforeNextRun(
+  booking: RoomBooking,
+  room: Room,
+  mail: MailQueue,
+  now: Date = new Date(),
+  /** The sender, swappable in the checks to make a send fail. */
+  send: ReminderSender = sendBookingReminderEmail
+): Promise<{ reminded: boolean; unreached: number }> {
+  const at = startsAtMs(booking.date, booking.startMinute);
+  if (!(at > now.getTime() && at <= nextReminderRunMs(now))) return { reminded: false, unreached: 0 };
+  const stamp = now.toISOString();
+  if (!(await claimReminder(booking, stamp, null))) return { reminded: false, unreached: 0 };
+  const { unreached } = await sendClaimedReminder(booking, room, stamp, now, mail, true, send);
+  return { reminded: true, unreached };
 }
 
 /** Settles cross-month moves a dead request left half done. Run from the cron. */
@@ -248,14 +325,12 @@ export async function runSettleMoves(now: Date = new Date()): Promise<string[]> 
   return r.rolledBack + r.finished ? [`Room bookings: ${r.rolledBack} half-done move(s) rolled back, ${r.finished} finished`] : [];
 }
 
-/** The reminder, run from the daily cron (see remindCutoffMs for which bookings). Claimed before sending so
- *  overlapping runs cannot double-send; handed back if nothing was delivered,
- *  so a re-run the same day tries again. */
-export async function runRoomBookingReminders(now: Date = new Date()): Promise<{ due: number; sent: number; failed: number; detail: string[] }> {
+/** The reminder, run from the daily cron (see remindCutoffMs for which
+ *  bookings). Claimed before sending so overlapping runs cannot double-send. */
+export async function runRoomBookingReminders(now: Date = new Date(), mail: MailQueue = new MailQueue()): Promise<{ due: number; sent: number; failed: number; detail: string[] }> {
   const due = await bookingsDueForReminder(now);
-  let sent = 0;
-  let failed = 0;
   const detail: string[] = [];
+  const tasks: Promise<{ sent: number; unreached: number }>[] = [];
   for (const { booking, room } of due) {
     const stamp = now.toISOString();
     // Claimed against the stamp it has now: none, or a stale one from a run that died.
@@ -263,24 +338,17 @@ export async function runRoomBookingReminders(now: Date = new Date()): Promise<{
       detail.push(`Room ${room.name} "${booking.title}": already reminded by another run`);
       continue;
     }
-    // Per holder: someone already reminded is not sent it again on a retry.
-    const reached = new Set((booking.remindedEmails ?? []).map((e) => e.toLowerCase()));
-    const todo = holders(booking).filter((h) => !reached.has(h.email.toLowerCase()));
-    let ok = 0;
-    for (let i = 0; i < todo.length; i++) {
-      if (i > 0 || sent + failed > 0) await pause();
-      if (await sendBookingReminderEmail(todo[i].email, todo[i].name, facts(booking, room), booking.date === sastToday(now) ? "today" : "tomorrow")) {
-        ok++;
-        reached.add(todo[i].email.toLowerCase());
-      } else failed++;
-    }
-    sent += ok;
-    const allDone = holders(booking).every((h) => reached.has(h.email.toLowerCase()));
-    await finishReminder(booking, stamp, [...reached], allDone);
-    detail.push(
-      `Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${ok} of ${todo.length}` +
-        (allDone ? "" : ", the rest are tried again on the next run if the meeting has not started")
+    tasks.push(
+      sendClaimedReminder(booking, room, stamp, now, mail, false).then((r) => {
+        detail.push(
+          `Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${r.sent}` +
+            (r.unreached ? `, ${r.unreached} not reached (tried again on the next run if the meeting has not started)` : "")
+        );
+        return r;
+      })
     );
   }
-  return { due: due.length, sent, failed, detail };
+  const [results] = await mail.settle(Promise.all(tasks));
+  const list = results as { sent: number; unreached: number }[];
+  return { due: due.length, sent: list.reduce((n, r) => n + r.sent, 0), failed: list.reduce((n, r) => n + r.unreached, 0), detail };
 }

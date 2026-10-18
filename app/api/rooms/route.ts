@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission, requirePermission } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { actorOf, getRooms, parseRoomInput, roomHasBookings, saveRoom } from "@/lib/roomBookingData";
 
 // Anyone who can book sees the active rooms. Room managers also see retired
@@ -23,6 +24,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, "manage_rooms");
   if (session instanceof NextResponse) return session;
+  const limited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
+  if (limited) return limited;
   const parsed = parseRoomInput(await req.json().catch(() => null));
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const result = await saveRoom(actorOf(session), null, parsed.value);

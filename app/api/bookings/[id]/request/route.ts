@@ -3,9 +3,9 @@ import { requirePermission } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { actorOf, holderLabel, isDate, isId, parseRequestInput, requestRoom } from "@/lib/roomBookingData";
+import { actorOf, holderLabel, isDate, isId, parseRequestInput, requestRoom, withdrawRequest } from "@/lib/roomBookingData";
 import { longDateLabel } from "@/lib/roomBookings";
-import { notifyRoomRequest } from "@/lib/roomBookingNotify";
+import { MailQueue, notifyRoomRequest } from "@/lib/roomBookingNotify";
 
 // Ask whoever holds this booking for the room. They get an email with a link;
 // nothing changes unless they agree.
@@ -27,13 +27,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const result = await requestRoom(actorOf(session), body.roomId, body.date, id, parsed.value);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   const { booking, room, request } = result.value;
-  const delivered = await notifyRoomRequest(booking, room, request);
+  const mail = new MailQueue();
+  const [delivered] = await mail.settle(notifyRoomRequest(booking, room, request, mail));
+  if (!delivered) {
+    // No holder could be told, so nobody can answer: withdraw it (freeing the
+    // series) and ask the requester to try again, rather than leave it hanging.
+    await withdrawRequest(request.token, "holder_unreachable");
+    await recordActivity({
+      ...actorFrom(req, session),
+      action: "booking.room_request_failed",
+      entity: "room",
+      entityId: id,
+      summary: `Asked ${holderLabel(booking)} for ${room.name} on ${longDateLabel(booking.date)}, but no email reached them, so the request was withdrawn`,
+    });
+    return NextResponse.json({ error: "We couldn't email the holder, so your request was withdrawn. Please try again." }, { status: 502 });
+  }
   await recordActivity({
     ...actorFrom(req, session),
     action: "booking.room_requested",
     entity: "room",
     entityId: id,
-    summary: `Asked ${holderLabel(booking)} for ${room.name} on ${longDateLabel(booking.date)}${delivered ? "" : " (email failed)"}`,
+    summary: `Asked ${holderLabel(booking)} for ${room.name} on ${longDateLabel(booking.date)}`,
   });
-  return NextResponse.json({ ok: true, emailFailed: !delivered }, { status: 201 });
+  return NextResponse.json({ ok: true, emailFailed: false }, { status: 201 });
 }

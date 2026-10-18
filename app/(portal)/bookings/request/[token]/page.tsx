@@ -15,6 +15,8 @@ import { longDateLabel, slotLabel } from "@/lib/roomBookings";
 interface Detail {
   status: "pending" | "approved" | "declined" | "withdrawn";
   canAnswer: boolean;
+  /** The meeting has started: it can no longer be answered. */
+  started: boolean;
   requesterName: string;
   requesterMeeting: string;
   message: string;
@@ -132,6 +134,8 @@ export default function RoomRequestPage() {
                 {detail.status === "withdrawn" && <p>{t("This request is no longer needed: the booking was cancelled, moved, or handed to someone else.")}</p>}
                 {note && <p className="mt-2 text-amber-800">{note}</p>}
               </div>
+            ) : detail.started ? (
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">{t("This meeting has already started, so the request can no longer be answered.")}</p>
             ) : !detail.canAnswer ? (
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
                 {role === "requester"

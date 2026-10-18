@@ -3,8 +3,8 @@ import { requirePermission } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { actorOf, deleteRoom, getRoom, isId, parseRoomInput, saveRoom } from "@/lib/roomBookingData";
-import { notifyRoomRetired } from "@/lib/roomBookingNotify";
+import { actorOf, deleteRoom, getRoom, isId, parseRoomInput, saveRoom, upcomingBookings } from "@/lib/roomBookingData";
+import { MailQueue, notifyRoomRetired } from "@/lib/roomBookingNotify";
 
 // Retiring a room emails every holder (one each) and every waiting requester, paced.
 export const maxDuration = 300;
@@ -25,7 +25,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const onlyActive = !!body && typeof body === "object" && Object.keys(body).length === 1 && active !== undefined;
   const parsed = onlyActive ? ({ ok: true, value: {} } as const) : parseRoomInput(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-  if (active === false) {
+  const writeLimited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
+  if (writeLimited) return writeLimited;
+  // Retiring emails the holders of its upcoming bookings: only then does it
+  // count against the email limit.
+  if (active === false && (await upcomingBookings(id)).length > 0) {
     const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
     if (limited) return limited;
   }
@@ -45,8 +49,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       (cancelled.length ? `, cancelling ${cancelled.length} upcoming booking${cancelled.length === 1 ? "" : "s"}` : ""),
     detail: before ? { before, after: r, cancelledIds: cancelled.map((b) => b.id) } : undefined,
   });
-  const emailFailures = cancelled.length ? await notifyRoomRetired(cancelled, r) : 0;
-  return NextResponse.json({ ...r, cancelledCount: cancelled.length, emailFailed: emailFailures > 0 });
+  const mail = new MailQueue();
+  const [emailFailures] = await mail.settle(cancelled.length ? notifyRoomRetired(cancelled, r, mail) : Promise.resolve(0));
+  // Capacity can be lowered below existing bookings (their holders can still
+  // rename or move them); the manager is told how many now exceed it.
+  const overCapacity = r.active ? (await upcomingBookings(r.id)).filter((b) => b.attendeeCount > r.capacity).length : 0;
+  return NextResponse.json({ ...r, cancelledCount: cancelled.length, emailFailed: emailFailures > 0, overCapacity });
 }
 
 // Deletes a room nobody has ever booked. One with bookings on record is
@@ -54,10 +62,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requirePermission(req, "manage_rooms");
   if (session instanceof NextResponse) return session;
-  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
-  if (limited) return limited;
   const { id } = await params;
   if (!isId(id)) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+  const writeLimited = await enforce([[LIMITS.bookingWriteUser, session.id]]);
+  if (writeLimited) return writeLimited;
+  // Emails only go out if upcoming bookings get cancelled.
+  if ((await upcomingBookings(id)).length > 0) {
+    const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+    if (limited) return limited;
+  }
   const result = await deleteRoom(actorOf(session), id);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   const { room, retired, cancelled } = result.value;
@@ -72,6 +85,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       : `Deleted meeting room "${room.name}" (never booked)`,
     detail: cancelled.length ? { cancelledIds: cancelled.map((b) => b.id) } : undefined,
   });
-  const emailFailures = cancelled.length ? await notifyRoomRetired(cancelled, room) : 0;
+  const mail = new MailQueue();
+  const [emailFailures] = await mail.settle(cancelled.length ? notifyRoomRetired(cancelled, room, mail) : Promise.resolve(0));
   return NextResponse.json({ retired, notice: result.notice, cancelledCount: cancelled.length, emailFailed: emailFailures > 0 });
 }

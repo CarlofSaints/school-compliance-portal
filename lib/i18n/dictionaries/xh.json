@@ -1675,5 +1675,7 @@
   "{holder} kept the room.": "U-{holder} ligcinile igumbi.",
   "Waiting for {holder} to answer. You will get an email either way.": "Kulindwe u-{holder} ukuba aphendule. Uya kufumana i-imeyile nokuba kunjani.",
   "Could not load this week's bookings. Try again.": "Akukwazanga ukulayisha ukubhukisha kwale veki. Zama kwakhona.",
-  "That repeat makes {n} bookings; the most is {max}. Pick an earlier end date.": "Oko kuphinda kwenza ukubhukisha oku-{n}; okona kuninzi ngu-{max}. Khetha umhla wokuphela wangaphambili."
+  "That repeat makes {n} bookings; the most is {max}. Pick an earlier end date.": "Oko kuphinda kwenza ukubhukisha oku-{n}; okona kuninzi ngu-{max}. Khetha umhla wokuphela wangaphambili.",
+  "This meeting has already started, so the request can no longer be answered.": "Le ntlanganiso sele iqalile, ngoko isicelo asisenakuphendulwa.",
+  "Room saved. {n} upcoming booking(s) have more attendees than the room now seats.": "Igumbi ligciniwe. Ukubhukisha okuzayo oku-{n} kunabantu abaninzi kunezihlalo zegumbi ngoku."
 }
