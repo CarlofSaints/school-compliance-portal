@@ -285,14 +285,18 @@ function ensureApologies<T extends { id: string; order: number; kind?: SectionKi
  * together, the same as "Fill from People register". Empty seats are left out.
  */
 export function attendeesFromRegister(people: { position?: string; name?: string }[]): AttendeeRow[] {
-  const byPosition = new Map<string, string>();
+  // Grouped ignoring case, like the editor's fill; the first spelling is kept.
+  const byPosition = new Map<string, AttendeeRow>();
   for (const p of people) {
     const position = (p.position || "").trim();
     const name = (p.name || "").trim();
     if (!position || !name) continue;
-    byPosition.set(position, byPosition.has(position) ? `${byPosition.get(position)}, ${name}` : name);
+    const key = position.toLowerCase();
+    const row = byPosition.get(key);
+    if (row) row.name = `${row.name}, ${name}`;
+    else byPosition.set(key, { position, name });
   }
-  return [...byPosition].map(([position, name]) => ({ position, name }));
+  return [...byPosition.values()];
 }
 
 export function withApologiesSection(sections: MinutesSection[]): MinutesSection[] {

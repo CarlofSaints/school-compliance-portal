@@ -53,9 +53,16 @@ export default function MinutesSectionEditor({
   const [people, setPeople] = useState<{ name: string; position?: string }[] | undefined>(undefined);
   useEffect(() => {
     if (!editable) return;
-    authFetch("/api/people/directory").then(async (res) => {
-      if (res.ok) setPeople(await res.json());
-    });
+    let live = true;
+    authFetch("/api/people/directory")
+      .then(async (res) => {
+        if (res.ok && live) setPeople(await res.json());
+      })
+      // No register means no Fill button, nothing worse.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [editable]);
 
   const capture = async (s: MinutesSection) => {

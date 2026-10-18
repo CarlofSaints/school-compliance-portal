@@ -348,6 +348,14 @@ check(
   ]
 );
 check(
+  "positions are grouped ignoring case, the first spelling kept",
+  attendeesFromRegister([
+    { position: "Secretary", name: "Ms Naidoo" },
+    { position: "secretary ", name: "Mr Khumalo" },
+  ]),
+  [{ position: "Secretary", name: "Ms Naidoo, Mr Khumalo" }]
+);
+check(
   "the list gets its Apologies section straight after it",
   withApologiesSection([
     { id: "a", title: "Attendance", body: "", order: 1, kind: "attendance", attendees: [] },
