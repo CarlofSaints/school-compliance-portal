@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useAuth, authFetch } from "@/lib/useAuth";
+import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 
 // Where the greyed Translate button sends people: the school's credit
-// balance, how to load more, and who may spend them. Loading is by email for
-// now (PayFast is not set up yet); School Compliance adds the credits once
-// paid, on /platform/<key>.
-const BUY_EMAIL = "info@outerjoin.co.za";
+// balance, how to load more, and who may spend them. Loading is by EFT for
+// now (PayFast is not set up yet): the school orders here, is invoiced, and
+// School Compliance adds the credits once paid (lib/creditRequests.ts).
+const PACK_CREDITS = 10;
+const PACK_RAND = 100;
+const MAX_PACKS = 20;
 
 export default function TranslationCreditsPage() {
   const t = useT();
@@ -17,8 +19,14 @@ export default function TranslationCreditsPage() {
   const [data, setData] = useState<{
     balance: number;
     spenders: { id: string; name: string; email: string }[];
+    pending: { id: string; credits: number; amountRand: number; reference: string; requestedBy: string; requestedAt: string }[];
   } | null>(null);
   const [error, setError] = useState("");
+  const [packs, setPacks] = useState(1);
+  const [reference, setReference] = useState("");
+  const [ordering, setOrdering] = useState(false);
+  const [orderMsg, setOrderMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (!session) return;
@@ -26,7 +34,35 @@ export default function TranslationCreditsPage() {
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setData)
       .catch(() => setError(t("Could not load your credit balance.")));
-  }, [session, t]);
+  }, [session, t, reload]);
+
+  const order = async () => {
+    if (ordering) return;
+    setOrdering(true);
+    setOrderMsg(null);
+    try {
+      const res = await authFetch("/api/translation-credits/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packs, reference }),
+      });
+      if (!res.ok) setOrderMsg({ ok: false, text: await apiErrorMessage(res) });
+      else {
+        setOrderMsg({
+          ok: true,
+          text: t("Done. An invoice for R{amount} will follow by email. The credits are added as soon as the EFT comes in.", {
+            amount: packs * PACK_RAND,
+          }),
+        });
+        setReference("");
+        setReload((n) => n + 1);
+      }
+    } catch {
+      setOrderMsg({ ok: false, text: t("Your request could not be sent just now. Please try again in a moment.") });
+    } finally {
+      setOrdering(false);
+    }
+  };
 
   if (loading || !session) {
     return (
@@ -63,15 +99,60 @@ export default function TranslationCreditsPage() {
 
         <div>
           <h2 className="text-base font-semibold text-gray-800 mb-2">{t("Load credits")}</h2>
-          <p>
-            {t("Email {email} with your school's name and how many credits you want. The credits are added to your balance once paid.", { email: BUY_EMAIL })}
-          </p>
-          <a
-            href={`mailto:${BUY_EMAIL}?subject=${encodeURIComponent("Translation credits")}`}
-            className="inline-block mt-3 bg-primary text-white px-4 py-2 rounded-lg"
-          >
-            {t("Email to buy credits")}
-          </a>
+          <p className="mb-3">{t("Order here and we send you an invoice. Pay it by EFT and the credits are added once the payment comes in.")}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs text-gray-500">
+              {t("Packs of 10 credits")}
+              <select
+                value={packs}
+                onChange={(e) => setPacks(Number(e.target.value))}
+                className="block mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              >
+                {Array.from({ length: MAX_PACKS }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {t("{credits} credits (R{amount})", { credits: n * PACK_CREDITS, amount: n * PACK_RAND })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs text-gray-500 flex-1 min-w-48">
+              {t("PO number or reference (optional)")}
+              <input
+                value={reference}
+                maxLength={60}
+                onChange={(e) => setReference(e.target.value)}
+                className="block w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+            <button
+              onClick={order}
+              disabled={ordering}
+              className="bg-primary text-white px-4 py-2 rounded-lg disabled:opacity-50"
+            >
+              {ordering ? t("Sending...") : t("Request credits")}
+            </button>
+          </div>
+          {orderMsg && (
+            <p className={`mt-3 ${orderMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{orderMsg.text}</p>
+          )}
+          {data && data.pending.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs font-medium text-gray-500 mb-1">{t("Waiting for payment")}</div>
+              <ul className="space-y-1">
+                {data.pending.map((r) => (
+                  <li key={r.id}>
+                    {t("{credits} credits (R{amount}), asked for by {name} on {date}", {
+                      credits: r.credits,
+                      amount: r.amountRand,
+                      name: r.requestedBy,
+                      date: new Date(r.requestedAt).toLocaleDateString("en-ZA"),
+                    })}
+                    {r.reference && <span className="text-gray-400"> · {r.reference}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         <div>

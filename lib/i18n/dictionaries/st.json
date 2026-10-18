@@ -1531,8 +1531,6 @@
   "1 credit translates up to 10 pages of one document into one language.": "Khrediti e le 1 e fetolela ho fihlela maqephe a 10 a tokomane e le nngwe puong e le nngwe.",
   "Once a document is translated, anyone at your school can read it in that language for free.": "Ha tokomane e se e fetoletswe, mang kapa mang sekolong sa hao a ka e bala ka puo eo mahala.",
   "Load credits": "Kenya dikhrediti",
-  "Email {email} with your school's name and how many credits you want. The credits are added to your balance once paid.": "Romela imeile ho {email} ka lebitso la sekolo sa hao le hore o batla dikhrediti tse kae. Dikhrediti di kenngwa palong ya hao ha di se di lefuwe.",
-  "Email to buy credits": "Romela imeile ho reka dikhrediti",
   "Who may spend credits": "Ke mang ya ka sebedisang dikhrediti",
   "Nobody yet. Nobody can translate a new document until someone is ticked.": "Ha ho motho hajwale. Ha ho motho ya ka fetolelang tokomane e ntjha ho fihlela motho a tshwauwa.",
   "Tick \"Can spend translation credits\" on a user in": "Tshwaya \"A ka sebedisa dikhrediti tsa phetolelo\" ho mosebedisi ho",
@@ -1541,5 +1539,14 @@
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Ho fetolela, o hloka dikhrediti. Eya ho Admin > Dikhrediti tsa Phetolelo ho kenya dikhrediti.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Ha o a dumellwa ho sebedisa dikhrediti tsa phetolelo. Kopa motsamaisi wa hao ho tshwaya \"A ka sebedisa dikhrediti tsa phetolelo\" ho mosebedisi wa hao.",
   "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Sekolo sa hao se hloka dikhrediti tse ding tsa phetolelo. Eya ho Admin > Dikhrediti tsa Phetolelo ho kenya dikhrediti.",
-  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Tokomane ena e fetohile ho tloha ha theko ya yona e ne e balwa. Theko e ntjha ke ena; ha ho letho le lefisitsweng."
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Tokomane ena e fetohile ho tloha ha theko ya yona e ne e balwa. Theko e ntjha ke ena; ha ho letho le lefisitsweng.",
+  "Done. An invoice for R{amount} will follow by email. The credits are added as soon as the EFT comes in.": "Ho phethilwe. Invoice ya R{amount} e tla latela ka imeile. Dikhrediti di kenngwa hang ha EFT e fihla.",
+  "Your request could not be sent just now. Please try again in a moment.": "Kopo ya hao ha e a kgona ho romelwa hona jwale. Ka kopo leka hape kamora nakwana.",
+  "Order here and we send you an invoice. Pay it by EFT and the credits are added once the payment comes in.": "Odara mona mme re tla o romella invoice. E lefe ka EFT mme dikhrediti di tla kenngwa ha tefo e fihla.",
+  "Packs of 10 credits": "Dipakete tsa dikhrediti tse 10",
+  "{credits} credits (R{amount})": "Dikhrediti tse {credits} (R{amount})",
+  "PO number or reference (optional)": "Nomoro ya odara kapa tshupiso (ha e a tlameha)",
+  "Request credits": "Kopa dikhrediti",
+  "Waiting for payment": "Ho emetswe tefo",
+  "{credits} credits (R{amount}), asked for by {name} on {date}": "Dikhrediti tse {credits} (R{amount}), di kopilwe ke {name} ka {date}"
 }

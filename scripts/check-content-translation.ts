@@ -76,6 +76,33 @@ async function main() {
 
   check("a correction never takes the balance below 0, and says what it removed", await T.addCredits(-50), { balance: 0, applied: -10 });
 
+  // Buying by EFT: a request adds nothing; the emailed link adds once.
+  const R = await import("../lib/creditRequests");
+  const before = await T.getCredits();
+  const { request, token } = await R.createCreditRequest({
+    packs: 3,
+    reference: "PO 123",
+    requestedBy: { id: "u1", name: "Bursar", email: "bursar@example.test" },
+  });
+  check("an order is 3 packs = 30 credits, R300", [request.credits, request.amountRand], [30, 300]);
+  check("ordering adds nothing", await T.getCredits(), before);
+  check("the order shows as waiting for payment", (await R.pendingCreditRequests()).map((x) => x.id), [request.id]);
+  check("the token itself is never stored", JSON.stringify(request).includes(token), false);
+  let a = await R.approveCreditRequest(request.id, "wrong-token");
+  check("a wrong link adds nothing", [a.ok, await T.getCredits()], [false, before]);
+  a = await R.approveCreditRequest(request.id, token);
+  check("the right link adds the credits", [a.ok, await T.getCredits()], [true, before + 30]);
+  a = await R.approveCreditRequest(request.id, token);
+  check("the same link a second time adds nothing", [a.ok, !a.ok && a.status, await T.getCredits()], [false, 409, before + 30]);
+  check("an approved order is no longer waiting", (await R.pendingCreditRequests()).length, 0);
+  const old = await R.createCreditRequest({ packs: 1, reference: "", requestedBy: { id: "u1", name: "B", email: "b@example.test" } });
+  await writeJson(`translations/credit-requests/${old.request.id}.json`, {
+    ...old.request,
+    requestedAt: new Date(Date.now() - 91 * 86_400_000).toISOString(),
+  });
+  a = await R.approveCreditRequest(old.request.id, old.token);
+  check("a link older than 90 days adds nothing", [a.ok, await T.getCredits()], [false, before + 30]);
+
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);
 }

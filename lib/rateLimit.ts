@@ -51,6 +51,8 @@ export const LIMITS = {
   translateUser: { scope: "translate-user", max: 10, windowSec: 60 * 60, message: "You have translated a lot of documents this hour. Try again in {wait}." },
   // Pricing a document reads the whole file (and may ask the AI to count it).
   translateQuoteUser: { scope: "translate-quote-user", max: 60, windowSec: 60 * 60, message: "You have priced a lot of translations this hour. Try again in {wait}." },
+  creditRequestUser: { scope: "credit-request-user", max: 5, windowSec: 60 * 60, message: "You have asked for credits several times this hour. Try again in {wait}." },
+  creditApproveIp: { scope: "credit-approve-ip", max: 20, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },
 } satisfies Record<string, Limit>;
 

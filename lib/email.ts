@@ -535,6 +535,79 @@ async function sendEmail(
 // Whether a provider is actually wired up. sendEmail() deliberately returns
 // true and logs when RESEND_API_KEY is absent, which is fine for a one-off
 // action but would make the reminder cron report sends that never happened.
+// ---------------------------------------------------------------------------
+// Translation credits bought by EFT (lib/creditRequests.ts).
+// ---------------------------------------------------------------------------
+
+/** Who receives credit orders. One address, School Compliance's, never the school's. */
+export function creditOrdersTo(): string {
+  return process.env.CREDITS_ORDER_EMAIL || "carl@outerjoin.co.za";
+}
+
+const rand = (n: number) => `R${n.toLocaleString("en-ZA")}`;
+
+/** To School Compliance: invoice this, and press the button once it is paid.
+ *  The button is the only copy of the approve link. */
+export async function sendCreditOrderEmail(order: {
+  credits: number;
+  amountRand: number;
+  reference: string;
+  requestedBy: { name: string; email: string };
+  approveUrl: string;
+}): Promise<boolean> {
+  const b = await resolveBranding();
+  const body = `
+    <p style="color:#333;"><strong>${esc(b.fullName)}</strong> asked for <strong>${order.credits} translation credits</strong> (${rand(order.amountRand)}).</p>
+    <p style="color:#333;">Requested by ${esc(order.requestedBy.name)} &lt;${esc(order.requestedBy.email)}&gt;.${
+      order.reference ? `<br>PO / reference: <strong>${esc(order.reference)}</strong>` : ""
+    }</p>
+    <p style="color:#b45309;font-weight:bold;">Nothing has been paid and no credits have been added. Send the invoice; press the button only once the EFT is in.</p>
+    <a href="${order.approveUrl}" style="display:inline-block;background:${b.colors.primary};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Payment received: add ${order.credits} credits</a>
+    <p style="color:#666;font-size:13px;">The link works once and expires in 90 days. Do not forward this email: whoever has the link can add the credits.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    creditOrdersTo(),
+    `Credit order: ${b.shortName}, ${order.credits} credits (${rand(order.amountRand)}), to invoice`,
+    emailShell(b, "Translation credits to invoice", body),
+    order.requestedBy.email
+  );
+}
+
+/** To the person who asked: what happens next. Says "to pay", never "paid". */
+export async function sendCreditOrderConfirmationEmail(
+  to: string,
+  name: string,
+  order: { credits: number; amountRand: number; reference: string }
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Thank you. We have your request for <strong>${order.credits} translation credits</strong>, ${rand(order.amountRand)} to pay.${
+      order.reference ? ` Your reference: <strong>${esc(order.reference)}</strong>.` : ""
+    }</p>
+    <p style="color:#333;">An invoice will follow by email. Pay it by EFT and the credits are added to your school's balance as soon as the payment comes in. You will get an email when they are.</p>
+    <p style="color:#666;font-size:13px;">Nothing has been charged. Credits never expire.</p>
+  `;
+  return sendEmail(b.fromEmail, to, `Your translation credits request (${rand(order.amountRand)})`, emailShell(b, "Translation credits requested", body), b.replyTo);
+}
+
+/** To the person who asked, once the credits are on. */
+export async function sendCreditsAddedEmail(
+  to: string,
+  name: string,
+  credits: number,
+  balance: number
+): Promise<boolean> {
+  const b = await resolveBranding();
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Your payment has been received and <strong>${credits} translation credits</strong> have been added. Your school now has <strong>${balance}</strong> credits.</p>
+    <p style="color:#666;font-size:13px;">Choose a language at the top right of the portal, then use "Translate" on a policy or set of minutes.</p>
+  `;
+  return sendEmail(b.fromEmail, to, `${credits} translation credits added`, emailShell(b, "Translation credits added", body), b.replyTo);
+}
+
 export function isEmailConfigured(): boolean {
   return resend !== null;
 }

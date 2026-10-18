@@ -1531,8 +1531,6 @@
   "1 credit translates up to 10 pages of one document into one language.": "Ikhredithi elingu-1 lihumusha amakhasi afinyelela ku-10 ombhalo owodwa olimini olulodwa.",
   "Once a document is translated, anyone at your school can read it in that language for free.": "Uma umbhalo usuhunyushiwe, noma ubani esikoleni sakho angawufunda ngalolo limi mahhala.",
   "Load credits": "Layisha amakhredithi",
-  "Email {email} with your school's name and how many credits you want. The credits are added to your balance once paid.": "Thumela i-imeyili ku-{email} negama lesikole sakho kanye nenani lamakhredithi amangaki owafunayo. Amakhredithi angezwa ebhalansini yakho uma esekhokhelwe.",
-  "Email to buy credits": "Thumela i-imeyili ukuze uthenge amakhredithi",
   "Who may spend credits": "Ubani ongasebenzisa amakhredithi",
   "Nobody yet. Nobody can translate a new document until someone is ticked.": "Akekho okwamanje. Akekho ongahumusha umbhalo omusha kuze kube kukhona omakiwe.",
   "Tick \"Can spend translation credits\" on a user in": "Maka u-\"Angasebenzisa amakhredithi okuhumusha\" kumsebenzisi ku-",
@@ -1541,5 +1539,14 @@
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Ukuze uhumushe, udinga amakhredithi. Iya ku-Admin > Amakhredithi Okuhumusha ukuze ulayishe amakhredithi.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Awuvunyelwe ukusebenzisa amakhredithi okuhumusha. Cela umphathi wakho ukuthi amake u-\"Angasebenzisa amakhredithi okuhumusha\" kumsebenzisi wakho.",
   "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Isikole sakho sidinga amakhredithi okuhumusha engeziwe. Iya ku-Admin > Amakhredithi Okuhumusha ukuze ulayishe amakhredithi.",
-  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Lo mbhalo ushintshile selokhu inani lawo labalwa. Nanti inani elisha; akukho okukhokhisiwe."
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Lo mbhalo ushintshile selokhu inani lawo labalwa. Nanti inani elisha; akukho okukhokhisiwe.",
+  "Done. An invoice for R{amount} will follow by email. The credits are added as soon as the EFT comes in.": "Kwenziwe. I-invoyisi ka-R{amount} izolandela nge-imeyili. Amakhredithi angezwa ngokushesha uma i-EFT ingena.",
+  "Your request could not be sent just now. Please try again in a moment.": "Isicelo sakho asikwazanga ukuthunyelwa manje. Sicela uzame futhi maduze.",
+  "Order here and we send you an invoice. Pay it by EFT and the credits are added once the payment comes in.": "Oda lapha bese sikuthumelela i-invoyisi. Yikhokhe nge-EFT bese amakhredithi engezwa uma inkokhelo ingena.",
+  "Packs of 10 credits": "Amaphakethe amakhredithi angu-10",
+  "{credits} credits (R{amount})": "Amakhredithi angu-{credits} (R{amount})",
+  "PO number or reference (optional)": "Inombolo ye-oda noma inkomba (akuphoqelekile)",
+  "Request credits": "Cela amakhredithi",
+  "Waiting for payment": "Kulindwe inkokhelo",
+  "{credits} credits (R{amount}), asked for by {name} on {date}": "Amakhredithi angu-{credits} (R{amount}), aceliwe ngu-{name} ngomhla ka-{date}"
 }
