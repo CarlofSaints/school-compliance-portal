@@ -21,6 +21,7 @@ interface UserRecord {
   forcePasswordChange: boolean;
   createdAt: string;
   tagIds?: string[];
+  canSpendTranslationCredits?: boolean;
   roleName?: string;
 }
 
@@ -74,6 +75,7 @@ export default function UsersPage() {
     personId: "",
     position: "",
     tagIds: [] as string[],
+    canSpendTranslationCredits: false,
   });
   const [showPassword, setShowPassword] = useState(false);
   // Editable in Admin > People Types, so it is fetched. This dropdown was left
@@ -146,6 +148,7 @@ export default function UsersPage() {
       personId: "",
       position: "",
       tagIds: [],
+      canSpendTranslationCredits: false,
     });
     setShowModal(true);
   };
@@ -163,6 +166,7 @@ export default function UsersPage() {
       personId: personForUser(user.id)?.id || "",
       position: "",
       tagIds: user.tagIds || [],
+      canSpendTranslationCredits: !!user.canSpendTranslationCredits,
     });
     setShowModal(true);
   };
@@ -250,6 +254,7 @@ export default function UsersPage() {
         role: form.role,
         forcePasswordChange: form.forcePasswordChange,
         tagIds: form.tagIds,
+        canSpendTranslationCredits: form.canSpendTranslationCredits,
       };
       if (form.password) updates.password = form.password;
       const res = await authFetch(`/api/users/${editUser.id}`, {
@@ -760,6 +765,20 @@ export default function UsersPage() {
                   {t("Force password change on login")}
                 </label>
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.canSpendTranslationCredits}
+                  onChange={(e) => setForm({ ...form, canSpendTranslationCredits: e.target.checked })}
+                  className="accent-primary mt-0.5"
+                />
+                <span>
+                  {t("Can spend translation credits")}
+                  <span className="block text-xs text-gray-400">
+                    {t("May translate a new document with the school's credits. Anyone can read a document already translated.")}
+                  </span>
+                </span>
+              </label>
               {!editUser && (
                 <label className="flex items-center gap-2 text-sm">
                   <input

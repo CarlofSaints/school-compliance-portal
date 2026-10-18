@@ -14,6 +14,10 @@ export interface User {
   // Tags naming this individual as part of a group (FINCOM, Principal...).
   // See lib/tagData.ts - a tag can sit on a User or on a Person.
   tagIds?: string[];
+  // Ticked on the Users screen: may spend the school's prepaid translation
+  // credits on a NEW document translation. Reading one already done is free
+  // for everybody.
+  canSpendTranslationCredits?: boolean;
 }
 
 const USERS_PATH = "users.json";
