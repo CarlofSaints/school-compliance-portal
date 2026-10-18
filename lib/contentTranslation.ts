@@ -73,14 +73,18 @@ export async function getCredits(): Promise<number> {
   return (await readJson<Credits>(CREDITS_PATH, { balance: 0 })).balance;
 }
 
-/** Carl's top-up (or correction, when negative). Never below 0. The new balance. */
-export async function addCredits(n: number): Promise<number> {
+/** Carl's top-up (or correction, when negative). Never below 0. The new
+ *  balance, and how many credits actually moved (a correction larger than
+ *  the balance only removes what is there). */
+export async function addCredits(n: number): Promise<{ balance: number; applied: number }> {
   let balance = 0;
+  let applied = 0;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     balance = Math.max(0, c.balance + n);
+    applied = balance - c.balance;
     return { balance, updatedAt: new Date().toISOString() };
   });
-  return balance;
+  return { balance, applied };
 }
 
 /** Takes n credits, atomically. False when the school has fewer. */
@@ -135,6 +139,9 @@ export async function translateContent(opts: {
   title: string;
   credits: number;
   content: Anthropic.ContentBlockParam[];
+  /** Epoch ms by which the model must have finished, so the refund below
+   *  still runs before the platform kills the request. */
+  deadline: number;
 }): Promise<TranslateOutcome> {
   const { kind, id, locale, sourceHash } = opts;
   if (locale === "en") return { ok: false, status: 400, error: "Pick a language other than English first." };
@@ -181,7 +188,7 @@ async function translateClaimed(opts: Parameters<typeof translateContent>[0]): P
 
   let text: string;
   try {
-    text = await callModel(locale, opts.title, opts.content);
+    text = await callModel(locale, opts.title, opts.content, opts.deadline);
   } catch (err) {
     console.error("[translate] failed", kind, id, locale, err);
     await addCredits(opts.credits).catch((e) =>
@@ -209,7 +216,8 @@ class TranslationError extends Error {}
 async function callModel(
   locale: Locale,
   title: string,
-  content: Anthropic.ContentBlockParam[]
+  content: Anthropic.ContentBlockParam[],
+  deadline: number
 ): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
@@ -237,9 +245,10 @@ async function callModel(
         },
       ],
     }, {
-      // Stopped by us well inside the route's 800s, so the catch runs and the
-      // credits go back. A run Vercel kills itself would keep them.
-      signal: AbortSignal.timeout(700_000),
+      // Stopped by us before the route's 800s, counted from the start of the
+      // request, so the catch runs and the credits go back. A run Vercel
+      // kills itself would keep them.
+      signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
     })
     .finalMessage();
 

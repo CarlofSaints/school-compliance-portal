@@ -1540,5 +1540,6 @@
   "May translate a new document with the school's credits. Anyone can read a document already translated.": "Mag 'n nuwe dokument met die skool se krediete vertaal. Enigiemand kan 'n dokument lees wat reeds vertaal is.",
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Om te vertaal, het jy krediete nodig. Gaan na Admin > Vertaalkrediete om krediete te laai.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Jy mag nie vertaalkrediete gebruik nie. Vra jou administrateur om \"Mag vertaalkrediete gebruik\" by jou gebruiker te merk.",
-  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Jou skool het meer vertaalkrediete nodig. Gaan na Admin > Vertaalkrediete om krediete te laai."
+  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Jou skool het meer vertaalkrediete nodig. Gaan na Admin > Vertaalkrediete om krediete te laai.",
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Hierdie dokument het verander sedert die prys bereken is. Hier is die nuwe prys; niks is gehef nie."
 }

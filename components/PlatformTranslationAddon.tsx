@@ -34,7 +34,11 @@ export default function PlatformTranslationAddon({ schoolKey }: { schoolKey: str
       if (!res.ok) setMsg(d.error || "Could not save.");
       else {
         setBalance(d.balance);
-        setMsg(`Added ${add}. New balance ${d.balance}.`);
+        setMsg(
+          d.applied >= 0
+            ? `Added ${d.applied}. New balance ${d.balance}.`
+            : `Removed ${-d.applied}. New balance ${d.balance}.`
+        );
         setAdd("");
       }
     } catch {

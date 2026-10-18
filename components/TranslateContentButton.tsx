@@ -17,27 +17,47 @@ import { LOCALES } from "@/lib/i18n/locales";
 export default function TranslateContentButton({ kind, id }: { kind: "policy" | "minutes"; id: string }) {
   const t = useT();
   const locale = useLocale();
-  const [quote, setQuote] = useState<{ credits: number; pages: number; balance: number } | null>(null);
+  const [quote, setQuote] = useState<{ credits: number; pages: number; balance: number; sourceHash: string } | null>(null);
+  const [priceChanged, setPriceChanged] = useState(false);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
-  const [status, setStatus] = useState<{ stored: boolean; balance: number; canSpend: boolean } | null>(null);
+  // null while loading; { error } when the document cannot be translated.
+  const [status, setStatus] = useState<
+    { stored: boolean; balance: number; canSpend: boolean } | { error: string } | null
+  >(null);
   const [blockedOpen, setBlockedOpen] = useState(false);
+  // Bumped after a translation, so the balance and "already translated" are
+  // read again rather than left as they were before it.
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     if (locale === "en") return;
+    let live = true;
     authFetch(`/api/translate?kind=${kind}&id=${encodeURIComponent(id)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setStatus(d))
-      .catch(() => setStatus(null));
-  }, [locale, kind, id]);
+      .then(async (r) => {
+        const d = r.ok ? await r.json() : { error: await apiErrorMessage(r, t("The translation could not be done just now.")) };
+        if (live) setStatus(d);
+      })
+      .catch(() => {
+        if (live) setStatus({ error: t("The translation could not be done just now.") });
+      });
+    return () => {
+      live = false;
+    };
+  }, [locale, kind, id, reload, t]);
 
   if (locale === "en") return null;
+  const loading = status === null;
   // Why the button is greyed, or "" when it can be used.
-  const blocked = !status || status.stored
+  const blocked = !status
     ? ""
-    : status.balance <= 0
+    : "error" in status
+      ? status.error
+      : status.stored
+        ? ""
+        : status.balance <= 0
       ? t("To translate, you need credits. Go to Admin > Translation Credits to load credits.")
       : !status.canSpend
         ? t("You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.")
@@ -45,22 +65,34 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
   const language = LOCALES.find((l) => l.code === locale)?.label ?? locale;
 
   const run = async (confirm: boolean) => {
+    const agreed = quote;
     setOpen(true);
     setBusy(true);
     setError("");
     setText("");
     setQuote(null);
+    setPriceChanged(false);
     try {
       const res = await authFetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, id, confirm }),
+        // The price agreed to: the server refuses to charge anything else.
+        body: JSON.stringify(
+          confirm && agreed
+            ? { kind, id, confirm, credits: agreed.credits, sourceHash: agreed.sourceHash }
+            : { kind, id }
+        ),
       });
       if (!res.ok) setError(await apiErrorMessage(res, t("The translation could not be done just now.")));
       else {
         const d = await res.json();
-        if (d.quote) setQuote(d.quote);
-        else setText(d.text);
+        if (d.quote) {
+          setQuote(d.quote);
+          setPriceChanged(!!d.changed);
+        } else {
+          setText(d.text);
+          if (!d.fromStore) setReload((n) => n + 1);
+        }
       }
     } catch {
       setError(t("The translation could not be done just now."));
@@ -73,11 +105,12 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
     <>
       <span className="relative inline-block">
         <button
-          onClick={() => (blocked ? setBlockedOpen((o) => !o) : run(false))}
+          onClick={() => (loading ? undefined : blocked ? setBlockedOpen((o) => !o) : run(false))}
           title={blocked || undefined}
-          aria-disabled={!!blocked}
+          aria-disabled={loading || !!blocked}
+          aria-busy={loading}
           className={`px-4 py-2 rounded-lg border border-gray-200 text-sm transition-colors ${
-            blocked ? "text-gray-400 bg-gray-50 cursor-not-allowed" : "hover:bg-gray-50"
+            loading || blocked ? "text-gray-400 bg-gray-50 cursor-not-allowed" : "hover:bg-gray-50"
           }`}
         >
           {t("Translate into {language}", { language })}
@@ -118,6 +151,11 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
               {busy && t("Translating. A long document can take a minute or two…")}
               {quote && (
                 <div className="space-y-3">
+                  {priceChanged && (
+                    <p className="text-amber-700">
+                      {t("This document changed since it was priced. Here is the new price; nothing has been charged.")}
+                    </p>
+                  )}
                   <p>
                     {t("This document is about {pages} pages. Translating it into {language} costs {credits} credits. Your school has {balance} credits.", {
                       pages: quote.pages,

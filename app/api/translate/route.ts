@@ -124,10 +124,12 @@ export async function GET(req: NextRequest) {
 // quote { credits, pages, balance } for a new one. Send again with
 // confirm: true to spend the credits and translate.
 export async function POST(req: NextRequest) {
+  // The model must finish by here, leaving time to refund before the 800s cut.
+  const deadline = Date.now() + 760_000;
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
 
-  let body: { kind?: unknown; id?: unknown; confirm?: unknown } = {};
+  let body: { kind?: unknown; id?: unknown; confirm?: unknown; credits?: unknown; sourceHash?: unknown } = {};
   try {
     body = await req.json();
   } catch {
@@ -160,8 +162,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "This document could not be read for translation." }, { status: 502 });
   }
   const credits = creditsFor(loaded.pages);
-  if (body.confirm !== true) {
-    return NextResponse.json({ quote: { credits, pages: loaded.pages, balance: await getCredits() } });
+  const quote = { credits, pages: loaded.pages, balance: await getCredits(), sourceHash: doc.sourceHash };
+  if (body.confirm !== true) return NextResponse.json({ quote });
+  // Never charge other than what was agreed: a new version uploaded between
+  // the quote and the click is priced again and shown, not silently charged.
+  if (body.credits !== credits || body.sourceHash !== doc.sourceHash) {
+    return NextResponse.json({ quote, changed: true });
   }
 
   // Only a NEW translation is a paid AI call, so only that is rate limited.
@@ -176,6 +182,7 @@ export async function POST(req: NextRequest) {
     title: doc.title,
     credits,
     content: loaded.content,
+    deadline,
   });
   return result.ok
     ? NextResponse.json(result)

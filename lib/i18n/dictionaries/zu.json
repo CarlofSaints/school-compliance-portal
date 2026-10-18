@@ -1540,5 +1540,6 @@
   "May translate a new document with the school's credits. Anyone can read a document already translated.": "Angahumusha umbhalo omusha ngamakhredithi esikole. Noma ubani angafunda umbhalo osuhunyushiwe.",
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Ukuze uhumushe, udinga amakhredithi. Iya ku-Admin > Amakhredithi Okuhumusha ukuze ulayishe amakhredithi.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Awuvunyelwe ukusebenzisa amakhredithi okuhumusha. Cela umphathi wakho ukuthi amake u-\"Angasebenzisa amakhredithi okuhumusha\" kumsebenzisi wakho.",
-  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Isikole sakho sidinga amakhredithi okuhumusha engeziwe. Iya ku-Admin > Amakhredithi Okuhumusha ukuze ulayishe amakhredithi."
+  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Isikole sakho sidinga amakhredithi okuhumusha engeziwe. Iya ku-Admin > Amakhredithi Okuhumusha ukuze ulayishe amakhredithi.",
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Lo mbhalo ushintshile selokhu inani lawo labalwa. Nanti inani elisha; akukho okukhokhisiwe."
 }

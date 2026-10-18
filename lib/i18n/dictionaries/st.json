@@ -1540,5 +1540,6 @@
   "May translate a new document with the school's credits. Anyone can read a document already translated.": "A ka fetolela tokomane e ntjha ka dikhrediti tsa sekolo. Mang kapa mang a ka bala tokomane e seng e fetoletswe.",
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Ho fetolela, o hloka dikhrediti. Eya ho Admin > Dikhrediti tsa Phetolelo ho kenya dikhrediti.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Ha o a dumellwa ho sebedisa dikhrediti tsa phetolelo. Kopa motsamaisi wa hao ho tshwaya \"A ka sebedisa dikhrediti tsa phetolelo\" ho mosebedisi wa hao.",
-  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Sekolo sa hao se hloka dikhrediti tse ding tsa phetolelo. Eya ho Admin > Dikhrediti tsa Phetolelo ho kenya dikhrediti."
+  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Sekolo sa hao se hloka dikhrediti tse ding tsa phetolelo. Eya ho Admin > Dikhrediti tsa Phetolelo ho kenya dikhrediti.",
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Tokomane ena e fetohile ho tloha ha theko ya yona e ne e balwa. Theko e ntjha ke ena; ha ho letho le lefisitsweng."
 }

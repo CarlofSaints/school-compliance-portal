@@ -35,17 +35,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ key
     return NextResponse.json({ error: "add must be a whole number of credits, -1000 to 1000, not 0" }, { status: 400 });
   }
 
-  const balance = await runAsTenant(key, async () => {
-    const balance = await addCredits(add);
+  const result = await runAsTenant(key, async () => {
+    const { balance, applied } = await addCredits(add);
     await recordActivity({
       actorName: `${admin.email} (School Compliance support)`,
       actorEmail: admin.email,
       action: "translation_credits.added",
       entity: "system",
-      summary: `${add > 0 ? `${add} translation credits added` : `${-add} translation credits removed`}. Balance ${balance}.`,
-      detail: { add, balance },
+      summary: `${applied >= 0 ? `${applied} translation credits added` : `${-applied} translation credits removed`}. Balance ${balance}.`,
+      detail: { requested: add, applied, balance },
     });
-    return balance;
+    return { balance, applied };
   });
-  return NextResponse.json({ balance });
+  return NextResponse.json(result);
 }

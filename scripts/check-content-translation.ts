@@ -36,6 +36,7 @@ async function main() {
     title: "Admissions",
     credits,
     content: [{ type: "text" as const, text: "hello" }],
+    deadline: Date.now() + 60_000,
   });
 
   check("1 page costs 1 credit", T.creditsFor(1), 1);
@@ -58,7 +59,7 @@ async function main() {
   r = await T.translateContent(req("v1"));
   check("stored copy is returned with 0 credits", r.ok && r.text, "sawubona");
 
-  check("Carl adds 10 credits", await T.addCredits(10), 10);
+  check("Carl adds 10 credits", await T.addCredits(10), { balance: 10, applied: 10 });
   r = await T.translateContent(req("v2", 3));
   check("new version, AI fails (no key): 502", r.ok ? "ok" : r.status, 502);
   check("failed translation gives the credits back", await T.getCredits(), 10);
@@ -73,7 +74,7 @@ async function main() {
   r = await T.translateContent(req("v2"));
   check("a stale claim (killed run) is taken over", r.ok ? "ok" : r.status, 502);
 
-  check("a correction never takes the balance below 0", await T.addCredits(-50), 0);
+  check("a correction never takes the balance below 0, and says what it removed", await T.addCredits(-50), { balance: 0, applied: -10 });
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);

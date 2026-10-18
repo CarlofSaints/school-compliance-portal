@@ -1540,5 +1540,6 @@
   "May translate a new document with the school's credits. Anyone can read a document already translated.": "Unokuguqulela uxwebhu olutsha ngeekhredithi zesikolo. Nabani na unokufunda uxwebhu osele luguqulelwe.",
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Ukuze uguqulele, ufuna iikhredithi. Yiya ku-Admin > Iikhredithi Zokuguqulela ukuze ulayishe iikhredithi.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Awuvumelekanga ukusebenzisa iikhredithi zokuguqulela. Cela umlawuli wakho ukuba aphawule \"Unokusebenzisa iikhredithi zokuguqulela\" kumsebenzisi wakho.",
-  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Isikolo sakho sifuna iikhredithi zokuguqulela ezongezelelweyo. Yiya ku-Admin > Iikhredithi Zokuguqulela ukuze ulayishe iikhredithi."
+  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Isikolo sakho sifuna iikhredithi zokuguqulela ezongezelelweyo. Yiya ku-Admin > Iikhredithi Zokuguqulela ukuze ulayishe iikhredithi.",
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Olu xwebhu lutshintshile ukusukela oko kwabalwa ixabiso lalo. Nali ixabiso elitsha; akukho nto ihlawulisiweyo."
 }

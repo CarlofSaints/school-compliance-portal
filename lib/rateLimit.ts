@@ -48,9 +48,9 @@ export const LIMITS = {
   signupCheckIp: { scope: "signup-check-ip", max: 60, windowSec: 60, message: "Too many checks. Try again in {wait}.", platform: true },
   aiUser: { scope: "ai-user", max: 20, windowSec: 60 * 60, message: "You have run a lot of compliance checks this hour. Try again in {wait}." },
   aiSchool: { scope: "ai-school", max: 200, windowSec: 24 * 60 * 60, message: "Your school has reached today's limit for compliance checks. Try again in {wait}, or contact support." },
-  translateUser: { scope: "translate-user", max: 10, windowSec: 60 * 60, message: "You have translated a lot of documents this hour. Try again in {wait}." },
-  // Pricing a document reads the whole file (and may ask the AI to count it).
-  translateQuoteUser: { scope: "translate-quote-user", max: 60, windowSec: 60 * 60, message: "You have priced a lot of translations this hour. Try again in {wait}." },
+  translateUser: { scope: "translate-user", max: 10, windowSec: 60 * 60, message: "You have translated a lot of documents this hour. Try again in {wait}." },
+  // Pricing a document reads the whole file (and may ask the AI to count it).
+  translateQuoteUser: { scope: "translate-quote-user", max: 60, windowSec: 60 * 60, message: "You have priced a lot of translations this hour. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },
 } satisfies Record<string, Limit>;
 

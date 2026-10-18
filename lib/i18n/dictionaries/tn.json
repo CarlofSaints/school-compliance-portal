@@ -1540,5 +1540,6 @@
   "May translate a new document with the school's credits. Anyone can read a document already translated.": "O ka ranola tokumente e ntšhwa ka dikhrediti tsa sekolo. Mongwe le mongwe a ka bala tokumente e e setseng e ranolwa.",
   "To translate, you need credits. Go to Admin > Translation Credits to load credits.": "Go ranola, o tlhoka dikhrediti. Ya kwa Admin > Dikhrediti tsa Thanolo go laela dikhrediti.",
   "You are not allowed to spend translation credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Ga o a letlelelwa go dirisa dikhrediti tsa thanolo. Kopa motsamaisi wa gago go tshwaya \"O ka dirisa dikhrediti tsa thanolo\" mo modirising wa gago.",
-  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Sekolo sa gago se tlhoka dikhrediti tse dingwe tsa thanolo. Ya kwa Admin > Dikhrediti tsa Thanolo go laela dikhrediti."
+  "Your school needs more translation credits. Go to Admin > Translation Credits to load credits.": "Sekolo sa gago se tlhoka dikhrediti tse dingwe tsa thanolo. Ya kwa Admin > Dikhrediti tsa Thanolo go laela dikhrediti.",
+  "This document changed since it was priced. Here is the new price; nothing has been charged.": "Tokumente e e fetogile fa e sale tlhwatlhwa ya yone e balwa. Tlhwatlhwa e ntšhwa ke eno; ga go sepe se se duedisitsweng."
 }

@@ -62,7 +62,18 @@ export async function PUT(
       updates.email = email;
     }
     if (typeof body.forcePasswordChange === "boolean") updates.forcePasswordChange = body.forcePasswordChange;
-    if (typeof body.canSpendTranslationCredits === "boolean") {
+    if (
+      typeof body.canSpendTranslationCredits === "boolean" &&
+      body.canSpendTranslationCredits !== !!existing.canSpendTranslationCredits
+    ) {
+      // Same rule as tags: spending the school's prepaid credits is authority,
+      // and nobody grants authority to themselves.
+      if (id === session.id && !maySelfTag(session)) {
+        return NextResponse.json(
+          { error: "You cannot let yourself spend translation credits. Ask a Super Admin." },
+          { status: 403 }
+        );
+      }
       updates.canSpendTranslationCredits = body.canSpendTranslationCredits;
     }
     if (Array.isArray(body.tagIds)) {
