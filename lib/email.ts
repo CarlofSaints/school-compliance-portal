@@ -1215,10 +1215,12 @@ export function sendBookingConfirmedEmail(to: string, name: string, f: RoomBooki
   `);
 }
 
-export function sendBookingReminderEmail(to: string, name: string, f: RoomBookingEmailFacts): Promise<boolean> {
-  return sendBookingMail(to, `Tomorrow: ${f.roomName}, ${f.title}`, "Room booking tomorrow", (P) => `
+/** `when` comes from the meeting's actual date: a reminder sent on the day says today. */
+export function sendBookingReminderEmail(to: string, name: string, f: RoomBookingEmailFacts, when: "today" | "tomorrow" = "tomorrow"): Promise<boolean> {
+  const word = when === "today" ? "Today" : "Tomorrow";
+  return sendBookingMail(to, `${word}: ${f.roomName}, ${f.title}`, `Room booking ${when}`, (P) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
-    <p style="color:#333;">A reminder that you have a meeting room booked tomorrow.</p>
+    <p style="color:#333;">A reminder that you have a meeting room booked ${when}.</p>
     ${bookingFactsBlock(f)}
     <p style="color:#666;font-size:13px;">If you no longer need it, please cancel it so someone else can use the room.</p>
     ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
@@ -1386,9 +1388,9 @@ export function sendRoomRequestDeclinedEmail(
   reason: string,
   f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
 ): Promise<boolean> {
-  return sendBookingMail(to, `${holderName} is keeping ${f.roomName}, ${f.dateLabel}`, "Request declined", (P) => `
+  return sendBookingMail(to, `${holderName} declined your request for ${f.roomName}, ${f.dateLabel}`, "Request declined", (P) => `
     <p style="color:#333;">Dear ${esc(requesterName)},</p>
-    <p style="color:#333;">${esc(holderName)} is keeping the ${esc(f.roomName)} booking on ${esc(f.dateLabel)} at ${esc(f.timeLabel)}.</p>
+    <p style="color:#333;">${esc(holderName)} declined your request for ${esc(f.roomName)} on ${esc(f.dateLabel)} at ${esc(f.timeLabel)}. The booking stays as it is.</p>
     <p style="color:#333;">Their reason:</p>
     <blockquote style="margin:0 0 16px;padding:8px 12px;border-left:4px solid ${P};background:#fafafa;color:#333;">${esc(reason)}</blockquote>
     ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}

@@ -6,7 +6,6 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import {
   actorOf,
   cancelBooking,
-  findBooking,
   getRoom,
   holderLabel,
   isDate,
@@ -37,20 +36,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = parseBookingInput(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  // An edit that will send email (a new holder, or a move that withdraws
-  // pending requests) also counts against the email limit, like /request.
-  const current = await findBooking(parsed.value.roomId, currentDate, id);
-  if (current) {
-    const holderChange = (parsed.value.bookedForId || null) !== (current.bookedForId ?? null) && parsed.value.bookedForId !== current.bookedById;
-    const move = current.date !== parsed.value.date || current.startMinute !== parsed.value.startMinute || current.endMinute !== parsed.value.endMinute;
-    if (holderChange || (move && current.requests.some((q) => q.status === "pending"))) {
-      const mailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
-      if (mailLimited) return mailLimited;
-    }
-  }
-
+  // updateBooking says, before writing, whether this edit will send email (a
+  // new holder, or a move that withdraws pending requests); if so it also
+  // counts against the email limit, like /request.
+  let mailLimited: NextResponse | null = null;
   const actor = actorOf(session);
-  const result = await updateBooking(actor, id, currentDate, { ...parsed.value, recurrence: { ...parsed.value.recurrence, frequency: "none" } });
+  const result = await updateBooking(
+    actor,
+    id,
+    currentDate,
+    { ...parsed.value, recurrence: { ...parsed.value.recurrence, frequency: "none" } },
+    new Date(),
+    async (willEmail) => {
+      if (willEmail) mailLimited = await enforce([[LIMITS.emailSendUser, session.id]]);
+      return !mailLimited;
+    }
+  );
+  if (mailLimited) return mailLimited;
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   const { before, after, room, holderChanged, withdrawn } = result.value;
 

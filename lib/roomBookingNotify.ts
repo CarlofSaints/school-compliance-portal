@@ -24,7 +24,7 @@ import {
   type Withdrawal,
   type WithdrawReason,
 } from "./roomBookingData";
-import { describeRecurrence, longDateLabel, slotLabel } from "./roomBookings";
+import { describeRecurrence, longDateLabel, sastToday, slotLabel } from "./roomBookings";
 
 // The booking emails COLAB sends, wired to the portal's mailer. Each returns
 // false (or a failure count) when a message that was due did not go, so the
@@ -159,8 +159,8 @@ export async function notifyRoomRequest(b: RoomBooking, room: Room, r: RoomReque
   return delivered;
 }
 
-/** Who the requester is told gave them the room: the holder, or, when a room
- *  manager answered on the holder's behalf, that manager. */
+/** Who the requester is told answered (gave them the room, or declined): the
+ *  holder, or, when a room manager answered on the holder's behalf, that manager. */
 export function giverName(before: RoomBooking, by?: { name: string; onBehalf: boolean }): string {
   return by?.onBehalf ? `${by.name} (a room manager)` : holderLabel(before);
 }
@@ -179,7 +179,7 @@ export async function notifyRequestOutcome(
   let ok =
     r.status === "approved"
       ? await sendRoomRequestApprovedEmail(r.requesterEmail, r.requesterName, giverName(before, by), { ...f, title: after.title })
-      : await sendRoomRequestDeclinedEmail(r.requesterEmail, r.requesterName, holderLabel(before), r.declineReason || "", f);
+      : await sendRoomRequestDeclinedEmail(r.requesterEmail, r.requesterName, giverName(before, by), r.declineReason || "", f);
   if (r.status === "approved" && by && room) {
     for (const h of holders(before)) {
       if (same(h.email, by.email)) continue;
@@ -209,7 +209,7 @@ export async function runRoomBookingReminders(now: Date = new Date()): Promise<{
     let ok = 0;
     for (let i = 0; i < todo.length; i++) {
       if (i > 0 || sent + failed > 0) await sleep(SEND_GAP_MS);
-      if (await sendBookingReminderEmail(todo[i].email, todo[i].name, facts(booking, room))) {
+      if (await sendBookingReminderEmail(todo[i].email, todo[i].name, facts(booking, room), booking.date === sastToday(now) ? "today" : "tomorrow")) {
         ok++;
         reached.add(todo[i].email.toLowerCase());
       } else failed++;
@@ -217,7 +217,10 @@ export async function runRoomBookingReminders(now: Date = new Date()): Promise<{
     sent += ok;
     const allDone = holders(booking).every((h) => reached.has(h.email.toLowerCase()));
     await finishReminder(booking, stamp, [...reached], allDone);
-    detail.push(`Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${ok} of ${todo.length}${allDone ? "" : ", will retry the rest"}`);
+    detail.push(
+      `Room ${room.name} "${booking.title}" ${booking.date}: reminder sent to ${ok} of ${todo.length}` +
+        (allDone ? "" : ", the rest are tried again on the next run if the meeting has not started")
+    );
   }
   return { due: due.length, sent, failed, detail };
 }

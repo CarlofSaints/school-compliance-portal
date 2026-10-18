@@ -16,6 +16,8 @@ import {
   addDays,
   sastToday,
   isPast,
+  startsAtMs,
+  REMIND_WINDOW_MS,
   hasEnded,
   type Recurrence,
 } from "./roomBookings";
@@ -147,6 +149,22 @@ type Err = { status: number; error: string };
  *  (The write's closure sets it, which TypeScript cannot follow, hence one helper.) */
 function failure(e: Err | null): { ok: false; status: number; error: string } | null {
   return e ? fail(e.status, e.error) : null;
+}
+
+/** 🔴 EVERY write to a booking goes through here, so updatedAt always moves
+ *  (by at least a millisecond) and a writer comparing it can see the change. */
+export function touch(b: RoomBooking, patch: Partial<RoomBooking> = {}): RoomBooking {
+  const prev = Date.parse(b.updatedAt);
+  let t = Date.now();
+  if (Number.isFinite(prev) && t <= prev) t = prev + 1;
+  return { ...b, ...patch, updatedAt: new Date(t).toISOString() };
+}
+
+/** The fields an edit sets. Another write that changes one of these conflicts
+ *  with an edit; one that changes anything else (a request, a reminder stamp)
+ *  is merged. */
+function fingerprint(b: RoomBooking): string {
+  return JSON.stringify([b.title, b.date, b.startMinute, b.endMinute, b.attendeeCount, b.bookedById, b.bookedForId, b.status]);
 }
 
 const fail = (status: number, error: string): { ok: false; status: number; error: string } => ({ ok: false, status, error });
@@ -360,7 +378,7 @@ export async function cancelRoomFutureBookings(roomId: string, byName: string, n
         // Only meetings that have not started: one under way carries on, an ended one is the record.
         if (b.status !== "confirmed" || isPast(b.date, b.startMinute, now)) return b;
         hit.push(b);
-        return { ...b, status: "cancelled" as const, requests: withdrawAll(b, stamp), cancelledAt: stamp, cancelledByName: byName, updatedAt: stamp };
+        return touch(b, { status: "cancelled", requests: withdrawAll(b, stamp), cancelledAt: stamp, cancelledByName: byName });
       });
       return hit.length ? next : NO_CHANGE;
     });
@@ -494,8 +512,13 @@ async function userCanBook(userId: string): Promise<boolean> {
   return resolveRolePermissions(u.role, role).includes("book_rooms");
 }
 
-async function resolveBookedFor(bookedForId: string, ownerId: string) {
+async function resolveBookedFor(bookedForId: string, ownerId: string, stored?: RoomBooking) {
   if (!bookedForId || bookedForId === ownerId) return { ok: true as const, person: null };
+  // Unchanged: keep who it is for even if that login has since been removed,
+  // or the booking could never be edited again.
+  if (stored && stored.bookedForId === bookedForId && stored.bookedForEmail) {
+    return { ok: true as const, person: { id: bookedForId, name: stored.bookedForName || stored.bookedForEmail, email: stored.bookedForEmail } };
+  }
   const u = await getUserById(bookedForId);
   if (!u) return { ok: false as const };
   return { ok: true as const, person: { id: u.id, name: displayName(u), email: u.email } };
@@ -601,13 +624,22 @@ export interface EditResult {
 }
 
 /** Changes ONE occurrence: title, date, times, headcount, who it is for. The
- *  room stays the same (as in COLAB, the form edits within the calendar's room). */
+ *  room stays the same (as in COLAB, the form edits within the calendar's room).
+ *
+ *  🔴 The edit is applied to the record AS IT IS INSIDE THE WRITE, not to the
+ *  copy read first: a request or a reminder stamp that landed in between is
+ *  kept (only the edited fields come from the form). A conflicting change to
+ *  those edited fields (someone else's edit, an approve, a cancel) refuses.
+ *
+ *  `beforeWrite` is told whether this edit will send email, before anything
+ *  is written, so the route can apply the email limit; returning false stops it. */
 export async function updateBooking(
   actor: Actor,
   id: string,
   locatorDate: string,
   input: BookingInput,
-  nowAt: Date = new Date()
+  nowAt: Date = new Date(),
+  beforeWrite?: (willEmail: boolean) => Promise<boolean>
 ): Promise<Outcome<EditResult>> {
   const before = await findBooking(input.roomId, locatorDate, id);
   if (!before) return fail(404, "That booking no longer exists");
@@ -619,39 +651,51 @@ export async function updateBooking(
   if (!room || !room.active) return fail(400, "That room isn't available");
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}`);
 
-  const forWho = await resolveBookedFor(input.bookedForId, before.bookedById);
+  const forWho = await resolveBookedFor(input.bookedForId, before.bookedById, before);
   if (!forWho.ok) return fail(400, "That person can't be booked for");
 
-  const moved = before.date !== input.date || before.startMinute !== input.startMinute || before.endMinute !== input.endMinute;
-  // Leaving an under-way meeting's times alone is fine; moving one INTO the past is not.
-  if ((before.date !== input.date || before.startMinute !== input.startMinute) && isPast(input.date, input.startMinute, nowAt)) return fail(400, PAST);
+  // A different day or start is a move (requests for the old slot lapse, the
+  // reminder is due again). Only extending or shortening the end is not.
+  const moved = before.date !== input.date || before.startMinute !== input.startMinute;
+  if (moved && isPast(input.date, input.startMinute, nowAt)) return fail(400, PAST);
+  // A meeting under way can be extended, not ended in the past.
+  if (hasEnded(input.date, input.endMinute, nowAt)) return fail(400, "The end time has already passed.");
   const holderChanged = (forWho.person?.id ?? null) !== before.bookedForId;
   if (holderChanged && before.bookedById !== actor.id && !canManageRooms(actor))
     return fail(403, "Only the person who made the booking can change who it is for");
-  const now = new Date().toISOString();
-  const after: RoomBooking = {
-    ...before,
-    title: input.title,
-    date: input.date,
-    startMinute: input.startMinute,
-    endMinute: input.endMinute,
-    attendeeCount: input.attendeeCount,
-    bookedForId: forWho.person?.id ?? null,
-    bookedForName: forWho.person?.name ?? null,
-    bookedForEmail: forWho.person?.email ?? null,
-    // A moved or re-held booking gets its day-before reminder again.
-    reminderSentAt: moved || holderChanged ? null : before.reminderSentAt,
-    remindedEmails: moved || holderChanged ? [] : before.remindedEmails,
-    // Somebody who asked for the OLD slot did not ask for this one.
-    requests: moved
-      ? withdrawAll(before, now)
-      : before.requests,
-    updatedAt: now,
+
+  if (beforeWrite) {
+    const willEmail = holderChanged || (moved && before.requests.some((r) => r.status === "pending"));
+    if (!(await beforeWrite(willEmail))) return fail(429, "Too many emails");
+  }
+
+  /** The edit, applied to whatever the record holds right now. */
+  const apply = (cur: RoomBooking): RoomBooking => {
+    const stamp = new Date().toISOString();
+    return touch(cur, {
+      title: input.title,
+      date: input.date,
+      startMinute: input.startMinute,
+      endMinute: input.endMinute,
+      attendeeCount: input.attendeeCount,
+      bookedForId: forWho.person?.id ?? null,
+      bookedForName: forWho.person?.name ?? null,
+      bookedForEmail: forWho.person?.email ?? null,
+      // A moved or re-held booking gets its reminder again.
+      reminderSentAt: moved || holderChanged ? null : cur.reminderSentAt,
+      remindedEmails: moved || holderChanged ? [] : cur.remindedEmails,
+      // Somebody who asked for the OLD slot did not ask for this one.
+      requests: moved ? withdrawAll(cur, stamp) : cur.requests,
+    });
   };
+  const CHANGED = { status: 409, error: "Someone changed this booking a moment ago. Reload and try again." };
+  const sameEdit = (cur: RoomBooking | undefined): cur is RoomBooking => !!cur && fingerprint(cur) === fingerprint(before);
 
   const fromFile = fileFor(room.id, monthOf(before.date));
   const toFile = fileFor(room.id, monthOf(input.date));
-  let error: { status: number; error: string } | null = null;
+  let error: Err | null = null;
+  let after: RoomBooking = apply(before);
+  let current: RoomBooking = before;
 
   const clashOf = (list: RoomBooking[]) =>
     findConflicts([after], list.filter((b) => b.status === "confirmed" && b.id !== id))[0] ?? null;
@@ -660,10 +704,12 @@ export async function updateBooking(
     await updateJson<RoomBooking[]>(fromFile, [], (list) => {
       error = null;
       const cur = list.find((b) => b.id === id);
-      if (!cur || cur.updatedAt !== before.updatedAt) {
-        error = { status: 409, error: "Someone changed this booking a moment ago. Reload and try again." };
+      if (!sameEdit(cur)) {
+        error = CHANGED;
         return NO_CHANGE;
       }
+      current = cur;
+      after = apply(cur);
       const c = clashOf(list);
       if (c) {
         error = { status: 409, error: clashMessage(room.name, after.date, c.clash, 0) };
@@ -673,8 +719,8 @@ export async function updateBooking(
     });
   } else {
     // Different month = different file: add to the new one (with the clash
-    // check), then take it out of the old one. If the old one moved meanwhile,
-    // the new copy is taken back out.
+    // check), then take it out of the old one. If the old one changed
+    // meanwhile, the new copy is taken back out.
     await updateJson<RoomBooking[]>(toFile, [], (list) => {
       error = null;
       const c = clashOf(list);
@@ -685,14 +731,16 @@ export async function updateBooking(
       return [...list.filter((b) => b.id !== id), after];
     });
     if (!error) {
+      const placed = after;
       try {
         await updateJson<RoomBooking[]>(fromFile, [], (list) => {
           error = null;
           const cur = list.find((b) => b.id === id);
-          if (!cur || cur.updatedAt !== before.updatedAt) {
-            error = { status: 409, error: "Someone changed this booking a moment ago. Reload and try again." };
+          if (!sameEdit(cur)) {
+            error = CHANGED;
             return NO_CHANGE;
           }
+          current = cur;
           return list.filter((b) => b.id !== id);
         });
       } catch (err) {
@@ -703,9 +751,21 @@ export async function updateBooking(
         );
         throw err;
       }
-      if (error) await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id));
-      // The request links point at a month file; follow the booking to its new one.
-      if (!error) {
+      if (error) {
+        await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id));
+      } else {
+        // Anything that landed on the old copy in between (a request, a
+        // reminder stamp) is carried over to the new one.
+        if (current !== before) {
+          const merged = apply(current);
+          await updateJson<RoomBooking[]>(toFile, [], (list) => {
+            const mine = list.find((b) => b.id === id);
+            if (!mine || mine.updatedAt !== placed.updatedAt) return NO_CHANGE;
+            after = merged;
+            return list.map((b) => (b.id === id ? merged : b));
+          });
+        }
+        // The request links point at a month file; follow the booking to its new one.
         for (const q of after.requests) {
           await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(after.date), bookingId: id });
         }
@@ -715,11 +775,25 @@ export async function updateBooking(
   const bad = failure(error);
   if (bad) return bad;
   // 🔴 The room may have been retired or deleted while this was being written
-  // (it was read as active before). Put the booking back as it was.
+  // (it was read as active before). Put the edited fields back as they were.
   if (!(await getRoom(room.id))?.active) {
     const ours = (b: RoomBooking) => b.id === id && b.updatedAt === after.updatedAt;
+    const undoEdit = (b: RoomBooking) =>
+      touch(b, {
+        title: current.title,
+        date: current.date,
+        startMinute: current.startMinute,
+        endMinute: current.endMinute,
+        attendeeCount: current.attendeeCount,
+        bookedForId: current.bookedForId,
+        bookedForName: current.bookedForName,
+        bookedForEmail: current.bookedForEmail,
+        reminderSentAt: current.reminderSentAt,
+        remindedEmails: current.remindedEmails,
+        requests: current.requests,
+      });
     if (fromFile === toFile) {
-      await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some(ours) ? list.map((b) => (ours(b) ? before : b)) : NO_CHANGE));
+      await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some(ours) ? list.map((b) => (ours(b) ? undoEdit(b) : b)) : NO_CHANGE));
     } else {
       // Only if our new copy is still exactly ours: if retiring the room
       // cancelled it meanwhile, bringing the old one back would resurrect a
@@ -730,15 +804,15 @@ export async function updateBooking(
         return removedOurs ? list.filter((b) => !ours(b)) : NO_CHANGE;
       });
       if (removedOurs) {
-        await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some((b) => b.id === id) ? NO_CHANGE : [...list, before]));
-        for (const q of before.requests) {
-          await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(before.date), bookingId: id });
+        await updateJson<RoomBooking[]>(fromFile, [], (list) => (list.some((b) => b.id === id) ? NO_CHANGE : [...list, touch(current)]));
+        for (const q of current.requests) {
+          await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(current.date), bookingId: id });
         }
       }
     }
     return fail(400, "That room isn't available");
   }
-  return { ok: true, value: { before, after, room, holderChanged, withdrawn: moved ? pendingWithdrawals(before, "moved") : [] } };
+  return { ok: true, value: { before: current, after, room, holderChanged, withdrawn: moved ? pendingWithdrawals(current, "moved") : [] } };
 }
 
 // --- Cancel ----------------------------------------------------------------------
@@ -771,14 +845,8 @@ export async function cancelBooking(
 
   const now = new Date().toISOString();
   const mayCancel = (b: RoomBooking) => isHolder(b, actor.id) || canManageRooms(actor);
-  const cancel = (b: RoomBooking): RoomBooking => ({
-    ...b,
-    status: "cancelled",
-    requests: withdrawAll(b, now),
-    cancelledAt: now,
-    cancelledByName: actor.name,
-    updatedAt: now,
-  });
+  const cancel = (b: RoomBooking): RoomBooking =>
+    touch(b, { status: "cancelled", requests: withdrawAll(b, now), cancelledAt: now, cancelledByName: actor.name });
   let count = 0;
   let skipped = 0;
   /** As they were before cancelling, for the emails. */
@@ -812,7 +880,9 @@ export async function cancelBooking(
       skipped += k;
       cancelled.push(...hit);
     }
-    if (count === 0) return fail(403, "Only the people holding this room can cancel it");
+    // Nothing cancelled: because the caller holds none of what is left (403),
+    // or because what is left was already cancelled or has ended (409).
+    if (count === 0) return skipped > 0 ? fail(403, "Only the people holding this room can cancel it") : fail(409, "Nothing left to cancel in this series");
   } else {
     let error: { status: number; error: string } | null = null;
     await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(booking.date)), [], (list) => {
@@ -916,11 +986,15 @@ export async function requestRoom(
       error = { status: 409, error: "You've already asked for this one. Waiting on their reply." };
       return NO_CHANGE;
     }
-    live = { ...cur, requests: [...cur.requests, request] };
+    live = touch(cur, { requests: [...cur.requests, request] });
     return list.map((b) => (b.id === id ? live : b));
   });
   const bad = failure(error);
-  if (bad) return bad;
+  if (bad) {
+    // The ask did not happen: hand the series marker back at once.
+    if (booking.seriesId) await releaseSeriesAsk(booking.seriesId, actor.id, token).catch(() => {});
+    return bad;
+  }
   return { ok: true, value: { booking: live, room, request } };
 }
 
@@ -933,22 +1007,46 @@ export async function requestRoom(
 
 const seriesAskPath = (seriesId: string, userId: string) => `rooms/requests-by-series/${seriesId}/${userId}.json`;
 
-async function requestIsPending(token: string): Promise<boolean> {
-  const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
-  if (!ptr) return false;
-  const b = (await readMonth(ptr.roomId, ptr.month)).find((x) => x.id === ptr.bookingId);
-  return !!b && b.status === "confirmed" && b.requests.some((r) => r.token === token && r.status === "pending");
+interface SeriesAsk {
+  token: string;
+  /** ms. While the ask is still being written, its request cannot be found yet. */
+  at: number;
 }
 
-async function claimSeriesAsk(seriesId: string, userId: string, token: string): Promise<boolean> {
+/** A marker whose request is not written yet counts as live this long. */
+export const SERIES_ASK_GRACE_MS = 2 * 60_000;
+
+/** "pending": a live ask. "over": answered or withdrawn. "missing": not found
+ *  (not written yet, or the ask failed). */
+async function askState(token: string): Promise<"pending" | "over" | "missing"> {
+  const ptr = await readJson<RequestPointer | null>(requestPath(token), null);
+  if (!ptr) return "missing";
+  const b = (await readMonth(ptr.roomId, ptr.month)).find((x) => x.id === ptr.bookingId);
+  const req = b?.requests.find((r) => r.token === token);
+  if (!b || !req) return "missing";
+  return b.status === "confirmed" && req.status === "pending" ? "pending" : "over";
+}
+
+/** 🔴 Taken over ONLY when its request is definitely not pending: answered
+ *  or withdrawn, or still not found after the grace period (a failed ask). A
+ *  marker claimed a moment ago, whose request is still being written, holds. */
+async function claimSeriesAsk(seriesId: string, userId: string, token: string, now: number = Date.now()): Promise<boolean> {
   let claimed = false;
-  await updateJson<{ token: string } | null>(seriesAskPath(seriesId, userId), null, async (cur) => {
+  await updateJson<SeriesAsk | null>(seriesAskPath(seriesId, userId), null, async (cur) => {
     claimed = false;
-    if (cur?.token && (await requestIsPending(cur.token))) return NO_CHANGE;
+    if (cur?.token) {
+      const state = await askState(cur.token);
+      if (state === "pending") return NO_CHANGE;
+      if (state === "missing" && now - (cur.at ?? 0) < SERIES_ASK_GRACE_MS) return NO_CHANGE;
+    }
     claimed = true;
-    return { token };
+    return { token, at: now };
   });
   return claimed;
+}
+
+async function releaseSeriesAsk(seriesId: string, userId: string, token: string): Promise<void> {
+  await updateJson<SeriesAsk | null>(seriesAskPath(seriesId, userId), null, (cur) => (cur?.token === token ? null : NO_CHANGE));
 }
 
 export interface RequestView {
@@ -1048,12 +1146,12 @@ export async function respondToRequest(
       error = { status: 409, error: "That meeting time has already passed, so the request has lapsed." };
       // Every pending ask on a started meeting lapses, not only this one.
       lapsed = pendingWithdrawals(cur, "lapsed");
-      return list.map((b) => (b.id === cur.id ? { ...b, requests: withdrawAll(b, now), updatedAt: now } : b));
+      return list.map((b) => (b.id === cur.id ? touch(b, { requests: withdrawAll(b, now) }) : b));
     }
     if (decision === "approve" && requesterUnable) {
       error = { status: 409, error: "The person who asked can no longer book rooms, so their request has been withdrawn." };
       lapsed = pendingWithdrawals(cur, "requester_unable", (r) => r.token !== token);
-      return list.map((b) => (b.id === cur.id ? { ...b, requests: withdrawAll(b, now, (r) => r.token !== token), updatedAt: now } : b));
+      return list.map((b) => (b.id === cur.id ? touch(b, { requests: withdrawAll(b, now, (r) => r.token !== token) }) : b));
     }
     if (decision === "approve" && req.attendeeCount > capacity) {
       // Left pending: the holder can still decline it, or the room may be changed back.
@@ -1072,8 +1170,7 @@ export async function respondToRequest(
     before = cur;
     after =
       decision === "approve"
-        ? {
-            ...cur,
+        ? touch(cur, {
             title: req.title,
             attendeeCount: req.attendeeCount,
             bookedById: req.requesterId,
@@ -1091,9 +1188,8 @@ export async function respondToRequest(
             reminderSentAt: null,
             remindedEmails: [],
             requests,
-            updatedAt: now,
-          }
-        : { ...cur, requests, updatedAt: now };
+          })
+        : touch(cur, { requests });
     return list.map((b) => (b.id === cur.id ? after! : b));
   });
   const bad = failure(error);
@@ -1104,19 +1200,21 @@ export async function respondToRequest(
 // --- Day-before reminders ----------------------------------------------------------
 
 /** Tomorrow's confirmed, not-yet-reminded bookings across every room. */
+/** Bookings to remind now: confirmed, not yet reminded in full, and starting
+ *  within the next REMIND_WINDOW_MS. A holder whose send failed stays due, so
+ *  the next run (if the meeting has not started) tries them again. */
 export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ booking: RoomBooking; room: Room }[]> {
-  const tomorrow = addDays(sastToday(now), 1);
+  const today = sastToday(now);
   const out: { booking: RoomBooking; room: Room }[] = [];
   // A retired room has no calendar; its upcoming bookings were cancelled on retiring.
   const rooms = (await getRooms()).filter((r) => r.active);
-  const months = [monthOf(tomorrow)];
+  const months = [...new Set([today, addDays(today, 1), addDays(today, 2)].map(monthOf))];
   const lists = await Promise.all(rooms.flatMap((room) => months.map(async (m) => ({ room, list: await readMonth(room.id, m) }))));
   for (const { room, list } of lists) {
     for (const b of list) {
       if (b.status !== "confirmed" || b.reminderSentAt) continue;
-      // The day before only. A holder whose send failed is retried by a later run
-      // the same day; on the meeting day itself a "tomorrow" email would be wrong.
-      if (b.date === tomorrow) out.push({ booking: b, room });
+      const until = startsAtMs(b.date, b.startMinute) - now.getTime();
+      if (until > 0 && until <= REMIND_WINDOW_MS) out.push({ booking: b, room });
     }
   }
   return out;
@@ -1128,7 +1226,7 @@ export async function finishReminder(b: RoomBooking, stamp: string, remindedEmai
   await updateJson<RoomBooking[]>(fileFor(b.roomId, monthOf(b.date)), [], (list) => {
     const cur = list.find((x) => x.id === b.id);
     if (!cur || cur.reminderSentAt !== stamp) return NO_CHANGE;
-    return list.map((x) => (x.id === b.id ? { ...x, remindedEmails, reminderSentAt: allDone ? stamp : null } : x));
+    return list.map((x) => (x.id === b.id ? touch(x, { remindedEmails, reminderSentAt: allDone ? stamp : null }) : x));
   });
 }
 
@@ -1141,7 +1239,7 @@ export async function claimReminder(b: RoomBooking, stamp: string | null, onlyIf
     const cur = list.find((x) => x.id === b.id);
     if (!cur || cur.reminderSentAt !== onlyIf) return NO_CHANGE;
     claimed = true;
-    return list.map((x) => (x.id === b.id ? { ...x, reminderSentAt: stamp } : x));
+    return list.map((x) => (x.id === b.id ? touch(x, { reminderSentAt: stamp }) : x));
   });
   return claimed;
 }

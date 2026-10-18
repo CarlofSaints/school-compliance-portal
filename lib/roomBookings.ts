@@ -118,6 +118,18 @@ export function sastNowMinute(now: Date = new Date()): number {
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
+/** The moment a booking starts, as epoch ms (SAST is UTC+2). */
+export function startsAtMs(date: string, minute: number): number {
+  const p = parseDateKey(date);
+  if (!p) return NaN;
+  return Date.UTC(p.y, p.m - 1, p.d) + minute * 60_000 - 2 * 3_600_000;
+}
+
+/** How far ahead a reminder run looks. The cron runs once a day (07:00 SAST),
+ *  so 31 hours covers tomorrow until 14:00; anything later tomorrow, or booked
+ *  after today's run, is reminded on the morning of the day itself. */
+export const REMIND_WINDOW_MS = 31 * 3_600_000;
+
 /** A start in the past: an earlier day, or earlier today (SAST). */
 export function isPast(date: string, startMinute: number, now: Date = new Date()): boolean {
   const today = sastToday(now);

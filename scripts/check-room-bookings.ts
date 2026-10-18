@@ -661,7 +661,8 @@ async function main() {
   await D.respondToRequest(erinA, v2ask.value.request.token, "approve", "", new Date("2028-06-01T00:00:00Z"));
   const v2after = await D.findBooking(yard.id, v2b.date, v2b.id);
   check("V2 approve resets the reminder record", [v2after?.reminderSentAt, v2after?.remindedEmails], [null, []]);
-  check("V2 not reminded on the meeting day itself", (await D.bookingsDueForReminder(new Date("2028-06-06T04:00:00Z"))).some((x) => x.booking.id === v2b.id), false);
+  // (Since review 6: a holder change means the new holder is reminded on the day, with "today" wording.)
+  check("V2 the new holder is reminded on the day itself", (await D.bookingsDueForReminder(new Date("2028-06-06T04:00:00Z"))).some((x) => x.booking.id === v2b.id), true);
 
   // V3 the requester is re-checked when approving
   await createUser({ id: "gone", name: "Gone", surname: "Viewer", email: "gone@example.test", password: "pw", role: "viewer", forcePasswordChange: false, tagIds: [] });
@@ -718,6 +719,136 @@ async function main() {
   const weekRoute = await import("../app/api/bookings/route");
   check("V8 retired room week: 404 for a booker", (await weekRoute.GET(get(erin, `/api/bookings?room=${lab.id}&week=2027-12-13`))).status, 404);
   check("V8 retired room week: open to a room manager", (await weekRoute.GET(get(mia, `/api/bookings?room=${lab.id}&week=2027-12-13`))).status, 200);
+
+  // ======================= sixth review =======================
+  const S6 = await mkRoom("Studio");
+  const injectOnSecondRead = (key: string, change: (b: Booking) => Booking, bookingId: string) => {
+    let reads = 0;
+    const orig = store.get.bind(store);
+    store.get = (k: string) => {
+      if (k.endsWith(key) && ++reads === 2) {
+        const f = orig(k)!;
+        const list = JSON.parse(f.bytes.toString()) as Booking[];
+        store.set(k, { ...f, bytes: Buffer.from(JSON.stringify(list.map((b) => (b.id === bookingId ? change(b) : b)))), etag: '"injected"' });
+      }
+      return orig(k);
+    };
+    return () => (store.get = orig);
+  };
+
+  // W1 every writer bumps updatedAt
+  const w1 = await D.createBooking(erinA, inp(S6.id, "2028-10-02", 600, 660));
+  if (!w1.ok) throw new Error("create failed");
+  const w1b = w1.value.bookings[0];
+  await D.requestRoom(bob, S6.id, w1b.date, w1b.id, { title: "Bob", message: "y", attendeeCount: 1 });
+  const afterAsk = (await D.findBooking(S6.id, w1b.date, w1b.id))!;
+  await D.claimReminder(afterAsk, "2028-10-01T05:00:00.000Z", null);
+  const afterClaim = (await D.findBooking(S6.id, w1b.date, w1b.id))!;
+  check("W1 asking and claiming a reminder both move updatedAt", [afterAsk.updatedAt !== w1b.updatedAt, afterClaim.updatedAt !== afterAsk.updatedAt], [true, true]);
+
+  // W1 an edit that overlaps a new request keeps the request
+  const w2 = await D.createBooking(erinA, inp(S6.id, "2028-10-03", 600, 660, { title: "Edit me" }));
+  if (!w2.ok) throw new Error("create failed");
+  const w2b = w2.value.bookings[0];
+  const lateAsk = { token: "late-ask", requesterId: "bob", requesterName: "bob Tester", requesterEmail: "bob@example.test", title: "Bob", message: "y", attendeeCount: 1, status: "pending", createdAt: "x", holderIds: ["erin"] };
+  let restore = injectOnSecondRead("2028-10.json", (b) => ({ ...b, requests: [...b.requests, lateAsk as Booking["requests"][number]], updatedAt: new Date(Date.parse(b.updatedAt) + 5).toISOString() }), w2b.id);
+  const w2e = await D.updateBooking(erinA, w2b.id, w2b.date, inp(S6.id, w2b.date, 600, 660, { title: "Edited" }));
+  restore();
+  const w2now = await D.findBooking(S6.id, w2b.date, w2b.id);
+  check("W1 overlapping edit saved and the new request kept", [status(w2e), w2now?.title, w2now?.requests.map((q) => q.status)], ["ok", "Edited", ["pending"]]);
+
+  // W2 an edit that overlaps a reminder claim keeps the stamp (no duplicate reminder)
+  restore = injectOnSecondRead("2028-10.json", (b) => ({ ...b, reminderSentAt: "2028-10-02T05:00:00.000Z", updatedAt: new Date(Date.parse(b.updatedAt) + 5).toISOString() }), w2b.id);
+  const w3e = await D.updateBooking(erinA, w2b.id, w2b.date, inp(S6.id, w2b.date, 600, 660, { title: "Edited again" }));
+  restore();
+  check("W2 overlapping edit keeps the reminder stamp", [status(w3e), (await D.findBooking(S6.id, w2b.date, w2b.id))?.reminderSentAt], ["ok", "2028-10-02T05:00:00.000Z"]);
+
+  // W3 reminders: anything starting within the window, worded from the real date
+  const madeLate = await D.createBooking(erinA, inp(S6.id, "2028-11-08", 600, 660), new Date("2028-11-07T13:00:00Z")); // booked 15:00 for tomorrow 10:00
+  const evening = await D.createBooking(erinA, inp(S6.id, "2028-11-08", 1200, 1260), new Date("2028-11-07T13:00:00Z")); // tomorrow 20:00
+  if (!madeLate.ok || !evening.ok) throw new Error("create failed");
+  const run1 = new Date("2028-11-07T05:00:00Z"); // 07:00 the day before: the 20:00 meeting is 37 h away
+  check("W3 a meeting more than 31 h away is not due yet", (await D.bookingsDueForReminder(run1)).some((x) => x.booking.id === evening.value.bookings[0].id), false);
+  outbox.length = 0;
+  await runRem(new Date("2028-11-08T05:00:00Z")); // 07:00 on the day
+  check("W3 booked after yesterday's run: reminded on the day, worded 'Today'", outbox.filter((m) => m.to === "erin@example.test" && m.subject.startsWith("Today: Studio")).length, 2);
+  check("W3 and never 'Tomorrow' on the day", outbox.filter((m) => m.subject.startsWith("Tomorrow: Studio")).length, 0);
+
+  // W4 a series marker claimed a moment ago, request not written yet, holds; a stale one is taken over
+  const w4 = await D.createBooking(erinA, inp(S6.id, "2028-12-04", 600, 660, { recurrence: weekly(2) }));
+  if (!w4.ok) throw new Error("create failed");
+  const [w41, w42] = w4.value.bookings;
+  const markerPath = `rooms/requests-by-series/${w41.seriesId}/bob.json`;
+  await writeJson(markerPath, { token: "being-written", at: Date.now() });
+  check("W4 fresh marker with no request yet holds", status(await D.requestRoom(bob, S6.id, w41.date, w41.id, { title: "x", message: "y", attendeeCount: 1 })), 409);
+  await writeJson(markerPath, { token: "being-written", at: Date.now() - 3 * 60_000 });
+  check("W4 a marker still empty after the grace period is taken over", status(await D.requestRoom(bob, S6.id, w41.date, w41.id, { title: "x", message: "y", attendeeCount: 1 })), "ok");
+  check("W4 and that ask now holds the series", status(await D.requestRoom(bob, S6.id, w42.date, w42.id, { title: "x", message: "y", attendeeCount: 1 })), 409);
+
+  // W5 a room manager declining: the requester is told a room manager declined
+  const w5 = await D.createBooking(erinA, inp(S6.id, "2029-01-08", 600, 660));
+  if (!w5.ok) throw new Error("create failed");
+  const w5b = w5.value.bookings[0];
+  const w5q = await D.requestRoom(bob, S6.id, w5b.date, w5b.id, { title: "x", message: "y", attendeeCount: 1 });
+  if (!w5q.ok) throw new Error("request failed");
+  const w5r = await D.respondToRequest(miaA, w5q.value.request.token, "decline", "Board needs it");
+  if (!w5r.ok) throw new Error("decline failed");
+  outbox.length = 0;
+  await notifyRequestOutcome(w5r.value.before, w5r.value.after, w5r.value.room, w5r.value.request, { name: miaA.name, email: miaA.email, onBehalf: w5r.value.onBehalf });
+  check("W5 decline email names the room manager", outbox.filter((m) => m.to === "bob@example.test" && m.subject.startsWith("Mia Admin (a room manager) declined")).length, 1);
+
+  // W6 a booking for someone whose login was since deleted stays editable
+  const { deleteUser } = await import("../lib/userData");
+  await createUser({ id: "temp", name: "Temp", surname: "Person", email: "temp@example.test", password: "pw", role: "sgb-member", forcePasswordChange: false, tagIds: [] });
+  const w6 = await D.createBooking(erinA, inp(S6.id, "2029-01-15", 600, 660, { bookedForId: "temp" }));
+  if (!w6.ok) throw new Error("create failed");
+  await deleteUser("temp");
+  const w6b = w6.value.bookings[0];
+  const w6e = await D.updateBooking(erinA, w6b.id, w6b.date, inp(S6.id, w6b.date, 600, 660, { bookedForId: "temp", title: "Still editable" }));
+  check("W6 unchanged deleted bookee: edit still saves, name kept", [status(w6e), w6e.ok && w6e.value.after.bookedForName], ["ok", "Temp Person"]);
+  check("W6 but choosing a deleted person is still refused", status(await D.updateBooking(erinA, w6b.id, w6b.date, inp(S6.id, w6b.date, 600, 660, { bookedForId: "ghost" }))), 400);
+
+  // W7 extending a meeting under way: allowed, not a move; ending it in the past refused
+  const w7 = await D.createBooking(erinA, inp(S6.id, "2029-02-05", 600, 720), new Date("2029-02-01T00:00:00Z"));
+  if (!w7.ok) throw new Error("create failed");
+  const w7b = w7.value.bookings[0];
+  await D.requestRoom(bob, S6.id, w7b.date, w7b.id, { title: "x", message: "y", attendeeCount: 1 }, new Date("2029-02-01T00:00:00Z"));
+  const w7at = new Date("2029-02-05T09:00:00Z"); // 11:00 SAST, under way
+  check("W7 ending it before now refused", status(await D.updateBooking(erinA, w7b.id, w7b.date, inp(S6.id, w7b.date, 600, 630), w7at)), 400);
+  const w7e = await D.updateBooking(erinA, w7b.id, w7b.date, inp(S6.id, w7b.date, 600, 780), w7at);
+  check("W7 extending it is allowed and is not a move", [status(w7e), w7e.ok && w7e.value.withdrawn.length, (await D.findBooking(S6.id, w7b.date, w7b.id))?.requests[0].status], ["ok", 0, "pending"]);
+
+  // W8 series cancel with nothing left: 409, not 403
+  const w8 = await D.createBooking(erinA, inp(S6.id, "2029-03-05", 600, 660, { recurrence: weekly(2) }));
+  if (!w8.ok) throw new Error("create failed");
+  const [w81] = w8.value.bookings;
+  restore = (() => {
+    let reads = 0;
+    const orig = store.get.bind(store);
+    store.get = (k: string) => {
+      if (k.endsWith("2029-03.json") && ++reads === 2) {
+        const f = orig(k)!;
+        const list = JSON.parse(f.bytes.toString()) as Booking[];
+        store.set(k, { ...f, bytes: Buffer.from(JSON.stringify(list.map((b) => (b.seriesId === w81.seriesId ? { ...b, status: "cancelled" } : b)))), etag: '"gone"' });
+      }
+      return orig(k);
+    };
+    return () => (store.get = orig);
+  })();
+  const w8c = await D.cancelBooking(erinA, S6.id, w81.date, w81.id, "series");
+  restore();
+  check("W8 nothing left to cancel: 409", [status(w8c), !w8c.ok && w8c.error], [409, "Nothing left to cancel in this series"]);
+
+  // W9 the edit says, before writing, whether it will email; refusing stops it
+  const w9 = await D.createBooking(erinA, inp(S6.id, "2029-04-02", 600, 660, { title: "W9" }));
+  if (!w9.ok) throw new Error("create failed");
+  const w9b = w9.value.bookings[0];
+  const seen: boolean[] = [];
+  await D.updateBooking(erinA, w9b.id, w9b.date, inp(S6.id, w9b.date, 600, 660, { title: "W9 renamed" }), new Date(), async (w) => (seen.push(w), true));
+  const w9stop = await D.updateBooking(erinA, w9b.id, w9b.date, inp(S6.id, w9b.date, 600, 660, { title: "W9 renamed", bookedForId: "cara" }), new Date(), async (w) => (seen.push(w), false));
+  check("W9 willEmail false for a rename, true for a new holder", seen, [false, true]);
+  check("W9 refused by the limit: nothing written", [status(w9stop), (await D.findBooking(S6.id, w9b.date, w9b.id))?.bookedForId], [429, null]);
+
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);
