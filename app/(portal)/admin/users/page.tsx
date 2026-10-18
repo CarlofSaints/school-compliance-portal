@@ -83,6 +83,8 @@ export default function UsersPage() {
   // it from the user form.
   const [positions, setPositions] = useState<string[]>([]);
   const canManage = session?.permissions.includes("manage_users") ?? false;
+  // The API only sends lastSignInAt to someone who may read the sign-ins.
+  const showSignIns = users.some((u) => "lastSignInAt" in u);
 
   const fetchData = useCallback(async () => {
     const [usersRes, rolesRes, peopleRes, tagsRes, positionsRes] =
@@ -403,7 +405,7 @@ export default function UsersPage() {
               <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Tags")}</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Person")}</th>
               <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Status")}</th>
-              <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Last sign-in")}</th>
+              {showSignIns && <th className="text-left px-6 py-3 font-medium text-gray-500">{t("Last sign-in")}</th>}
               <th className="text-right px-6 py-3 font-medium text-gray-500">{t("Actions")}</th>
             </tr>
           </thead>
@@ -472,11 +474,13 @@ export default function UsersPage() {
                       <span className="text-emerald-600 text-xs">{t("Active")}</span>
                     )}
                   </td>
-                  <td className="px-6 py-4 text-gray-600 text-xs whitespace-nowrap">
-                    {user.lastSignInAt
-                      ? new Date(user.lastSignInAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-                      : "-"}
-                  </td>
+                  {showSignIns && (
+                    <td className="px-6 py-4 text-gray-600 text-xs whitespace-nowrap">
+                      {user.lastSignInAt
+                        ? new Date(user.lastSignInAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                        : "-"}
+                    </td>
+                  )}
                   <td className="px-6 py-4 text-right">
                     {canManage ? (
                       <>
@@ -516,7 +520,7 @@ export default function UsersPage() {
             })}
             {users.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
+                <td colSpan={showSignIns ? 8 : 7} className="px-6 py-12 text-center text-gray-400">
                   {t("No users yet.")}
                 </td>
               </tr>

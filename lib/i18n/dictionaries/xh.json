@@ -1529,5 +1529,7 @@
   "Wrong passwords (30 days)": "Iipassword ezingachanekanga (iintsuku ezingama-30)",
   "(removed)": "(isusiwe)",
   "No sign-in recorded since {date}": "Akukho kungena kurekhodiweyo ukususela ngo-{date}",
-  "No sign-in recorded yet": "Akukho kungena kurekhodiweyo okwangoku"
+  "No sign-in recorded yet": "Akukho kungena kurekhodiweyo okwangoku",
+  "Unknown address": "Idilesi engaziwayo",
+  "Unknown connection": "Unxibelelwano olungaziwayo"
 }

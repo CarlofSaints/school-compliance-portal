@@ -390,7 +390,13 @@ export async function deleteFolder(dirPath: string): Promise<number> {
  * an audit that quietly omits records is worse than no audit.
  */
 export async function listFiles(dirPath: string): Promise<string[]> {
-  try {
+  return listFilesStrict(dirPath).catch(() => []);
+}
+
+/** listFiles, but a storage error is THROWN rather than read as an empty
+ *  folder, for callers where "nothing there" would be a wrong answer. */
+export async function listFilesStrict(dirPath: string): Promise<string[]> {
+  {
     const { prefix: tenantPrefix, token } = await scope();
     // Resolved ONCE. The old version rebuilt the prefix inside the map, so
     // every row paid for it; now it is also an await, which cannot go there.
@@ -411,7 +417,5 @@ export async function listFiles(dirPath: string): Promise<string[]> {
     } while (cursor);
 
     return [...names];
-  } catch {
-    return [];
   }
 }

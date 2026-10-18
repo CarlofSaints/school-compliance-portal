@@ -1529,5 +1529,7 @@
   "Wrong passwords (30 days)": "Mantšu a sephiri a fošagetšego (matšatši a 30)",
   "(removed)": "(e tlošitšwe)",
   "No sign-in recorded since {date}": "Ga go na go tsena mo go rekhotilwego go tloga ka {date}",
-  "No sign-in recorded yet": "Ga go na go tsena mo go rekhotilwego ga bjale"
+  "No sign-in recorded yet": "Ga go na go tsena mo go rekhotilwego ga bjale",
+  "Unknown address": "Aterese ye e sa tsebjwego",
+  "Unknown connection": "Kgokagano ye e sa tsebjwego"
 }

@@ -59,6 +59,12 @@ function monthLabel(m: string): string {
   });
 }
 
+// Fixed "Who" labels the server writes for an attempt nobody signed in for.
+const UNKNOWN_ACTORS: Record<string, string> = {
+  "Unknown address": tk("Unknown address"),
+  "Unknown connection": tk("Unknown connection"),
+};
+
 const PAGE_SIZE = 100;
 
 export default function ActivityPage() {
@@ -390,7 +396,9 @@ function RowPair({
       >
         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{whenLabel(entry.at)}</td>
         <td className="px-4 py-3">
-          <div className="text-dark">{entry.actorName}</div>
+          <div className="text-dark">
+            {!entry.actorId && UNKNOWN_ACTORS[entry.actorName] ? t(UNKNOWN_ACTORS[entry.actorName]) : entry.actorName}
+          </div>
           {entry.actorEmail && (
             <div className="text-xs text-gray-400">{entry.actorEmail}</div>
           )}

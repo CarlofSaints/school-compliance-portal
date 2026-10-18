@@ -5,6 +5,7 @@ import {
   exportActivity,
   activityToCsv,
   type ActivityEntity,
+  ACTIVITY_VIEW_PERMISSIONS,
 } from "@/lib/activityLog";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { redactMinutesActivity } from "@/lib/minutesAccess";
@@ -14,7 +15,7 @@ import { redactMinutesActivity } from "@/lib/minutesAccess";
 // brand-new "view_activity" alone would lock out every existing admin until
 // somebody re-ticked it by hand. Anyone who can manage users, roles or spend
 // settings is already trusted with more than this.
-const CAN_VIEW = ["view_activity", "manage_users", "manage_roles", "manage_spend_settings"];
+const CAN_VIEW = ACTIVITY_VIEW_PERMISSIONS;
 
 export async function GET(req: NextRequest) {
   const session = await requireAnyPermission(req, CAN_VIEW);

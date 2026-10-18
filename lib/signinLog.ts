@@ -1,4 +1,4 @@
-import { readJson, readJsonTolerant, updateJson, listFiles, NO_CHANGE } from "./controlData";
+import { readJson, updateJson, listFilesStrict, NO_CHANGE } from "./controlData";
 
 // ---------------------------------------------------------------------------
 // "How often does each person sign in?"
@@ -86,34 +86,38 @@ export async function countSignIn(
   const day = sastDay(ms);
   const oldest = sastDay(ms - (KEEP_DAYS - 1) * 86400000);
   try {
-    await Promise.all([
-      updateJson<SignInStat | null>(userPath(user.id), null, (cur) => {
-        const s: SignInStat = cur || { name: "", email: "", days: {}, failedDays: {} };
-        s.name = `${user.name} ${user.surname || ""}`.trim() || user.email;
-        s.email = user.email;
-        if (outcome === "ok") {
-          s.days = bump(s.days || {}, day, oldest);
-          s.lastAt = at;
-          s.lastIp = ip;
-          s.lastDevice = device;
-        } else {
-          s.failedDays = bump(s.failedDays || {}, day, oldest);
-        }
-        return s;
-      }),
-      // Written once, the first time anybody at the school is counted. After
-      // that it is a read and NO_CHANGE: no write, so no contention.
-      updateJson<{ since: string } | null>(META_PATH, null, (cur) => (cur ? NO_CHANGE : { since: at })),
-    ]);
+    // mutate can run more than once; the LAST run is the one that was saved.
+    let created = false;
+    await updateJson<SignInStat | null>(userPath(user.id), null, (cur) => {
+      created = cur === null;
+      const s: SignInStat = cur || { name: "", email: "", days: {}, failedDays: {} };
+      s.name = `${user.name} ${user.surname || ""}`.trim() || user.email;
+      s.email = user.email;
+      if (outcome === "ok") {
+        s.days = bump(s.days || {}, day, oldest);
+        s.lastAt = at;
+        s.lastIp = ip;
+        s.lastDevice = device;
+      } else {
+        s.failedDays = bump(s.failedDays || {}, day, oldest);
+      }
+      return s;
+    });
+    // Only a person's FIRST tally can be the school's first, so meta.json is
+    // touched then and never again for them (NO_CHANGE if it already exists).
+    if (created) {
+      await updateJson<{ since: string } | null>(META_PATH, null, (cur) => (cur ? NO_CHANGE : { since: at }));
+    }
   } catch (err) {
     console.error("[signins] Could not count:", outcome, err);
   }
 }
 
-/** Every user's tally, by user id, read in parallel. */
+/** Every user's tally, by user id, read in parallel. THROWS on a storage
+ *  error: an empty answer would read as "nobody has signed in". */
 export async function readSignInStats(): Promise<Record<string, SignInStat>> {
-  const ids = (await listFiles("signins/users")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
-  const stats = await Promise.all(ids.map((id) => readJsonTolerant<SignInStat | null>(userPath(id), null)));
+  const ids = (await listFilesStrict("signins/users")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+  const stats = await Promise.all(ids.map((id) => readJson<SignInStat | null>(userPath(id), null)));
   const out: Record<string, SignInStat> = {};
   ids.forEach((id, i) => {
     if (stats[i]) out[id] = stats[i]!;
@@ -160,7 +164,7 @@ export function buildSignInRows(
     const seen = !!s?.lastAt;
     // Only someone created after counting began can truly be "never": anyone
     // older may well have signed in before there was anything to count it.
-    const after = !!since && !!createdAt && createdAt >= since;
+    const after = !!since && !!createdAt && Date.parse(createdAt) >= Date.parse(since);
     return {
       userId, name, email, removed,
       lastAt: s?.lastAt, lastIp: s?.lastIp, lastDevice: s?.lastDevice,

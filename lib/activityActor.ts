@@ -1,5 +1,6 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import type { SessionPayload } from "./roles";
+import { tenantScope, runInScope } from "./tenantContext";
 
 // ---------------------------------------------------------------------------
 // Turning a request and its session into the "who" on an audit entry.
@@ -39,6 +40,39 @@ export function actorFrom(req: NextRequest, session: SessionPayload): Actor {
     actorEmail: session.email,
     ip: clientIp(req),
   };
+}
+
+// Writes queued outside a request (the check scripts call route handlers
+// directly, where after() has no request to attach to).
+const pendingOutsideRequest: Promise<unknown>[] = [];
+
+/**
+ * Runs a log write AFTER the response has gone, and still guarantees it
+ * runs: Vercel keeps the function alive for after() work, so this is not the
+ * un-awaited write that silently never happens. Used on sign-in so the
+ * logging cannot change how long a reply takes.
+ *
+ * The school is resolved NOW, while the request is in hand, and the task
+ * runs pinned to it: a write after the response must land in the same
+ * school's store as the request it belongs to.
+ */
+export async function afterResponse(task: () => Promise<unknown>): Promise<void> {
+  const scope = await tenantScope();
+  const pinned = () => runInScope(scope, task);
+  try {
+    after(pinned);
+  } catch {
+    // Only outside a request scope (scripts). The script awaits these.
+    pendingOutsideRequest.push(pinned().catch((err) => console.error("[activity] after task failed:", err)));
+  }
+}
+
+/** For check scripts: waits for every afterResponse task queued outside a
+ *  request. Returns how many there were. */
+export async function flushAfterResponse(): Promise<number> {
+  let n = 0;
+  for (; pendingOutsideRequest.length; n++) await pendingOutsideRequest.shift();
+  return n;
 }
 
 /** For things nobody did by hand: a cron, a seed, an automatic reminder. */

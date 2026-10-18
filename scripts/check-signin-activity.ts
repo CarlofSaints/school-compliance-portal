@@ -45,9 +45,11 @@ async function main() {
   const changePw = await import("../app/api/auth/change-password/route");
   const signins = await import("../app/api/activity/signins/route");
   const usersRoute = await import("../app/api/users/route");
+  const { flushAfterResponse } = await import("../lib/activityActor");
   const { key: tenantKey } = await tenantScope();
 
-  await saveRoles(DEFAULT_ROLES);
+  // A role that may read the users list but NOT the activity log.
+  await saveRoles([...DEFAULT_ROLES, { id: "users-viewer", name: "Users viewer", permissions: ["view_users"] }]);
   const mk = (id: string, role: string, force = false) =>
     createUser({ id, name: id, surname: "Tester", email: `${id}@example.test`, password: "pw-" + id + "-SECRET", role, forcePasswordChange: force, tagIds: [] });
   const admin = await mk("admin", "super-admin");
@@ -68,8 +70,19 @@ async function main() {
     if (opts.json !== undefined) headers["content-type"] = "application/json";
     return new NextRequest(`http://${HOST}${path}`, { method, headers, body: opts.json === undefined ? undefined : JSON.stringify(opts.json) });
   }
-  const signIn = (email: string, password: string, ip?: string, fwd?: string) =>
-    auth.POST(req("POST", "/api/auth", { json: { email, password }, ip, fwd }));
+  // The logging runs after the response (after()); outside Next it is queued,
+  // and the check waits for it before looking.
+  let lastQueued = 0;
+  const signIn = async (email: string, password: string, ip?: string, fwd?: string) => {
+    const r = await auth.POST(req("POST", "/api/auth", { json: { email, password }, ip, fwd }));
+    lastQueued = await flushAfterResponse();
+    return r;
+  };
+  const signOut = async (as: { id: string; password: string }) => {
+    const r = await auth.DELETE(req("DELETE", "/api/auth", { as }));
+    await flushAfterResponse();
+    return r;
+  };
   const authEntries = async () => (await readActivity({ entity: "auth", limit: 10000 })).entries;
   const total = (days: Record<string, number> = {}) => Object.values(days).reduce((a, n) => a + n, 0);
 
@@ -85,11 +98,15 @@ async function main() {
   const one = { x: { name: "X", email: "x@t", days: { "2026-10-12": 1 }, failedDays: {} } };
   check(buildSignInRows([], one, null, Date.parse("2026-10-18T21:00:00Z"))[0].last7 === 1, "12 Oct is inside the 7 days ending SAST 18 Oct");
   check(buildSignInRows([], one, null, Date.parse("2026-10-18T22:30:00Z"))[0].last7 === 0, "12 Oct is outside the 7 days ending SAST 19 Oct");
+  // 11:00+02:00 is 09:00Z, BEFORE a 10:00Z start, though it sorts after it as text.
+  const tz = buildSignInRows([{ id: "tz", name: "T", surname: "Z", email: "tz@t", createdAt: "2026-10-18T11:00:00+02:00" }], {}, "2026-10-18T10:00:00.000Z");
+  check(tz[0].never === false && tz[0].noneSinceTracking === true, "createdAt vs tracking date compared as instants, not text");
 
   console.log("\nGood sign-in");
   check((await trackingSince()) === null, "no tracking date before the first sign-in");
   let res = await signIn(member.email, "pw-member-SECRET");
   check(res.status === 200, `HTTP ${res.status}`);
+  check(lastQueued >= 1, `the sign-in log write ran after the response (${lastQueued} queued)`);
   let entries = await authEntries();
   const ok = entries.filter((e) => e.action === "auth.sign_in");
   check(ok.length === 1 && ok[0].actorId === "member" && ok[0].ip === "10.0.0.1" && ok[0].detail?.device === "Chrome on Windows", "one auth.sign_in entry with actor, ip and device", JSON.stringify(ok));
@@ -110,6 +127,7 @@ async function main() {
   ipSeq = 2;
   res = await signIn(member.email, "wrong-guess-SECRET");
   check(res.status === 401, `HTTP ${res.status}`);
+  check(lastQueued >= 1, "wrong-password logging ran after the response");
   entries = await authEntries();
   check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "member").length === 1, "one auth.sign_in_failed naming the user");
   st = await readSignInStats();
@@ -120,12 +138,14 @@ async function main() {
   const longTyped = "  nobody@example.test" + "x".repeat(300) + "  ";
   res = await signIn(longTyped, "whatever-SECRET");
   check(res.status === 401, `HTTP ${res.status}`);
+  check(lastQueued >= 1, "unknown-address logging ran after the response");
   for (let i = 0; i < 4; i++) await signIn(`other${i}@example.test`, "whatever-SECRET");
   entries = await authEntries();
   const unk = entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId);
   check(unk.length === 1, `5 unknown-address attempts from one connection -> 1 entry (got ${unk.length})`);
   const typedFirst = String(unk[0]?.detail?.firstTypedEmail || "");
-  check(typedFirst.startsWith("nobody@example.test") && typedFirst.length <= 120, "no actorId; first typed address trimmed + capped", typedFirst);
+  check(typedFirst.startsWith("nobody@example.test") && typedFirst.length <= 120, "no actorId; first typed address trimmed + capped, in detail", typedFirst);
+  check(unk[0]?.actorName === "Unknown address" && !unk[0]?.summary.includes("nobody@"), "Who is the fixed 'Unknown address'; typed text not in actorName or summary", JSON.stringify(unk[0]));
   await signIn("from-elsewhere@example.test", "whatever-SECRET", "10.0.0.6");
   entries = await authEntries();
   check(entries.filter((e) => e.action === "auth.sign_in_failed" && !e.actorId).length === 2, "a second connection gets its own entry");
@@ -161,6 +181,9 @@ async function main() {
   entries = await authEntries();
   const locks = entries.filter((e) => e.action === "auth.sign_in_blocked" && e.detail?.reason === "account_locked");
   check(locks.length === 1, `one account_locked entry (got ${locks.length})`);
+  const lockedUntil = String(locks[0]?.detail?.lockedUntil || "");
+  const hhmm = new Date(Date.parse(lockedUntil) + 2 * 3600000).toISOString().slice(11, 16);
+  check(/^Account locked until \d\d:\d\d SAST after 5 wrong passwords$/.test(locks[0]?.summary || "") && locks[0]?.summary.includes(hhmm), "lock entry gives the real reset time in SAST", locks[0]?.summary);
   check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.actorId === "admin").length === 5, "each of the 5 known-user wrong passwords is logged");
 
   console.log("\nIP limit: blocked attempts log at most once per window");
@@ -169,19 +192,21 @@ async function main() {
   for (let i = 0; i < LIMITS.loginIp.max + 6; i++) statuses.push((await signIn(`bot${i}@example.test`, "x-SECRET", flood)).status);
   check(statuses.filter((s) => s === 429).length === 6, `6 refused with 429 (got ${statuses.filter((s) => s === 429).length})`);
   entries = await authEntries();
-  check(entries.filter((e) => e.action === "auth.sign_in_blocked" && e.ip === flood).length === 1, "one auth.sign_in_blocked for the IP");
+  const ipBlocks = entries.filter((e) => e.action === "auth.sign_in_blocked" && e.ip === flood);
+  check(ipBlocks.length === 1, "one auth.sign_in_blocked for the IP");
+  check(ipBlocks[0]?.actorName === "Unknown connection" && !ipBlocks[0]?.summary.includes("bot"), "blocked entry's Who is fixed, typed text only in detail", JSON.stringify(ipBlocks[0]));
   check(entries.filter((e) => e.action === "auth.sign_in_failed" && e.ip === flood).length === 1, "the flood's 20 unknown addresses -> 1 failed entry");
 
   console.log("\nSign-out");
   const outs = async () => (await authEntries()).filter((e) => e.action === "auth.sign_out").length;
   const before = await outs();
   const t0 = Date.now();
-  res = await auth.DELETE(req("DELETE", "/api/auth", { as: { id: "member", password: "not-the-real-hash" } }));
+  res = await signOut({ id: "member", password: "not-the-real-hash" });
   const ms = Date.now() - t0;
   check(res.status === 200 && /sc_session=;/.test(res.headers.get("set-cookie") || ""), "forged cookie: still signed out (cookie cleared)", res.headers.get("set-cookie") || "");
   check(ms < 500, `forged cookie: no retry delay (${ms} ms)`);
   check((await outs()) === before, "forged cookie: nothing logged");
-  res = await auth.DELETE(req("DELETE", "/api/auth", { as: member }));
+  res = await signOut(member);
   check(res.status === 200 && (await outs()) === before + 1, "real sign-out logged once");
   check((await authEntries()).some((e) => e.action === "auth.sign_out" && e.actorId === "member"), "auth.sign_out names the user");
 
@@ -201,6 +226,19 @@ async function main() {
   check(plain.length > 0 && plain.every((u) => !("lastSignInAt" in u)), "/api/users does not read sign-ins by default");
   const withS = (await (await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: admin }))).json()) as { id: string; lastSignInAt?: string | null }[];
   check(!!withS.find((u) => u.id === "member")?.lastSignInAt && withS.find((u) => u.id === "late")?.lastSignInAt === null, "/api/users?withSignIns=1 adds lastSignInAt");
+  const viewer = await mk("viewer2", "users-viewer");
+  res = await usersRoute.GET(req("GET", "/api/users?withSignIns=1", { as: viewer }));
+  const vRows = (await res.json()) as Record<string, unknown>[];
+  check(res.status === 200 && vRows.every((u) => !("lastSignInAt" in u)), "view_users WITHOUT the activity permission gets no sign-in data, even with ?withSignIns=1");
+
+  console.log("\nmeta.json is only touched on a user's FIRST tally");
+  const metaKey = [...store.keys()].find((k) => k.endsWith("signins/meta.json"))!;
+  store.delete(metaKey);
+  await signIn(admin.email, "pw-admin-SECRET", "10.0.0.70");
+  check(!store.has(metaKey), "an existing user's sign-in does not read or write meta.json");
+  const fresh = await mk("fresh", "viewer");
+  await signIn(fresh.email, "pw-fresh-SECRET", "10.0.0.71");
+  check(store.has(metaKey), "a user's first ever tally writes meta.json if it is missing");
 
   console.log("\nNo password anywhere in storage");
   const dump = [...store.values()].map((f) => Buffer.from(f.bytes).toString("utf8")).join("\n");

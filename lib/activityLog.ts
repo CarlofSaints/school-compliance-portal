@@ -95,6 +95,11 @@ export async function recordActivity(
   }
 }
 
+// Who may read the audit trail, and so the sign-ins too. ANY-of, not one
+// narrow key: a stored role that predates a new permission never gains it,
+// so "view_activity" alone would lock out every existing admin.
+export const ACTIVITY_VIEW_PERMISSIONS = ["view_activity", "manage_users", "manage_roles", "manage_spend_settings"];
+
 export interface ActivityQuery {
   /** "YYYY-MM". Omit for the current month. */
   month?: string;

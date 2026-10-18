@@ -1529,5 +1529,7 @@
   "Wrong passwords (30 days)": "Diphasewete tse fosahetseng (matsatsi a 30)",
   "(removed)": "(e tlositswe)",
   "No sign-in recorded since {date}": "Ha ho ho kena ho ngolisitsweng ho tloha ka {date}",
-  "No sign-in recorded yet": "Ha ho so be le ho kena ho ngolisitsweng"
+  "No sign-in recorded yet": "Ha ho so be le ho kena ho ngolisitsweng",
+  "Unknown address": "Aterese e sa tsejweng",
+  "Unknown connection": "Kgokahano e sa tsejweng"
 }
