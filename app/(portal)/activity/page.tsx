@@ -9,6 +9,7 @@ import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
 import type { SignInRow } from "@/lib/signinLog";
 import { UNKNOWN_ACTORS } from "@/lib/activityLabels";
+import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityAccess";
 import SortableTh from "@/components/SortableTh";
 import { useTableSort } from "@/lib/useTable";
 
@@ -67,12 +68,7 @@ export default function ActivityPage() {
   const t = useT();
   // ANY-of, matching the API. A narrow new key on its own would lock out every
   // existing admin, because a stored role never gains a permission added later.
-  const { session, loading } = useAuth([
-    "view_activity",
-    "manage_users",
-    "manage_roles",
-    "manage_spend_settings",
-  ]);
+  const { session, loading } = useAuth(ACTIVITY_VIEW_PERMISSIONS);
 
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -107,8 +103,11 @@ export default function ActivityPage() {
       if (!month && data.month) setMonth(data.month);
       // The filter changed to a view whose months do not include this one:
       // jump to its newest month rather than show an empty page.
+      // (The current month is always offered, so the start of a month never
+      // kicks anybody back to the last one.)
       const avail: string[] = data.availableMonths || [];
-      if (month && avail.length && !avail.includes(month)) setMonth(avail[0]);
+      const thisMonth = new Date().toISOString().slice(0, 7);
+      if (month && avail.length && !avail.includes(month) && month !== thisMonth) setMonth(avail[0]);
     } finally {
       setBusy(false);
     }

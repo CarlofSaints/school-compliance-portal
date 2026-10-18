@@ -1,4 +1,4 @@
-import { readJson, readJsonTolerant, updateJson, listFilesStrict, NO_CHANGE } from "./controlData";
+import { readJson, readJsonTolerant, updateJson, listFilesStrict, deleteFile, NO_CHANGE } from "./controlData";
 import { isPlausibleEmail } from "./emailIdentity";
 import { tenantScope } from "./tenantContext";
 
@@ -60,15 +60,25 @@ export function sastDay(ms: number): string {
 /**
  * What may be kept of what somebody typed into the email box.
  *
- * 🔴 Never the raw text: people type their PASSWORD into the email box. A
- * plausible address is kept masked ("j***@hvps.co.za"); anything else is
- * kept only as the fact that it was not an address.
+ * 🔴 Never the raw text: people type their PASSWORD into the email box. Only
+ * something that looks like a real address keeps its domain, masked
+ * ("j***@hvps.co.za"): all lowercase as typed, domain labels of [a-z0-9-],
+ * and a letters-only top-level domain of 2+. A password with an @ and a dot in
+ * it ("Summer@Holiday.2026") fails that and is kept only as the fact that it
+ * was not an address.
  */
 export function maskTypedEmail(typed: unknown): string {
   const s = String(typed ?? "").trim();
-  if (!isPlausibleEmail(s)) return "not an email address";
-  const at = s.lastIndexOf("@");
-  return `${s[0]}***@${s.slice(at + 1).slice(0, 100)}`;
+  const domain = s.slice(s.lastIndexOf("@") + 1);
+  if (
+    !isPlausibleEmail(s) ||
+    /[A-Z]/.test(s) ||
+    domain.length > 100 ||
+    !/^([a-z0-9-]+\.)+[a-z]{2,}$/.test(domain)
+  ) {
+    return "not an email address";
+  }
+  return `${s[0]}***@${domain}`;
 }
 
 /** "Chrome on Windows". Best effort, and never more than a short label. */
@@ -143,6 +153,15 @@ export async function countSignIn(
   } catch (err) {
     console.error("[signins] Could not count:", outcome, err);
   }
+}
+
+/** Erases a deleted user's tally (privacy). Never throws; a file that is
+ *  still there afterwards is logged. The activity log keeps its entries: an
+ *  audit trail records what happened. */
+export async function deleteSignInStats(userId: string): Promise<void> {
+  await deleteFile(userPath(userId));
+  const still = await readJson<SignInStat | null>(userPath(userId), null).catch(() => null);
+  if (still) console.error("[signins] Could not delete the tally of deleted user", userId);
 }
 
 /** Every user's tally, by user id, read in parallel. The LISTING throws on a

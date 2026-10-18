@@ -45,6 +45,8 @@ async function main() {
   const changePw = await import("../app/api/auth/change-password/route");
   const signins = await import("../app/api/activity/signins/route");
   const usersRoute = await import("../app/api/users/route");
+  const userItemRoute = await import("../app/api/users/[id]/route");
+  const { currentMonth } = await import("../lib/activityLog");
   const { flushAfterResponse, afterResponseDeps } = await import("../lib/activityActor");
   const { key: tenantKey } = await tenantScope();
 
@@ -105,6 +107,10 @@ async function main() {
   console.log("\nTyped addresses are masked, never stored raw");
   check(maskTypedEmail("  jane.doe@hvps.co.za ") === "j***@hvps.co.za", `address masked (${maskTypedEmail("jane.doe@hvps.co.za")})`);
   check(maskTypedEmail("Hunter2!secret") === "not an email address", "a non-address is not kept at all");
+  for (const pw of ["Summer@Holiday.2026", "p@ssw0rd.123", "Pa55@word.Com", "secret@pass.w0rd", "kitty@home.Net", "x@y.z", "Me@Example.com"]) {
+    check(maskTypedEmail(pw) === "not an email address", `password-like "${pw}" is not kept`);
+  }
+  check(maskTypedEmail("thabo-m@gde.gov.za") === "t***@gde.gov.za", "a normal address with a dash still masks to t***@domain");
   check(maskTypedEmail("x".repeat(300) + "@a.co") === "not an email address", "an over-long string is not kept");
 
   console.log("\nGood sign-in");
@@ -258,7 +264,8 @@ async function main() {
   check((await activityMonths()).length === 1 && blob.__foldedCalls() > folded0, "activityMonths uses a folder-only listing (one month, no stray folder)");
   // A sign-in in a month with nothing else in it.
   await recordActivity({ actorName: "Old", action: "auth.sign_in", entity: "auth", summary: "Signed in", at: "2026-01-15T08:00:00.000Z" });
-  check(!(await readActivity({})).availableMonths.includes("2026-01"), "the default view's months leave out a month with only sign-ins");
+  check((await readActivity({})).availableMonths.includes("2026-01"), "the default view's months include a month with only sign-ins (so it can be exported)");
+  check((await readActivity({ entity: "spend" })).availableMonths.includes(currentMonth()) && (await readActivity({ entity: "auth" })).availableMonths.includes(currentMonth()), "every view's month list includes the current month");
   check((await readActivity({ entity: "auth" })).availableMonths.includes("2026-01"), "the Sign in filter's months include it");
   const exp = await exportActivity(def.month);
   const sorted = [...exp].every((e, i) => i === 0 || exp[i - 1].at >= e.at);
@@ -300,9 +307,22 @@ async function main() {
   await signIn(fresh.email, "pw-fresh-SECRET", "10.0.0.71");
   check(store.has(metaKey), "a user's first ever tally writes meta.json if it is missing");
 
+  console.log("\nDeleting a user erases their tally");
+  const freshKey = [...store.keys()].find((k) => k.endsWith("signins/users/fresh.json"));
+  check(!!freshKey, "the user has a tally file before");
+  res = await userItemRoute.DELETE(req("DELETE", "/api/users/fresh", { as: admin }), { params: Promise.resolve({ id: "fresh" }) });
+  check(res.status === 200, `user deleted (HTTP ${res.status})`);
+  check(![...store.keys()].some((k) => k.endsWith("signins/users/fresh.json")), "signins/users/fresh.json is gone");
+  res = await signins.GET(req("GET", "/api/activity/signins", { as: admin }));
+  check(!((await res.json()).rows as { userId: string }[]).some((r) => r.userId === "fresh"), "and the Sign-ins view no longer lists them");
+
+  console.log("\nA password with an @ and a dot, typed as the email");
+  await signIn("Summer@Holiday.2026", "whatever-SECRET", "10.0.0.90");
+
   console.log("\nNo password anywhere in storage");
   const dump = [...store.values()].map((f) => Buffer.from(f.bytes).toString("utf8")).join("\n");
   check(!dump.includes("SECRET"), "no typed password in any stored blob");
+  check(!dump.includes("Holiday"), "no part of \"Summer@Holiday.2026\" typed as the email is in any stored blob");
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

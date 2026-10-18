@@ -399,45 +399,44 @@ export async function listFiles(dirPath: string): Promise<string[]> {
  * that each hold thousands of entries. Tolerant like listFiles.
  */
 export async function listFolders(dirPath: string): Promise<string[]> {
-  try {
-    const { prefix: tenantPrefix, token } = await scope();
-    const prefix = tenantPrefix + dirPath + "/";
-    const names = new Set<string>();
-    let cursor: string | undefined;
-    do {
-      const result = await list({ prefix, mode: "folded", limit: 1000, cursor, token });
-      for (const f of result.folders) {
-        const name = f.slice(prefix.length).replace(/\/$/, "");
-        if (name) names.add(name);
-      }
-      cursor = result.hasMore ? result.cursor : undefined;
-    } while (cursor);
-    return [...names];
-  } catch {
-    return [];
-  }
+  return listChildren(dirPath, true).catch(() => []);
 }
 
 /** listFiles, but a storage error is THROWN rather than read as an empty
  *  folder, for callers where "nothing there" would be a wrong answer. */
 export async function listFilesStrict(dirPath: string): Promise<string[]> {
+  return listChildren(dirPath, false);
+}
+
+// The one paging loop behind listFiles, listFilesStrict and listFolders.
+// Expanded: every blob, reduced to its first path segment. Folded: only the
+// folder entries the store returns. Throws on a storage error.
+async function listChildren(dirPath: string, folded: boolean): Promise<string[]> {
   const { prefix: tenantPrefix, token } = await scope();
-  // Resolved ONCE. The old version rebuilt the prefix inside the map, so
-  // every row paid for it; now it is also an await, which cannot go there.
+  // Resolved ONCE, outside the loop.
   const prefix = tenantPrefix + dirPath + "/";
 
   // A Set, because the same child appears once per blob beneath it.
   const names = new Set<string>();
   let cursor: string | undefined;
   do {
-    const result = await list({ prefix, limit: 1000, cursor, token });
-    for (const b of result.blobs) {
-      const full = b.pathname;
+    let paths: string[];
+    let next: string | undefined;
+    if (folded) {
+      const r = await list({ prefix, mode: "folded", limit: 1000, cursor, token });
+      paths = r.folders;
+      next = r.hasMore ? r.cursor : undefined;
+    } else {
+      const r = await list({ prefix, limit: 1000, cursor, token });
+      paths = r.blobs.map((x) => x.pathname);
+      next = r.hasMore ? r.cursor : undefined;
+    }
+    for (const full of paths) {
       const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
       const name = relative.split("/")[0];
       if (name) names.add(name);
     }
-    cursor = result.hasMore ? result.cursor : undefined;
+    cursor = next;
   } while (cursor);
 
   return [...names];

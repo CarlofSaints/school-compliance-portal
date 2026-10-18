@@ -117,6 +117,9 @@ export async function POST(req: NextRequest) {
     const valid = await verifyPassword(user, password);
     if (!valid) {
       const accountHit = await hit(LIMITS.loginAccount, account);
+      // When the lock lifts, from the limiter's own answer, taken NOW (not
+      // when the log write runs) so summary and detail say the same thing.
+      const lockedUntil = Date.now() + accountHit.retryAfter * 1000;
       await afterResponse(async () => {
         await Promise.all([
           recordActivity({
@@ -131,14 +134,14 @@ export async function POST(req: NextRequest) {
         ]);
         // The wrong password that locks the account, logged once per lock.
         if (accountHit.count === LIMITS.loginAccount.max) {
-          const until = sastIso(Date.now() + accountHit.retryAfter * 1000).slice(11, 16);
+          const until = sastIso(lockedUntil).slice(11, 16);
           await recordActivity({
             ...actorOf(user),
             action: "auth.sign_in_blocked",
             entity: "auth",
             entityId: user.id,
             summary: `Account locked until ${until} SAST after ${LIMITS.loginAccount.max} wrong passwords`,
-            detail: { reason: "account_locked", lockedUntil: new Date(Date.now() + accountHit.retryAfter * 1000).toISOString(), device },
+            detail: { reason: "account_locked", lockedUntil: new Date(lockedUntil).toISOString(), device },
           });
         }
       });

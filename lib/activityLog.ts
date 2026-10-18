@@ -106,11 +106,6 @@ export async function recordActivity(
   }
 }
 
-// Who may read the audit trail, and so the sign-ins too. ANY-of, not one
-// narrow key: a stored role that predates a new permission never gains it,
-// so "view_activity" alone would lock out every existing admin.
-export const ACTIVITY_VIEW_PERMISSIONS = ["view_activity", "manage_users", "manage_roles", "manage_spend_settings"];
-
 export interface ActivityQuery {
   /** "YYYY-MM". Omit for the current month. */
   month?: string;
@@ -170,12 +165,16 @@ export async function readActivity(
   const month = query.month || currentMonth();
   // "auth" (the Sign in filter) reads the sign-in partition only; everything
   // else reads the main one, so neither view downloads the other's month.
-  // The month list matches what the view reads.
+  // Month lists: the Sign in filter lists its own months; every other view
+  // lists both partitions' (the export merges both, so a month with only
+  // sign-ins must still be pickable). The current month is always there, so
+  // a new month with nothing in it yet never looks missing.
   const folders = query.entity === "auth" ? ["activity-auth"] : ["activity"];
-  const [availableMonths, ...parts] = await Promise.all([
-    activityMonths(folders),
+  const [months, ...parts] = await Promise.all([
+    activityMonths(query.entity === "auth" ? ["activity-auth"] : ["activity", "activity-auth"]),
     ...folders.map((f) => readMonth(f, month)),
   ]);
+  const availableMonths = [...new Set([currentMonth(), ...months])].sort().reverse();
   let entries = newestFirst((parts as ActivityEntry[][]).flat());
 
   if (query.entity) entries = entries.filter((e) => e.entity === query.entity);
