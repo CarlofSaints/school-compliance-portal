@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { authFetch } from "@/lib/useAuth";
 import {
   isApologies,
   isAttendance,
@@ -47,6 +48,22 @@ export default function MinutesSectionEditor({
   const boxes = useRef(new Map<string, HTMLTextAreaElement>());
   const [capturing, setCapturing] = useState<string | null>(null);
   const [captureHint, setCaptureHint] = useState<{ id: string; text: string } | null>(null);
+  // The People register, for "Fill from People register" on an attendance
+  // list. Only fetched while the minutes can still be edited.
+  const [people, setPeople] = useState<{ name: string; position?: string }[] | undefined>(undefined);
+  useEffect(() => {
+    if (!editable) return;
+    let live = true;
+    authFetch("/api/people/directory")
+      .then(async (res) => {
+        if (res.ok && live) setPeople(await res.json());
+      })
+      // No register means no Fill button, nothing worse.
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [editable]);
 
   const capture = async (s: MinutesSection) => {
     const box = boxes.current.get(s.id);
@@ -233,6 +250,7 @@ export default function MinutesSectionEditor({
                   <AttendeeRowsEditor
                     rows={s.attendees ?? []}
                     onChange={(rows) => update(s.id, { attendees: rows })}
+                    people={people}
                     showStatus
                   />
                 </div>

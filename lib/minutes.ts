@@ -278,6 +278,27 @@ function ensureApologies<T extends { id: string; order: number; kind?: SectionKi
   return ordered.map((s, i) => ({ ...s, order: i + 1 }));
 }
 
+/**
+ * Everyone on the People register as attendance rows, for minutes started
+ * without a template (Carl: "just list everyone"; the Apology / Not Present
+ * ticks do the rest). One row per position, two people sharing a seat named
+ * together, the same as "Fill from People register". Empty seats are left out.
+ */
+export function attendeesFromRegister(people: { position?: string; name?: string }[]): AttendeeRow[] {
+  // Grouped ignoring case, like the editor's fill; the first spelling is kept.
+  const byPosition = new Map<string, AttendeeRow>();
+  for (const p of people) {
+    const position = (p.position || "").trim();
+    const name = (p.name || "").trim();
+    if (!position || !name) continue;
+    const key = position.toLowerCase();
+    const row = byPosition.get(key);
+    if (row) row.name = `${row.name}, ${name}`;
+    else byPosition.set(key, { position, name });
+  }
+  return [...byPosition.values()];
+}
+
 export function withApologiesSection(sections: MinutesSection[]): MinutesSection[] {
   return ensureApologies(sections, (id) => ({
     id,
