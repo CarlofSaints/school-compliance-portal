@@ -1532,7 +1532,6 @@
   "On date": "Op datum",
   "times": "keer",
   "{n} bookings. Every one has to be free, or nothing is booked.": "{n} besprekings. Elkeen moet beskikbaar wees, anders word niks bespreek nie.",
-  "A repeat stops at {n} bookings.": "'n Herhaling stop by {n} besprekings.",
   "For: {name}": "Vir: {name}",
   "Search by name or email...": "Soek op naam of e-pos...",
   "{name} (booked it)": "{name} (het dit bespreek)",
@@ -1675,5 +1674,6 @@
   "You have the room. It is booked in your name.": "U het die lokaal. Dit is in u naam bespreek.",
   "{holder} kept the room.": "{holder} het die lokaal behou.",
   "Waiting for {holder} to answer. You will get an email either way.": "Wag vir {holder} om te antwoord. U kry in elk geval 'n e-pos.",
-  "Could not load this week's bookings. Try again.": "Kon nie hierdie week se besprekings laai nie. Probeer weer."
+  "Could not load this week's bookings. Try again.": "Kon nie hierdie week se besprekings laai nie. Probeer weer.",
+  "That repeat makes {n} bookings; the most is {max}. Pick an earlier end date.": "Daardie herhaling maak {n} besprekings; die meeste is {max}. Kies 'n vroeër einddatum."
 }

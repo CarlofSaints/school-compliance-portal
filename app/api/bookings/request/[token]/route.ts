@@ -3,7 +3,7 @@ import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { actorOf, getRequestView, getRoom as getRequestRoom, holderLabel, respondToRequest } from "@/lib/roomBookingData";
+import { actorOf, getRequestView, getRoom as getRequestRoom, holderLabel, logSafeBooking, respondToRequest } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
 import { notifyRequestOutcome, notifyWithdrawn } from "@/lib/roomBookingNotify";
 
@@ -73,7 +73,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       request.status === "approved"
         ? `Gave ${where} to ${request.requesterName}`
         : `Declined ${request.requesterName}'s request for ${where}`,
-    detail: request.status === "approved" ? { before, after } : { reason: request.declineReason },
+    // Safe fields only: no request message, decline reason or email address.
+    detail: request.status === "approved" ? { before: logSafeBooking(before), after: logSafeBooking(after) } : { booking: logSafeBooking(before) },
   });
   return NextResponse.json({ ok: true, status: request.status, emailFailed: !emailed || othersFailed > 0 });
 }

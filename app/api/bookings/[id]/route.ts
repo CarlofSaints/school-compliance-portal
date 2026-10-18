@@ -11,11 +11,12 @@ import {
   isDate,
   isHolder,
   isId,
+  logSafeBooking,
   parseBookingInput,
   updateBooking,
 } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
-import { notifyCancelledByOther, notifyHandover, notifyWithdrawn } from "@/lib/roomBookingNotify";
+import { notifyCancelledByOther, notifyEdited, notifyHandover, notifyWithdrawn } from "@/lib/roomBookingNotify";
 
 // A series cancel can email many people, paced.
 export const maxDuration = 300;
@@ -64,13 +65,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     summary:
       `Edited "${after.title}" in ${room.name}: ${longDateLabel(after.date)} ${slotLabel(after.startMinute, after.endMinute)}` +
       (holderChanged ? `, now for ${after.bookedForName || after.bookedByName} (was ${before.bookedForName || before.bookedByName})` : ""),
-    detail: { before, after },
+    detail: { before: logSafeBooking(before), after: logSafeBooking(after) },
   });
 
   const emailed = holderChanged ? await notifyHandover(before, after, room, actor) : true;
+  // The other holder(s) are told what changed; the editor is not.
+  const changeFailed = await notifyEdited(before, after, room, actor, holderChanged);
   // Anyone who had asked for the old slot is told it moved.
   const lapsedFailed = await notifyWithdrawn(withdrawn, room);
-  return NextResponse.json({ ok: true, emailFailed: !emailed || lapsedFailed > 0 });
+  return NextResponse.json({ ok: true, emailFailed: !emailed || changeFailed > 0 || lapsedFailed > 0 });
 }
 
 // DELETE /api/bookings/<id>?room=<roomId>&date=<its date>&scope=one|series

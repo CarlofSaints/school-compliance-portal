@@ -8,6 +8,7 @@ import {
   DAY_END_MINUTE,
   MAX_OCCURRENCES,
   expandRecurrence,
+  recurrenceSize,
   findConflicts,
   longDateLabel,
   minuteLabel,
@@ -17,7 +18,7 @@ import {
   sastToday,
   isPast,
   startsAtMs,
-  REMIND_WINDOW_MS,
+  remindCutoffMs,
   hasEnded,
   type Recurrence,
 } from "./roomBookings";
@@ -107,7 +108,11 @@ export interface RoomBooking {
   occurrences: number;
   status: "confirmed" | "cancelled";
   reminderSentAt: string | null;
-  /** Holders' addresses the day-before reminder already reached, so a run that
+  /** Set while a cross-month move is half done: this is the NEW copy, and the
+   *  old one may still be in `from`. Readers prefer the old copy until it is
+   *  gone; the cron settles a move left like this for MOVE_STALE_MS. */
+  moving?: { from: string; at: number };
+  /** Holders' addresses the reminder already reached, so a run that
    *  failed for one person retries only that person. */
   remindedEmails?: string[];
   requests: RoomRequest[];
@@ -226,6 +231,26 @@ export function bookingView(b: RoomBooking, actor: Actor) {
 }
 
 export type BookingView = ReturnType<typeof bookingView>;
+
+/** What the activity log keeps about a booking: who, where, when, and how many
+ *  requests. Never request messages, decline reasons or email addresses. */
+export function logSafeBooking(b: RoomBooking) {
+  return {
+    id: b.id,
+    roomId: b.roomId,
+    title: b.title,
+    date: b.date,
+    startMinute: b.startMinute,
+    endMinute: b.endMinute,
+    attendeeCount: b.attendeeCount,
+    bookedByName: b.bookedByName,
+    bookedForName: b.bookedForName,
+    status: b.status,
+    seriesId: b.seriesId,
+    requestCount: b.requests.length,
+    pendingRequests: b.requests.filter((r) => r.status === "pending").length,
+  };
+}
 
 // --- Request validation --------------------------------------------------------
 //
@@ -488,8 +513,51 @@ async function monthsFrom(roomId: string, fromMonth: string): Promise<string[]> 
     .sort();
 }
 
-async function readMonth(roomId: string, month: string): Promise<RoomBooking[]> {
+async function readMonthRaw(roomId: string, month: string): Promise<RoomBooking[]> {
   return readJson<RoomBooking[]>(fileFor(roomId, month), []);
+}
+
+/** A month's bookings as readers should see them: a half-moved row whose old
+ *  copy is still in its source month is left out (the old copy is the live one
+ *  until it is removed), so a move never shows or reminds twice. */
+async function readMonth(roomId: string, month: string): Promise<RoomBooking[]> {
+  const list = await readMonthRaw(roomId, month);
+  const moving = list.filter((b) => b.moving && b.moving.from !== month);
+  if (moving.length === 0) return list;
+  const sources = new Map<string, Set<string>>();
+  for (const m of new Set(moving.map((b) => b.moving!.from))) {
+    sources.set(m, new Set((await readMonthRaw(roomId, m)).map((b) => b.id)));
+  }
+  return list.filter((b) => !(b.moving && sources.get(b.moving.from)?.has(b.id)));
+}
+
+/** A move left half done this long (the request that made it died) is settled
+ *  by the cron: rolled back if the old copy is still there, finished if not. */
+export const MOVE_STALE_MS = 15 * 60_000;
+
+export async function settleStaleMoves(now: Date = new Date()): Promise<{ rolledBack: number; finished: number }> {
+  let rolledBack = 0;
+  let finished = 0;
+  for (const room of await getRooms()) {
+    for (const m of await monthsFrom(room.id, monthOf(addDays(sastToday(now), -62)))) {
+      const list = await readMonthRaw(room.id, m);
+      const stale = list.filter((b) => b.moving && now.getTime() - b.moving.at >= MOVE_STALE_MS);
+      for (const b of stale) {
+        const oldThere = (await readMonthRaw(room.id, b.moving!.from)).some((x) => x.id === b.id);
+        await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (rows) => {
+          const cur = rows.find((x) => x.id === b.id);
+          if (!cur?.moving) return NO_CHANGE;
+          return oldThere ? rows.filter((x) => x.id !== b.id) : rows.map((x) => (x.id === b.id ? touch(x, { moving: undefined }) : x));
+        });
+        if (oldThere) rolledBack++;
+        else {
+          finished++;
+          for (const q of b.requests) await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: m, bookingId: b.id });
+        }
+      }
+    }
+  }
+  return { rolledBack, finished };
 }
 
 /** Confirmed bookings in one room between two dates, inclusive. */
@@ -555,6 +623,10 @@ export async function createBooking(actor: Actor, input: BookingInput, nowAt: Da
   if (input.attendeeCount > room.capacity) return fail(400, `${room.name} seats ${room.capacity}. Pick a bigger room or reduce the headcount.`);
 
   if (isPast(input.date, input.startMinute, nowAt)) return fail(400, PAST);
+  if (input.recurrence.endMode === "date" && input.recurrence.frequency !== "none") {
+    const n = recurrenceSize(input.date, input.recurrence);
+    if (n > MAX_OCCURRENCES) return fail(400, `That repeat makes ${n} bookings; the most is ${MAX_OCCURRENCES}. Pick an earlier end date.`);
+  }
   const dates = expandRecurrence(input.date, input.recurrence);
   if (dates.length === 0) return fail(400, "That repeat pattern doesn't produce any dates");
 
@@ -626,10 +698,16 @@ export async function createBooking(actor: Actor, input: BookingInput, nowAt: Da
     written.push(month);
   }
   // 🔴 The room may have been retired or deleted while this was being written
-  // (deleteRoom retires first, then deletes). If so, take the booking back out.
-  if (!(await getRoom(room.id))?.active) {
-    await undo(written);
-    return fail(400, "That room isn't available");
+  // (deleteRoom retires first, then deletes). If so, take OUR still-confirmed
+  // rows back out; rows the retire already cancelled stay as the record.
+  const now2 = await getRoom(room.id);
+  if (!now2?.active) {
+    for (const m of written) {
+      await updateJson<RoomBooking[]>(fileFor(room.id, m), [], (list) =>
+        list.some((b) => ids.has(b.id) && b.status === "confirmed") ? list.filter((b) => !(ids.has(b.id) && b.status === "confirmed")) : NO_CHANGE
+      );
+    }
+    return fail(409, now2 ? `${room.name} was retired while you were booking it, so nothing was booked.` : "That room was removed while you were booking it, so nothing was booked.");
   }
   return { ok: true, value: { bookings, room } };
 }
@@ -687,7 +765,11 @@ export async function updateBooking(
     return fail(403, "Only the person who made the booking can change who it is for");
 
   if (beforeWrite) {
-    const willEmail = holderChanged || (moved && before.requests.some((r) => r.status === "pending"));
+    const changed =
+      before.title !== input.title || before.date !== input.date || before.startMinute !== input.startMinute ||
+      before.endMinute !== input.endMinute || before.attendeeCount !== input.attendeeCount;
+    const otherHolder = holders(before).some((h) => h.email.toLowerCase() !== actor.email.toLowerCase());
+    const willEmail = holderChanged || (moved && before.requests.some((r) => r.status === "pending")) || (changed && otherHolder);
     if (!(await beforeWrite(willEmail))) return fail(429, "Too many emails");
   }
 
@@ -743,6 +825,8 @@ export async function updateBooking(
     // Different month = different file: add to the new one (with the clash
     // check), then take it out of the old one. If the old one changed
     // meanwhile, the new copy is taken back out.
+    // Step 1: the new copy, marked as moving from the old month.
+    after = { ...after, moving: { from: monthOf(before.date), at: Date.now() } };
     await updateJson<RoomBooking[]>(toFile, [], (list) => {
       error = null;
       const c = clashOf(list);
@@ -753,7 +837,6 @@ export async function updateBooking(
       return [...list.filter((b) => b.id !== id), after];
     });
     if (!error) {
-      const placed = after;
       try {
         await updateJson<RoomBooking[]>(fromFile, [], (list) => {
           error = null;
@@ -776,17 +859,20 @@ export async function updateBooking(
       if (error) {
         await updateJson<RoomBooking[]>(toFile, [], (list) => list.filter((b) => b.id !== id));
       } else {
-        // Anything that landed on the old copy in between (a request, a
-        // reminder stamp) is carried over to the new one.
-        if (current.updatedAt !== before.updatedAt) {
-          const merged = apply(current);
-          await updateJson<RoomBooking[]>(toFile, [], (list) => {
-            const mine = list.find((b) => b.id === id);
-            if (!mine || mine.updatedAt !== placed.updatedAt) return NO_CHANGE;
-            after = merged;
-            return list.map((b) => (b.id === id ? merged : b));
-          });
-        }
+        // Step 3: settle the new copy. It is merged with whatever it holds NOW
+        // (a request may have landed on it) and with anything that landed on
+        // the old copy before it went (carried over, withdrawn: the slot
+        // moved), and the moving mark is cleared. Done on the current row
+        // inside the write, so nothing is dropped.
+        const fromOld = apply(current);
+        await updateJson<RoomBooking[]>(toFile, [], (list) => {
+          const mine = list.find((b) => b.id === id);
+          if (!mine) return NO_CHANGE;
+          const known = new Set(mine.requests.map((q) => q.token));
+          const settled = touch(mine, { requests: [...mine.requests, ...fromOld.requests.filter((q) => !known.has(q.token))], moving: undefined });
+          after = settled;
+          return list.map((b) => (b.id === id ? settled : b));
+        });
         // The request links point at a month file; follow the booking to its new one.
         for (const q of after.requests) {
           await writeJson<RequestPointer>(requestPath(q.token), { roomId: room.id, month: monthOf(after.date), bookingId: id });
@@ -799,7 +885,9 @@ export async function updateBooking(
   // 🔴 The room may have been retired or deleted while this was being written
   // (it was read as active before). Put the edited fields back as they were.
   if (!(await getRoom(room.id))?.active) {
-    const ours = (b: RoomBooking) => b.id === id && b.updatedAt === after.updatedAt;
+    // Ours = exactly what this edit wrote, still confirmed. A copy the retire
+    // cancelled is the record now and is left alone (never resurrected).
+    const ours = (b: RoomBooking) => b.id === id && b.updatedAt === after.updatedAt && b.status === "confirmed";
     const undoEdit = (b: RoomBooking) =>
       touch(b, {
         title: current.title,
@@ -1003,31 +1091,49 @@ export async function requestRoom(
   };
   let error: { status: number; error: string } | null = null;
   let live: RoomBooking = booking;
-  // The pointer goes first: a request on a booking that nobody can open from
-  // its link would be worse than a pointer to nothing.
-  await writeJson<RequestPointer>(requestPath(request.token), { roomId, month: monthOf(booking.date), bookingId: id });
-  await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(booking.date)), [], (list) => {
-    error = null;
-    const cur = list.find((b) => b.id === id);
-    if (!cur || cur.status !== "confirmed") {
-      error = { status: 404, error: "That booking is no longer live" };
-      return NO_CHANGE;
-    }
-    // One live request per person per booking, so nobody can flood an inbox.
-    if (cur.requests.some((r) => r.requesterId === actor.id && r.status === "pending")) {
-      error = { status: 409, error: "You've already asked for this one. Waiting on their reply." };
-      return NO_CHANGE;
-    }
-    live = touch(cur, { requests: [...cur.requests, request] });
-    return list.map((b) => (b.id === id ? live : b));
-  });
-  const bad = failure(error);
-  if (bad) {
-    // The ask did not happen: hand the series marker back at once.
+  const release = async () => {
     if (booking.seriesId) await releaseSeriesAsk(booking.seriesId, actor.id, token).catch(() => {});
-    return bad;
+  };
+  try {
+    await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(booking.date)), [], (list) => {
+      error = null;
+      const cur = list.find((b) => b.id === id);
+      if (!cur || cur.status !== "confirmed") {
+        error = { status: 404, error: "That booking is no longer live" };
+        return NO_CHANGE;
+      }
+      // One live request per person per booking, so nobody can flood an inbox.
+      if (cur.requests.some((r) => r.requesterId === actor.id && r.status === "pending")) {
+        error = { status: 409, error: "You've already asked for this one. Waiting on their reply." };
+        return NO_CHANGE;
+      }
+      live = touch(cur, { requests: [...cur.requests, request] });
+      return list.map((b) => (b.id === id ? live : b));
+    });
+    const bad = failure(error);
+    if (bad) {
+      // The ask did not happen: hand the series marker back at once.
+      await release();
+      return bad;
+    }
+    // The pointer goes AFTER the request is stored, so a refusal leaves no
+    // pointer behind. If it cannot be written, the request is taken back out:
+    // a request nobody can open from its link must not exist.
+    try {
+      await writeJson<RequestPointer>(requestPath(request.token), { roomId, month: monthOf(booking.date), bookingId: id });
+    } catch (err) {
+      await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(booking.date)), [], (list) =>
+        list.some((b) => b.requests.some((q) => q.token === token))
+          ? list.map((b) => (b.id === id ? touch(b, { requests: b.requests.filter((q) => q.token !== token) }) : b))
+          : NO_CHANGE
+      ).catch(() => {});
+      throw err;
+    }
+    return { ok: true, value: { booking: live, room, request } };
+  } catch (err) {
+    await release();
+    throw err;
   }
-  return { ok: true, value: { booking: live, room, request } };
 }
 
 // --- One live ask per person per series -------------------------------------------
@@ -1234,7 +1340,7 @@ export async function respondToRequest(
 
 /** Tomorrow's confirmed, not-yet-reminded bookings across every room. */
 /** Bookings to remind now: confirmed, not yet reminded in full, and starting
- *  within the next REMIND_WINDOW_MS. A holder whose send failed stays due, so
+ *  before an hour after the next run (see remindCutoffMs). A holder whose send failed stays due, so
  *  the next run (if the meeting has not started) tries them again. */
 export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ booking: RoomBooking; room: Room }[]> {
   const today = sastToday(now);
@@ -1242,6 +1348,7 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
   // A retired room has no calendar; its upcoming bookings were cancelled on retiring.
   const rooms = (await getRooms()).filter((r) => r.active);
   const months = [...new Set([today, addDays(today, 1), addDays(today, 2)].map(monthOf))];
+  const cutoff = remindCutoffMs(now);
   const lists = await Promise.all(rooms.flatMap((room) => months.map(async (m) => ({ room, list: await readMonth(room.id, m) }))));
   for (const { room, list } of lists) {
     for (const b of list) {
@@ -1252,8 +1359,9 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
       const reached = new Set((b.remindedEmails ?? []).map((e) => e.toLowerCase()));
       if (holders(b).every((h) => reached.has(h.email.toLowerCase()))) continue;
       if (b.reminderSentAt && now.getTime() - Date.parse(b.reminderSentAt) < REMINDER_CLAIM_STALE_MS) continue;
-      const until = startsAtMs(b.date, b.startMinute) - now.getTime();
-      if (until > 0 && until <= REMIND_WINDOW_MS) out.push({ booking: b, room });
+      // From now until an hour after the next run. Already started: too late, skipped.
+      const at = startsAtMs(b.date, b.startMinute);
+      if (at > now.getTime() && at < cutoff) out.push({ booking: b, room });
     }
   }
   return out;

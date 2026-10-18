@@ -29,9 +29,10 @@ Rooms (`/rooms`, `manage_rooms`) and a week calendar (`/bookings`, `book_rooms` 
 `manage_rooms`). Clash check, repeats (daily/weekly/monthly, max 52), edit one
 occurrence, cancel one or the series (this and every upcoming one; past ones kept),
 book on someone's behalf, "ask the holder for the room" (`/bookings/request/<token>`,
-sign-in required, the token only names the request), booking emails + day-before
-reminder on the existing `/api/cron/reminders`. Any hour of the day is bookable; the
-grid opens at 07:00.
+sign-in required, the token only names the request), booking emails + reminders on
+the existing `/api/cron/reminders` (07:00 run: everything later today and tomorrow before
+08:00; a meeting booked to start before the next run is reminded at once). Any hour of
+the day is bookable; the grid opens at 07:00.
 - Storage: `rooms/rooms.json`, `rooms/bookings/<roomId>/<YYYY-MM>.json` (clash check +
   insert in ONE updateJson), `rooms/requests/<token>.json` (pointer; the request
   itself lives on the booking). Logic in `lib/roomBookingData.ts`, maths in

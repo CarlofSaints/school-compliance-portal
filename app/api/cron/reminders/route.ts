@@ -21,7 +21,7 @@ import {
   getActionSummarySettings,
   sendActionSummary,
 } from "@/lib/actionSummaryData";
-import { runRequestLapses, runRoomBookingReminders } from "@/lib/roomBookingNotify";
+import { runRequestLapses, runRoomBookingReminders, runSettleMoves } from "@/lib/roomBookingNotify";
 
 export const maxDuration = 300;
 
@@ -227,7 +227,7 @@ export async function GET(req: NextRequest) {
     detail.push(`Action items summary failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // --- Meeting room bookings: the day-before reminder ---------------------------
+  // --- Meeting room bookings: reminders (see remindCutoffMs), lapses, stale moves ----
   // Wrapped on its own, like the summary: a failure must not cost the run log.
   let roomDue = 0;
   try {
@@ -239,6 +239,12 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     failed++;
     detail.push(`Room booking reminders failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  try {
+    detail.push(...(await runSettleMoves(now)));
+  } catch (err) {
+    failed++;
+    detail.push(`Room move settling failed: ${err instanceof Error ? err.message : String(err)}`);
   }
   try {
     const lapses = await runRequestLapses(now);

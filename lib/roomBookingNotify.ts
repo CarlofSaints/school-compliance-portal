@@ -1,4 +1,5 @@
 import {
+  sendBookingChangedEmail,
   sendBookingConfirmedEmail,
   sendBookingGivenAwayEmail,
   sendBookingHandedOverEmail,
@@ -14,6 +15,7 @@ import {
 import {
   bookingsDueForReminder,
   claimReminder,
+  settleStaleMoves,
   lapseStartedRequests,
   finishReminder,
   holderLabel,
@@ -25,7 +27,8 @@ import {
   type Withdrawal,
   type WithdrawReason,
 } from "./roomBookingData";
-import { describeRecurrence, longDateLabel, sastToday, slotLabel } from "./roomBookings";
+import { describeRecurrence, longDateLabel, nextReminderRunMs, sastToday, slotLabel, startsAtMs } from "./roomBookings";
+import { pause, sendPaced } from "./actionItemNotify";
 
 // The booking emails COLAB sends, wired to the portal's mailer. Each returns
 // false (or a failure count) when a message that was due did not go, so the
@@ -46,20 +49,8 @@ function facts(b: RoomBooking, room: Room): RoomBookingEmailFacts {
   };
 }
 
-// Bulk sends are paced like the weekly update and the action summary (600 ms
-// apart), so a room with many bookings does not hit the provider all at once.
-const SEND_GAP_MS = 600;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Sends one after another, paced. Returns how many failed. */
-async function sendPaced(jobs: (() => Promise<boolean>)[]): Promise<number> {
-  let failed = 0;
-  for (let i = 0; i < jobs.length; i++) {
-    if (i > 0) await sleep(SEND_GAP_MS);
-    if (!(await jobs[i]())) failed++;
-  }
-  return failed;
-}
+// Bulk sends use the action items' paced sender (600 ms apart), so a room with
+// many bookings does not hit the provider all at once.
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
@@ -134,6 +125,35 @@ export async function notifyCancelledByOther(cancelled: RoomBooking[], room: Roo
   return sendPaced(jobs);
 }
 
+/** What an edit changed, as lines for the email ("When: was X, now Y"). */
+export function editChanges(before: RoomBooking, after: RoomBooking): string[] {
+  const out: string[] = [];
+  const when = (b: RoomBooking) => `${longDateLabel(b.date)}, ${slotLabel(b.startMinute, b.endMinute)}`;
+  if (before.title !== after.title) out.push(`Meeting: was "${before.title}", now "${after.title}"`);
+  if (before.date !== after.date || before.startMinute !== after.startMinute || before.endMinute !== after.endMinute)
+    out.push(`When: was ${when(before)}, now ${when(after)}`);
+  if (before.attendeeCount !== after.attendeeCount) out.push(`Attendees: was ${before.attendeeCount}, now ${after.attendeeCount}`);
+  return out;
+}
+
+/** An edit to the title, time or headcount: ONE email, old vs new, to every
+ *  holder other than the editor (the other holder of a two-holder booking, or
+ *  both when a room manager edited). Someone already getting a hand-over email
+ *  for this edit is not sent this as well. Returns failures. */
+export async function notifyEdited(
+  before: RoomBooking,
+  after: RoomBooking,
+  room: Room,
+  editor: { name: string; email: string },
+  holderChanged: boolean
+): Promise<number> {
+  const changes = editChanges(before, after);
+  if (changes.length === 0) return 0;
+  const handedOver = holderChanged ? new Set([before, after].map((b) => (b.bookedForEmail || b.bookedByEmail).toLowerCase())) : new Set<string>();
+  const to = holders(after).filter((h) => !same(h.email, editor.email) && !handedOver.has(h.email.toLowerCase()));
+  return sendPaced(to.map((h) => () => sendBookingChangedEmail(h.email, h.name, editor.name, changes, facts(after, room))));
+}
+
 /** An edit changed who the room is for: tell both sides, except whoever made
  *  the change (they know). */
 export async function notifyHandover(before: RoomBooking, after: RoomBooking, room: Room, changedBy: { name: string; email: string }): Promise<boolean> {
@@ -204,7 +224,29 @@ export async function runRequestLapses(now: Date = new Date()): Promise<{ lapsed
   return { lapsed, failed, detail };
 }
 
-/** The day-before reminder, run from the daily cron. Claimed before sending so
+/** A meeting that starts before the next reminder run would never be
+ *  reminded by the cron: send its reminder now, at booking time. */
+export async function remindNowIfBeforeNextRun(booking: RoomBooking, room: Room, now: Date = new Date()): Promise<boolean> {
+  const at = startsAtMs(booking.date, booking.startMinute);
+  if (!(at > now.getTime() && at < nextReminderRunMs(now))) return false;
+  const stamp = now.toISOString();
+  if (!(await claimReminder(booking, stamp, null))) return false;
+  const reached: string[] = [];
+  for (const h of holders(booking)) {
+    if (reached.length) await pause();
+    if (await sendBookingReminderEmail(h.email, h.name, facts(booking, room), booking.date === sastToday(now) ? "today" : "tomorrow")) reached.push(h.email.toLowerCase());
+  }
+  await finishReminder(booking, stamp, reached, reached.length === holders(booking).length);
+  return true;
+}
+
+/** Settles cross-month moves a dead request left half done. Run from the cron. */
+export async function runSettleMoves(now: Date = new Date()): Promise<string[]> {
+  const r = await settleStaleMoves(now);
+  return r.rolledBack + r.finished ? [`Room bookings: ${r.rolledBack} half-done move(s) rolled back, ${r.finished} finished`] : [];
+}
+
+/** The reminder, run from the daily cron (see remindCutoffMs for which bookings). Claimed before sending so
  *  overlapping runs cannot double-send; handed back if nothing was delivered,
  *  so a re-run the same day tries again. */
 export async function runRoomBookingReminders(now: Date = new Date()): Promise<{ due: number; sent: number; failed: number; detail: string[] }> {
@@ -224,7 +266,7 @@ export async function runRoomBookingReminders(now: Date = new Date()): Promise<{
     const todo = holders(booking).filter((h) => !reached.has(h.email.toLowerCase()));
     let ok = 0;
     for (let i = 0; i < todo.length; i++) {
-      if (i > 0 || sent + failed > 0) await sleep(SEND_GAP_MS);
+      if (i > 0 || sent + failed > 0) await pause();
       if (await sendBookingReminderEmail(todo[i].email, todo[i].name, facts(booking, room), booking.date === sastToday(now) ? "today" : "tomorrow")) {
         ok++;
         reached.add(todo[i].email.toLowerCase());

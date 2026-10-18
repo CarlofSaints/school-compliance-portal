@@ -14,7 +14,7 @@ import {
   parseBookingInput,
 } from "@/lib/roomBookingData";
 import { addDays, describeRecurrence, longDateLabel, slotLabel, weekStart } from "@/lib/roomBookings";
-import { notifyBookingCreated } from "@/lib/roomBookingNotify";
+import { notifyBookingCreated, remindNowIfBeforeNextRun } from "@/lib/roomBookingNotify";
 
 // One room, one week: GET /api/bookings?room=<id>&week=<any date in the week>
 export async function GET(req: NextRequest) {
@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
   });
 
   const emailed = await notifyBookingCreated(first, room);
+  // A meeting that starts before the next reminder run is reminded now.
+  await remindNowIfBeforeNextRun(first, room).catch((err) => console.error("[rooms] immediate reminder failed:", err));
   return NextResponse.json(
     { count: bookings.length, emailFailed: !emailed },
     { status: 201 }

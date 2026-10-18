@@ -178,7 +178,7 @@ async function main() {
   // --- reminders
   const tom = await D.createBooking(alice, input("2027-10-05", "08:00", "09:00", { bookedForId: "cara" }));
   if (!tom.ok) throw new Error("create failed");
-  const runAt = new Date("2027-10-04T05:00:00Z");
+  const runAt = new Date("2027-10-05T05:00:00Z"); // 07:00 run on the day, meeting at 08:00
   const rem = await runRoomBookingReminders(runAt);
   check("reminder sent to both holders", [rem.due, rem.sent], [1, 2]);
   check("reminder not sent twice", (await runRoomBookingReminders(runAt)).due, 0);
@@ -566,14 +566,14 @@ async function main() {
   const rem2 = await D.createBooking(erinA, inp(ring.id, "2027-12-21", 600, 660, { bookedForId: "cara" }));
   if (!rem2.ok) throw new Error("create failed");
   const r2b = rem2.value.bookings[0];
-  const eve = new Date("2027-12-20T05:00:00Z");
+  const eve = new Date("2027-12-21T05:00:00Z"); // the 07:00 run on the day
   const stamp2 = eve.toISOString();
   await D.claimReminder(r2b, stamp2, null);
   await D.finishReminder(r2b, stamp2, ["erin@example.test"], false); // as if Cara's send had failed
   check("F5 half-reminded booking is due again", (await D.bookingsDueForReminder(eve)).some((x) => x.booking.id === r2b.id), true);
   outbox.length = 0;
   await runRem(eve);
-  check("F5 retry reaches only the holder who missed it", [mailTo("cara@example.test", "Tomorrow"), mailTo("erin@example.test", "Tomorrow")], [1, 0]);
+  check("F5 retry reaches only the holder who missed it", [mailTo("cara@example.test", "Today"), mailTo("erin@example.test", "Today")], [1, 0]);
   check("F5 then it is done", (await D.findBooking(ring.id, r2b.date, r2b.id))?.remindedEmails?.sort(), ["cara@example.test", "erin@example.test"]);
 
   // F6 a booking written while the room is deleted is taken back out
@@ -593,7 +593,7 @@ async function main() {
   };
   const racing = await D.createBooking(erinA, inp(ring.id, "2028-01-10", 600, 660, { title: "Racer" }));
   putHook.put = realPut;
-  check("F6 create racing a delete is refused", status(racing), 400);
+  check("F6 create racing a delete is refused", status(racing), 409);
   check("F6 and its write is rolled back", (await readJson<Booking[]>(ringKey, [])).filter((b) => b.title === "Racer").length, 0);
   // and an edit racing a retire is put back as it was
   const plaza = await mkRoom("Plaza");
@@ -665,7 +665,7 @@ async function main() {
   const v2after = await D.findBooking(yard.id, v2b.date, v2b.id);
   check("V2 approve resets the reminder record", [v2after?.reminderSentAt, v2after?.remindedEmails], [null, []]);
   // (Since review 6: a holder change means the new holder is reminded on the day, with "today" wording.)
-  check("V2 the new holder is reminded on the day itself", (await D.bookingsDueForReminder(new Date("2028-06-06T04:00:00Z"))).some((x) => x.booking.id === v2b.id), true);
+  check("V2 the new holder is reminded on the day itself", (await D.bookingsDueForReminder(new Date("2028-06-06T05:00:00Z"))).some((x) => x.booking.id === v2b.id), true);
 
   // V3 the requester is re-checked when approving
   await createUser({ id: "gone", name: "Gone", surname: "Viewer", email: "gone@example.test", password: "pw", role: "viewer", forcePasswordChange: false, tagIds: [] });
@@ -886,7 +886,7 @@ async function main() {
   check("G3 booking for a room manager allowed", status(await D.createBooking(erinA, inp(S7.id, "2029-06-12", 600, 660, { bookedForId: "mia" }), early7)), "ok");
 
   // G4 a reminder claim that never finished goes stale and the booking is due again
-  const g4 = await D.createBooking(erinA, inp(S7.id, "2029-06-20", 600, 660, { bookedForId: "cara" }), early7);
+  const g4 = await D.createBooking(erinA, inp(S7.id, "2029-06-19", 600, 660, { bookedForId: "cara" }), early7);
   if (!g4.ok) throw new Error("create failed");
   const g4b = g4.value.bookings[0];
   const g4run = new Date("2029-06-19T05:00:00Z");
@@ -922,6 +922,111 @@ async function main() {
   const g7r = await D.saveRoom(admin, g7.id, { active: false });
   check("G7 retire with only the flag keeps the new name", g7r.ok && [g7r.value.room.name, g7r.value.room.active], ["Renamed by Mia", false]);
   check("G7 the rooms page sends only the flag", readFileSync("app/(portal)/rooms/page.tsx", "utf8").includes('"PUT", { active: !r.active }'), true);
+
+  // ======================= eighth review =======================
+  const { notifyEdited, remindNowIfBeforeNextRun } = await import("../lib/roomBookingNotify");
+  const { nextReminderRunMs, remindCutoffMs } = await import("../lib/roomBookings");
+  const S8 = await mkRoom("Hall Eight");
+  const e8 = new Date("2029-10-01T00:00:00Z");
+
+  // H1 an edit tells the other holder(s) what changed, never the editor
+  const h1 = await D.createBooking(erinA, inp(S8.id, "2029-10-08", 600, 660, { bookedForId: "cara", title: "Plan" }), e8);
+  if (!h1.ok) throw new Error("create failed");
+  const h1b = h1.value.bookings[0];
+  const h1e = await D.updateBooking(erinA, h1b.id, h1b.date, inp(S8.id, h1b.date, 600, 720, { bookedForId: "cara", title: "Plan B" }), e8);
+  if (!h1e.ok) throw new Error("edit failed");
+  outbox.length = 0;
+  await notifyEdited(h1e.value.before, h1e.value.after, S8, erinA, h1e.value.holderChanged);
+  check("H1 holder edit: the other holder told, the editor not", [mailTo("cara@example.test", "Booking changed"), mailTo("erin@example.test", "Booking changed")], [1, 0]);
+  const h1m = await D.updateBooking(miaA, h1b.id, h1b.date, inp(S8.id, h1b.date, 600, 720, { bookedForId: "cara", title: "Plan C" }), e8);
+  if (!h1m.ok) throw new Error("edit failed");
+  outbox.length = 0;
+  await notifyEdited(h1m.value.before, h1m.value.after, S8, miaA, false);
+  check("H1 manager edit: both holders told, one email each", [mailTo("cara@example.test", "Booking changed"), mailTo("erin@example.test", "Booking changed"), mailTo("mia@example.test", "Booking changed")], [1, 1, 0]);
+
+  // H2 reminder timing with one 07:00 run a day
+  const run7 = new Date("2029-10-15T05:00:00Z"); // Mon 07:00 SAST
+  check("H2 a 07:00 run's cutoff is 08:00 tomorrow", new Date(remindCutoffMs(run7)).toISOString(), "2029-10-16T06:00:00.000Z");
+  check("H2 the next run after 15:00 is 07:00 tomorrow", new Date(nextReminderRunMs(new Date("2029-10-15T13:00:00Z"))).toISOString(), "2029-10-16T05:00:00.000Z");
+  const h2a = await D.createBooking(erinA, inp(S8.id, "2029-10-16", 450, 480), e8); // tomorrow 07:30: before 08:00
+  const h2b = await D.createBooking(erinA, inp(S8.id, "2029-10-16", 540, 600), e8); // tomorrow 09:00: tomorrow's run
+  const h2c = await D.createBooking(erinA, inp(S8.id, "2029-10-15", 360, 420), e8); // today 06:00: already started
+  if (!h2a.ok || !h2b.ok || !h2c.ok) throw new Error("create failed");
+  const due7 = (await D.bookingsDueForReminder(run7)).map((x) => x.booking.id);
+  check("H2 07:00 run: tomorrow 07:30 due, tomorrow 09:00 not yet, already-started skipped", [due7.includes(h2a.value.bookings[0].id), due7.includes(h2b.value.bookings[0].id), due7.includes(h2c.value.bookings[0].id)], [true, false, false]);
+  const h2d = await D.createBooking(erinA, inp(S8.id, "2029-10-17", 390, 420), e8); // Wed 06:30
+  if (!h2d.ok) throw new Error("create failed");
+  outbox.length = 0;
+  const bookedAt = new Date("2029-10-16T13:00:00Z"); // Tue 15:00: next run Wed 07:00, after the meeting starts
+  check("H2 booked after the run for before the next run: reminded straight away", [await remindNowIfBeforeNextRun(h2d.value.bookings[0], S8, bookedAt), mailTo("erin@example.test", "Tomorrow: Hall Eight")], [true, 1]);
+  check("H2 a later meeting waits for the cron", await remindNowIfBeforeNextRun(h2b.value.bookings[0], S8, bookedAt), false);
+
+  // H3 crash-safe moves: a half-done move shows once and is settled by the cron
+  const h3 = await D.createBooking(erinA, inp(S8.id, "2029-11-05", 600, 660, { title: "Half moved" }), e8);
+  if (!h3.ok) throw new Error("create failed");
+  const h3b = h3.value.bookings[0];
+  const ghost = { ...h3b, date: "2029-12-03", moving: { from: "2029-11", at: Date.now() - 20 * 60_000 } };
+  await writeJson(`rooms/bookings/${S8.id}/2029-12.json`, [ghost]); // as if the request died after step 1
+  check("H3 the half-moved copy is hidden while the old one exists", (await D.findBooking(S8.id, "2029-12-03", h3b.id)) === null, true);
+  check("H3 the calendar shows it once", (await D.bookingsBetween(S8.id, "2029-11-01", "2029-12-31")).filter((b) => b.id === h3b.id).length, 1);
+  const settled1 = await D.settleStaleMoves(new Date());
+  check("H3 stale move with the old copy still there: rolled back", [settled1.rolledBack >= 1, (await readJson<Booking[]>(`rooms/bookings/${S8.id}/2029-12.json`, [])).length], [true, 0]);
+  const orphan = { ...h3b, id: "orphan-move", date: "2029-12-10", moving: { from: "2029-11", at: Date.now() - 20 * 60_000 } };
+  await writeJson(`rooms/bookings/${S8.id}/2029-12.json`, [orphan]); // as if it died after step 2
+  await D.settleStaleMoves(new Date());
+  check("H3 stale move with the old copy gone: finished, flag cleared", (await D.findBooking(S8.id, "2029-12-10", "orphan-move"))?.moving, undefined);
+  const h3m = await D.updateBooking(erinA, h3b.id, h3b.date, inp(S8.id, "2030-01-07", 600, 660, { title: "Half moved" }), e8);
+  check("H3 a normal move leaves no moving mark", [status(h3m), (await D.findBooking(S8.id, "2030-01-07", h3b.id))?.moving], ["ok", undefined]);
+
+  // H4 the picker lists only people who can be booked for
+  const listed = (await (await peopleRoute.GET(get(erin, "/api/bookings/people"))).json()) as { id: string }[];
+  check("H4 a Viewer is not offered, a member is", [listed.some((x) => x.id === "gone"), listed.some((x) => x.id === "cara")], [false, true]);
+
+  // H5 the activity log keeps no messages, reasons or addresses
+  const withAsk = (await D.findBooking(S8.id, "2029-10-16", h2a.value.bookings[0].id))!;
+  const safe = JSON.stringify(D.logSafeBooking({ ...withAsk, requests: [{ token: "t", requesterId: "bob", requesterName: "Bob", requesterEmail: "bob@example.test", title: "x", message: "SECRET MESSAGE", attendeeCount: 1, status: "declined", declineReason: "SECRET REASON", createdAt: "x" }] }));
+  check("H5 safe log detail: no email, message or reason, but a count", [safe.includes("@"), safe.includes("SECRET"), safe.includes('"requestCount":1')], [false, false, true]);
+
+  // H6 an end-date repeat over the limit is refused, not cut short
+  const tooLong = await D.createBooking(erinA, inp(S8.id, "2030-02-01", 600, 660, { recurrence: { frequency: "daily", interval: 1, weekdays: [], endMode: "date", count: 1, until: "2030-04-01" } }), e8);
+  check("H6 60-day daily repeat refused with the count", [status(tooLong), !tooLong.ok && tooLong.error], [400, "That repeat makes 60 bookings; the most is 52. Pick an earlier end date."]);
+
+  // H7 a create racing a retire: the retire's cancelled rows stay, nothing is resurrected, and the reply says retired
+  const r7 = await mkRoom("Retire Seven");
+  let fired7 = false;
+  putHook.put = async (...a: unknown[]) => {
+    const res = await realPut(...a);
+    if (!fired7 && String(a[0]).endsWith(`rooms/bookings/${r7.id}/2030-03.json`)) {
+      fired7 = true;
+      await D.saveRoom(admin, r7.id, { active: false }); // retires and cancels upcoming bookings
+    }
+    return res;
+  };
+  const c7 = await D.createBooking(erinA, inp(r7.id, "2030-03-04", 600, 660, { title: "Racing retire" }), e8);
+  putHook.put = realPut;
+  const rows7 = await readJson<Booking[]>(`rooms/bookings/${r7.id}/2030-03.json`, []);
+  check("H7 refused, saying the room was retired", [status(c7), !c7.ok && c7.error.includes("was retired")], [409, true]);
+  check("H7 the row the retire cancelled stays as the record", rows7.map((b) => b.status), ["cancelled"]);
+
+  // H8 a refused ask leaves no pointer; a pointer write failure takes the request back out
+  const pointers = () => [...store.keys()].filter((k) => k.includes("rooms/requests/")).length;
+  const h8 = await D.createBooking(erinA, inp(S8.id, "2030-05-06", 600, 660), e8);
+  if (!h8.ok) throw new Error("create failed");
+  const h8b = h8.value.bookings[0];
+  await D.requestRoom(bob, S8.id, h8b.date, h8b.id, { title: "x", message: "y", attendeeCount: 1 }, e8);
+  const before8 = pointers();
+  check("H8 a refused second ask", status(await D.requestRoom(bob, S8.id, h8b.date, h8b.id, { title: "x", message: "y", attendeeCount: 1 }, e8)), 409);
+  check("H8 leaves no pointer behind", pointers(), before8);
+  putHook.put = async (...a: unknown[]) => {
+    if (String(a[0]).includes("rooms/requests/")) throw new Error("store down");
+    return realPut(...a);
+  };
+  const h8fail = await quiet(() => D.requestRoom(cara, S8.id, h8b.date, h8b.id, { title: "x", message: "y", attendeeCount: 1 }, e8).then(() => "returned", () => "threw"));
+  putHook.put = realPut;
+  check("H8 pointer failure throws and takes the request back out", [h8fail, (await D.findBooking(S8.id, h8b.date, h8b.id))?.requests.some((q) => q.requesterId === "cara")], ["threw", false]);
+
+  // H9 one paced sender, shared with the action items
+  check("H9 room mail uses the action items' paced sender", [readFileSync("lib/roomBookingNotify.ts", "utf8").includes("setTimeout"), readFileSync("lib/actionItemNotify.ts", "utf8").includes("export async function sendPaced")], [false, true]);
 
 
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");

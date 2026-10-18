@@ -18,7 +18,7 @@ import {
   dayShortName,
   describeRecurrence,
   durationLabel,
-  expandRecurrence,
+  recurrenceSize,
   normaliseRecurrence,
   labelToMinute,
   endMinuteFromLabel,
@@ -91,7 +91,8 @@ function WarnLine({ text }: { text: string }) {
 
 function RecurrenceEditor({ value, onChange, startDate, t }: { value: Recurrence; onChange: (r: Recurrence) => void; startDate: string; t: T }) {
   const set = (patch: Partial<Recurrence>) => onChange({ ...value, ...patch });
-  const occurrences = parseDateKey(startDate) ? expandRecurrence(startDate, value).length : 0;
+  // Counted in full, so an end date that makes too many is shown, not cut short.
+  const occurrences = parseDateKey(startDate) ? recurrenceSize(startDate, value) : 0;
   const unit = value.frequency === "daily" ? t("day(s)") : value.frequency === "weekly" ? t("week(s)") : t("month(s)");
   return (
     <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
@@ -147,8 +148,10 @@ function RecurrenceEditor({ value, onChange, startDate, t }: { value: Recurrence
       {value.frequency !== "none" && (
         <p className="text-xs text-gray-500">
           {describeRecurrence(value, t)}: {t("{n} bookings. Every one has to be free, or nothing is booked.", { n: occurrences })}
-          {occurrences >= MAX_OCCURRENCES ? ` ${t("A repeat stops at {n} bookings.", { n: MAX_OCCURRENCES })}` : ""}
         </p>
+      )}
+      {occurrences > MAX_OCCURRENCES && (
+        <WarnLine text={t("That repeat makes {n} bookings; the most is {max}. Pick an earlier end date.", { n: occurrences, max: MAX_OCCURRENCES })} />
       )}
     </div>
   );
@@ -214,6 +217,7 @@ function BookingForm({
   const endsBeforeItStarts = endMin <= startMin;
   const tooShort = !endsBeforeItStarts && endMin - startMin < MIN_DURATION;
   const tooMany = attendeeCount > room.capacity;
+  const repeatTooLong = !existing && parseDateKey(bookingDate) !== null && recurrenceSize(bookingDate, normaliseRecurrence(recurrence)) > MAX_OCCURRENCES;
 
   const submit = async () => {
     setBusy(true);
@@ -306,7 +310,7 @@ function BookingForm({
       <ErrorLine text={error} />
       <div className="flex justify-end gap-2 pt-1">
         <button type="button" onClick={onCancel} className={btnGhost}>{t("Cancel")}</button>
-        <button type="button" onClick={submit} disabled={busy || !title.trim() || endsBeforeItStarts || tooShort || tooMany} className={btnPrimary}>
+        <button type="button" onClick={submit} disabled={busy || !title.trim() || endsBeforeItStarts || tooShort || tooMany || repeatTooLong} className={btnPrimary}>
           {busy ? t("Saving...") : existing ? t("Save changes") : t("Book the room")}
         </button>
       </div>

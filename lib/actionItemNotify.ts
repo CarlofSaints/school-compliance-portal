@@ -14,10 +14,21 @@ import { sendActionAssignedEmail, sendActionReminderEmail } from "./email";
 // Resend accepts roughly two messages a second, and a burst comes back as 429s
 // that read like bad addresses rather than like rate limiting. Everything here
 // goes out one at a time with a breath in between.
-const SEND_GAP_MS = 600;
+export const SEND_GAP_MS = 600;
 
-function pause(): Promise<void> {
+export function pause(): Promise<void> {
   return new Promise((r) => setTimeout(r, SEND_GAP_MS));
+}
+
+/** Sends one after another with the pause between. Returns how many failed.
+ *  Shared with the room-booking mail (lib/roomBookingNotify.ts). */
+export async function sendPaced(jobs: (() => Promise<boolean>)[]): Promise<number> {
+  let failed = 0;
+  for (let i = 0; i < jobs.length; i++) {
+    if (i > 0) await pause();
+    if (!(await jobs[i]())) failed++;
+  }
+  return failed;
 }
 
 // The facts every action email shows, built once so the assignment mail and the

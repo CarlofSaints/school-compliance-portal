@@ -1216,6 +1216,19 @@ export function sendBookingConfirmedEmail(to: string, name: string, f: RoomBooki
 }
 
 /** `when` comes from the meeting's actual date: a reminder sent on the day says today. */
+/** One email listing what changed on a booking someone else edited. */
+export function sendBookingChangedEmail(to: string, name: string, editorName: string, changes: string[], f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Booking changed: ${f.roomName}, ${f.dateLabel}`, "Booking changed", (P) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${esc(editorName)} changed this booking:</p>
+    <ul style="background:#f4f4f5;padding:16px 16px 16px 32px;border-radius:6px;margin:16px 0;color:#333;">
+      ${changes.map((c) => `<li style="margin:4px 0;">${esc(c)}</li>`).join("")}
+    </ul>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+  `);
+}
+
 export function sendBookingReminderEmail(to: string, name: string, f: RoomBookingEmailFacts, when: "today" | "tomorrow" = "tomorrow"): Promise<boolean> {
   const word = when === "today" ? "Today" : "Tomorrow";
   return sendBookingMail(to, `${word}: ${f.roomName}, ${f.title}`, `Room booking ${when}`, (P) => `
@@ -1239,7 +1252,7 @@ export function sendBookingHandedOverEmail(
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">${esc(changedByName)} has changed who this meeting room is for. It was for <strong>${esc(previousHolderName)}</strong>. It is now for you.</p>
     ${bookingFactsBlock(f)}
-    <p style="color:#666;font-size:13px;">You will get the reminder the day before, and any request for the room comes to you. If this is not right, speak to whoever made the change, or cancel it from the calendar.</p>
+    <p style="color:#666;font-size:13px;">You will get the reminder before the meeting, and any request for the room comes to you. If this is not right, speak to whoever made the change, or cancel it from the calendar.</p>
     ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
   `);
 }
@@ -1255,7 +1268,7 @@ export function sendBookingTakenOverEmail(
   f: RoomBookingEmailFacts
 ): Promise<boolean> {
   const standing = stillHolderAsBooker
-    ? `You booked this room, so you are still on it: you will get the reminder the day before, and any request for the room still comes to you as well as to ${esc(newHolderName)}. It is simply no longer held in your name.`
+    ? `You booked this room, so you are still on it: you will get the reminder before the meeting, and any request for the room still comes to you as well as to ${esc(newHolderName)}. It is simply no longer held in your name.`
     : `The booking still stands, as shown above. It is just no longer in your name: you will not get the reminder for it, and requests for the room will go to ${esc(newHolderName)} instead. If you still need the room, you can ask for it back from the calendar.`;
   return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} is no longer booked for you`, "Booking changed hands", (P) => `
     <p style="color:#333;">Dear ${esc(name)},</p>

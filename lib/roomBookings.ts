@@ -119,10 +119,24 @@ export function startsAtMs(date: string, minute: number): number {
   return Date.UTC(p.y, p.m - 1, p.d) + minute * 60_000 - 2 * 3_600_000;
 }
 
-/** How far ahead a reminder run looks. The cron runs once a day (07:00 SAST),
- *  so 31 hours covers tomorrow until 14:00; anything later tomorrow, or booked
- *  after today's run, is reminded on the morning of the day itself. */
-export const REMIND_WINDOW_MS = 31 * 3_600_000;
+/** The reminder cron runs once a day at 07:00 SAST (vercel.json 0 5 * * *). */
+export const REMINDER_RUN_MINUTE = 7 * 60;
+
+/** The next reminder run strictly after `now`, as epoch ms. */
+export function nextReminderRunMs(now: Date = new Date()): number {
+  const today = sastToday(now);
+  const todays = startsAtMs(today, REMINDER_RUN_MINUTE);
+  return now.getTime() < todays ? todays : startsAtMs(addDays(today, 1), REMINDER_RUN_MINUTE);
+}
+
+/** A run reminds every booking starting from now until an hour after the NEXT
+ *  run (07:00 run: everything later today, and tomorrow before 08:00). The
+ *  rest of tomorrow is reminded by tomorrow's 07:00 run, on the day, so each
+ *  booking is reminded once, by the last run before it starts. A meeting that
+ *  starts before the next run is reminded straight away when it is booked. */
+export function remindCutoffMs(now: Date = new Date()): number {
+  return nextReminderRunMs(now) + 3_600_000;
+}
 
 /** A start in the past: an earlier day, or earlier today (SAST). */
 export function isPast(date: string, startMinute: number, now: Date = new Date()): boolean {
@@ -229,11 +243,12 @@ export function normaliseRecurrence(r: Recurrence): Recurrence {
 }
 
 /** The dates a repeat produces from `start`, capped at MAX_OCCURRENCES. */
-export function expandRecurrence(start: string, rule: Recurrence): string[] {
+/** `cap` is how many dates to produce at most. The default is the booking
+ *  limit; pass a larger one to COUNT what an end date would make. */
+export function expandRecurrence(start: string, rule: Recurrence, cap: number = MAX_OCCURRENCES): string[] {
   if (rule.frequency === "none") return [start];
   const interval = Math.max(1, Math.floor(rule.interval || 1));
-  const limit =
-    rule.endMode === "count" ? Math.min(Math.max(1, Math.floor(rule.count || 1)), MAX_OCCURRENCES) : MAX_OCCURRENCES;
+  const limit = rule.endMode === "count" ? Math.min(Math.max(1, Math.floor(rule.count || 1)), cap) : cap;
   const until = rule.endMode === "date" && rule.until ? rule.until : null;
   const dates: string[] = [];
   const push = (key: string) => {
@@ -276,6 +291,12 @@ export function expandRecurrence(start: string, rule: Recurrence): string[] {
     }
   }
   return dates;
+}
+
+/** How many bookings an end-date repeat would make (up to a safety bound),
+ *  so one that exceeds MAX_OCCURRENCES is refused rather than cut short. */
+export function recurrenceSize(start: string, rule: Recurrence): number {
+  return expandRecurrence(start, rule, 5000).length;
 }
 
 /** "Every 2 weeks on Mon, Wed, until Wed 30 Sep 2026" */
