@@ -211,8 +211,12 @@ export default function Sidebar() {
   };
 
   const handleLogout = async () => {
-    await signOut();
-    router.push("/login");
+    // A page with unsaved work may cancel (its person chose to stay).
+    const ok = await signOut({
+      confirmOtherTabs: () =>
+        window.confirm(t("You have unsaved minutes open in another tab. Sign out anyway and lose them?")),
+    });
+    if (ok) router.push("/login");
   };
 
   return (

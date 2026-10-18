@@ -3,6 +3,9 @@ import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserByEmail } from "@/lib/userData";
 import { createResetToken, RESET_TTL_MS } from "@/lib/passwordReset";
 import { sendPasswordResetLinkEmail, isEmailConfigured } from "@/lib/email";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFromUser, afterResponse } from "@/lib/activityActor";
+import { deviceOf } from "@/lib/signinLog";
 
 // Unauthenticated by design — the whole point is that the caller cannot log in.
 export async function POST(req: NextRequest) {
@@ -61,6 +64,24 @@ export async function POST(req: NextRequest) {
         { status: 502 }
       );
     }
+    // Only for a real account: an unknown address is not logged here, or the
+    // log would fill with whatever a stranger types into a public form.
+    // After the reply, so a logging problem can never fail the request. (Not
+    // a timing measure here: sending the email already makes a real account
+    // answer slower than an unknown address.)
+    const actor = { ...actorFromUser(req, user), ip: ipOf(req) };
+    const at = new Date().toISOString();
+    await afterResponse(() =>
+      recordActivity({
+        at,
+        ...actor,
+        action: "auth.password_reset_requested",
+        entity: "password",
+        entityId: user.id,
+        summary: "Asked for a password reset link",
+        detail: { device: deviceOf(req.headers.get("user-agent")) },
+      })
+    );
     return same;
   } catch (err) {
     console.error("[forgot-password] Failed:", err);

@@ -3,6 +3,10 @@ import { getUserById, updateUser, verifyPassword } from "@/lib/userData";
 import { requireLogin } from "@/lib/rolesData";
 import { SESSION_COOKIE, createSessionToken, sessionCookieOptions, isHttps } from "@/lib/session";
 import { tenantScope } from "@/lib/tenantContext";
+import { recordActivity } from "@/lib/activityLog";
+import { actorFrom, afterResponse } from "@/lib/activityActor";
+import { deviceOf } from "@/lib/signinLog";
+import { ipOf } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
   const session = await requireLogin(req);
@@ -42,6 +46,23 @@ export async function POST(req: NextRequest) {
       password: newPassword,
       forcePasswordChange: false,
     });
+
+    if (updated) {
+      const actor = { ...actorFrom(req, session), ip: ipOf(req) };
+      const at = new Date().toISOString();
+      const device = deviceOf(req.headers.get("user-agent"));
+      await afterResponse(() =>
+        recordActivity({
+          at,
+          ...actor,
+          action: "auth.password_changed",
+          entity: "password",
+          entityId: session.id,
+          summary: "Changed their password",
+          detail: { device },
+        })
+      );
+    }
 
     // A session is signed against the password hash, so the cookie this
     // request came in with just died, along with every other device signed in

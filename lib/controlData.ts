@@ -337,14 +337,17 @@ export async function writeFile(
 }
 
 export async function deleteFile(blobPath: string): Promise<void> {
-  try {
-    const { token } = await scope();
-    const blob = await findBlob(blobPath);
-    if (blob) {
-      await del(blob.url, { token });
-    }
-  } catch {
+  await deleteFileStrict(blobPath).catch(() => {
     // ignore
+  });
+}
+
+/** deleteFile, but a storage error is THROWN, for a caller that must know. */
+export async function deleteFileStrict(blobPath: string): Promise<void> {
+  const { token } = await scope();
+  const blob = await findBlob(blobPath);
+  if (blob) {
+    await del(blob.url, { token });
   }
 }
 
@@ -390,28 +393,54 @@ export async function deleteFolder(dirPath: string): Promise<number> {
  * an audit that quietly omits records is worse than no audit.
  */
 export async function listFiles(dirPath: string): Promise<string[]> {
-  try {
-    const { prefix: tenantPrefix, token } = await scope();
-    // Resolved ONCE. The old version rebuilt the prefix inside the map, so
-    // every row paid for it; now it is also an await, which cannot go there.
-    const prefix = tenantPrefix + dirPath + "/";
+  return listFilesStrict(dirPath).catch(() => []);
+}
 
-    // A Set, because the same child appears once per blob beneath it.
-    const names = new Set<string>();
-    let cursor: string | undefined;
-    do {
-      const result = await list({ prefix, limit: 1000, cursor, token });
-      for (const b of result.blobs) {
-        const full = b.pathname;
-        const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
-        const name = relative.split("/")[0];
-        if (name) names.add(name);
-      }
-      cursor = result.hasMore ? result.cursor : undefined;
-    } while (cursor);
+/**
+ * The immediate SUB-FOLDER names under a path, from the store's folded
+ * listing: it never pages through the blobs inside them. For month folders
+ * that each hold thousands of entries. Tolerant like listFiles.
+ */
+export async function listFolders(dirPath: string): Promise<string[]> {
+  return listChildren(dirPath, true).catch(() => []);
+}
 
-    return [...names];
-  } catch {
-    return [];
-  }
+/** listFiles, but a storage error is THROWN rather than read as an empty
+ *  folder, for callers where "nothing there" would be a wrong answer. */
+export async function listFilesStrict(dirPath: string): Promise<string[]> {
+  return listChildren(dirPath, false);
+}
+
+// The one paging loop behind listFiles, listFilesStrict and listFolders.
+// Expanded: every blob, reduced to its first path segment. Folded: only the
+// folder entries the store returns. Throws on a storage error.
+async function listChildren(dirPath: string, folded: boolean): Promise<string[]> {
+  const { prefix: tenantPrefix, token } = await scope();
+  // Resolved ONCE, outside the loop.
+  const prefix = tenantPrefix + dirPath + "/";
+
+  // A Set, because the same child appears once per blob beneath it.
+  const names = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    let paths: string[];
+    let next: string | undefined;
+    if (folded) {
+      const r = await list({ prefix, mode: "folded", limit: 1000, cursor, token });
+      paths = r.folders;
+      next = r.hasMore ? r.cursor : undefined;
+    } else {
+      const r = await list({ prefix, limit: 1000, cursor, token });
+      paths = r.blobs.map((x) => x.pathname);
+      next = r.hasMore ? r.cursor : undefined;
+    }
+    for (const full of paths) {
+      const relative = full.startsWith(prefix) ? full.slice(prefix.length) : full;
+      const name = relative.split("/")[0];
+      if (name) names.add(name);
+    }
+    cursor = next;
+  } while (cursor);
+
+  return [...names];
 }

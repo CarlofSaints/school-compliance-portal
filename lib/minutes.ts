@@ -165,6 +165,10 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   absent: "Not Present",
 };
 
+/** The fields that ARE the minutes' words: what the editor saves, what a
+ *  conflict is about, and (with the uploaded original) what signing freezes. */
+export const MINUTES_TEXT_FIELDS = ["title", "body", "period", "sections"] as const;
+
 export const APOLOGIES_TITLE = "Apologies";
 export const NOT_IN_ATTENDANCE_HEADING = "Not in Attendance";
 
@@ -276,6 +280,27 @@ function ensureApologies<T extends { id: string; order: number; kind?: SectionKi
   });
   ordered.splice(at + 1, 0, make(crypto.randomUUID()));
   return ordered.map((s, i) => ({ ...s, order: i + 1 }));
+}
+
+/**
+ * Everyone on the People register as attendance rows, for minutes started
+ * without a template (Carl: "just list everyone"; the Apology / Not Present
+ * ticks do the rest). One row per position, two people sharing a seat named
+ * together, the same as "Fill from People register". Empty seats are left out.
+ */
+export function attendeesFromRegister(people: { position?: string; name?: string }[]): AttendeeRow[] {
+  // Grouped ignoring case, like the editor's fill; the first spelling is kept.
+  const byPosition = new Map<string, AttendeeRow>();
+  for (const p of people) {
+    const position = (p.position || "").trim();
+    const name = (p.name || "").trim();
+    if (!position || !name) continue;
+    const key = position.toLowerCase();
+    const row = byPosition.get(key);
+    if (row) row.name = `${row.name}, ${name}`;
+    else byPosition.set(key, { position, name });
+  }
+  return [...byPosition.values()];
 }
 
 export function withApologiesSection(sections: MinutesSection[]): MinutesSection[] {

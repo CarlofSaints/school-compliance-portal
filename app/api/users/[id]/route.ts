@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { deleteSignInStats } from "@/lib/signinLog";
 import { requirePermission, roleWithinReach, roleExists, maySelfTag, sameIds } from "@/lib/rolesData";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
@@ -133,5 +134,7 @@ export async function DELETE(
   if (!deleted) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+  // Their sign-in tally goes with them (erasure). Never fails the delete.
+  await deleteSignInStats(id);
   return NextResponse.json({ success: true });
 }
