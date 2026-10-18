@@ -165,6 +165,10 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   absent: "Not Present",
 };
 
+/** The fields that ARE the minutes' words: what the editor saves, what a
+ *  conflict is about, and (with the uploaded original) what signing freezes. */
+export const MINUTES_TEXT_FIELDS = ["title", "body", "period", "sections"] as const;
+
 export const APOLOGIES_TITLE = "Apologies";
 export const NOT_IN_ATTENDANCE_HEADING = "Not in Attendance";
 
