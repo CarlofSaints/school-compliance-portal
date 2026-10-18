@@ -6,18 +6,15 @@ import {
   activityToCsv,
   type ActivityEntity,
 } from "@/lib/activityLog";
+import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityAccess";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { redactMinutesActivity } from "@/lib/minutesAccess";
 
-// Reading the audit trail is gated, but on ANY of these rather than one narrow
-// key. A stored role that predates a new permission never gains it, so a
-// brand-new "view_activity" alone would lock out every existing admin until
-// somebody re-ticked it by hand. Anyone who can manage users, roles or spend
-// settings is already trusted with more than this.
-const CAN_VIEW = ["view_activity", "manage_users", "manage_roles", "manage_spend_settings"];
+// Reading the audit trail is gated ANY-of (lib/activityAccess.ts). Anyone who
+// can manage users, roles or spend settings is already trusted with more.
 
 export async function GET(req: NextRequest) {
-  const session = await requireAnyPermission(req, CAN_VIEW);
+  const session = await requireAnyPermission(req, ACTIVITY_VIEW_PERMISSIONS);
   if (session instanceof NextResponse) return session;
 
   const sp = req.nextUrl.searchParams;

@@ -21,7 +21,7 @@ export default async function PlatformSchoolPage({
   searchParams,
 }: {
   params: Promise<{ key: string }>;
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; view?: string }>;
 }) {
   const admin = await requirePlatformAdmin();
   // Rendered, not redirected: a redirect would land on a SCHOOL sign-in page,
@@ -29,13 +29,15 @@ export default async function PlatformSchoolPage({
   if (admin instanceof NextResponse) return <PlatformSignedOut />;
 
   const { key } = await params;
-  const { month } = await searchParams;
+  const { month, view } = await searchParams;
+  // Sign-ins live in their own partition, as on the school's own page.
+  const signIns = view === "signins";
 
   const tenant = await getTenantByKey(key);
   if (!tenant) notFound();
 
   const page = await runAsTenant(key, async () => {
-    const result = await readActivity({ month, limit: 200 });
+    const result = await readActivity({ month, limit: 200, entity: signIns ? "auth" : undefined });
 
     // 🔴 Recorded in THIS SCHOOL'S log, not ours. An operator who can read
     // everything and leaves no trace is the gap an audit trail exists to close.
@@ -75,12 +77,26 @@ export default async function PlatformSchoolPage({
 
       <main className="max-w-7xl mx-auto p-6">
         <PlatformTranslationAddon schoolKey={key} />
+        <div className="mb-4 flex gap-2 text-xs">
+          <Link
+            href={`/platform/${key}?month=${page.month}`}
+            className={`px-3 py-1.5 rounded-lg border ${!signIns ? "bg-primary text-white border-primary" : "bg-white border-gray-200 text-gray-600"}`}
+          >
+            Activity
+          </Link>
+          <Link
+            href={`/platform/${key}?month=${page.month}&view=signins`}
+            className={`px-3 py-1.5 rounded-lg border ${signIns ? "bg-primary text-white border-primary" : "bg-white border-gray-200 text-gray-600"}`}
+          >
+            Sign-ins and sign-outs
+          </Link>
+        </div>
         {page.availableMonths.length > 1 && (
           <div className="mb-4 flex flex-wrap gap-2">
             {page.availableMonths.map((m) => (
               <Link
                 key={m}
-                href={`/platform/${key}?month=${m}`}
+                href={`/platform/${key}?month=${m}${signIns ? "&view=signins" : ""}`}
                 className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
                   m === page.month
                     ? "bg-primary text-white border-primary"

@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import type { ActivityEntry, ActivityEntity } from "@/lib/activityLog";
 import DownloadLink from "@/components/DownloadLink";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
+import type { SignInRow } from "@/lib/signinLog";
+import { UNKNOWN_ACTORS } from "@/lib/activityLabels";
+import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityAccess";
+import SortableTh from "@/components/SortableTh";
+import { useTableSort } from "@/lib/useTable";
 
 // The school's own audit trail. Carl sees the same thing per school from the
 // admin portal, deliberately: a school that can be shown its own record trusts
@@ -25,6 +30,7 @@ const ENTITY_LABELS: Record<ActivityEntity | "all", string> = {
   compliance: tk("Compliance checks"),
   branding: tk("Branding"),
   auth: tk("Sign in"),
+  password: tk("Password changes"),
   system: tk("System"),
 };
 
@@ -41,6 +47,7 @@ function toneFor(action: string): string {
 function whenLabel(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -62,12 +69,7 @@ export default function ActivityPage() {
   const t = useT();
   // ANY-of, matching the API. A narrow new key on its own would lock out every
   // existing admin, because a stored role never gains a permission added later.
-  const { session, loading } = useAuth([
-    "view_activity",
-    "manage_users",
-    "manage_roles",
-    "manage_spend_settings",
-  ]);
+  const { session, loading } = useAuth(ACTIVITY_VIEW_PERMISSIONS);
 
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [total, setTotal] = useState(0);
@@ -75,34 +77,54 @@ export default function ActivityPage() {
   const [month, setMonth] = useState<string>("");
   const [entity, setEntity] = useState<ActivityEntity | "all">("all");
   const [search, setSearch] = useState("");
+  // What is actually searched for: the box, once typing pauses, so typing
+  // does not send a request per keystroke.
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(id);
+  }, [search]);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(true);
+  const [view, setView] = useState<"log" | "signins">("log");
   const [open, setOpen] = useState<string | null>(null);
   // A failed export must say so. Silent is what makes a dead button hard to report.
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  // Only the newest request may set the grid: a slow answer for a filter or
+  // month that is no longer selected must not overwrite the current one.
+  const latest = useRef(0);
   const load = useCallback(async () => {
     if (!session) return;
+    const mine = ++latest.current;
     setBusy(true);
     try {
       const qs = new URLSearchParams();
       if (month) qs.set("month", month);
       if (entity !== "all") qs.set("entity", entity);
-      if (search.trim()) qs.set("search", search.trim());
+      if (query) qs.set("search", query);
       qs.set("limit", String(PAGE_SIZE));
       qs.set("offset", String(page * PAGE_SIZE));
 
       const res = await authFetch(`/api/activity?${qs}`);
-      if (!res.ok) return;
+      if (!res.ok || mine !== latest.current) return;
       const data = await res.json();
+      if (mine !== latest.current) return;
       setEntries(data.entries || []);
       setTotal(data.total || 0);
       setMonths(data.availableMonths || []);
       if (!month && data.month) setMonth(data.month);
+      // The filter changed to a view whose months do not include this one:
+      // jump to its newest month rather than show an empty page.
+      // (The current month is always offered, so the start of a month never
+      // kicks anybody back to the last one.)
+      const avail: string[] = data.availableMonths || [];
+      const thisMonth = new Date().toISOString().slice(0, 7);
+      if (month && avail.length && !avail.includes(month) && month !== thisMonth) setMonth(avail[0]);
     } finally {
-      setBusy(false);
+      if (mine === latest.current) setBusy(false);
     }
-  }, [session, month, entity, search, page]);
+  }, [session, month, entity, query, page]);
 
   useEffect(() => {
     load();
@@ -132,15 +154,38 @@ export default function ActivityPage() {
             {t("Every action taken in this portal, who took it and when. Kept as a record for audits.")}
           </p>
         </div>
-        <DownloadLink
+        {view === "log" && <DownloadLink
           href={`/api/activity?format=csv&month=${month}`}
           filename={`activity-${month}.csv`}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
           onError={(message) => setToast({ message, type: "error" })}
         >
           {t("Export this month")}
-        </DownloadLink>
+        </DownloadLink>}
       </div>
+
+      <div className="flex gap-2 mb-4">
+        {([
+          ["log", t("Activity log")],
+          ["signins", t("Sign-ins")],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`px-4 py-2 rounded-lg text-sm border transition-colors ${
+              view === k
+                ? "bg-primary text-white border-primary"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "signins" && <SignInsView />}
+
+      {view === "log" && <>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-4 flex flex-wrap gap-3">
         <select
@@ -177,6 +222,13 @@ export default function ActivityPage() {
         />
       </div>
 
+      <p className="text-xs text-gray-400 mb-2">
+        {entity === "auth"
+          ? t("Sign-ins, failed sign-ins and sign-outs only. Password changes and resets are under Password changes in the filter.")
+          : entity === "all" && search.trim()
+            ? t("Sign-ins and sign-outs are included in these search results.")
+            : t("Sign-ins, failed sign-ins and sign-outs are not listed here: choose Sign in in the filter, or open the Sign-ins tab.")}
+      </p>
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -197,7 +249,7 @@ export default function ActivityPage() {
                 <td colSpan={5} className="px-6 py-12 text-center text-gray-400">
                   {search || entity !== "all"
                     ? t("Nothing matches those filters this month.")
-                    : t("Nothing recorded this month yet.")}
+                    : t("No other activity this month. Sign-ins are under the Sign in filter.")}
                 </td>
               </tr>
             )}
@@ -235,7 +287,114 @@ export default function ActivityPage() {
           </div>
         </div>
       )}
+      </>}
     </div>
+  );
+}
+
+// Who signs in and how often. One row per user, from each user's own tally
+// file (lib/signinLog.ts); every single sign-in is also in the log, under the
+// Sign in filter.
+function SignInsView() {
+  const t = useT();
+  const [rows, setRows] = useState<SignInRow[] | null>(null);
+  const [since, setSince] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const { sortKey, sortDir, toggle, sort } = useTableSort<SignInRow>("lastAt", "desc");
+
+  useEffect(() => {
+    let live = true;
+    authFetch("/api/activity/signins")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        if (!live) return;
+        setRows(data.rows || []);
+        setSince(data.since || null);
+      })
+      .catch(() => {
+        if (live) setFailed(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (failed) {
+    return <p className="text-risk-high text-sm">{t("The sign-ins could not be loaded. Please refresh to try again.")}</p>;
+  }
+  if (!rows) return <p className="text-gray-400 text-sm">{t("Loading...")}</p>;
+
+  const never = rows.filter((r) => r.never).length;
+  const sorted = sort(rows, (r, k) => r[k as keyof SignInRow]);
+  const th = (label: string, key: string, firstDir: "asc" | "desc" = "desc", align: "left" | "right" = "right") => (
+    <SortableTh label={label} sortKey={key} activeKey={sortKey} dir={sortDir} onSort={(k) => toggle(k, firstDir)} align={align} />
+  );
+
+  return (
+    <>
+      <p className="text-sm text-gray-500 mb-3">
+        {t("Sign-ins are counted from the day this view was added. Earlier sign-ins are not included.")}
+        {never > 0 && (
+          <span className="ml-2 text-risk-medium">
+            {never === 1 ? t("1 person has never signed in.") : t("{count} people have never signed in.", { count: never })}
+          </span>
+        )}
+      </p>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              {th(tk("Who"), "name", "asc", "left")}
+              {th(tk("Last sign-in"), "lastAt", "desc", "left")}
+              {th(tk("Last 7 days"), "last7")}
+              {th(tk("Last 30 days"), "last30")}
+              {th(tk("Wrong passwords (30 days)"), "failed30")}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map((r) => (
+              <tr key={r.userId}>
+                <td className="px-4 py-3">
+                  <div className="text-dark">
+                    {r.name}
+                  </div>
+                  <div className="text-xs text-gray-400">{r.email}</div>
+                </td>
+                <td className="px-4 py-3">
+                  {r.lastAt ? (
+                    <>
+                      <div className="text-gray-700 whitespace-nowrap">{whenLabel(r.lastAt)}</div>
+                      <div className="text-xs text-gray-400">
+                        {[r.lastDevice, r.lastIp].filter(Boolean).join(" · ")}
+                      </div>
+                    </>
+                  ) : r.never ? (
+                    <span className="text-risk-medium text-xs">{t("Never signed in")}</span>
+                  ) : r.noneSinceTracking ? (
+                    <span className="text-gray-400 text-xs">
+                      {since
+                        ? t("No sign-in recorded since {date}", { date: new Date(since).toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg", day: "numeric", month: "short", year: "numeric" }) })
+                        : t("No sign-in recorded yet")}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 text-xs">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">{r.last7}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{r.last30}</td>
+                <td className={`px-4 py-3 text-right tabular-nums ${r.failed30 > 0 ? "text-risk-high" : ""}`}>{r.failed30}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-gray-400">{t("No users yet.")}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -258,7 +417,9 @@ function RowPair({
       >
         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{whenLabel(entry.at)}</td>
         <td className="px-4 py-3">
-          <div className="text-dark">{entry.actorName}</div>
+          <div className="text-dark">
+            {!entry.actorId && UNKNOWN_ACTORS.has(entry.actorName) ? t(entry.actorName) : entry.actorName}
+          </div>
           {entry.actorEmail && (
             <div className="text-xs text-gray-400">{entry.actorEmail}</div>
           )}
