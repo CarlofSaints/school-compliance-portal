@@ -1730,5 +1730,8 @@
   "Copy mine": "Kopieer myne",
   "Overwrite with mine": "Oorskryf met myne",
   "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "U het ongestoorde notule oop in ’n ander oortjie. Teken in elk geval uit en verloor dit?",
-  "Last edited by {name} at {time}": "Laas gewysig deur {name} om {time}"
+  "Last edited by {name} at {time}": "Laas gewysig deur {name} om {time}",
+  "Meeting date": "Vergaderdatum",
+  "Choose the meeting date.": "Kies die vergaderdatum.",
+  "That date can't be used. Pick a date from 2000 onwards.": "Daardie datum kan nie gebruik word nie. Kies 'n datum vanaf 2000."
 }

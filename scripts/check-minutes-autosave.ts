@@ -35,12 +35,12 @@ function check(name: string, actual: unknown, expected: unknown) {
 }
 
 const server = {
-  title: "Old", body: "sgb", period: { year: 2026 }, sections: [{ id: "a", body: "" }],
+  title: "Old", body: "sgb", period: { year: 2026 }, meetingDate: "2026-10-15" as string | undefined, sections: [{ id: "a", body: "" }],
   status: "in_review" as MinutesStatus, reviews: [{ by: "x" }], draftNumber: 2,
 };
 const local = {
-  title: "New", body: "fincom", period: { year: 2027 }, sections: [{ id: "a", body: "typed" }],
-  status: "draft" as MinutesStatus, reviews: [], draftNumber: 1,
+  title: "New", body: "fincom", period: { year: 2027 }, meetingDate: "2026-10-16" as string | undefined, sections: [{ id: "a", body: "typed" }],
+  status: "draft" as MinutesStatus, reviews: [] as { by: string }[], draftNumber: 1,
 };
 
 console.log("Unsaved");
@@ -154,6 +154,9 @@ check("a section deleted since: stays deleted", mergedT.sections.some((s) => s.i
 check("the section the server added: kept", mergedT.sections.some((s) => s.id === "ap"), true);
 check("the new base comes from the save", mergedT.textUpdatedAt, "new");
 check("nothing changed in sections since: exactly the server's", mergeTypingOverSave(savedT, sentT, { ...sentT, title: "x" }).sections, savedT.sections);
+check("a meeting date picked during a save survives it", (mergeTypingOverSave(savedT, sentT, { ...sentT, meetingDate: "2026-10-15" }) as { meetingDate?: string }).meetingDate, "2026-10-15");
+check("a change to ONLY the meeting date is a change", sameText({ ...typed, meetingDate: "2026-10-15" }, { ...typed, meetingDate: "2026-10-16" }), false);
+check("no date on either side is still the same text", sameText(typed, { ...typed }), true);
 check("a real change to a word: different", sameText(typed, { ...saved, sections: [{ ...saved.sections[0], body: "Fees down." }] }), false);
 check("an Apologies section with names in it counts",
   sameText(typed, { ...saved, sections: [saved.sections[0], { ...saved.sections[1], body: "Ms Dube" }] }), false);

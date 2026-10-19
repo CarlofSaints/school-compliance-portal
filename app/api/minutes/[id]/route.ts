@@ -11,6 +11,7 @@ import {
 } from "@/lib/minutesData";
 import {
   checkPeriod,
+  checkMeetingDate,
   isLocked,
   cleanAttendees,
   isAttendance,
@@ -107,6 +108,18 @@ export async function PATCH(
       const problem = checkPeriod(body.period);
       if (problem) return NextResponse.json({ error: problem }, { status: 400 });
       updates.period = body.period;
+    }
+    // Optional here: minutes added before the date existed may have none, and
+    // "" (or null) clears one. 🔴 Nothing about the date is ever refused here:
+    // autosave sends every field together, so a refusal would stop the typed
+    // words saving too. The editors keep date and period in agreement
+    // (periodForDate, and a period change clears a date it does not cover).
+    if (body.meetingDate === "" || body.meetingDate === null) {
+      if (existing.meetingDate) updates.meetingDate = "";
+    } else if (body.meetingDate !== undefined) {
+      // 🔴 A bad date is IGNORED, never refused: refusing would refuse the whole
+      // autosave and the typed words with it. The page only sends a valid one.
+      if (!checkMeetingDate(body.meetingDate)) updates.meetingDate = body.meetingDate;
     }
     if (body.sections !== undefined) {
       if (!Array.isArray(body.sections)) {

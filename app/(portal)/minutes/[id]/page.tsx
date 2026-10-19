@@ -52,6 +52,10 @@ import DangerConfirmModal from "@/components/DangerConfirmModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
+  formatMeetingDate,
+  periodForDate,
+  meetingDateOutsidePeriod,
+  checkMeetingDate,
   isLocked,
   MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
@@ -70,6 +74,7 @@ interface MinutesDetail {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  meetingDate?: string;
   status: MinutesStatus;
   sections: MinutesSection[];
   original?: { filename: string; size: number; uploadedAt: string };
@@ -189,6 +194,11 @@ export default function MinutesDetailPage() {
   const keysRef = useRef<BackupKeys | null>(null);
   // Restored backups (their editedAt) are only let go of once their text is saved.
   const restoredOffers = useRef<Set<string>>(new Set());
+  // What is typed in the date box until it is a whole, valid date: a date
+  // input reports "0002-10-15" while a year is typed digit by digit, and
+  // binding it straight to the record would snap it back on every keystroke.
+  const [dateDraft, setDateDraft] = useState<string | null>(null);
+  const [dateProblem, setDateProblem] = useState("");
   // The server's Retry-After on the last transient failure, if it sent one.
   const retryAfter = useRef<string | null>(null);
   /** Nothing left to save or back up: the user chose to lose the changes, or
@@ -638,7 +648,11 @@ export default function MinutesDetailPage() {
       return;
     }
     if (item.reason === "device" && item.editedAt) restoredOffers.current.add(item.editedAt);
-    patch(textOf(item.draft) as Partial<MinutesDetail>);
+    const text = textOf(item.draft) as Partial<MinutesDetail>;
+    // A backup from before meeting dates existed has none: keep the current
+    // one rather than blanking it on screen (the server would keep it anyway).
+    if (text.meetingDate === undefined) delete text.meetingDate;
+    patch(text);
     setOffered((prev) => prev.filter((o) => o.id !== item.id));
   };
   const discardOffered = (item: OfferedItem) => {
@@ -735,7 +749,9 @@ export default function MinutesDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark">{record.title}</h1>
           <p className="text-gray-500 mt-1">
-            {t(MEETING_BODY_LABELS[record.body])} · {formatPeriod(record.period)} ·{" "}
+            {t(MEETING_BODY_LABELS[record.body])} ·{" "}
+            {record.meetingDate ? `${formatMeetingDate(record.meetingDate)} · ` : ""}
+            {formatPeriod(record.period)} ·{" "}
             {t(MINUTES_STATUS_LABELS[record.status])}
             {record.draftNumber > 0 && " · " + t("Draft {n}", { n: record.draftNumber })}
           </p>
@@ -925,7 +941,38 @@ export default function MinutesDetailPage() {
               </select>
             </div>
           </div>
-          <PeriodPicker value={record.period} onChange={(p) => patch({ period: p })} />
+          <div className="max-w-xs">
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("Meeting date")}</label>
+            <input
+              type="date"
+              value={dateDraft ?? record.meetingDate ?? ""}
+              onChange={(e) => {
+                const d = e.target.value;
+                setDateDraft(d);
+                setDateProblem("");
+                // A whole valid date is saved at once (the period follows it).
+                // Empty is NOT saved yet: the browser reports "" while one part
+                // of the date is being retyped. It clears on leaving the box.
+                if (d && !checkMeetingDate(d)) {
+                  patch({ meetingDate: d, period: periodForDate(d, record.period) });
+                  setDateDraft(null);
+                }
+              }}
+              onBlur={() => {
+                if (dateDraft === "") patch({ meetingDate: "" });
+                else if (dateDraft) setDateProblem(t("That date can't be used. Pick a date from 2000 onwards."));
+                setDateDraft(null);
+              }}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+            />
+            {dateProblem && <p className="text-xs text-red-600 mt-1">{dateProblem}</p>}
+          </div>
+          <PeriodPicker
+            value={record.period}
+            // A date the new period no longer covers is cleared, so the two
+            // do not contradict each other in what is signed.
+            onChange={(p) => patch(meetingDateOutsidePeriod(record.meetingDate, p) ? { period: p, meetingDate: "" } : { period: p })}
+          />
         </div>
       )}
 

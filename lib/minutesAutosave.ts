@@ -9,6 +9,7 @@ import {
   ATTENDANCE_STATUS_LABELS,
   cleanAttendees,
   formatPeriod,
+  formatMeetingDate,
   isLocked,
   MEETING_BODY_LABELS,
   MINUTES_TEXT_FIELDS,
@@ -41,6 +42,7 @@ export interface MinutesText<P = unknown, S = unknown> {
   title: string;
   body: string;
   period: P;
+  meetingDate?: string;
   sections: S;
 }
 
@@ -109,7 +111,8 @@ function normalText(t: MinutesText): string {
           };
         })
     : t.sections;
-  return stable({ title: String(t.title ?? "").trim(), body: t.body, period: t.period, sections });
+  // meetingDate only when set, so minutes without one compare as before.
+  return stable({ title: String(t.title ?? "").trim(), body: t.body, period: t.period, meetingDate: t.meetingDate || undefined, sections });
 }
 
 export function sameText(a: MinutesText, b: MinutesText): boolean {
@@ -196,7 +199,8 @@ type Section = { id?: string } & Record<string, unknown>;
 export function mergeTypingOverSave<T extends MinutesText>(saved: T, sent: MinutesText, now: MinutesText): T {
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   const out = { ...saved } as T & Record<string, unknown>;
-  for (const f of ["title", "body", "period"] as const) {
+  for (const f of MINUTES_TEXT_FIELDS) {
+    if (f === "sections") continue; // merged per section below
     if (!same(now[f], sent[f])) (out as Record<string, unknown>)[f] = now[f];
   }
   const savedSecs = (Array.isArray(saved.sections) ? saved.sections : []) as Section[];
@@ -240,7 +244,8 @@ export function plainText(d: MinutesText, tr: (s: string) => string): string {
     if (responsible) lines.push(`${tr("Responsible")}: ${responsible}`);
     return lines.filter(Boolean).join("\n");
   });
-  const heading = [meeting ? tr(meeting) : d.body, period].filter(Boolean).join(" · ");
+  const held = typeof d.meetingDate === "string" && d.meetingDate ? formatMeetingDate(d.meetingDate) : "";
+  const heading = [meeting ? tr(meeting) : d.body, held, period].filter(Boolean).join(" · ");
   return [d.title, heading, "", sections.join("\n\n")].join("\n");
 }
 

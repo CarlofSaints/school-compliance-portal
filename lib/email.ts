@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { resolveBranding } from "@/lib/brandingData";
 import type { SchoolBranding } from "@/lib/branding";
 import { duePhrase } from "@/lib/actionItems";
+import { readableTextOn } from "@/lib/brandingColors";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -53,50 +54,79 @@ function logoUrl(b: SchoolBranding): string {
 // text. Many clients also block remote images until the reader allows them,
 // which is why the school name stays as text in the header rather than being
 // baked into the image.
+// ---------------------------------------------------------------------------
+// 🔴 Built from TABLES with bgcolor, not styled divs. Outlook on Windows draws
+// mail with Word, which ignores background colours on divs and links, padding
+// on links and rounded corners. Carl, 19 Oct 2026: the header came out white
+// with the white school name on it, invisible, and every button was bare text.
+// Anything coloured goes on a <td> with both bgcolor and a style background.
+// ---------------------------------------------------------------------------
+
+const FONT = "Arial,Helvetica,sans-serif";
+
+/** A button that keeps its colour and size in Outlook: the colour AND the
+ *  padding sit on the table cell (Outlook ignores padding on a link), and
+ *  the link inside only carries the text. */
+function button(href: string, label: string, bg: string, align: "left" | "center" = "left"): string {
+  const fg = readableTextOn(bg);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"${align === "center" ? ' align="center"' : ""} style="margin:16px 0;"><tr><td bgcolor="${bg}" style="background:${bg};border-radius:6px;padding:12px 24px;"><a href="${href}" style="display:inline-block;font-family:${FONT};font-size:15px;font-weight:bold;color:${fg};text-decoration:none;border-radius:6px;">${label}</a></td></tr></table>`;
+}
+
+/** A tinted panel (the minutes title, a project's facts, a comment). Opened
+ *  and closed separately because what goes inside is the template's own HTML. */
+function boxOpen(bg: string, padding: string, margin: string, extra = ""): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:${margin};"><tr><td bgcolor="${bg}" style="background:${bg};padding:${padding};border-radius:6px;${extra}">`;
+}
+const BOX_CLOSE = `</td></tr></table>`;
+
 function emailShell(b: SchoolBranding, title: string, body: string): string {
   const PRIMARY = b.colors.primary;
+  // Black or white, whichever reads on the school's colour: HVPS's cyan with
+  // white text was hard to read even where the colour did show.
+  const HEAD_TEXT = readableTextOn(PRIMARY);
+  const STRIPE = b.colors.accent && b.colors.accent.toLowerCase() !== PRIMARY.toLowerCase() ? b.colors.accent : b.colors.primaryDark;
   const LOGO_URL = logoUrl(b);
-  const branding = b;
-  const footerSlogan = branding.slogan
-    ? `${esc(branding.fullName)} &mdash; "${esc(branding.slogan)}"`
-    : esc(branding.fullName);
+  const footerSlogan = b.slogan ? `&ldquo;${esc(b.slogan)}&rdquo;` : "";
   return `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>body, table, td, p, a, li, h2, div { font-family: Arial, Helvetica, sans-serif; }</style>
 </head>
-<body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
-  <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <div style="background:${PRIMARY};padding:24px 20px;text-align:center;border-radius:8px 8px 0 0;">
-      ${
-        // 🔴 The crest block is omitted entirely when a school has none, and
-        // never falls back to a file. The fallback used to be /logo.png, which
-        // is Hurlyvale's actual crest, so every email a new school sent went
-        // out under another school's badge - to that school's own governors.
-        //
-        // Nothing is drawn in its place: an inline SVG is the one thing mail
-        // clients are worst at, and the school's NAME is already directly
-        // underneath. A header with no crest reads as plain; a header with a
-        // broken image reads as a forgery.
-        LOGO_URL
-          ? `<div style="background:#fff;border-radius:8px;padding:8px;display:inline-block;margin:0 0 12px;">
-        <img src="${LOGO_URL}" alt="${esc(branding.logoAlt)}" width="52" style="display:block;width:52px;height:auto;border:0;outline:none;text-decoration:none;">
-      </div>`
-          : ""
-      }
-      <h1 style="color:#fff;margin:0;font-size:24px;">${esc(branding.fullName)}</h1>
-      <p style="color:${branding.colors.primaryTint};margin:4px 0 0;font-size:14px;">${esc(branding.tagline)}</p>
-    </div>
-    <div style="background:#fff;padding:30px;border-radius:0 0 8px 8px;">
-      <h2 style="color:${branding.colors.dark};margin:0 0 16px;">${title}</h2>
-      ${body}
-    </div>
-    <div style="text-align:center;padding:20px;color:#888;font-size:12px;">
-      <p>${footerSlogan}</p>
-    </div>
-  </div>
+<body style="margin:0;padding:0;background:#f1f3f5;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f1f3f5" style="background:#f1f3f5;">
+  <tr><td align="center" style="padding:24px 12px;">
+    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;">
+      <tr>
+        <td bgcolor="${PRIMARY}" align="center" style="background:${PRIMARY};padding:28px 24px 22px;border-radius:10px 10px 0 0;font-family:${FONT};">
+          ${
+            // 🔴 Omitted when a school has no crest, never a default file:
+            // the old fallback was Hurlyvale's own crest.
+            LOGO_URL
+              ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td bgcolor="#ffffff" style="background:#ffffff;padding:8px;border-radius:8px;"><img src="${LOGO_URL}" alt="${esc(b.logoAlt)}" width="56" style="display:block;width:56px;height:auto;border:0;outline:none;text-decoration:none;"></td></tr></table>`
+              : ""
+          }
+          <div style="font-family:${FONT};font-size:22px;font-weight:bold;color:${HEAD_TEXT};margin:${LOGO_URL ? "14px" : "0"} 0 0;">${esc(b.fullName)}</div>
+          <div style="font-family:${FONT};font-size:13px;color:${HEAD_TEXT};margin:4px 0 0;">${esc(b.tagline)}</div>
+        </td>
+      </tr>
+      <tr><td bgcolor="${STRIPE}" height="4" style="background:${STRIPE};height:4px;line-height:4px;font-size:0;">&nbsp;</td></tr>
+      <tr>
+        <td bgcolor="#ffffff" style="background:#ffffff;padding:30px 32px 28px;border-radius:0 0 10px 10px;font-family:${FONT};font-size:15px;line-height:1.55;color:#333333;">
+          <h2 style="font-family:${FONT};color:${b.colors.dark};font-size:20px;margin:0 0 18px;">${title}</h2>
+          ${body}
+        </td>
+      </tr>
+      <tr>
+        <td align="center" style="padding:18px 12px 4px;font-family:${FONT};font-size:12px;line-height:1.5;color:#888888;">
+          <strong style="color:#666666;">${esc(b.fullName)}</strong>${footerSlogan ? `<br>${footerSlogan}` : ""}
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+</table>
 </body>
 </html>`;
 }
@@ -112,12 +142,12 @@ export async function sendWelcomeEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">Welcome to the ${esc(branding.shortName)} ${esc(branding.tagline)}. Your account has been created.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Email:</strong> ${esc(to)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${esc(password)}</p>
-    </div>
+    ${BOX_CLOSE}
     <p style="color:#333;">Please log in and change your password immediately.</p>
-    <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
+    ${button(`${SITE_URL}/login`, `Log In Now`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body), b.replyTo);
 }
@@ -138,10 +168,10 @@ export async function sendCredentialsSetupEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">An account has been created for you on the ${esc(branding.shortName)} ${esc(branding.tagline)}. To get in, choose your own password using the button below.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>You sign in with:</strong> ${esc(to)}</p>
-    </div>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose your password</a>
+    ${BOX_CLOSE}
+    ${button(`${url}`, `Choose your password`, PRIMARY)}
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes. If it has expired by the time you get to it, use <strong>Forgot your password?</strong> on the sign-in page and it will send you a fresh one.</p>
   `;
   return sendEmail(b.fromEmail, to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell(b, "Set up your account", body), b.replyTo);
@@ -160,7 +190,7 @@ export async function sendPasswordResetLinkEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">Someone asked to reset the password for your ${esc(branding.shortName)} ${esc(branding.tagline)} account. If that was you, choose a new password using the button below.</p>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose a new password</a>
+    ${button(`${url}`, `Choose a new password`, PRIMARY)}
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes.</p>
     <p style="color:#666;font-size:13px;">If you did not ask for this, you can ignore this email. Your password has not changed.</p>
     <p style="color:#888;font-size:12px;word-break:break-all;">If the button does not work, paste this into your browser:<br>${url}</p>
@@ -184,7 +214,7 @@ export async function sendEmailChangeConfirmEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">You asked to use this address for your ${esc(b.shortName)} ${esc(b.tagline)} account. Confirm it using the button below and it becomes the address you sign in with.</p>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Confirm my new email</a>
+    ${button(`${url}`, `Confirm my new email`, PRIMARY)}
     <p style="color:#666;font-size:13px;">This link expires in ${ttlHours} hours. Until it is used, your account keeps its old address.</p>
     <p style="color:#666;font-size:13px;">If you did not ask for this, ignore this email and nothing changes.</p>
   `;
@@ -238,12 +268,12 @@ export async function sendMinutesForReviewEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">${esc(fromName)} has sent you <strong>draft ${draftNumber}</strong> of the minutes below to check.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
       <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
-    </div>
+    ${BOX_CLOSE}
     <p style="color:#333;">Please read it and either approve it, or send it back with a note saying what needs changing.</p>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Read and respond</a>
+    ${button(`${url}`, `Read and respond`, PRIMARY)}
   `;
   return sendEmail(
     b.fromEmail,
@@ -274,10 +304,10 @@ export async function sendMinutesChangesRequestedEmail(
     <p style="color:#333;"><strong>${esc(reviewerName)}</strong> has asked for changes to <strong>${esc(minutesTitle)}</strong> before it goes out for signing.</p>
     ${
       comments
-        ? `<div style="background:#fffbeb;border-left:3px solid #f59e0b;padding:12px 16px;margin:16px 0;"><p style="margin:0;color:#78350f;white-space:pre-wrap;">${esc(comments)}</p></div>`
+        ? `${boxOpen("#fffbeb", "12px 16px", "16px 0", "border-left:3px solid #f59e0b;")}<p style="margin:0;color:#78350f;white-space:pre-wrap;">${esc(comments)}</p>${BOX_CLOSE}`
         : `<p style="color:#666;font-size:14px;">No note was left, so it is worth asking them what needs changing.</p>`
     }
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the minutes</a>
+    ${button(`${url}`, `Open the minutes`, PRIMARY)}
   `;
   return sendEmail(
     b.fromEmail,
@@ -289,37 +319,6 @@ export async function sendMinutesChangesRequestedEmail(
 }
 
 // Everyone has approved and it is ready to sign.
-export async function sendMinutesReadyToSignEmail(
-  to: string,
-  recipientName: string,
-  minutesId: string,
-  minutesTitle: string,
-  periodLabel: string
-): Promise<boolean> {
-  const b = await resolveBranding();
-  const branding = b;
-  const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/minutes/${minutesId}`;
-  const body = `
-    <p style="color:#333;">Dear ${esc(recipientName)},</p>
-    <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
-      <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
-    </div>
-    <p style="color:#333;">Open it, read it through, and sign it off.</p>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Read and sign</a>
-    <p style="color:#666;font-size:13px;margin-top:16px;">Once everyone has signed, the minutes are locked and cannot be changed. If something is still wrong, send it back rather than signing.</p>
-  `;
-  return sendEmail(
-    b.fromEmail,
-    to,
-    `Ready to sign: ${minutesTitle}`,
-    emailShell(b, "Ready to sign", body),
-    b.replyTo
-  );
-}
-
 // The code somebody types to sign. Sent to them, never shown on the page: what
 // makes an ordinary electronic signature stand up is that the signer did
 // something deliberate that only they could do, and clicking a button while
@@ -341,13 +340,13 @@ export async function sendMinutesSigningCodeEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
       <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
-    </div>
+    ${BOX_CLOSE}
     <p style="color:#333;">Read them through, then sign with this code:</p>
-    <p style="font-family:monospace;font-size:30px;letter-spacing:6px;font-weight:bold;color:${PRIMARY};margin:8px 0 20px;">${esc(code)}</p>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Read and sign</a>
+    ${boxOpen("#f4f4f5", "14px 20px", "8px 0 20px", "text-align:center;")}<span style="font-family:'Courier New',monospace;font-size:30px;letter-spacing:8px;font-weight:bold;color:${b.colors.dark};">${esc(code)}</span>${BOX_CLOSE}
+    ${button(`${url}`, `Read and sign`, PRIMARY)}
     <p style="color:#666;font-size:13px;margin-top:20px;">The code is yours alone. Do not pass it on: whoever uses it signs in your name.</p>
     <p style="color:#666;font-size:13px;">Once everyone has signed, the minutes are locked and cannot be changed. If something is still wrong, ask the secretary to pull them back rather than signing.</p>
   `;
@@ -362,42 +361,77 @@ export async function sendMinutesSigningCodeEmail(
 
 // Everybody has signed. This goes to the distribution list for the body, so
 // the whole SGB or FINCOM gets the final record.
+/** An open action from the minutes that is this recipient's to do. */
+export interface SignedEmailAction {
+  title: string;
+  dueDate?: string;
+}
+
+// Carl's wording, 19 Oct 2026. Each recipient sees only THEIR open actions
+// from this meeting, so the list is a to-do, not the whole register.
 export async function sendMinutesSignedEmail(
   to: string,
   recipientName: string,
   minutesId: string,
   minutesTitle: string,
   periodLabel: string,
+  /** "on 15 October 2026" / "in October 2026" (meetingWhen in lib/minutes). */
+  heldWhen: string,
   signedBy: string[],
+  /** Identifies the exact wording signed (shortHash of documentHash). */
   documentRef: string,
+  actions: SignedEmailAction[],
+  /** Has a portal login. Only then is the Action Item List mentioned: a
+   *  register member without one would land on a sign-in page. */
+  canSignIn: boolean,
   /** The signed minutes themselves. Absent when the file could not be built,
    *  in which case the email still goes, with its link. */
   attachment?: EmailAttachment | null
 ): Promise<boolean> {
   const b = await resolveBranding();
-  const branding = b;
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/minutes/${minutesId}`;
-  const body = `
+  const actionBlock = actions.length
+    ? `
+    <p style="color:#333;margin-top:20px;">Action items from the meeting that are yours to execute are:</p>
+    <ol style="color:#333;margin:0 0 12px;padding-left:22px;">
+      ${actions
+        .map(
+          (a) =>
+            `<li style="margin:0 0 6px;">${esc(a.title)}${a.dueDate ? ` <span style="color:#666;font-size:13px;">(due ${esc(formatZaDate(a.dueDate))})</span>` : ""}</li>`
+        )
+        .join("")}
+    </ol>${
+      canSignIn
+        ? `
+    <p style="color:#333;">Remember to check the <a href="${SITE_URL}/action-items" style="color:${b.colors.dark};font-weight:bold;">Action Item List</a> in the portal and then mark as done the ones you have completed.</p>`
+        : ""
+    }`
+    : "";
+  // Two bodies: if the attachment is refused the mail goes without it, and
+  // must not then say a copy is attached.
+  const body = (attached: boolean) => `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
-    <p style="color:#333;">The minutes below have been signed and are now the final record.${
-      attachment ? ` A copy is attached to this email (${esc(attachment.filename)}).` : ""
-    }</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
+    <p style="color:#333;">Minutes from the meeting held ${esc(heldWhen)} ${attached ? "are attached for your reference" : "have been signed"}.</p>
+    <p style="color:#333;margin-bottom:0;">You can view them online if you would like, by clicking this link:</p>
+    ${button(url, "READ", PRIMARY)}
+    ${actionBlock}
+    ${boxOpen("#f4f4f5", "16px", "20px 0 16px")}
+      <p style="margin:0;color:#333;">Minutes Name: <strong>${esc(minutesTitle)}</strong></p>
       <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
       <p style="margin:10px 0 0;color:#555;font-size:14px;">Signed by ${esc(signedBy.join(", "))}</p>
-    </div>
-    <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Read the signed minutes</a>
-    <p style="color:#666;font-size:13px;margin-top:20px;">Document reference ${esc(documentRef)}. This identifies the exact wording that was signed, so a later copy can be checked against it.</p>
+    ${BOX_CLOSE}
+    <p style="color:#333;">Thank you</p>
+    <p style="color:#999;font-size:12px;margin-top:24px;">Document reference ${esc(documentRef)}. It identifies the exact wording that was signed, so a later copy can be checked against it.</p>
   `;
   return sendEmail(
     b.fromEmail,
     to,
     `Signed: ${minutesTitle}`,
-    emailShell(b, "Signed minutes", body),
+    emailShell(b, "Signed minutes", body(!!attachment)),
     b.replyTo,
-    attachment ? [attachment] : undefined
+    attachment ? [attachment] : undefined,
+    attachment ? emailShell(b, "Signed minutes", body(false)) : undefined
   );
 }
 
@@ -414,12 +448,12 @@ export async function sendSpendNotificationEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">A new spend application has been submitted and requires your review.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${esc(submittedBy)}</p>
-    </div>
-    <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
+    ${BOX_CLOSE}
+    ${button(`${SITE_URL}/spend`, `Review Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body), b.replyTo);
 }
@@ -459,7 +493,7 @@ export async function sendApplicantConfirmationEmail(
     <p style="color:#333;">${intro}</p>
     ${quotes}
     ${routing}
-    <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View Application</a>
+    ${button(`${SITE_URL}/spend`, `View Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -559,7 +593,7 @@ export async function sendCreditOrderEmail(order: {
       order.reference ? `<br>PO / reference: <strong>${esc(order.reference)}</strong>` : ""
     }</p>
     <p style="color:#b45309;font-weight:bold;">Nothing has been paid and no credits have been added. Send the invoice; press the button only once the EFT is in.</p>
-    <a href="${order.approveUrl}" style="display:inline-block;background:${b.colors.primary};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Payment received: add ${order.credits} credits</a>
+    ${button(`${order.approveUrl}`, `Payment received: add ${order.credits} credits`, b.colors.primary)}
     <p style="color:#666;font-size:13px;">The link works once and expires in 90 days. Do not forward this email: whoever has the link can add the credits.</p>
   `;
   return sendEmail(
@@ -630,13 +664,13 @@ export async function sendSpendReminderEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     ${noteBlock}
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${esc(statusLabel)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>You are receiving this as:</strong> ${esc(role)}</p>
-    </div>
-    <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the Project</a>
+    ${BOX_CLOSE}
+    ${button(`${SITE_URL}/spend`, `Open the Project`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -674,7 +708,7 @@ export async function sendApprovalRequestEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(approverName)},</p>
     <p style="color:#333;">A fund application needs your decision.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${esc(sourceOfFunds || "Not stated")}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Quotes submitted:</strong> ${quoteCount}</p>
@@ -682,15 +716,15 @@ export async function sendApprovalRequestEmail(
       <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${esc(submittedBy)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Approval level:</strong> ${esc(tierLabel)}</p>
       ${deadline}
-    </div>
+    ${BOX_CLOSE}
     <p style="color:#333;">Open the application to read it in full, then approve, decline, or ask a question.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;">
       <tr>
         <td style="padding-right:8px;">
-          <a href="${url}?decision=approve" style="display:inline-block;background:#059669;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Approve</a>
+          ${button(`${url}?decision=approve`, `Approve`, "#059669")}
         </td>
         <td>
-          <a href="${url}?decision=decline" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Decline</a>
+          ${button(`${url}?decision=decline`, `Decline`, "#dc2626")}
         </td>
       </tr>
     </table>
@@ -724,13 +758,13 @@ export async function sendApprovalProgressEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(applicantName)},</p>
     <p style="color:#333;">There has been an update on your fund application.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>${esc(approverName)}:</strong> ${esc(decision)}</p>
       ${note}
       <p style="margin:8px 0 0;color:#333;"><strong>Progress:</strong> ${approved} of ${total} approvals in</p>
-    </div>
-    <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
+    ${BOX_CLOSE}
+    ${button(`${SITE_URL}/spend/${spendId}`, `View the Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -754,12 +788,12 @@ export async function sendFullyApprovedEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(applicantName)},</p>
     <p style="color:#333;">Your fund application has been <strong>fully approved</strong>.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Approved amount:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Approved by:</strong> ${esc(approverNames.join(", "))}</p>
-    </div>
-    <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
+    ${BOX_CLOSE}
+    ${button(`${SITE_URL}/spend/${spendId}`, `View the Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -799,21 +833,21 @@ export async function sendApprovalReminderEmail(
   const body = `
     <p style="color:#333;">Dear ${esc(approverName)},</p>
     <p style="color:#333;">This is a reminder that a fund application is waiting for your decision. ${waited}</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${esc(sourceOfFunds || "Not stated")}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Quotes submitted:</strong> ${quoteCount}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Estimated cost:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Reminder sent by:</strong> ${esc(chasedBy)}</p>
       ${alsoWaiting}
-    </div>
+    ${BOX_CLOSE}
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;">
       <tr>
         <td style="padding-right:8px;">
-          <a href="${url}?decision=approve" style="display:inline-block;background:#059669;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Approve</a>
+          ${button(`${url}?decision=approve`, `Approve`, "#059669")}
         </td>
         <td>
-          <a href="${url}?decision=decline" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Decline</a>
+          ${button(`${url}?decision=decline`, `Decline`, "#dc2626")}
         </td>
       </tr>
     </table>
@@ -845,9 +879,9 @@ function progressBar(percent: number, PRIMARY: string): string {
   return `
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:4px 0 0;">
       <tr>
-        <td style="background:#e5e7eb;border-radius:999px;height:10px;padding:0;">
+        <td bgcolor="#e5e7eb" style="background:#e5e7eb;border-radius:999px;height:10px;padding:0;">
           <table role="presentation" cellpadding="0" cellspacing="0" width="${pct}%" style="min-width:1%;">
-            <tr><td style="background:${PRIMARY};border-radius:999px;height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>
+            <tr><td bgcolor="${PRIMARY}" style="background:${PRIMARY};border-radius:999px;height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>
           </table>
         </td>
       </tr>
@@ -878,7 +912,7 @@ interface ActionEmailFacts {
 function actionFactsBlock(facts: ActionEmailFacts, PRIMARY: string): string {
   const overdue = facts.daysLeft !== null && facts.daysLeft < 0;
   return `
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       <p style="margin:0;color:#333;"><strong>${esc(facts.ref)}:</strong> ${esc(facts.title)}</p>
       ${facts.description ? `<p style="margin:8px 0 0;color:#555;font-size:14px;">${esc(facts.description)}</p>` : ""}
       <p style="margin:12px 0 0;color:${overdue ? "#dc2626" : "#333"};"><strong>Due:</strong> ${esc(dueLine(facts.dueDate, facts.daysLeft))}</p>
@@ -886,7 +920,7 @@ function actionFactsBlock(facts: ActionEmailFacts, PRIMARY: string): string {
       <p style="margin:8px 0 0;color:#333;"><strong>Priority:</strong> ${esc(facts.priorityLabel)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${esc(facts.statusLabel)}</p>
       ${progressBar(facts.progress, PRIMARY)}
-    </div>`;
+    ${BOX_CLOSE}`;
 }
 
 // Sent the moment somebody is put on an action, so the first they hear of it is
@@ -905,7 +939,7 @@ export async function sendActionAssignedEmail(
     <p style="color:#333;">${esc(raisedByName)} has assigned you an action item.</p>
     ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#333;">Please update your progress in the portal as the work moves along. You will get a reminder before it is due.</p>
-    <a href="${SITE_URL}/action-items" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the action</a>
+    ${button(`${SITE_URL}/action-items`, `Open the action`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -934,7 +968,7 @@ export async function sendActionReminderEmail(
     ${note ? `<p style="color:#333;">${esc(note)}</p>` : ""}
     ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#666;font-size:13px;">You are receiving this as: ${esc(role)}</p>
-    <a href="${SITE_URL}/action-items" style="display:inline-block;background:${overdue ? "#dc2626" : PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Update the progress</a>
+    ${button(`${SITE_URL}/action-items`, `Update the progress`, overdue ? "#dc2626" : PRIMARY)}
   `;
   const subject = overdue
     ? `Overdue: ${facts.ref} ${facts.title}`
@@ -1052,10 +1086,10 @@ export function buildWeeklyUpdateEmail(
       ${minutes
         .slice(0, WEEKLY_LIST_CAP)
         .map(
-          (m) => `<div style="background:#f4f4f5;padding:12px 14px;border-radius:6px;margin:0 0 8px;font-size:14px;">
+          (m) => `${boxOpen("#f4f4f5", "12px 14px", "0 0 8px", "font-size:14px;")}
         <p style="margin:0;color:#333;"><strong>${esc(m.title)}</strong> <span style="color:#777;">(${esc(m.period)})</span></p>
         <p style="margin:6px 0 0;color:#333;">${m.signed} of ${m.total} signed. Waiting on: <strong>${esc(m.waitingOn.join(", ") || "nobody")}</strong></p>
-      </div>`
+      ${BOX_CLOSE}`
         )
         .join("")}
       ${minutes.length > WEEKLY_LIST_CAP ? `<p style="color:#777;font-size:13px;margin:8px 0 0;">And ${minutes.length - WEEKLY_LIST_CAP} more in the portal.</p>` : ""}`
@@ -1108,7 +1142,7 @@ export function buildWeeklyUpdateEmail(
     ${spendBlock}
     ${activateBlock}
     <div style="text-align:center;margin:28px 0 8px;">
-      <a href="${SITE_URL}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;">Open the ${esc(b.shortName)} portal</a>
+      ${button(`${SITE_URL}`, `Open the ${esc(b.shortName)} portal`, PRIMARY, "center")}
       <p style="margin:10px 0 0;font-size:12px;color:#777;">${esc(SITE_URL.replace(/^https?:\/\//, ""))}</p>
     </div>
     <p style="color:#999;font-size:12px;margin:24px 0 0;">You receive this because you have an account on the ${esc(b.fullName)} ${esc(b.tagline)}. Sent to ${esc(recipientName || to)}.</p>
@@ -1183,7 +1217,7 @@ export function buildActionSummaryEmail(
     const colour = late ? RED : ORANGE;
     const when = duePhrase(r.dueDate, r.daysLeft);
     return `<tr>
-      <td width="4" style="background:${colour};padding:0;font-size:0;">&nbsp;</td>
+      <td width="4" bgcolor="${colour}" style="background:${colour};padding:0;font-size:0;">&nbsp;</td>
       <td style="padding:8px 10px;border-bottom:1px solid #eee;color:#333;"><strong>${esc(r.ref)}</strong> ${esc(r.title)}<br><span style="color:#777;font-size:13px;">${esc(r.owners || "Nobody assigned")} &middot; ${r.progress}% done</span></td>
       <td style="padding:8px 0 8px 12px;border-bottom:1px solid #eee;color:${colour};white-space:nowrap;text-align:right;font-weight:600;" valign="top">${esc(when)}</td>
     </tr>`;
@@ -1210,7 +1244,7 @@ export function buildActionSummaryEmail(
     ${urgentBlock}
     ${attachmentNote}
     <div style="text-align:center;margin:28px 0 8px;">
-      <a href="${SITE_URL}/action-items" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;">Open the action items</a>
+      ${button(`${SITE_URL}/action-items`, `Open the action items`, PRIMARY, "center")}
     </div>
     <p style="color:#999;font-size:12px;margin:24px 0 0;">${e.scheduleText ? `This summary goes out ${esc(e.scheduleText.charAt(0).toLowerCase() + e.scheduleText.slice(1))}. ` : ""}You are on the list for it in the ${esc(b.fullName)} portal.</p>
   `;
@@ -1256,7 +1290,7 @@ function bookingRow(label: string, value: string): string {
 
 function bookingFactsBlock(f: RoomBookingEmailFacts): string {
   return `
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       ${bookingRow("Room", f.roomName)}
       ${bookingRow("Meeting", f.title)}
       ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
@@ -1264,11 +1298,11 @@ function bookingFactsBlock(f: RoomBookingEmailFacts): string {
       ${f.bookedForName ? bookingRow("Booked for", f.bookedForName) : ""}
       ${f.bookedForName && f.bookedByName ? bookingRow("Booked by", f.bookedByName) : ""}
       ${f.recurrenceLabel ? bookingRow("Repeats", f.occurrences && f.occurrences > 1 ? `${f.recurrenceLabel} (${f.occurrences} bookings)` : f.recurrenceLabel) : ""}
-    </div>`;
+    ${BOX_CLOSE}`;
 }
 
 function bookingButton(PRIMARY: string, href: string, label: string): string {
-  return `<a href="${href}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">${label}</a>`;
+  return `${button(`${href}`, `${label}`, PRIMARY)}`;
 }
 
 async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string) => string): Promise<boolean> {
@@ -1368,12 +1402,12 @@ export function sendRoomRequestEmail(
   return sendBookingMail(to, `${requesterName} is asking for ${f.roomName}, ${f.dateLabel}`, "Can they have the room?", (P) => `
     <p style="color:#333;">Dear ${esc(holderName)},</p>
     <p style="color:#333;">${esc(requesterName)} is asking for the room you have booked. Nothing changes unless you say yes.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       ${bookingRow("Your booking", yourMeeting)}
       ${bookingRow("Room", f.roomName)}
       ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
       ${bookingRow("They need it for", requesterMeeting)}
-    </div>
+    ${BOX_CLOSE}
     <p style="color:#333;">Their reason:</p>
     <blockquote style="margin:0 0 16px;padding:8px 12px;border-left:4px solid ${P};background:#fafafa;color:#333;">${esc(message)}</blockquote>
     ${bookingButton(P, `${link}?action=approve`, "Let them have it")}
@@ -1458,11 +1492,11 @@ export function sendRoomRequestApprovedEmail(
   return sendBookingMail(to, `You have ${f.roomName}, ${f.dateLabel}`, "Request approved", (P) => `
     <p style="color:#333;">Dear ${esc(requesterName)},</p>
     <p style="color:#333;">${esc(holderName)} has given you the room. It is booked in your name, so there is nothing further to do.</p>
-    <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
       ${bookingRow("Room", f.roomName)}
       ${bookingRow("Meeting", f.title)}
       ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
-    </div>
+    ${BOX_CLOSE}
     ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
   `);
 }

@@ -21,6 +21,7 @@ import type { SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
   formatPeriod,
+  minutesWhenLabel,
   MEETING_BODY_LABELS,
   SIGNATORY_ROLE_LABELS,
   sectionListGroups,
@@ -423,7 +424,7 @@ export async function buildMinutesDocx(
     new Paragraph({
       spacing: { after: 320 },
       children: [
-        new TextRun({ text: formatPeriod(record.period), size: 20, color: "666666" }),
+        new TextRun({ text: minutesWhenLabel(record), size: 20, color: "666666" }),
         ...(record.draftNumber > 0 && !record.signedAt
           ? [
               new TextRun({
@@ -619,7 +620,7 @@ export async function buildMinutesDocx(
                 alignment: AlignmentType.CENTER,
                 children: [
                   new TextRun({
-                    text: `${branding.fullName}  |  ${MEETING_BODY_LABELS[record.body]} minutes  |  ${formatPeriod(record.period)}  |  Page `,
+                    text: `${branding.fullName}  |  ${MEETING_BODY_LABELS[record.body]} minutes  |  ${minutesWhenLabel(record)}  |  Page `,
                     size: 16,
                     color: "888888",
                   }),

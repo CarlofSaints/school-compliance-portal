@@ -1,7 +1,7 @@
 import { getMinutes, updateMinutes } from "./minutesData";
 import type { MinutesRecord } from "./minutesData";
 import type { Signatory } from "./minutes";
-import { formatPeriod } from "./minutes";
+import { minutesWhenLabel } from "./minutes";
 import { signatoryRoleForPosition } from "./positions";
 import { resolveAudience } from "./minutesRecipients";
 import { getPeople } from "./peopleData";
@@ -122,7 +122,7 @@ export async function openSigning(
     return { signatories, status: "awaiting_signatures" as const };
   });
 
-  const periodLabel = formatPeriod(record.period);
+  const periodLabel = minutesWhenLabel(record);
   const failed: string[] = [];
   for (const { signatory, code } of codes) {
     const ok = await sendMinutesSigningCodeEmail(

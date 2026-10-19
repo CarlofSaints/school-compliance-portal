@@ -100,5 +100,87 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail === 0 ? 0 : 1);
+(async () => {
+  console.log("\nThe signed-minutes email lists each person's OWN open actions");
+  process.env.RESEND_API_KEY = "re_check_not_real";
+  let html = "";
+  let attachments: { filename: string; contentId?: string; content_id?: string }[] = [];
+  process.env.NEXT_PUBLIC_SCHOOL ||= "hvps"; // a school with a built-in crest
+  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
+    const body = JSON.parse(init?.body || "{}");
+    html = body.html || "";
+    attachments = body.attachments || [];
+    return new Response(JSON.stringify({ id: "x" }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const { openActionsByEmail } = await import("../lib/minutesDistribution");
+  const { sendMinutesSignedEmail } = await import("../lib/email");
+  const { meetingWhen } = await import("../lib/minutes");
+
+
+  const from = { minutesId: "m1", minutesTitle: "T", minutesPeriod: "October 2026" };
+  const items = [
+    { id: "a1", title: "Fix the borehole", dueDate: "2026-10-30", status: "in_progress", assigneeIds: ["p1"], fromMinutes: from },
+    { id: "a2", title: "Order STEM kits", dueDate: "", status: "not_started", assigneeIds: ["p1", "p2"], fromMinutes: from },
+    { id: "a3", title: "Already done", dueDate: "", status: "done", assigneeIds: ["p1"], fromMinutes: from },
+    { id: "a4", title: "Cancelled", dueDate: "", status: "cancelled", assigneeIds: ["p1"], fromMinutes: from },
+    { id: "a6", title: "Shared mailbox job", dueDate: "", status: "not_started", assigneeIds: ["p4", "p5"], fromMinutes: from },
+    { id: "a5", title: "Other meeting", dueDate: "", status: "not_started", assigneeIds: ["p1"], fromMinutes: { ...from, minutesId: "m2" } },
+  ] as Parameters<typeof openActionsByEmail>[1];
+  const people = [
+    { id: "p1", email: " Derek@School.co.za " },
+    { id: "p2", email: "old-dee@school.co.za", userId: "u2" },
+    { id: "p3", email: "" },
+    { id: "p4", email: "office@school.co.za" },
+    { id: "p5", email: "Office@school.co.za" },
+  ];
+  const users = [{ id: "u2", email: "dee@school.co.za" }];
+  const map = openActionsByEmail("m1", items, people, users);
+  check("Derek gets his two open actions from THIS meeting", map.get("derek@school.co.za")?.map((a) => a.title), ["Fix the borehole", "Order STEM kits"]);
+  check("Dee gets only the shared one", map.get("dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
+  check("Dee's actions are found under her login email", map.get("dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
+  check("and under her register email, which the list may mail instead", map.get("old-dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
+  check("two register entries sharing one mailbox list the action once", map.get("office@school.co.za")?.map((a) => a.title), ["Shared mailbox job"]);
+  check("nobody else is listed", [...map.keys()].length, 4);
+  check("a custom period with no usable dates never shows its label", meetingWhen({ kind: "custom", year: 2026, from: "", to: "", label: "Special AGM" }), "in 2026");
+
+  check("a custom period with only a start date is not called a single day", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "" }), "in 2026");
+  check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");
+  check("a custom range reads 'from <date> to <date>', not its label", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15", label: "Special meeting" }), "from 1 October 2026 to 15 October 2026");
+  const { checkMeetingDate, minutesWhenLabel, canonicalMinutes } = await import("../lib/minutes");
+  check("a meeting date beats the period", meetingWhen({ kind: "month", year: 2026, month: 10 }, "2026-10-15"), "on 15 October 2026");
+  check("a valid meeting date passes", checkMeetingDate("2026-10-15"), null);
+  checkThat("a missing meeting date is refused", !!checkMeetingDate(""));
+  checkThat("an impossible date is refused", !!checkMeetingDate("2026-02-30"));
+  check("the label shows the date and the period", minutesWhenLabel({ period: { kind: "month", year: 2026, month: 10 }, meetingDate: "2026-10-15" }), "Held 15 October 2026 · October 2026");
+  check("without a date the label is just the period", minutesWhenLabel({ period: { kind: "month", year: 2026, month: 10 } }), "October 2026");
+  const base = { title: "T", body: "sgb" as const, period: { kind: "month" as const, year: 2026, month: 10 }, sections: [] };
+  check("🔴 minutes with no date sign exactly as before (old signatures stay valid)", canonicalMinutes(base), ["T", "sgb", "October 2026"].join("\u001e"));
+  checkThat("the meeting date IS part of what is signed", canonicalMinutes({ ...base, meetingDate: "2026-10-15" }) !== canonicalMinutes(base));
+  const { meetingDateOutsidePeriod } = await import("../lib/minutes");
+  check("a date inside its month agrees", meetingDateOutsidePeriod("2026-10-15", { kind: "month", year: 2026, month: 10 }), null);
+  checkThat("a date outside its month is flagged", !!meetingDateOutsidePeriod("2026-11-02", { kind: "month", year: 2026, month: 10 }));
+  check("a date inside its quarter agrees", meetingDateOutsidePeriod("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), null);
+  checkThat("a date outside a custom range is flagged", !!meetingDateOutsidePeriod("2026-10-20", { kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15" }));
+  check("no date: nothing to disagree with", meetingDateOutsidePeriod(undefined, { kind: "month", year: 2026, month: 10 }), null);
+  const { periodForDate } = await import("../lib/minutes");
+  check("a month period follows a picked date", periodForDate("2026-11-02", { kind: "month", year: 2026, month: 10 }), { kind: "month", year: 2026, month: 11 });
+  check("a date outside a quarter makes it that month, so they never disagree", periodForDate("2026-10-15", { kind: "quarter", year: 2026, quarter: 3 }), { kind: "month", year: 2026, month: 10 });
+  check("a quarter the secretary chose is left alone", periodForDate("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), { kind: "quarter", year: 2026, quarter: 4 });
+  check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
+
+  await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", map.get("derek@school.co.za")!, true, null);
+  checkThat("email lists the actions", html.includes("Fix the borehole") && html.includes("Order STEM kits"));
+  checkThat("with the due date", html.includes("(due 30 October 2026)"));
+  checkThat("and the Action Item List link", html.includes("/action-items") && html.includes("Action Item List"));
+  checkThat("without an attachment it does not claim one", html.includes("have been signed") && !html.includes("attached"));
+  checkThat("the document reference is at the bottom", html.includes("Document reference 3F9A1C0B7E22"));
+  checkThat("the title is escaped", html.includes("Ad hoc &lt;SGB&gt;"));
+  await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", [], true, null);
+  checkThat("someone with no actions gets no action list", !html.includes("yours to execute"));
+  await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", map.get("office@school.co.za")!, false, null);
+  checkThat("the crest is linked, with nothing attached", html.includes("/logo.png") && attachments.length === 0);
+  checkThat("someone with no login gets their actions but no portal link", html.includes("Shared mailbox job") && !html.includes("/action-items"));
+
+  console.log(`\n${pass} passed, ${fail} failed\n`);
+  process.exit(fail === 0 ? 0 : 1);
+})();

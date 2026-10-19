@@ -64,6 +64,84 @@ export function formatPeriod(p: MeetingPeriod): string {
   }
 }
 
+/** The day the meeting was held, YYYY-MM-DD. Carl, 19 Oct 2026: a period
+ *  alone ("October 2026") did not say when the meeting actually was. Optional
+ *  on the record (older minutes have none), required when adding new ones. */
+export function checkMeetingDate(d: unknown): string | null {
+  if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return "Choose the meeting date.";
+  const parsed = new Date(`${d}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) return "That meeting date is not a real date.";
+  const thisYear = new Date().getFullYear();
+  if (parsed.getUTCFullYear() < 2000 || parsed.getUTCFullYear() > thisYear + 5) return `The year should be between 2000 and ${thisYear + 5}.`;
+  return null;
+}
+
+/** A well-formed calendar date, for SHOWING a stored date. Not checkMeetingDate,
+ *  whose limits are rules for entering one. */
+function isIsoDate(d: string | undefined): d is string {
+  return !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`));
+}
+
+/** The period to use once a meeting date is picked: a month period follows
+ *  the date, and a quarter or custom period that does not cover it becomes
+ *  that month, so the two never disagree in what is signed. A quarter or
+ *  range that does cover it is left as the secretary chose. */
+export function periodForDate(date: string, p: MeetingPeriod): MeetingPeriod {
+  if (!isIsoDate(date)) return p;
+  if (p.kind !== "month" && !meetingDateOutsidePeriod(date, p)) return p;
+  return { kind: "month", year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) };
+}
+
+/** Null when the date falls inside the period (or either is missing), else
+ *  why not. Used by the editor to clear a date a new period no longer covers.
+ *  🔴 Deliberately NOT enforced on save or at signing: a refusal there stopped
+ *  autosave, or left approved minutes stuck before codes went out. The sign
+ *  page shows both, so a signer sees exactly what they sign. */
+export function meetingDateOutsidePeriod(d: string | undefined, p: MeetingPeriod): string | null {
+  if (!isIsoDate(d)) return null;
+  const y = Number(d.slice(0, 4));
+  const m = Number(d.slice(5, 7));
+  const inside =
+    p.kind === "month"
+      ? p.year === y && p.month === m
+      : p.kind === "quarter"
+        ? p.year === y && Math.ceil(m / 3) === p.quarter
+        : !p.from || !p.to || (d >= p.from && d <= p.to);
+  return inside ? null : `The meeting date (${formatMeetingDate(d)}) is outside ${formatPeriod(p)}. Change one so they agree.`;
+}
+
+/** "15 October 2026". */
+export function formatMeetingDate(d: string): string {
+  const parsed = new Date(`${d}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? d : `${parsed.getUTCDate()} ${MONTHS[parsed.getUTCMonth()]} ${parsed.getUTCFullYear()}`;
+}
+
+/** "Held 15 October 2026 · October 2026", or just the period when the
+ *  minutes have no meeting date (those added before 19 Oct 2026). For the
+ *  emails and the Word file, which are English. */
+export function minutesWhenLabel(m: { period: MeetingPeriod; meetingDate?: string }): string {
+  return isIsoDate(m.meetingDate)
+    ? `Held ${formatMeetingDate(m.meetingDate)} · ${formatPeriod(m.period)}`
+    : formatPeriod(m.period);
+}
+
+/** When the meeting was, for a sentence: "on 15 October 2026" for one day,
+ *  "from 1 October 2026 to 15 October 2026" for a custom range (its dates,
+ *  not its free-text label), otherwise "in October 2026" / "in Q4 2026".
+ *  Minutes keep a period, not one meeting date. */
+export function meetingWhen(p: MeetingPeriod, meetingDate?: string): string {
+  if (isIsoDate(meetingDate)) return `on ${formatMeetingDate(meetingDate)}`;
+  if (p.kind === "custom") {
+    const day = (iso: string) => (isIsoDate(iso) ? formatMeetingDate(iso) : null);
+    const from = day(p.from);
+    const to = day(p.to);
+    if (from && to && p.from === p.to) return `on ${from}`;
+    if (from && to) return `from ${from} to ${to}`;
+    return `in ${p.year}`; // never the free-text label
+  }
+  return `in ${formatPeriod(p)}`;
+}
+
 /** Sortable key, so a list of minutes orders correctly whichever kind of period
  *  each one uses. Quarters sort to the START of their first month, which puts a
  *  quarter ahead of the months inside it rather than interleaved oddly. */
@@ -167,7 +245,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 
 /** The fields that ARE the minutes' words: what the editor saves, what a
  *  conflict is about, and (with the uploaded original) what signing freezes. */
-export const MINUTES_TEXT_FIELDS = ["title", "body", "period", "sections"] as const;
+export const MINUTES_TEXT_FIELDS = ["title", "body", "period", "meetingDate", "sections"] as const;
 
 export const APOLOGIES_TITLE = "Apologies";
 export const NOT_IN_ATTENDANCE_HEADING = "Not in Attendance";
@@ -871,6 +949,7 @@ export function canonicalMinutes(m: {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  meetingDate?: string;
   sections: MinutesSection[];
 }): string {
   const numbers = sectionNumbers(m.sections);
@@ -906,6 +985,9 @@ export function canonicalMinutes(m: {
     m.title.trim(),
     m.body,
     formatPeriod(m.period),
+    // 🔴 Only when set, so minutes without a date (all signed before 19 Oct
+    // 2026) hash exactly as they always have.
+    ...(m.meetingDate ? [`held ${m.meetingDate}`] : []),
     ...sections,
   ].join("\u001e");
 }

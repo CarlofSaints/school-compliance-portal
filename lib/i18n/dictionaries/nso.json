@@ -1730,5 +1730,8 @@
   "Copy mine": "Kopiša ya ka",
   "Overwrite with mine": "Ngwala godimo ka ya ka",
   "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "O na le metsotso ye e sa bolokwago ye e butšwego thebeng ye nngwe. O a tšwa le ge go le bjalo gomme o e lahlegelwa?",
-  "Last edited by {name} at {time}": "E fetotšwe la mafelelo ke {name} ka {time}"
+  "Last edited by {name} at {time}": "E fetotšwe la mafelelo ke {name} ka {time}",
+  "Meeting date": "Letšatšikgwedi la kopano",
+  "Choose the meeting date.": "Kgetha letšatšikgwedi la kopano.",
+  "That date can't be used. Pick a date from 2000 onwards.": "Letšatšikgwedi leo ga le kgone go šomišwa. Kgetha letšatšikgwedi go tloga ka 2000."
 }

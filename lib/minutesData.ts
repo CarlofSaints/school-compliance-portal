@@ -36,6 +36,8 @@ export interface MinutesRecord {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  /** YYYY-MM-DD the meeting was held. Absent on minutes added before 19 Oct 2026. */
+  meetingDate?: string;
   status: MinutesStatus;
 
   /** Written in the app. Empty for a set of minutes that was only uploaded. */

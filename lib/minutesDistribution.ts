@@ -1,10 +1,14 @@
 import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
-import { formatPeriod, canDistribute } from "./minutes";
+import { canDistribute, formatPeriod, meetingWhen } from "./minutes";
+import { getActionItems } from "./actionItemData";
+import { isClosed, type ActionItem } from "./actionItems";
+import { getPeople } from "./peopleData";
+import { getUsers } from "./userData";
+import { documentHash, shortHash } from "./minutesSigning";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
-import { documentHash, shortHash } from "./minutesSigning";
-import { sendMinutesSignedEmail, type EmailAttachment } from "./email";
+import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
 
 /**
@@ -104,6 +108,43 @@ export async function previewDistribution(record: MinutesRecord) {
 }
 
 /**
+ * Lowercased email -> that person's open actions raised from these minutes.
+ * Filed under BOTH of an assignee's addresses (their linked login's and their
+ * People record's), because the list may mail either. Each action is listed
+ * once per address, even if two register entries share that address.
+ */
+export function openActionsByEmail(
+  minutesId: string,
+  items: Pick<ActionItem, "id" | "title" | "dueDate" | "status" | "assigneeIds" | "fromMinutes">[],
+  people: { id: string; email?: string; userId?: string | null }[],
+  users: { id: string; email?: string }[]
+): Map<string, SignedEmailAction[]> {
+  const norm = (e?: string) => (e || "").trim().toLowerCase();
+  const userEmail = new Map(users.map((u) => [u.id, norm(u.email)]));
+  // Both of a person's addresses: the distribution list may mail either the
+  // register's or the login's, and the lookup must find them under each.
+  const emailsOf = new Map(
+    people.map((p) => [p.id, [...new Set([p.userId ? userEmail.get(p.userId) : "", norm(p.email)].filter((e): e is string => !!e))]])
+  );
+  const out = new Map<string, SignedEmailAction[]>();
+  const listed = new Set<string>();
+  for (const item of items) {
+    // Cancelled counts as closed too: neither is anybody's to execute.
+    if (item.fromMinutes?.minutesId !== minutesId || isClosed(item)) continue;
+    for (const pid of item.assigneeIds) {
+      for (const email of emailsOf.get(pid) ?? []) {
+        if (listed.has(`${email}|${item.id}`)) continue;
+        listed.add(`${email}|${item.id}`);
+        const list = out.get(email) ?? [];
+        list.push({ title: item.title, dueDate: item.dueDate || undefined });
+        out.set(email, list);
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Emails the signed minutes to the distribution list for that body.
  *
  * The audience is resolved at SEND time, never frozen: a governor elected
@@ -148,16 +189,42 @@ export async function distributeSignedMinutes(
     );
   }
 
-  // 🔴 The hash of the minutes AS THEY STAND, computed here rather than read
-  // off a signatory. A wet-ink record has no signatory row to read it from,
-  // and a signed record cannot have changed since, so the two agree.
-  const ref = shortHash(documentHash(record));
+  // Each recipient's OPEN actions raised from these minutes, by email, and who
+  // can sign in (only they are pointed at the Action Item List). A failure
+  // here loses the list, never the minutes themselves.
+  const actionLists = (async () => {
+    try {
+      const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
+      return {
+        byEmail: openActionsByEmail(id, items, people, users),
+        // Any address of someone WITH a login: their login email, or the
+        // register email of a People entry linked to one.
+        logins: new Set(
+          [...users.map((u) => u.email), ...people.filter((p) => p.userId && users.some((u) => u.id === p.userId)).map((p) => p.email)]
+            .map((e) => (e || "").trim().toLowerCase())
+            .filter(Boolean)
+        ),
+      };
+    } catch (err) {
+      console.error("[minutes distribution] Could not read action items, sending without them:", err);
+      return { byEmail: new Map<string, SignedEmailAction[]>(), logins: new Set<string>() };
+    }
+  })();
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
+  // The period only: the email's opening line already gives the date.
   const period = formatPeriod(record.period);
 
-  // Built once for the whole list. Null means it could not be built, and the
-  // minutes go out with their link regardless.
-  const attachment = await signedMinutesAttachment(record);
+  // Built once for the whole list, alongside the action lists. Null means it
+  // could not be built, and the minutes go out with their link regardless.
+  const [attachment, { byEmail: actionsByEmail, logins }] = await Promise.all([
+    signedMinutesAttachment(record),
+    actionLists,
+  ]);
+
+  // 🔴 Computed from the minutes AS THEY STAND, once: a wet-ink (uploaded)
+  // record has no signatory row to read it from, and a signed record cannot
+  // have changed since, so the two agree.
+  const documentRef = shortHash(documentHash(record));
 
   const failed: string[] = [];
   let sent = 0;
@@ -168,8 +235,11 @@ export async function distributeSignedMinutes(
       id,
       record.title,
       period,
+      meetingWhen(record.period, record.meetingDate),
       signedBy,
-      ref,
+      documentRef,
+      actionsByEmail.get(person.email.trim().toLowerCase()) ?? [],
+      logins.has(person.email.trim().toLowerCase()),
       attachment
     );
     if (ok) sent += 1;
