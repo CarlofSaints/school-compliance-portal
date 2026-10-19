@@ -5,8 +5,8 @@ import { redactMinutesActivity } from "@/lib/minutesAccess";
 import { readSentEmail, readSentEmails, sentEmailMonths, SENT_PAGE_SIZE, type SentEmail } from "@/lib/sentEmails";
 import type { SessionPayload } from "@/lib/roles";
 
-// Who may read every fund application (the spend list's own rule).
-const ALL_SPEND = ["view_all_spend", "manage_spend_settings"];
+// Who may read every fund application: exactly the spend pages' own rule.
+const ALL_SPEND = ["view_all_spend"];
 
 type Shown = SentEmail & { hidden?: "minutes" | "spend" };
 
@@ -25,7 +25,10 @@ async function applyAccess(session: SessionPayload, emails: SentEmail[]): Promis
   const seesSpend = session.permissions.some((p) => ALL_SPEND.includes(p));
   return emails.map((e, i) => {
     const hidden = probes[i].summary !== e.id ? "minutes" : e.kind.startsWith("spend.") && !seesSpend ? "spend" : undefined;
-    return hidden ? { ...e, subject: "", attachments: undefined, hasBody: false, hidden } : e;
+    // Hidden: only that it was sent, to whom and when. Not even which minutes.
+    return hidden
+      ? { ...e, subject: "", attachments: undefined, minutesId: undefined, error: undefined, hasBody: false, hidden }
+      : e;
   });
 }
 
@@ -51,10 +54,11 @@ export async function GET(req: NextRequest) {
 
     const months = await sentEmailMonths();
     const month = sp.get("month") || months[0] || new Date().toISOString().slice(0, 7);
-    const page = Math.max(0, Number(sp.get("page")) || 0);
-    const { emails, total } = await readSentEmails(month, page);
+    // "before" is the last file name already shown: paging by name, not by
+    // position, so mail sent meanwhile cannot shift a page and repeat rows.
+    const { emails, total, next } = await readSentEmails(month, sp.get("before") || undefined);
     return NextResponse.json(
-      { month, months, page, pageSize: SENT_PAGE_SIZE, total, emails: await applyAccess(session, emails) },
+      { month, months, pageSize: SENT_PAGE_SIZE, total, next, emails: await applyAccess(session, emails) },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

@@ -1,4 +1,4 @@
-import { writeJson, writeFile, readFile, listFilesStrict, readJson, readJsonTolerant } from "./controlData";
+import { writeFile, readFile, listFilesStrict, readJson, readJsonTolerant } from "./controlData";
 import { activityMonths } from "./activityLog";
 
 // ---------------------------------------------------------------------------
@@ -72,8 +72,22 @@ function names(at: string, id: string) {
   return { summary: `sent-emails/${month}/${base}.json`, body: `sent-email-bodies/${month}/${base}.html` };
 }
 
+// One write at a time per instance: a mailout to 300 people queues its
+// records instead of firing 600 storage writes at once.
+let queue: Promise<void> = Promise.resolve();
+
 /** Never throws: a sent box that cannot be written must not fail a send. */
-export async function recordSentEmail(
+export function recordSentEmail(
+  e: Omit<SentEmail, "id" | "at" | "hasBody">,
+  html: string | undefined,
+  secrets: string[] = []
+): Promise<void> {
+  const run = queue.then(() => writeSentEmail(e, html, secrets));
+  queue = run;
+  return run;
+}
+
+async function writeSentEmail(
   e: Omit<SentEmail, "id" | "at" | "hasBody">,
   html: string | undefined,
   secrets: string[] = []
@@ -85,7 +99,9 @@ export async function recordSentEmail(
     const entry: SentEmail = { ...e, id, at, subject: redactEmailHtml(e.subject, secrets), hasBody: html !== undefined };
     // Body first: a summary must never point at a body that is not there.
     if (html !== undefined) await writeFile(files.body, Buffer.from(redactEmailHtml(html, secrets), "utf8"));
-    await writeJson(files.summary, entry);
+    // writeFile, not writeJson: writeJson also keeps every write in an
+    // in-memory cache, which would grow with every email ever sent.
+    await writeFile(files.summary, Buffer.from(JSON.stringify(entry, null, 2), "utf8"));
   } catch (err) {
     console.error("[sent emails] Could not record:", e.kind, err);
   }
@@ -98,14 +114,23 @@ export async function sentEmailMonths(): Promise<string[]> {
 
 export const SENT_PAGE_SIZE = 200;
 
-/** A page of a month's mail, newest first. A storage error THROWS: an outage
- *  must not read as "nothing sent". total says how many the month holds. */
-export async function readSentEmails(month: string, page = 0): Promise<{ emails: SentEmail[]; total: number }> {
+/** A page of a month's mail, newest first, starting after the file name
+ *  `before` (the last one already shown). A storage error THROWS: an outage
+ *  must not read as "nothing sent". next is the cursor for the page after. */
+export async function readSentEmails(
+  month: string,
+  before?: string
+): Promise<{ emails: SentEmail[]; total: number; next?: string }> {
   if (!/^\d{4}-\d{2}$/.test(month)) return { emails: [], total: 0 };
   const all = (await listFilesStrict(`sent-emails/${month}`)).filter((n) => n.endsWith(".json")).sort().reverse();
-  const slice = all.slice(page * SENT_PAGE_SIZE, (page + 1) * SENT_PAGE_SIZE);
+  const older = before ? all.filter((n) => n < before) : all;
+  const slice = older.slice(0, SENT_PAGE_SIZE);
   const read = await Promise.all(slice.map((n) => readJsonTolerant<SentEmail | null>(`sent-emails/${month}/${n}`, null)));
-  return { emails: read.filter((e): e is SentEmail => !!e), total: all.length };
+  return {
+    emails: read.filter((e): e is SentEmail => !!e),
+    total: all.length,
+    ...(older.length > SENT_PAGE_SIZE ? { next: slice[slice.length - 1] } : {}),
+  };
 }
 
 /** One email and its body, found directly from when it was sent and its id. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityAccess";
 import { useT } from "@/components/I18nProvider";
@@ -36,19 +36,30 @@ export default function SentEmailsPage() {
   const [month, setMonth] = useState("");
   const [months, setMonths] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [page, setPage] = useState(0);
+  const [next, setNext] = useState<string | undefined>();
   const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<(Row & { html?: string; failed?: boolean }) | null>(null);
 
-  // Page 0 replaces the list; a later page (Show older) is added to it.
-  const load = useCallback(async (m: string, p = 0) => {
+  // Without "before" the list is replaced; with it (Show older) the next page
+  // is added. A response for a month no longer shown is ignored.
+  const shownMonth = useRef("");
+  const load = useCallback(async (m: string, before?: string) => {
     const q = new URLSearchParams();
     if (m) q.set("month", m);
-    if (p) q.set("page", String(p));
-    const res = await authFetch(`/api/sent-emails?${q}`, { cache: "no-store" });
+    if (before) q.set("before", before);
+    if (!before) shownMonth.current = m;
+    let res: Response;
+    try {
+      res = await authFetch(`/api/sent-emails?${q}`, { cache: "no-store" });
+    } catch {
+      setError(t("Could not load the sent emails."));
+      setRows((prev) => prev ?? []);
+      return;
+    }
     const data = await res.json().catch(() => ({}));
+    if (before && data.month !== shownMonth.current) return;
     if (!res.ok) {
       setError(data.error || t("Could not load the sent emails."));
       setRows([]);
@@ -57,9 +68,14 @@ export default function SentEmailsPage() {
     setError("");
     setMonth(data.month);
     setMonths(data.months || []);
+    shownMonth.current = data.month;
     setTotal(data.total || 0);
-    setPage(p);
-    setRows((prev) => (p ? [...(prev || []), ...(data.emails || [])] : data.emails || []));
+    setNext(data.next);
+    setRows((prev) => {
+      if (!before) return data.emails || [];
+      const seen = new Set((prev || []).map((r) => r.id));
+      return [...(prev || []), ...(data.emails || []).filter((r: Row) => !seen.has(r.id))];
+    });
   }, [t]);
 
   useEffect(() => {
@@ -68,8 +84,12 @@ export default function SentEmailsPage() {
 
   const show = async (r: Row) => {
     if (!r.hasBody) return setOpen(r);
-    const res = await authFetch(`/api/sent-emails?at=${encodeURIComponent(r.at)}&id=${encodeURIComponent(r.id)}`, { cache: "no-store" });
-    setOpen(res.ok ? await res.json() : { ...r, failed: true });
+    try {
+      const res = await authFetch(`/api/sent-emails?at=${encodeURIComponent(r.at)}&id=${encodeURIComponent(r.id)}`, { cache: "no-store" });
+      setOpen(res.ok ? await res.json() : { ...r, failed: true });
+    } catch {
+      setOpen({ ...r, failed: true });
+    }
   };
 
   const hiddenText = (why: "minutes" | "spend") =>
@@ -148,9 +168,9 @@ export default function SentEmailsPage() {
           </tbody>
         </table>
       </div>
-      {rows && rows.length < total && (
+      {rows && next && (
         <button
-          onClick={() => void load(month, page + 1)}
+          onClick={() => void load(month, next)}
           className="mt-4 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
         >
           {t("Show older ({n} more)", { n: total - rows.length })}
