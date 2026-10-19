@@ -40,9 +40,6 @@ export function hashSigningCode(code: string, minutesId: string): string {
     .digest("hex");
 }
 
-// 🔴 Codes emailed before 19 Oct 2026 were stored as a plain SHA-256 that every
-// reader of the minutes was sent, so they are NOT accepted: a signer holding
-// one gets "does not match" and sends themselves a new code.
 function sameHex(a: string, b: string): boolean {
   const x = Buffer.from(a, "hex");
   const y = Buffer.from(b, "hex");
@@ -50,21 +47,25 @@ function sameHex(a: string, b: string): boolean {
 }
 
 /** Constant time, so the number of correct leading characters cannot be read
- *  off how long the comparison took. */
+ *  off how long the comparison took.
+ *
+ *  🔴 Codes emailed before 19 Oct 2026 were stored as a plain SHA-256 that every
+ *  reader of the minutes was sent, so they are NOT accepted: a signer holding
+ *  one gets "does not match" and sends themselves a new code. */
 export function signingCodeMatches(
   code: string,
   minutesId: string,
   storedHash: string | undefined
 ): boolean {
   if (!storedHash) return false;
-  return (
-    sameHex(hashSigningCode(code, minutesId), storedHash)
-  );
+  return sameHex(hashSigningCode(code, minutesId), storedHash);
 }
 
-/** The one key both the sign route (counts) and a resend (clears) use. */
-export function signCodeLimitKey(minutesId: string, email: string): string {
-  return `${minutesId}|${email.trim().toLowerCase()}`;
+/** Wrong-code attempts are counted per CODE (codeSentAt changes with every new
+ *  one), so a fresh code starts a fresh count with nothing to clear, and a
+ *  resend never gives more than 10 tries at any single code. */
+export function signCodeLimitKey(minutesId: string, s: { email: string; codeSentAt?: string }): string {
+  return `${minutesId}|${s.email.trim().toLowerCase()}|${s.codeSentAt || ""}`;
 }
 
 /**

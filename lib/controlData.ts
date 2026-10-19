@@ -382,6 +382,7 @@ export async function deleteFileStrict(blobPath: string): Promise<void> {
  * somebody "deleted" is telling the truth.
  */
 export async function deleteFolder(dirPath: string): Promise<number> {
+  if (isUnsafeBlobPath(dirPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${dirPath}`);
   const { prefix: tenantPrefix, token } = await scope();
   const prefix = tenantPrefix + dirPath.replace(/\/+$/, "") + "/";
   let removed = 0;
@@ -436,6 +437,7 @@ export async function listFilesStrict(dirPath: string): Promise<string[]> {
 // Expanded: every blob, reduced to its first path segment. Folded: only the
 // folder entries the store returns. Throws on a storage error.
 async function listChildren(dirPath: string, folded: boolean): Promise<string[]> {
+  if (isUnsafeBlobPath(dirPath)) return [];
   const { prefix: tenantPrefix, token } = await scope();
   // Resolved ONCE, outside the loop.
   const prefix = tenantPrefix + dirPath + "/";

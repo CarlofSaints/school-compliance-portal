@@ -84,10 +84,10 @@ export async function POST(
     }
     throw e;
   }
-  // Counted per signatory on THIS set before the code is checked, so guessing
-  // it online is capped too. After the drawing is accepted, so a blank or
-  // oversized mark does not use up a try. A new code resets the count.
-  const limited = await enforce([[LIMITS.signCodeAttempt, signCodeLimitKey(id, signatory.email)]]);
+  // Counted per code before it is checked, so guessing it online is capped
+  // too. After the drawing is accepted, so a blank or oversized mark does not
+  // use up a try. A new code gets its own count (see signCodeLimitKey).
+  const limited = await enforce([[LIMITS.signCodeAttempt, signCodeLimitKey(id, signatory)]]);
   if (limited) return limited;
   if (!signingCodeMatches(code, id, signatory.codeHash)) {
     // Logged, because repeated wrong codes against a governance record are

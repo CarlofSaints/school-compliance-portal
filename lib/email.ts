@@ -114,7 +114,7 @@ export async function sendWelcomeEmail(
     <p style="color:#333;">Welcome to the ${esc(branding.shortName)} ${esc(branding.tagline)}. Your account has been created.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
       <p style="margin:0;color:#333;"><strong>Email:</strong> ${esc(to)}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${password}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${esc(password)}</p>
     </div>
     <p style="color:#333;">Please log in and change your password immediately.</p>
     <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
@@ -830,7 +830,7 @@ export async function sendApprovalReminderEmail(
 
 // Titles, descriptions and notes are typed by people, and an apostrophe or an
 // angle bracket in a title should not be able to break the layout of the mail.
-// The older templates above predate this and interpolate raw; new copy escapes.
+// Every value a person typed, in every template, goes through this.
 function esc(value: string): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
