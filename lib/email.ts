@@ -3,6 +3,7 @@ import { resolveBranding } from "@/lib/brandingData";
 import type { SchoolBranding } from "@/lib/branding";
 import { duePhrase } from "@/lib/actionItems";
 import { readableTextOn } from "@/lib/brandingColors";
+import { recordSentEmail, type EmailMeta } from "@/lib/sentEmails";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -149,7 +150,7 @@ export async function sendWelcomeEmail(
     <p style="color:#333;">Please log in and change your password immediately.</p>
     ${button(`${SITE_URL}/login`, `Log In Now`, PRIMARY)}
   `;
-  return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body), b.replyTo, undefined, undefined, { kind: "account.welcome", secrets: [password] });
 }
 
 // Somebody who has NEVER signed in is not resetting anything, and telling them
@@ -174,7 +175,7 @@ export async function sendCredentialsSetupEmail(
     ${button(`${url}`, `Choose your password`, PRIMARY)}
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes. If it has expired by the time you get to it, use <strong>Forgot your password?</strong> on the sign-in page and it will send you a fresh one.</p>
   `;
-  return sendEmail(b.fromEmail, to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell(b, "Set up your account", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `Set up your ${branding.shortName} ${branding.portalSubtitle} account`, emailShell(b, "Set up your account", body), b.replyTo, undefined, undefined, { kind: "account.setup" });
 }
 
 export async function sendPasswordResetLinkEmail(
@@ -195,7 +196,7 @@ export async function sendPasswordResetLinkEmail(
     <p style="color:#666;font-size:13px;">If you did not ask for this, you can ignore this email. Your password has not changed.</p>
     <p style="color:#888;font-size:12px;word-break:break-all;">If the button does not work, paste this into your browser:<br>${url}</p>
   `;
-  return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `Reset your ${branding.shortName} ${branding.portalSubtitle} password`, emailShell(b, "Reset your password", body), b.replyTo, undefined, undefined, { kind: "account.password_reset" });
 }
 
 // Sent to the NEW address when somebody changes their own email. Nothing
@@ -218,7 +219,7 @@ export async function sendEmailChangeConfirmEmail(
     <p style="color:#666;font-size:13px;">This link expires in ${ttlHours} hours. Until it is used, your account keeps its old address.</p>
     <p style="color:#666;font-size:13px;">If you did not ask for this, ignore this email and nothing changes.</p>
   `;
-  return sendEmail(b.fromEmail, to, `Confirm your new email for ${b.shortName} ${b.portalSubtitle}`, emailShell(b, "Confirm your new email", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `Confirm your new email for ${b.shortName} ${b.portalSubtitle}`, emailShell(b, "Confirm your new email", body), b.replyTo, undefined, undefined, { kind: "account.email_confirm" });
 }
 
 // Sent to the OLD address, both when a change is asked for and when it goes
@@ -246,7 +247,7 @@ export async function sendEmailChangeNoticeEmail(
     stage === "requested" ? `Email change requested on ${b.shortName} ${b.portalSubtitle}` : `Your ${b.shortName} ${b.portalSubtitle} email was changed`,
     emailShell(b, stage === "requested" ? "Email change requested" : "Your email was changed", body),
     b.replyTo
-  );
+  , undefined, undefined, { kind: "account.email_changed" });
 }
 
 // The draft, out for checking. Carl: it "explains that this is draft 1, asks
@@ -281,7 +282,7 @@ export async function sendMinutesForReviewEmail(
     `Please check: ${minutesTitle}`,
     emailShell(b, "Minutes to check", body),
     b.replyTo
-  );
+  , undefined, undefined, { kind: "minutes.for_checking", minutesId });
 }
 
 // Back to the secretary when somebody asks for changes. Carl: "Secretary then
@@ -315,7 +316,7 @@ export async function sendMinutesChangesRequestedEmail(
     `Changes requested: ${minutesTitle}`,
     emailShell(b, "Changes requested", body),
     b.replyTo
-  );
+  , undefined, undefined, { kind: "minutes.changes_requested", minutesId });
 }
 
 // Everyone has approved and it is ready to sign.
@@ -356,7 +357,7 @@ export async function sendMinutesSigningCodeEmail(
     `Your signing code: ${minutesTitle}`,
     emailShell(b, "Ready to sign", body),
     b.replyTo
-  );
+  , undefined, undefined, { kind: "minutes.signing_code", minutesId, secrets: [code] });
 }
 
 // Everybody has signed. This goes to the distribution list for the body, so
@@ -432,7 +433,7 @@ export async function sendMinutesSignedEmail(
     b.replyTo,
     attachment ? [attachment] : undefined,
     attachment ? emailShell(b, "Signed minutes", body(false)) : undefined
-  );
+  , { kind: "minutes.signed", minutesId });
 }
 
 export async function sendSpendNotificationEmail(
@@ -455,7 +456,7 @@ export async function sendSpendNotificationEmail(
     ${BOX_CLOSE}
     ${button(`${SITE_URL}/spend`, `Review Application`, PRIMARY)}
   `;
-  return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body), b.replyTo, undefined, undefined, { kind: "spend.new_application" });
 }
 
 // The applicant's own copy, sent on every submission.
@@ -499,7 +500,7 @@ export async function sendApplicantConfirmationEmail(
     to,
     `Spend Application Submitted: ${projectName}`,
     emailShell(b, "Application Submitted", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "spend.applicant_confirmation" });
 }
 
 /** A file sent with an email. Resend's limit is 40MB for the whole message
@@ -509,6 +510,11 @@ export interface EmailAttachment {
   content: Buffer;
 }
 
+/**
+ * Sends one email AND records it in the sent box (lib/sentEmails). The record
+ * is written after the send, awaited (an un-awaited write on serverless may
+ * never happen), and can never fail the send.
+ */
 async function sendEmail(
   from: string,
   to: string,
@@ -518,15 +524,45 @@ async function sendEmail(
   attachments?: EmailAttachment[],
   /** The body to send instead if the message has to go without its
    *  attachments, so it does not promise a file that is not there. */
-  htmlWithoutAttachments?: string
+  htmlWithoutAttachments?: string,
+  meta: EmailMeta = { kind: "other" }
 ): Promise<boolean> {
+  const r = await deliver(from, to, subject, html, replyTo, attachments, htmlWithoutAttachments);
+  await recordSentEmail(
+    {
+      to,
+      subject,
+      kind: meta.kind,
+      ...(meta.minutesId ? { minutesId: meta.minutesId } : {}),
+      ok: r.ok,
+      ...(r.error ? { error: r.error } : {}),
+      ...(r.attached.length ? { attachments: r.attached } : {}),
+      ...(meta.personal ? {} : { html: r.html }),
+    },
+    meta.secrets
+  );
+  return r.ok;
+}
+
+async function deliver(
+  from: string,
+  to: string,
+  subject: string,
+  html: string,
+  replyTo?: string,
+  attachments?: EmailAttachment[],
+  htmlWithoutAttachments?: string
+): Promise<{ ok: boolean; error?: string; html: string; attached: string[] }> {
+  const names = (attachments ?? []).map((a) => a.filename);
   if (!resend) {
     console.log(`[Email] Would send to ${to}: ${subject}`);
     if (attachments?.length) {
       console.log(`[Email] With ${attachments.map((a) => `${a.filename} (${a.content.length} bytes)`).join(", ")}`);
     }
     console.log(`[Email] (No RESEND_API_KEY configured)`);
-    return true;
+    // True to the caller as before (a deployment without email must still
+    // work), but the sent box says plainly that nothing left.
+    return { ok: true, error: "Not sent: email is not set up on this deployment.", html, attached: names };
   }
   try {
     // replyTo is left OFF when the school has not set one, rather than sent
@@ -542,6 +578,7 @@ async function sendEmail(
       ...message,
       ...(attachments?.length ? { attachments } : {}),
     });
+    let sent = { html, attached: names };
 
     // A refused attachment must not cost the email itself. Signed minutes that
     // arrive with only their link beat signed minutes that never arrive.
@@ -550,19 +587,19 @@ async function sendEmail(
         `[Email] Rejected with attachment to ${to}, retrying without it:`,
         error
       );
-      ({ error } = await resend.emails.send(
-        htmlWithoutAttachments ? { ...message, html: htmlWithoutAttachments } : message
-      ));
+      const bare = htmlWithoutAttachments ?? html;
+      ({ error } = await resend.emails.send({ ...message, html: bare }));
+      sent = { html: bare, attached: [] };
     }
 
     if (error) {
       console.error(`[Email] Resend refused the message to ${to}:`, error);
-      return false;
+      return { ok: false, error: error.message || String(error), ...sent };
     }
-    return true;
+    return { ok: true, ...sent };
   } catch (err) {
     console.error("[Email] Failed to send:", err);
-    return false;
+    return { ok: false, error: err instanceof Error ? err.message : String(err), html, attached: [] };
   }
 }
 
@@ -602,7 +639,7 @@ export async function sendCreditOrderEmail(order: {
     `Credit order: ${b.shortName}, ${order.credits} credits (${rand(order.amountRand)}), to invoice`,
     emailShell(b, "Translation credits to invoice", body),
     order.requestedBy.email
-  );
+  , undefined, undefined, { kind: "credits.order" });
 }
 
 /** To the person who asked: what happens next. Says "to pay", never "paid". */
@@ -620,7 +657,7 @@ export async function sendCreditOrderConfirmationEmail(
     <p style="color:#333;">An invoice will follow by email. Pay it by EFT and the credits are added to your school's balance as soon as the payment comes in. You will get an email when they are.</p>
     <p style="color:#666;font-size:13px;">Nothing has been charged. Credits never expire.</p>
   `;
-  return sendEmail(b.fromEmail, to, `Your translation credits request (${rand(order.amountRand)})`, emailShell(b, "Translation credits requested", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `Your translation credits request (${rand(order.amountRand)})`, emailShell(b, "Translation credits requested", body), b.replyTo, undefined, undefined, { kind: "credits.order_confirmation" });
 }
 
 /** To the person who asked, once the credits are on. */
@@ -636,10 +673,10 @@ export async function sendCreditsAddedEmail(
     <p style="color:#333;">Your payment has been received and <strong>${credits} translation credits</strong> have been added. Your school now has <strong>${balance}</strong> credits.</p>
     <p style="color:#666;font-size:13px;">Choose a language at the top right of the portal, then use "Translate" on a policy or set of minutes.</p>
   `;
-  return sendEmail(b.fromEmail, to, `${credits} translation credits added`, emailShell(b, "Translation credits added", body), b.replyTo);
+  return sendEmail(b.fromEmail, to, `${credits} translation credits added`, emailShell(b, "Translation credits added", body), b.replyTo, undefined, undefined, { kind: "credits.added" });
 }
 
-// Whether a provider is actually wired up. sendEmail() deliberately returns
+// Whether a provider is actually wired up. sendEmail( undefined, undefined, undefined, undefined, undefined, undefined, undefined, { kind: "credits.added" }) deliberately returns
 // true and logs when RESEND_API_KEY is absent, which is fine for a one-off
 // action but would make the reminder cron report sends that never happened.
 export function isEmailConfigured(): boolean {
@@ -676,7 +713,7 @@ export async function sendSpendReminderEmail(
     to,
     `Reminder: ${projectName}`,
     emailShell(b, "Project Reminder", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "spend.reminder" });
 }
 
 // --- Fund application approval workflow ------------------------------------
@@ -734,7 +771,7 @@ export async function sendApprovalRequestEmail(
     to,
     `Approval needed: ${projectName} (R${amount.toLocaleString()})`,
     emailShell(b, "Fund Application Approval", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "spend.approval_request" });
 }
 
 // Sent to the applicant each time one approver decides.
@@ -770,7 +807,7 @@ export async function sendApprovalProgressEmail(
     to,
     `Update on ${projectName}: ${approved} of ${total} approved`,
     emailShell(b, "Application Update", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "spend.approval_progress" });
 }
 
 // Sent to the applicant once the last approver is in.
@@ -799,7 +836,7 @@ export async function sendFullyApprovedEmail(
     to,
     `Approved: ${projectName}`,
     emailShell(b, "Application Approved", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "spend.fully_approved" });
 }
 
 // A nudge sent by hand from the grid, as opposed to the scheduled cron. Says
@@ -857,7 +894,7 @@ export async function sendApprovalReminderEmail(
     to,
     `Reminder: ${projectName} is waiting for your approval`,
     emailShell(b, "Approval Reminder", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "spend.approval_reminder" });
 }
 
 // --- Action items -----------------------------------------------------------
@@ -907,6 +944,8 @@ interface ActionEmailFacts {
   statusLabel: string;
   assignedTo: string;
   priorityLabel: string;
+  /** The minutes it was raised in: its email then follows their read access in the sent box. */
+  minutesId?: string;
 }
 
 function actionFactsBlock(facts: ActionEmailFacts, PRIMARY: string): string {
@@ -945,7 +984,7 @@ export async function sendActionAssignedEmail(
     to,
     `Action ${facts.ref}: ${facts.title}`,
     emailShell(b, "You have a new action item", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "action.assigned", ...(facts.minutesId ? { minutesId: facts.minutesId } : { personal: true }) });
 }
 
 // The scheduled chase. `why` states plainly which of the three it is (heads-up,
@@ -977,7 +1016,7 @@ export async function sendActionReminderEmail(
     to,
     subject,
     emailShell(b, overdue ? "An action is overdue" : "Action item reminder", body)
-  , b.replyTo);
+  , b.replyTo, undefined, undefined, { kind: "action.reminder", ...(facts.minutesId ? { minutesId: facts.minutesId } : { personal: true }) });
 }
 
 // --- Weekly SGB update --------------------------------------------------------
@@ -1165,7 +1204,7 @@ export async function sendWeeklyUpdateEmail(
 ): Promise<boolean> {
   const b = await resolveBranding();
   const { subject, html } = buildWeeklyUpdateEmail(b, to, recipientName, e);
-  return sendEmail(b.fromEmail, to, subject, html, b.replyTo);
+  return sendEmail(b.fromEmail, to, subject, html, b.replyTo, undefined, undefined, { kind: "weekly_update", personal: true });
 }
 
 // --- Action items summary -----------------------------------------------------
@@ -1263,7 +1302,7 @@ export async function sendActionSummaryEmail(
 ): Promise<boolean> {
   const { subject, html } = buildActionSummaryEmail(b, recipientName, e);
   const bare = buildActionSummaryEmail(b, recipientName, { ...e, noAttachment: true }).html;
-  return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare);
+  return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare, { kind: "action_summary", personal: true });
 }
 
 // --- Meeting room bookings ------------------------------------------------------
@@ -1307,7 +1346,7 @@ function bookingButton(PRIMARY: string, href: string, label: string): string {
 
 async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string) => string): Promise<boolean> {
   const b = await resolveBranding();
-  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary)), b.replyTo);
+  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary)), b.replyTo, undefined, undefined, { kind: "booking" });
 }
 
 const CALENDAR_LINK = () => `${SITE_URL}/bookings`;

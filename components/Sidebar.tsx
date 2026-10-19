@@ -185,6 +185,12 @@ const navItems: NavItem[] = [
         permissions: ["manage_action_items", "manage_people"],
       },
       { label: tk("Activity Log"), href: "/activity", permission: "manage_users" },
+      {
+        label: tk("Sent Emails"),
+        href: "/admin/sent-emails",
+        // ACTIVITY_VIEW_PERMISSIONS, the same people the API lets in.
+        permissions: ["view_activity", "manage_users", "manage_roles", "manage_spend_settings"],
+      },
       { label: tk("Backup Data"), href: "/admin/backup", permission: "manage_roles" },
     ],
   },

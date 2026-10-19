@@ -35,6 +35,7 @@ function factsFor(item: ActionItem, now = new Date()) {
     statusLabel: STATUS_LABELS[item.status],
     assignedTo: item.assigneeNames.filter(Boolean).join(", "),
     priorityLabel: PRIORITY_LABELS[item.priority],
+    minutesId: item.fromMinutes?.minutesId,
   };
 }
 
