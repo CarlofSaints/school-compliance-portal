@@ -17,7 +17,9 @@ import {
   WidthType,
   ShadingType,
   TableBorders,
+  TableLayoutType,
 } from "docx";
+import JSZip from "jszip";
 import type { SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
@@ -79,9 +81,55 @@ function signatureBlock(name: string, role: string): Paragraph[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Widths, in twips. 🔴 Every table is sized from the page it lands on. The
+// minutes table used to be "100%" with columns adding up to 10 000, which is
+// wider than a letterhead page (HVPS's has 8 535 between its margins): Word
+// squeezed the columns its own way, the attendance list inside the Item cell
+// kept its full width and ran off the edge, and "Responsible" wrapped a few
+// letters per line.
+// ---------------------------------------------------------------------------
+
+/** docx's own default page: A4 with 1" margins. */
+const DEFAULT_CONTENT_WIDTH = 11906 - 2 * 1440;
+
+/** The width between the margins of the letterhead's (last) page setup. */
+export async function contentWidthOf(letterhead: Buffer | null): Promise<number> {
+  if (!letterhead) return DEFAULT_CONTENT_WIDTH;
+  try {
+    const xml = await (await JSZip.loadAsync(letterhead)).file("word/document.xml")?.async("string");
+    const attr = (tag: string, name: string) => {
+      const all = xml?.match(new RegExp(`<w:${tag}\\b[^>]*>`, "g")) ?? [];
+      const m = all.at(-1)?.match(new RegExp(`w:${name}="(\\d+)"`));
+      return m ? Number(m[1]) : NaN;
+    };
+    const width = attr("pgSz", "w") - attr("pgMar", "left") - attr("pgMar", "right");
+    return width >= 4000 && width <= 16000 ? width : DEFAULT_CONTENT_WIDTH;
+  } catch {
+    return DEFAULT_CONTENT_WIDTH;
+  }
+}
+
+interface Columns {
+  total: number;
+  no: number;
+  item: number;
+  responsible: number;
+}
+
+/** No. narrow, Responsible wide enough for its own heading, Item the rest. */
+export function minutesColumns(total: number): Columns {
+  const no = Math.max(500, Math.round(total * 0.07));
+  const responsible = Math.max(1500, Math.round(total * 0.2));
+  return { total, no, item: total - no - responsible, responsible };
+}
+
+/** Cell padding left + right in the minutes table. */
+const CELL_PAD_X = 200;
+
 /** Header row, tinted with the school's own colour so the document looks like
  *  the school's rather than the software's. */
-function headerRow(branding: SchoolBranding): TableRow {
+function headerRow(branding: SchoolBranding, cols: Columns): TableRow {
   const cell = (text: string, width: number) =>
     new TableCell({
       width: { size: width, type: WidthType.DXA },
@@ -109,7 +157,7 @@ function headerRow(branding: SchoolBranding): TableRow {
 
   return new TableRow({
     tableHeader: true, // repeats the header when the table breaks across pages
-    children: [cell("No.", 700), cell("Item", 7300), cell("Responsible", 2000)],
+    children: [cell("No.", cols.no), cell("Item", cols.item), cell("Responsible", cols.responsible)],
   });
 }
 
@@ -121,7 +169,8 @@ function sectionRow(
   responsible: string,
   /** The lists this section draws (sectionListGroups): an attendance list,
    *  or the Apologies section's two. Empty for a text section. */
-  groups: ListGroup[] = []
+  groups: ListGroup[],
+  cols: Columns
 ): TableRow {
   const hasRows = groups.length > 0;
   // Each line its own paragraph. A single run containing newlines renders as
@@ -148,10 +197,11 @@ function sectionRow(
           })
       );
 
-  const pad = { top: 80, bottom: 80, left: 100, right: 100 };
+  const pad = { top: 80, bottom: 80, left: CELL_PAD_X / 2, right: CELL_PAD_X / 2 };
   return new TableRow({
     children: [
       new TableCell({
+        width: { size: cols.no, type: WidthType.DXA },
         margins: pad,
         children: [
           new Paragraph({
@@ -162,18 +212,20 @@ function sectionRow(
         ],
       }),
       new TableCell({
+        width: { size: cols.item, type: WidthType.DXA },
         margins: pad,
         children: [
           new Paragraph({
             spacing: { after: 80 },
             children: [new TextRun({ text: title, bold: true, size: 20 })],
           }),
-          // The Item column is 7300 twips less the cell padding.
-          ...listGroupBlocks(groups, { indent: 0, width: 7000 }),
+          // Exactly the Item column less its padding, so it cannot run over.
+          ...listGroupBlocks(groups, { indent: 0, width: cols.item - CELL_PAD_X }),
           ...bodyParagraphs,
         ],
       }),
       new TableCell({
+        width: { size: cols.responsible, type: WidthType.DXA },
         margins: pad,
         children: [
           new Paragraph({
@@ -216,6 +268,7 @@ function attendanceTable(
   return new Table({
     width: { size: opts.width, type: WidthType.DXA },
     columnWidths: [col, col],
+    layout: TableLayoutType.FIXED,
     ...(opts.indent ? { indent: { size: opts.indent, type: WidthType.DXA } } : {}),
     borders: TableBorders.NONE,
     rows: rows.map(
@@ -274,7 +327,8 @@ function listGroupBlocks(
 function leadingSection(
   title: string,
   body: string,
-  groups: ListGroup[] = []
+  groups: ListGroup[],
+  contentWidth: number
 ): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [
     new Paragraph({
@@ -283,7 +337,7 @@ function leadingSection(
     }),
   ];
   // Indented ~1.25cm under the heading, as on the letterhead.
-  out.push(...listGroupBlocks(groups, { indent: 720, width: 8400 }));
+  out.push(...listGroupBlocks(groups, { indent: 720, width: contentWidth - 720 }));
   const lines = (body || "").split(/\r?\n/);
   if (lines.some((l) => l.trim())) {
     out.push(
@@ -519,6 +573,7 @@ export async function buildMinutesDocx(
   // what the document says. Sections before the chosen start point carry no
   // number: the attendee list is not agenda item 1.
   const numbers = sectionNumbers(record.sections);
+  const cols = minutesColumns(await contentWidthOf(letterhead));
 
   if (sections.length === 0) {
     body.push(
@@ -549,23 +604,25 @@ export async function buildMinutesDocx(
     const numbered = sections.filter((s) => numbers.get(s.id) != null);
 
     for (const s of leading) {
-      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections)));
+      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections), cols.total));
     }
 
     if (numbered.length > 0) {
       body.push(
         new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          columnWidths: [700, 7300, 2000],
+          width: { size: cols.total, type: WidthType.DXA },
+          columnWidths: [cols.no, cols.item, cols.responsible],
+          layout: TableLayoutType.FIXED,
           rows: [
-            headerRow(branding),
+            headerRow(branding, cols),
             ...numbered.map((s) =>
               sectionRow(
                 numbers.get(s.id) ?? null,
                 s.title,
                 s.body,
                 s.responsible || "",
-                sectionListGroups(s, sections)
+                sectionListGroups(s, sections),
+                cols
               )
             ),
           ],

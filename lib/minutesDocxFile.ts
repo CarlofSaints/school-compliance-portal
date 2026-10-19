@@ -1,3 +1,5 @@
+import { readFile } from "fs/promises";
+import path from "path";
 import { readSignatureImage } from "./minutesData";
 import type { MinutesRecord } from "./minutesData";
 import { readLetterheadFile } from "./letterheadData";
@@ -23,7 +25,13 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
   // The school's uploaded crest if it has one; null is fine and the document
   // simply has no picture. A missing crest must not fail a download somebody
   // needs for a meeting tonight.
-  const crest = await readLogo().catch(() => null);
+  // Falls back to the built-in crest (HVPS and Jeppe ship theirs in /public,
+  // never uploaded one), which next.config.ts traces into every API function.
+  const crest =
+    (await readLogo().catch(() => null)) ??
+    (branding.logo.startsWith("/") && branding.logo.endsWith(".png")
+      ? await readFile(path.join(process.cwd(), "public", branding.logo)).catch(() => null)
+      : null);
 
   // No People lookup for the sections: the responsible name was frozen into
   // each one when the template was copied, so the document shows who was
