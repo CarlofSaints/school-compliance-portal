@@ -1,4 +1,4 @@
-import { writeJson, listFiles, listFolders, readJsonTolerant } from "./controlData";
+import { writeJson, listFilesStrict, listFolders, readJson, readJsonTolerant } from "./controlData";
 
 // ---------------------------------------------------------------------------
 // The SENT BOX: every email the portal sends, as it was sent (Carl, 19 Oct
@@ -48,7 +48,12 @@ const BLANK = "••••••";
 /** Blanks every secret before anything is stored. */
 export function redactEmailHtml(html: string, secrets: string[] = []): string {
   let out = html;
-  for (const s of secrets.filter((x) => x && x.length >= 3)) out = out.split(s).join(BLANK);
+  // As typed AND as the template escaped it: a password "Tom&Jerry1" sits in
+  // the HTML as "Tom&amp;Jerry1".
+  const escaped = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  for (const s of secrets.filter((x) => x && x.length >= 3)) {
+    out = out.split(escaped(s)).join(BLANK).split(s).join(BLANK);
+  }
   return out
     // ?token=… / &token=… / &code=… in any link
     .replace(/([?&](?:token|code|t)=)[^"'&<\s]+/gi, `$1${BLANK}`)
@@ -79,10 +84,19 @@ export async function sentEmailMonths(): Promise<string[]> {
   return (await listFolders("sent-emails")).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
 }
 
-/** A month's mail, newest first, capped (a busy school sends a few hundred). */
+/** A month's mail, newest first, capped (a busy school sends a few hundred).
+ *  A storage error THROWS: an outage must not read as "nothing sent". */
 export async function readSentEmails(month: string, limit = 500): Promise<SentEmail[]> {
   if (!/^\d{4}-\d{2}$/.test(month)) return [];
-  const names = (await listFiles(`sent-emails/${month}`)).sort().reverse().slice(0, limit);
+  const names = (await listFilesStrict(`sent-emails/${month}`)).sort().reverse().slice(0, limit);
   const all = await Promise.all(names.map((n) => readJsonTolerant<SentEmail | null>(`sent-emails/${month}/${n}`, null)));
   return all.filter((e): e is SentEmail => !!e);
+}
+
+/** One email, read on its own: its file name ends with the id's first six. */
+export async function readSentEmail(month: string, id: string): Promise<SentEmail | null> {
+  if (!/^\d{4}-\d{2}$/.test(month) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const name = (await listFilesStrict(`sent-emails/${month}`)).find((n) => n.endsWith(`-${id.slice(0, 6)}.json`));
+  const entry = name ? await readJson<SentEmail | null>(`sent-emails/${month}/${name}`, null) : null;
+  return entry?.id === id ? entry : null;
 }

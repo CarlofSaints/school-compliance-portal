@@ -59,7 +59,9 @@ export async function POST(req: NextRequest) {
   }
 
   const name = `${updated.name} ${updated.surname}`.trim();
-  sendEmailChangeNoticeEmail(oldEmail, name, claims.n, "changed").catch(() => {});
+  // Awaited (its sent box record is written after the send, and serverless
+  // work after the response may never run), but a failure changes nothing.
+  await sendEmailChangeNoticeEmail(oldEmail, name, claims.n, "changed").catch(() => {});
   await recordActivity({
     actorId: user.id,
     actorName: name,

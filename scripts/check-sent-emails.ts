@@ -21,7 +21,7 @@ async function main() {
       ? new Response(JSON.stringify({ name: "validation_error", message: "Invalid to address" }), { status: 422, headers: { "content-type": "application/json" } })
       : new Response(JSON.stringify({ id: "x" }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
 
-  const { redactEmailHtml, readSentEmails } = await import("../lib/sentEmails");
+  const { redactEmailHtml, readSentEmails, readSentEmail } = await import("../lib/sentEmails");
   const email = await import("../lib/email");
   const month = new Date().toISOString().slice(0, 7);
 
@@ -41,6 +41,7 @@ async function main() {
   });
   refuse = true;
   await email.sendWelcomeEmail("bad@x.za", "B", "TempPass99");
+  await email.sendWelcomeEmail("amp@x.za", "A", "Tom&Jerry<1>");
   refuse = false;
 
   const sent = await readSentEmails(month);
@@ -59,7 +60,11 @@ async function main() {
   check("a refused send is recorded as not sent", bad?.ok, false);
   check("with the service's reason", bad?.error, "Invalid to address");
   check("🔴 the temporary password is NOT stored", !!bad?.html && !bad.html.includes("TempPass99"), true);
-  check("newest first", sent[0]?.to, "bad@x.za");
+  const amp = byTo("amp@x.za");
+  check("🔴 a password with & < > is blanked even after HTML escaping", !!amp?.html && !amp.html.includes("Tom&amp;Jerry") && !amp.html.includes("Tom&Jerry"), true);
+  check("newest first", sent[0]?.to, "amp@x.za");
+  check("one email can be read on its own", (await readSentEmail(month, code!.id))?.to, "chair@x.za");
+  check("a wrong id finds nothing", await readSentEmail(month, "00000000-0000-0000-0000-000000000000"), null);
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

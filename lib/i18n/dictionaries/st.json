@@ -1745,5 +1745,7 @@
   "Not sent": "Ha e a romelwa",
   "Attached": "E hoketswe",
   "This email is about minutes you do not have access to.": "Imeile ena e mabapi le metsotso eo o se nang tumello ya ho e bona.",
-  "This email was written for one person from things only they may see, so its wording is not kept.": "Imeile ena e ngoletswe motho a le mong ka dintho tseo e leng yena feela a ka di bonang, ka hona mantswe a yona ha a bolokwe."
+  "This email was written for one person from things only they may see, so its wording is not kept.": "Imeile ena e ngoletswe motho a le mong ka dintho tseo e leng yena feela a ka di bonang, ka hona mantswe a yona ha a bolokwe.",
+  "Could not open this email. Try again.": "Ha ho kgonehe ho bula imeile ena. Leka hape.",
+  "This email is about a fund application you do not have access to.": "Imeile ena e mabapi le kopo ya tjhelete eo o se nang tumello ya ho e bona."
 }

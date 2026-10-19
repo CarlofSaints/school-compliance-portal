@@ -15,7 +15,7 @@ interface Row {
   error?: string;
   attachments?: string[];
   hasBody: boolean;
-  hidden?: boolean;
+  hidden?: "minutes" | "spend";
 }
 
 /** "minutes.signing_code" -> "Minutes: signing code". */
@@ -38,13 +38,14 @@ export default function SentEmailsPage() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
-  const [open, setOpen] = useState<(Row & { html?: string }) | null>(null);
+  const [open, setOpen] = useState<(Row & { html?: string; failed?: boolean }) | null>(null);
 
   const load = useCallback(async (m: string) => {
     const res = await authFetch(`/api/sent-emails${m ? `?month=${encodeURIComponent(m)}` : ""}`, { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(data.error || t("Could not load the sent emails."));
+      setRows([]);
       return;
     }
     setError("");
@@ -60,8 +61,13 @@ export default function SentEmailsPage() {
   const show = async (r: Row) => {
     if (!r.hasBody) return setOpen(r);
     const res = await authFetch(`/api/sent-emails?month=${encodeURIComponent(month)}&id=${encodeURIComponent(r.id)}`, { cache: "no-store" });
-    setOpen(res.ok ? await res.json() : r);
+    setOpen(res.ok ? await res.json() : { ...r, failed: true });
   };
+
+  const hiddenText = (why: "minutes" | "spend") =>
+    why === "spend"
+      ? t("This email is about a fund application you do not have access to.")
+      : t("This email is about minutes you do not have access to.");
 
   if (loading || !session) return null;
 
@@ -119,7 +125,7 @@ export default function SentEmailsPage() {
                 <tr key={r.id} onClick={() => void show(r)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{when(r.at)}</td>
                   <td className="px-4 py-3 text-gray-700">{r.to}</td>
-                  <td className={`px-4 py-3 ${r.hidden ? "text-gray-400 italic" : "text-dark"}`}>{r.subject}</td>
+                  <td className={`px-4 py-3 ${r.hidden ? "text-gray-400 italic" : "text-dark"}`}>{r.hidden ? hiddenText(r.hidden) : r.subject}</td>
                   <td className="px-4 py-3 text-gray-500">{kindLabel(r.kind)}</td>
                   <td className="px-4 py-3">
                     {r.ok ? (
@@ -140,7 +146,7 @@ export default function SentEmailsPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 text-sm space-y-1">
               <div className="flex justify-between gap-4">
-                <p className="font-semibold text-dark">{open.subject}</p>
+                <p className="font-semibold text-dark">{open.hidden ? hiddenText(open.hidden) : open.subject}</p>
                 <button onClick={() => setOpen(null)} className="text-gray-400 hover:text-gray-600">{t("Close")}</button>
               </div>
               <p className="text-gray-500">{t("To")}: {open.to} · {when(open.at)} · {kindLabel(open.kind)}</p>
@@ -149,12 +155,14 @@ export default function SentEmailsPage() {
             </div>
             {open.html ? (
               // sandbox with no permissions: the stored mail is shown, never run.
-              <iframe sandbox="" srcDoc={open.html} title={open.subject} className="w-full flex-1 min-h-[60vh] rounded-b-xl" />
+              <iframe sandbox="" srcDoc={open.html} title={open.subject || t("Sent emails")} className="w-full flex-1 min-h-[60vh] rounded-b-xl" />
             ) : (
               <p className="p-6 text-gray-500 text-sm">
-                {open.hidden
-                  ? t("This email is about minutes you do not have access to.")
-                  : t("This email was written for one person from things only they may see, so its wording is not kept.")}
+                {open.failed
+                  ? t("Could not open this email. Try again.")
+                  : open.hidden
+                    ? hiddenText(open.hidden)
+                    : t("This email was written for one person from things only they may see, so its wording is not kept.")}
               </p>
             )}
           </div>

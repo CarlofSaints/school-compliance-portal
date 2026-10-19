@@ -534,7 +534,8 @@ async function sendEmail(
       subject,
       kind: meta.kind,
       ...(meta.minutesId ? { minutesId: meta.minutesId } : {}),
-      ok: r.ok,
+      // Not configured counts as not sent here, though the caller is told true.
+      ok: r.ok && !r.error,
       ...(r.error ? { error: r.error } : {}),
       ...(r.attached.length ? { attachments: r.attached } : {}),
       ...(meta.personal ? {} : { html: r.html }),
@@ -676,7 +677,7 @@ export async function sendCreditsAddedEmail(
   return sendEmail(b.fromEmail, to, `${credits} translation credits added`, emailShell(b, "Translation credits added", body), b.replyTo, undefined, undefined, { kind: "credits.added" });
 }
 
-// Whether a provider is actually wired up. sendEmail( undefined, undefined, undefined, undefined, undefined, undefined, undefined, { kind: "credits.added" }) deliberately returns
+// Whether a provider is actually wired up. sendEmail() deliberately returns
 // true and logs when RESEND_API_KEY is absent, which is fine for a one-off
 // action but would make the reminder cron report sends that never happened.
 export function isEmailConfigured(): boolean {

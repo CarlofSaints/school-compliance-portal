@@ -1745,5 +1745,7 @@
   "Not sent": "Ayithunyelwanga",
   "Attached": "Incanyathiselwe",
   "This email is about minutes you do not have access to.": "Le imeyile imalunga nemizuzu ongenayo imvume yokuyibona.",
-  "This email was written for one person from things only they may see, so its wording is not kept.": "Le imeyile ibhalelwe umntu omnye ngezinto yena kuphela anokuzibona, ngoko amagama ayo akagcinwa."
+  "This email was written for one person from things only they may see, so its wording is not kept.": "Le imeyile ibhalelwe umntu omnye ngezinto yena kuphela anokuzibona, ngoko amagama ayo akagcinwa.",
+  "Could not open this email. Try again.": "Akukwazekanga ukuvula le imeyile. Zama kwakhona.",
+  "This email is about a fund application you do not have access to.": "Le imeyile imalunga nesicelo semali ongenayo imvume yokusibona."
 }

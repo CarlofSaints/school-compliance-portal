@@ -124,8 +124,9 @@ export async function PUT(req: NextRequest) {
           { status: 502 }
         );
       }
-      // Fire and forget: a notice that fails must not undo the request.
-      sendEmailChangeNoticeEmail(current.email, name, wanted, "requested").catch(() => {});
+      // Awaited so its sent box record is written; a notice that fails must
+      // still not undo the request.
+      await sendEmailChangeNoticeEmail(current.email, name, wanted, "requested").catch(() => {});
       pendingEmail = wanted;
     }
 
