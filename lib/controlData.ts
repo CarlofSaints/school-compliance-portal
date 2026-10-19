@@ -28,8 +28,11 @@ async function scope() {
 // route answers 404), a write throws. A plain backslash in a file name is fine.
 export class UnsafeBlobPathError extends Error {}
 function isUnsafeBlobPath(blobPath: string): boolean {
-  if (/[\x00-\x1f\x7f]/.test(blobPath)) return true;
-  return blobPath.split(/[\\/]/).some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
+  // Tab and newline are deleted by the URL parser, so a segment is judged
+  // without them; anywhere else they are just part of a file name.
+  return blobPath
+    .split(/[\\/]/)
+    .some((seg) => /^(\.|%2e){1,2}$/i.test(seg.replace(/[\t\n\r]/g, "")));
 }
 function blobKey(prefix: string, blobPath: string): string {
   if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
@@ -365,6 +368,8 @@ export async function deleteFile(blobPath: string): Promise<void> {
 
 /** deleteFile, but a storage error is THROWN, for a caller that must know. */
 export async function deleteFileStrict(blobPath: string): Promise<void> {
+  // "Deleted" must be true, so an unsafe path is an error here, not a miss.
+  if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
   const { token } = await scope();
   const blob = await findBlob(blobPath);
   if (blob) {

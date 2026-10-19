@@ -102,7 +102,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "That code does not match. Check the email you were sent, or ask the secretary to send it again.",
+          'That code does not match. Check the email you were sent. If your code came before 20 October, it no longer works: go back to the minutes and press "Send my code again".',
       },
       { status: 400 }
     );

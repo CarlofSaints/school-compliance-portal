@@ -63,7 +63,8 @@ async function main() {
   check("writing through '..' is refused", await writeRefused("policies/../users/index.json"), true);
   check("an ordinary path still reads", await read("users/index.json"), { secret: true });
   check("a dotted file name is fine", await writeRefused("compliance/x/report.v2.pdf"), false);
-  check("a backslash inside a file name is fine", await writeRefused("compliance/x/budget\\2026.pdf"), false);
+  check("a tab inside a file name is fine", await writeRefused("compliance/x/a\tb.pdf"), false);
+  check("a backslash inside a file name is fine",await writeRefused("compliance/x/budget\\2026.pdf"), false);
 
   // --- sign-up name ---
   process.env.VERCEL_API_TOKEN ||= "x";
