@@ -390,13 +390,9 @@ export async function readOriginalFile(id: string): Promise<Buffer | null> {
   return readFile(`${DIR}/${id}/original${extensionOf(record.original.filename)}`);
 }
 
-// ⚠️ The Word LETTERHEAD moved to lib/letterhead.ts.
-//
-// It used to live here, stored under minutes-template/, with no route and no
-// screen: a half-built feature that read as if it worked. Carl asked for it in
-// Admin > Branding "so we can use it for other things if needed", which is
-// also where it belongs: a school has ONE letterhead, and the next document
-// type we generate should not ask for it a second time.
+// ⚠️ There is no Word letterhead. Every school's minutes use one standard
+// template (lib/minutesDocx.ts): its crest on top, a grid that fits the page.
+// Carl, 19 Oct 2026: a per-school letterhead would each need catering for.
 
 // ⚠️ Signing lives in lib/minutesSigning.ts, not here.
 //

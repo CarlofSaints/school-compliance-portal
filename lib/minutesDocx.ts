@@ -1,7 +1,5 @@
 import {
   Document,
-  patchDocument,
-  PatchType,
   Packer,
   Paragraph,
   TextRun,
@@ -19,7 +17,6 @@ import {
   TableBorders,
   TableLayoutType,
 } from "docx";
-import JSZip from "jszip";
 import type { SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
@@ -31,7 +28,6 @@ import {
   type AttendeeRow,
   type ListGroup,
 } from "./minutes";
-import { POSITIONS } from "./positions";
 import type { MinutesRecord } from "./minutesData";
 
 // ---------------------------------------------------------------------------
@@ -82,33 +78,15 @@ function signatureBlock(name: string, role: string): Paragraph[] {
 }
 
 // ---------------------------------------------------------------------------
-// Widths, in twips. 🔴 Every table is sized from the page it lands on. The
-// minutes table used to be "100%" with columns adding up to 10 000, which is
-// wider than a letterhead page (HVPS's has 8 535 between its margins): Word
-// squeezed the columns its own way, the attendance list inside the Item cell
-// kept its full width and ran off the edge, and "Responsible" wrapped a few
-// letters per line.
+// Widths, in twips. 🔴 Every table is sized from the page. The minutes table
+// used to be "100%" with columns adding up to 10 000, wider than the page:
+// Word squeezed the columns its own way, the attendance list inside the Item
+// cell kept its full width and ran off the edge, and "Responsible" wrapped a
+// few letters per line.
 // ---------------------------------------------------------------------------
 
 /** docx's own default page: A4 with 1" margins. */
 const DEFAULT_CONTENT_WIDTH = 11906 - 2 * 1440;
-
-/** The width between the margins of the letterhead's (last) page setup. */
-export async function contentWidthOf(letterhead: Buffer | null): Promise<number> {
-  if (!letterhead) return DEFAULT_CONTENT_WIDTH;
-  try {
-    const xml = await (await JSZip.loadAsync(letterhead)).file("word/document.xml")?.async("string");
-    const attr = (tag: string, name: string) => {
-      const all = xml?.match(new RegExp(`<w:${tag}\\b[^>]*>`, "g")) ?? [];
-      const m = all.at(-1)?.match(new RegExp(`w:${name}="(\\d+)"`));
-      return m ? Number(m[1]) : NaN;
-    };
-    const width = attr("pgSz", "w") - attr("pgMar", "left") - attr("pgMar", "right");
-    return width >= 4000 && width <= 16000 ? width : DEFAULT_CONTENT_WIDTH;
-  } catch {
-    return DEFAULT_CONTENT_WIDTH;
-  }
-}
 
 interface Columns {
   total: number;
@@ -250,9 +228,6 @@ function sectionRow(
  * cannot reproduce it: Word draws text in a proportional font, so spaces land
  * in a different place on every line. A borderless table is what Word itself
  * uses for this.
- *
- * Runs carry no size or font, so on a school's letterhead they take the
- * letterhead's own body style (patched with keepOriginalStyles).
  */
 function attendanceTable(
   rows: AttendeeRow[],
@@ -351,103 +326,6 @@ function leadingSection(
   return out;
 }
 
-/**
- * The governing body as a two-column table, for a letterhead's {{governors}}.
- *
- * 🔴 Position order comes from lib/positions, NOT from the register's own
- * order. A governing body table reads Principal, Chair, Deputy - the order the
- * positions are defined in - and sorting it by whoever was captured first
- * would produce a different table every time somebody was added.
- *
- * A vacant seat is drawn as the position with "Vacant" beside it, never
- * skipped: an empty Treasurer line is information a reader of the minutes
- * wants, and a table that silently omits it looks complete when it is not.
- */
-export function governorsTable(
-  positions: readonly string[],
-  holders: Map<string, string[]>,
-  /** The school's primary colour, WITH its leading "#". Stripped for docx,
-   *  which wants bare hex - doing that at the call site once cost the header
-   *  its readable text, because readableTextOn needs the "#" to parse. */
-  accent: string
-): Table {
-  const fill = accent.replace("#", "");
-  // 🔴 Derived, not hardcoded white. A yellow-brand school gets near-black
-  // header text and a navy one gets white - the same rule the portal's own
-  // buttons follow, and the reason Jeppe's yellow does not come out unreadable.
-  const headerText = readableTextOn(accent).replace("#", "");
-
-  const pad = { top: 60, bottom: 60, left: 100, right: 100 };
-  const rows: TableRow[] = [
-    new TableRow({
-      tableHeader: true,
-      children: ["Position", "Name"].map(
-        (label) =>
-          new TableCell({
-            margins: pad,
-            shading: { type: ShadingType.CLEAR, fill },
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: label,
-                    bold: true,
-                    size: 18,
-                    color: headerText,
-                  }),
-                ],
-              }),
-            ],
-          })
-      ),
-    }),
-  ];
-
-  for (const position of positions) {
-    const names = holders.get(position) ?? [];
-    rows.push(
-      new TableRow({
-        children: [
-          new TableCell({
-            margins: pad,
-            children: [
-              new Paragraph({
-                children: [new TextRun({ text: position, size: 18 })],
-              }),
-            ],
-          }),
-          new TableCell({
-            margins: pad,
-            children: [
-              new Paragraph({
-                children: [
-                  names.length > 0
-                    ? // Two people can hold one position - two co-opted
-                      // members, a joint deputy - so this is a list, not a
-                      // find(). Taking the first would silently drop somebody
-                      // off the school's own letterhead.
-                      new TextRun({ text: names.join(", "), size: 18 })
-                    : new TextRun({
-                        text: "Vacant",
-                        size: 18,
-                        italics: true,
-                        color: "999999",
-                      }),
-                ],
-              }),
-            ],
-          }),
-        ],
-      })
-    );
-  }
-
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows,
-  });
-}
-
 export async function buildMinutesDocx(
   record: MinutesRecord,
   branding: SchoolBranding,
@@ -459,49 +337,16 @@ export async function buildMinutesDocx(
    * signature image could not be read. A missing one falls back to the
    * wording, which still records that they signed.
    */
-  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map(),
-  /**
-   * The school's own letterhead .docx, if it has uploaded one.
-   *
-   * When present the content is PATCHED INTO IT at its {{content}} marker,
-   * which keeps everything the school put there: its crest, its wording, its
-   * fonts, its governing-body table, and any header or footer it defines. We
-   * do not rebuild their letterhead, we fill it in.
-   */
-  letterhead: Buffer | null = null,
-  /**
-   * Position -> who holds it now, for a letterhead using {{governors}}.
-   *
-   * ⚠️ Resolved AT BUILD TIME, so re-downloading last year's minutes shows
-   * this year's governing body. Right for letterhead, which describes the
-   * school as it stands - and stated plainly on the admin screen, so a school
-   * that needs the historical list keeps typing its own table instead.
-   *
-   * Empty by default: a letterhead with no {{governors}} marker keeps whatever
-   * table the school typed, which is every existing letterhead.
-   */
-  governorsByPosition: Map<string, string[]> = new Map(),
-  /**
-   * The school's own positions, in its own order, for {{governors}}.
-   *
-   * 🔴 Was the built-in list, so a position the school added under Admin,
-   * Positions never reached its letterhead's governing body table. Defaults
-   * to the built-in list only for callers that have no saved one.
-   */
-  positions: readonly string[] = POSITIONS
+  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map()
 ): Promise<Buffer> {
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
   // office holders.
   const children: (Paragraph | Table)[] = [];
 
-  // 🔴 Skipped entirely when a letterhead is in use. Their file already has
-  // the crest and the school's name on it, and printing ours underneath
-  // theirs is the one outcome nobody wants from uploading a letterhead.
-  const ownHeader = !letterhead;
 
   // Crest, embedded. Sized by height so a wide or tall crest both sit sensibly.
-  if (crest && ownHeader) {
+  if (crest) {
     try {
       children.push(
         new Paragraph({
@@ -522,7 +367,7 @@ export async function buildMinutesDocx(
     }
   }
 
-  if (ownHeader) children.push(
+  children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 120, after: 0 },
@@ -562,10 +407,7 @@ export async function buildMinutesDocx(
     })
   );
 
-  // Everything from here is the CONTENT: the numbered table and the
-  // signatures. Kept apart from the header above because a school's own
-  // letterhead already carries its crest and name, and this is the part that
-  // gets patched into it.
+  // Everything from here is the CONTENT: the numbered table and the signatures.
   const body: (Paragraph | Table)[] = [];
 
   const sections = [...record.sections].sort((a, b) => a.order - b.order);
@@ -573,7 +415,7 @@ export async function buildMinutesDocx(
   // what the document says. Sections before the chosen start point carry no
   // number: the attendee list is not agenda item 1.
   const numbers = sectionNumbers(record.sections);
-  const cols = minutesColumns(await contentWidthOf(letterhead));
+  const cols = minutesColumns(DEFAULT_CONTENT_WIDTH);
 
   if (sections.length === 0) {
     body.push(
@@ -722,49 +564,6 @@ export async function buildMinutesDocx(
     body.push(
       ...signatureBlock("________________________", "SGB Chair"),
       ...signatureBlock("________________________", "Principal")
-    );
-  }
-
-  if (letterhead) {
-    // patchDocument rewrites the placeholders and leaves every other part of
-    // their file untouched, which is why this works at all: we never parse or
-    // rebuild their layout.
-    //
-    // Only `content` is required. The optional ones let a school put the
-    // meeting details wherever its own layout wants them, and a letterhead
-    // that does not use them simply keeps its own wording.
-    const text = (value: string) => ({
-      type: PatchType.PARAGRAPH,
-      children: [new TextRun(value)],
-    });
-    return Buffer.from(
-      await patchDocument({
-        outputType: "nodebuffer",
-        data: letterhead,
-        patches: {
-          content: { type: PatchType.DOCUMENT, children: body },
-          title: text(record.title),
-          period: text(formatPeriod(record.period)),
-          meeting: text(MEETING_BODY_LABELS[record.body]),
-          school: text(branding.fullName),
-          draft: text(
-            record.draftNumber > 0 && !record.signedAt
-              ? `DRAFT ${record.draftNumber}`
-              : // Blanked rather than left as the raw {{draft}} marker: a signed
-                // set of minutes must not go out with template syntax on it.
-                ""
-          ),
-          governors: {
-            type: PatchType.DOCUMENT,
-            children: [
-              governorsTable(positions, governorsByPosition, branding.colors.primary),
-            ],
-          },
-        },
-        // A placeholder the letterhead does not contain is not an error. Most
-        // will only use {{content}}.
-        keepOriginalStyles: true,
-      })
     );
   }
 
