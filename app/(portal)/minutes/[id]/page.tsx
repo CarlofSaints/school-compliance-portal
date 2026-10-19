@@ -53,6 +53,8 @@ import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
   formatMeetingDate,
+  periodForDate,
+  meetingDateOutsidePeriod,
   isLocked,
   MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
@@ -936,19 +938,18 @@ export default function MinutesDetailPage() {
               value={record.meetingDate ?? ""}
               onChange={(e) => {
                 const d = e.target.value;
-                if (!d) return;
-                // A month period follows the date, as on Add minutes, so the
-                // two never disagree in what gets signed.
-                patch(
-                  record.period.kind === "month"
-                    ? { meetingDate: d, period: { kind: "month", year: Number(d.slice(0, 4)), month: Number(d.slice(5, 7)) } }
-                    : { meetingDate: d }
-                );
+                // Empty clears it; a month period follows a date (periodForDate).
+                patch(d ? { meetingDate: d, period: periodForDate(d, record.period) } : { meetingDate: "" });
               }}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
             />
           </div>
-          <PeriodPicker value={record.period} onChange={(p) => patch({ period: p })} />
+          <PeriodPicker
+            value={record.period}
+            // A date the new period no longer covers is cleared, so the two can
+            // never stand in contradiction (signing refuses that).
+            onChange={(p) => patch(meetingDateOutsidePeriod(record.meetingDate, p) ? { period: p, meetingDate: "" } : { period: p })}
+          />
         </div>
       )}
 
