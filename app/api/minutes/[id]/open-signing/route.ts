@@ -5,6 +5,7 @@ import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes } from "@/lib/minutesData";
 import { canOpenSigning, MINUTES_STATUS_LABELS } from "@/lib/minutes";
 import { openSigning, SigningSetupError } from "@/lib/minutesSigningFlow";
+import { minutesForClient } from "@/lib/minutesSigning";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -73,7 +74,7 @@ export async function POST(
       entityId: id,
       summary: `Sent themselves a new signing code for "${record.title}"`,
     });
-    return NextResponse.json({ record: result.record, sent: result.sent, failed: result.failed });
+    return NextResponse.json({ record: minutesForClient(result.record), sent: result.sent, failed: result.failed });
   }
 
   const managing = await requireAnyPermission(req, CAN_MANAGE);
@@ -107,7 +108,7 @@ export async function POST(
         withoutEmail: result.withoutEmail,
       },
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, record: minutesForClient(result.record) });
   } catch (e) {
     if (e instanceof SigningSetupError) {
       return NextResponse.json({ error: e.message }, { status: 400 });

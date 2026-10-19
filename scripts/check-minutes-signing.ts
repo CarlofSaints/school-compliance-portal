@@ -32,6 +32,9 @@ import { PUBLIC_POSITIONS } from "../lib/positions";
 
 import zlib from "zlib";
 
+// The code hash is keyed with the server secret since 19 Oct 2026.
+process.env.AUTH_SECRET ||= "check-minutes-signing-secret";
+
 /** A real PNG, built by hand, so the decoder is tested against actual bytes
  *  rather than against a string that merely looks like an image. */
 function signaturePng(w: number, h: number): Buffer {

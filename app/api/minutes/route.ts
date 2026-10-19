@@ -13,6 +13,7 @@ import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
+import { minutesForClient } from "@/lib/minutesSigning";
 import { v4 as uuidv4 } from "uuid";
 
 // Managing minutes is ANY-of, so a permission key added later cannot lock out
@@ -38,7 +39,7 @@ const MAX_BYTES = 15 * 1024 * 1024;
 export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
-  return NextResponse.json(await readableMinutes(session, await listMinutes()));
+  return NextResponse.json((await readableMinutes(session, await listMinutes())).map(minutesForClient));
 }
 
 // The register with each linked login's CURRENT name, the same rule as the
@@ -173,7 +174,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(saved, { status: 201 });
+    return NextResponse.json(minutesForClient(saved), { status: 201 });
   } catch (err) {
     console.error("[minutes] Create failed:", err);
     return NextResponse.json(

@@ -19,12 +19,25 @@ async function scope() {
   return tenantScope();
 }
 
+// 🔴 The SDK turns a key into a URL, and a URL resolves ".." and "%2e%2e" segments and
+// treats a backslash as a slash. Ids come straight from request paths (policies/[id], checks/[id]),
+// so one route that forgot to validate its id could otherwise reach any
+// other file in the school's store. Refused here, once, for every caller.
+export class UnsafeBlobPathError extends Error {}
+function blobKey(prefix: string, blobPath: string): string {
+  const bad =
+    blobPath.includes("\\") ||
+    blobPath.split("/").some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
+  if (bad) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
+  return prefix + blobPath;
+}
+
 
 // Still needed by deleteFile, which needs a blob's URL rather than its bytes.
 // Nothing should READ through this — see readBlobBody below for why.
 async function findBlob(blobPath: string) {
   const { prefix, token } = await scope();
-  const key = prefix + blobPath;
+  const key = blobKey(prefix, blobPath);
   const result = await list({ prefix: key, limit: 1, token });
   return result.blobs.find((b) => b.pathname === key) || null;
 }
@@ -50,7 +63,7 @@ async function findBlob(blobPath: string) {
 // get() also needs no separate index lookup, so it is one round trip, not two.
 async function readBlobBody(blobPath: string): Promise<Response | null> {
   const { prefix, token } = await scope();
-  const result = await get(prefix + blobPath, {
+  const result = await get(blobKey(prefix, blobPath), {
     access: "private",
     // The whole point. Straight from origin storage, never the CDN copy.
     useCache: false,
@@ -158,7 +171,7 @@ export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
 
 export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
   const { prefix, token } = await scope();
-  await put(prefix + blobPath, JSON.stringify(data, null, 2), {
+  await put(blobKey(prefix, blobPath), JSON.stringify(data, null, 2), {
     access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
@@ -196,7 +209,7 @@ export const NO_CHANGE = Symbol("no-change");
 
 async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: string } | null> {
   const { prefix, token } = await scope();
-  const result = await get(prefix + blobPath, { access: "private", useCache: false, token });
+  const result = await get(blobKey(prefix, blobPath), { access: "private", useCache: false, token });
   if (!result || result.statusCode !== 200) return null;
   const text = await new Response(result.stream).text();
   try {
@@ -228,7 +241,7 @@ export async function updateJson<T>(
     const next = await mutate(current);
     if (next === NO_CHANGE) return current;
     try {
-      await put(prefix + blobPath, JSON.stringify(next, null, 2), {
+      await put(blobKey(prefix, blobPath), JSON.stringify(next, null, 2), {
         access: "private",
         contentType: "application/json",
         addRandomSuffix: false,
@@ -328,7 +341,7 @@ export async function writeFile(
   data: Buffer | Uint8Array
 ): Promise<void> {
   const { prefix, token } = await scope();
-  await put(prefix + blobPath, Buffer.from(data), {
+  await put(blobKey(prefix, blobPath), Buffer.from(data), {
     access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,

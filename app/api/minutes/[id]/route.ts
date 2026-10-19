@@ -16,7 +16,7 @@ import {
   isAttendance,
   withApologiesSection,
 } from "@/lib/minutes";
-import { documentHash, shortHash } from "@/lib/minutesSigning";
+import { documentHash, shortHash, minutesForClient } from "@/lib/minutesSigning";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -45,7 +45,7 @@ export async function GET(
   // the two must agree, and one implementation cannot disagree with itself.
   const hash = documentHash(record);
   return NextResponse.json({
-    ...record,
+    ...minutesForClient(record),
     documentHash: hash,
     documentRef: shortHash(hash),
   });
@@ -185,7 +185,7 @@ export async function PATCH(
     // the previous copy, which makes a correct save look like it failed.
     // Shaped like GET, so the page's "what is signed" reference stays.
     const hash = documentHash(saved);
-    return NextResponse.json({ ...saved, documentHash: hash, documentRef: shortHash(hash) });
+    return NextResponse.json({ ...minutesForClient(saved), documentHash: hash, documentRef: shortHash(hash) });
   } catch (err) {
     if (err instanceof MinutesLockedError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
@@ -196,7 +196,7 @@ export async function PATCH(
         {
           error: err.message,
           conflict: true,
-          current: { ...err.current, documentHash: hash, documentRef: shortHash(hash) },
+          current: { ...minutesForClient(err.current), documentHash: hash, documentRef: shortHash(hash) },
         },
         { status: 409 }
       );

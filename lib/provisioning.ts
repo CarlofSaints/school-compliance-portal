@@ -143,6 +143,15 @@ export async function validateNewSchool(
   if (!req.name?.trim()) {
     return { ok: false, reason: "invalid", message: "The school needs a name." };
   }
+  // The name goes into the welcome email of a sign-up anyone can make, so
+  // markup is refused here as well as escaped there.
+  if (req.name.trim().length > 100 || /[<>]/.test(req.name)) {
+    return {
+      ok: false,
+      reason: "invalid",
+      message: "The school name can be up to 100 characters and cannot contain < or >.",
+    };
+  }
   if (!isPlausibleEmail(req.adminEmail || "")) {
     return {
       ok: false,

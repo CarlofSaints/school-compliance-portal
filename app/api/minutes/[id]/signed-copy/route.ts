@@ -3,7 +3,7 @@ import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes, saveSignedCopy, readSignedCopy } from "@/lib/minutesData";
 import { isLocked, MINUTES_STATUS_LABELS } from "@/lib/minutes";
-import { documentHash, shortHash } from "@/lib/minutesSigning";
+import { documentHash, shortHash, minutesForClient } from "@/lib/minutesSigning";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -82,7 +82,7 @@ export async function POST(
     detail: { filename: file.name, size: bytes.length, documentHash: hash },
   });
 
-  return NextResponse.json({ record: saved, documentRef: shortHash(hash) });
+  return NextResponse.json({ record: minutesForClient(saved), documentRef: shortHash(hash) });
 }
 
 /** The signed copy back. Only a login, like every other read in this module. */

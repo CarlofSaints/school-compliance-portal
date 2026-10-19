@@ -5,6 +5,7 @@ import { getMinutes, updateMinutes, saveSignatureImage, MinutesChangeRefused } f
 import { signingProgress } from "@/lib/minutes";
 import {
   signingCodeMatches,
+  minutesForClient,
   documentHash,
   decodeSignature,
   SignatureError,
@@ -12,6 +13,7 @@ import {
 import { distributeSignedMinutes } from "@/lib/minutesDistribution";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom, clientIp } from "@/lib/activityActor";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 
 /**
  * Signs the minutes.
@@ -65,6 +67,11 @@ export async function POST(
       { status: 409 }
     );
   }
+
+  // Counted per signatory on THIS set, before the code is checked, so guessing
+  // the ~30-bit code online is capped too. An honest signer needs one or two.
+  const limited = await enforce([[LIMITS.signCodeAttempt, `${id}|${signatory.email}`]]);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
   const code = typeof body.code === "string" ? body.code : "";
@@ -206,5 +213,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ record: updated, progress });
+  return NextResponse.json({ record: minutesForClient(updated), progress });
 }

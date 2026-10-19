@@ -12,6 +12,7 @@ import { resolveAudience } from "@/lib/minutesRecipients";
 import { sendMinutesForReviewEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
+import { minutesForClient } from "@/lib/minutesSigning";
 
 const CAN_MANAGE = ["manage_minutes", "manage_users"];
 
@@ -124,7 +125,7 @@ export async function POST(
   });
 
   return NextResponse.json({
-    record: updated,
+    record: minutesForClient(updated),
     sent: everyone.length - failed.length,
     failed,
     // Named, never silently dropped: somebody meant to check the minutes who
