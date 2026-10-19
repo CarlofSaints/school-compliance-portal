@@ -14,6 +14,7 @@ import {
   formatMeetingDate,
   periodForDate,
   checkMeetingDate,
+  meetingDateOutsidePeriod,
   isLocked,
   periodSortKey,
   MEETING_BODY_LABELS,
@@ -362,7 +363,14 @@ function AddMinutes({
         />
       </div>
 
-      <PeriodPicker value={period} onChange={setPeriod} />
+      <PeriodPicker
+        value={period}
+        // A date the new period no longer covers is cleared, as on the minutes page.
+        onChange={(p) => {
+          setPeriod(p);
+          if (meetingDateOutsidePeriod(meetingDate, p)) setMeetingDate("");
+        }}
+      />
 
       <div>
         {/* items-stretch so the two buttons stay the same height even though

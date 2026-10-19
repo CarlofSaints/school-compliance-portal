@@ -143,6 +143,7 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   check("nobody else is listed", [...map.keys()].length, 4);
   check("a custom period with no usable dates never shows its label", meetingWhen({ kind: "custom", year: 2026, from: "", to: "", label: "Special AGM" }), "in 2026");
 
+  check("a custom period with only a start date is not called a single day", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "" }), "in 2026");
   check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");
   check("a custom range reads 'from <date> to <date>', not its label", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15", label: "Special meeting" }), "from 1 October 2026 to 15 October 2026");
   const { checkMeetingDate, minutesWhenLabel, canonicalMinutes } = await import("../lib/minutes");
@@ -157,27 +158,13 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   checkThat("the meeting date IS part of what is signed", canonicalMinutes({ ...base, meetingDate: "2026-10-15" }) !== canonicalMinutes(base));
   const { meetingDateOutsidePeriod } = await import("../lib/minutes");
   check("a date inside its month agrees", meetingDateOutsidePeriod("2026-10-15", { kind: "month", year: 2026, month: 10 }), null);
-  checkThat("a date outside its month is refused", !!meetingDateOutsidePeriod("2026-11-02", { kind: "month", year: 2026, month: 10 }));
+  checkThat("a date outside its month is flagged", !!meetingDateOutsidePeriod("2026-11-02", { kind: "month", year: 2026, month: 10 }));
   check("a date inside its quarter agrees", meetingDateOutsidePeriod("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), null);
-  checkThat("a date outside a custom range is refused", !!meetingDateOutsidePeriod("2026-10-20", { kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15" }));
+  checkThat("a date outside a custom range is flagged", !!meetingDateOutsidePeriod("2026-10-20", { kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15" }));
   check("no date: nothing to disagree with", meetingDateOutsidePeriod(undefined, { kind: "month", year: 2026, month: 10 }), null);
   const { periodForDate } = await import("../lib/minutes");
   check("a month period follows a picked date", periodForDate("2026-11-02", { kind: "month", year: 2026, month: 10 }), { kind: "month", year: 2026, month: 11 });
   check("a quarter the secretary chose is left alone", periodForDate("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), { kind: "quarter", year: 2026, quarter: 4 });
-  {
-    // Writes a record: only ever against the fake store.
-    const { createRequire } = await import("module");
-    const blob = createRequire(__filename)("@vercel/blob") as { __fakeStore?: unknown };
-    if (typeof blob.__fakeStore !== "function") {
-      console.error("Refusing to run: @vercel/blob is the REAL store. Run with --import ./scripts/fake-blob/register.mjs");
-      process.exit(1);
-    }
-    const { createMinutes } = await import("../lib/minutesData");
-    const { openSigning } = await import("../lib/minutesSigningFlow");
-    const m = await createMinutes({ title: "Mismatch", body: "sgb", period: { kind: "month", year: 2026, month: 11 }, meetingDate: "2026-10-15", sections: [], createdBy: "x@x.za" });
-    const refusal = await openSigning(m.id).then(() => "", (e: Error) => e.message);
-    checkThat("🔴 signing refuses a date outside the period (both would be signed)", refusal.includes("outside November 2026"));
-  }
   check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 
   await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", map.get("derek@school.co.za")!, true, null);

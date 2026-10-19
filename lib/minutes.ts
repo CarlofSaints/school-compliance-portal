@@ -71,9 +71,8 @@ export function checkMeetingDate(d: unknown): string | null {
   if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return "Choose the meeting date.";
   const parsed = new Date(`${d}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) return "That meeting date is not a real date.";
-  if (parsed.getUTCFullYear() < 2000) return "The meeting date should be in 2000 or later.";
-  // Minutes may be set up a few weeks before the meeting, not years.
-  if (parsed.getTime() > Date.now() + 60 * 86_400_000) return "The meeting date cannot be more than 60 days from today.";
+  const thisYear = new Date().getFullYear();
+  if (parsed.getUTCFullYear() < 2000 || parsed.getUTCFullYear() > thisYear + 5) return `The year should be between 2000 and ${thisYear + 5}.`;
   return null;
 }
 
@@ -92,7 +91,10 @@ export function periodForDate(date: string, p: MeetingPeriod): MeetingPeriod {
 }
 
 /** Null when the date falls inside the period (or either is missing), else
- *  why not. Both are signed, so they must not contradict each other. */
+ *  why not. Used by the editor to clear a date a new period no longer covers.
+ *  🔴 Deliberately NOT enforced on save or at signing: a refusal there stopped
+ *  autosave, or left approved minutes stuck before codes went out. The sign
+ *  page shows both, so a signer sees exactly what they sign. */
 export function meetingDateOutsidePeriod(d: string | undefined, p: MeetingPeriod): string | null {
   if (!isIsoDate(d)) return null;
   const y = Number(d.slice(0, 4));
@@ -131,7 +133,7 @@ export function meetingWhen(p: MeetingPeriod, meetingDate?: string): string {
     const day = (iso: string) => (isIsoDate(iso) ? formatMeetingDate(iso) : null);
     const from = day(p.from);
     const to = day(p.to);
-    if (from && (!to || p.from === p.to)) return `on ${from}`;
+    if (from && to && p.from === p.to) return `on ${from}`;
     if (from && to) return `from ${from} to ${to}`;
     return `in ${p.year}`; // never the free-text label
   }
