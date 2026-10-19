@@ -164,6 +164,7 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   check("no date: nothing to disagree with", meetingDateOutsidePeriod(undefined, { kind: "month", year: 2026, month: 10 }), null);
   const { periodForDate } = await import("../lib/minutes");
   check("a month period follows a picked date", periodForDate("2026-11-02", { kind: "month", year: 2026, month: 10 }), { kind: "month", year: 2026, month: 11 });
+  check("a date outside a quarter makes it that month, so they never disagree", periodForDate("2026-10-15", { kind: "quarter", year: 2026, quarter: 3 }), { kind: "month", year: 2026, month: 10 });
   check("a quarter the secretary chose is left alone", periodForDate("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), { kind: "quarter", year: 2026, quarter: 4 });
   check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 

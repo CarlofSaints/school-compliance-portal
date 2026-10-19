@@ -110,10 +110,10 @@ export async function PATCH(
       updates.period = body.period;
     }
     // Optional here: minutes added before the date existed may have none, and
-    // "" (or null) clears one. 🔴 A date that disagrees with the period is NOT
-    // refused here: autosave sends every field together, so refusing would
-    // stop the typed words saving too. Agreement is required when the minutes
-    // go out for signing (openSigning), where both become fixed.
+    // "" (or null) clears one. 🔴 Nothing about the date is ever refused here:
+    // autosave sends every field together, so a refusal would stop the typed
+    // words saving too. The editors keep date and period in agreement
+    // (periodForDate, and a period change clears a date it does not cover).
     if (body.meetingDate === "" || body.meetingDate === null) {
       if (existing.meetingDate) updates.meetingDate = "";
     } else if (body.meetingDate !== undefined) {

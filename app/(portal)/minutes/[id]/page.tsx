@@ -198,6 +198,7 @@ export default function MinutesDetailPage() {
   // input reports "0002-10-15" while a year is typed digit by digit, and
   // binding it straight to the record would snap it back on every keystroke.
   const [dateDraft, setDateDraft] = useState<string | null>(null);
+  const [dateProblem, setDateProblem] = useState("");
   // The server's Retry-After on the last transient failure, if it sent one.
   const retryAfter = useRef<string | null>(null);
   /** Nothing left to save or back up: the user chose to lose the changes, or
@@ -948,19 +949,23 @@ export default function MinutesDetailPage() {
               onChange={(e) => {
                 const d = e.target.value;
                 setDateDraft(d);
-                // Empty clears it; a whole valid date is saved and a month
-                // period follows it. Anything in between stays in the box only.
-                if (!d) {
-                  patch({ meetingDate: "" });
-                  setDateDraft(null);
-                } else if (!checkMeetingDate(d)) {
+                setDateProblem("");
+                // A whole valid date is saved at once (the period follows it).
+                // Empty is NOT saved yet: the browser reports "" while one part
+                // of the date is being retyped. It clears on leaving the box.
+                if (d && !checkMeetingDate(d)) {
                   patch({ meetingDate: d, period: periodForDate(d, record.period) });
                   setDateDraft(null);
                 }
               }}
-              onBlur={() => setDateDraft(null)}
+              onBlur={() => {
+                if (dateDraft === "") patch({ meetingDate: "" });
+                else if (dateDraft) setDateProblem(t("That date can't be used. Pick a date from 2000 onwards."));
+                setDateDraft(null);
+              }}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
             />
+            {dateProblem && <p className="text-xs text-red-600 mt-1">{dateProblem}</p>}
           </div>
           <PeriodPicker
             value={record.period}

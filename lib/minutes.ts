@@ -83,11 +83,13 @@ function isIsoDate(d: string | undefined): d is string {
 }
 
 /** The period to use once a meeting date is picked: a month period follows
- *  the date; a quarter or custom period the secretary chose is left alone. */
+ *  the date, and a quarter or custom period that does not cover it becomes
+ *  that month, so the two never disagree in what is signed. A quarter or
+ *  range that does cover it is left as the secretary chose. */
 export function periodForDate(date: string, p: MeetingPeriod): MeetingPeriod {
-  return isIsoDate(date) && p.kind === "month"
-    ? { kind: "month", year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) }
-    : p;
+  if (!isIsoDate(date)) return p;
+  if (p.kind !== "month" && !meetingDateOutsidePeriod(date, p)) return p;
+  return { kind: "month", year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) };
 }
 
 /** Null when the date falls inside the period (or either is missing), else

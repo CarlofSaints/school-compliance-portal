@@ -1733,6 +1733,7 @@
   "Last edited by {name} at {time}": "E fetotswe la bofelo ke {name} ka {time}",
   "Meeting date": "Letlha la kopano",
   "Choose the meeting date.": "Tlhopha letlha la kopano.",
+  "That date can't be used. Pick a date from 2000 onwards.": "Letlha leo ga le kgone go dirisiwa. Tlhopha letlha go simolola ka 2000.",
   "Sent Emails": "Di-imeile tse di rometsweng",
   "Sent emails": "Di-imeile tse di rometsweng",
   "Every email the portal sent, who it went to and whether it was accepted. Codes and private links are blanked out.": "Imeile nngwe le nngwe e portal e e rometseng, gore e ile go mang le gore e amogetswe. Dikhoutu le dikgolagano tsa sephiri di a phimolwa.",

@@ -1733,6 +1733,7 @@
   "Last edited by {name} at {time}": "Laas gewysig deur {name} om {time}",
   "Meeting date": "Vergaderdatum",
   "Choose the meeting date.": "Kies die vergaderdatum.",
+  "That date can't be used. Pick a date from 2000 onwards.": "Daardie datum kan nie gebruik word nie. Kies 'n datum vanaf 2000.",
   "Sent Emails": "Gestuurde e-posse",
   "Sent emails": "Gestuurde e-posse",
   "Every email the portal sent, who it went to and whether it was accepted. Codes and private links are blanked out.": "Elke e-pos wat die portaal gestuur het, aan wie dit gegaan het en of dit aanvaar is. Kodes en private skakels word uitgevee.",

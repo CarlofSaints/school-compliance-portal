@@ -1733,6 +1733,7 @@
   "Last edited by {name} at {time}": "Kugcine ukuhlelwa ngu-{name} ngo-{time}",
   "Meeting date": "Usuku lomhlangano",
   "Choose the meeting date.": "Khetha usuku lomhlangano.",
+  "That date can't be used. Pick a date from 2000 onwards.": "Lolo suku alukwazi ukusetshenziswa. Khetha usuku kusukela ngo-2000.",
   "Sent Emails": "Ama-imeyili athunyelwe",
   "Sent emails": "Ama-imeyili athunyelwe",
   "Every email the portal sent, who it went to and whether it was accepted. Codes and private links are blanked out.": "Yonke i-imeyili ethunyelwe yiphothali, ukuthi iye kubani nokuthi yamukelwe yini. Amakhodi nezixhumanisi eziyimfihlo kuyacishwa.",
