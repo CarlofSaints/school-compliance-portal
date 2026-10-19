@@ -64,13 +64,20 @@ export function formatPeriod(p: MeetingPeriod): string {
   }
 }
 
-/** When the meeting was, for a sentence: "on 15 October 2026" for a single
- *  day, otherwise "in October 2026" / "in Q4 2026". Minutes keep a period,
- *  not one meeting date. */
+/** When the meeting was, for a sentence: "on 15 October 2026" for one day,
+ *  "from 1 October 2026 to 15 October 2026" for a custom range (its dates,
+ *  not its free-text label), otherwise "in October 2026" / "in Q4 2026".
+ *  Minutes keep a period, not one meeting date. */
 export function meetingWhen(p: MeetingPeriod): string {
-  if (p.kind === "custom" && p.from && p.from === p.to) {
-    const d = new Date(`${p.from}T00:00:00Z`);
-    if (!Number.isNaN(d.getTime())) return `on ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  if (p.kind === "custom") {
+    const day = (iso: string) => {
+      const d = new Date(`${iso}T00:00:00Z`);
+      return Number.isNaN(d.getTime()) ? null : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    };
+    const from = day(p.from);
+    const to = day(p.to);
+    if (from && (!to || p.from === p.to)) return `on ${from}`;
+    if (from && to) return `from ${from} to ${to}`;
   }
   return `in ${formatPeriod(p)}`;
 }

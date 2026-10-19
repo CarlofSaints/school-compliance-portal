@@ -116,6 +116,7 @@ console.log("\nThe distribution list follows the MEETING, not the status");
     { title: "Fix the borehole", dueDate: "2026-10-30", status: "in_progress", assigneeIds: ["p1"], fromMinutes: from },
     { title: "Order STEM kits", dueDate: "", status: "not_started", assigneeIds: ["p1", "p2"], fromMinutes: from },
     { title: "Already done", dueDate: "", status: "done", assigneeIds: ["p1"], fromMinutes: from },
+    { title: "Cancelled", dueDate: "", status: "cancelled", assigneeIds: ["p1"], fromMinutes: from },
     { title: "Other meeting", dueDate: "", status: "not_started", assigneeIds: ["p1"], fromMinutes: { ...from, minutesId: "m2" } },
   ] as Parameters<typeof openActionsByEmail>[1];
   const people = [{ id: "p1", email: " Derek@School.co.za " }, { id: "p2", email: "dee@school.co.za" }, { id: "p3", email: "" }];
@@ -125,7 +126,8 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   check("nobody else is listed", [...map.keys()].length, 2);
 
   check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");
-  check("a month reads 'in <month>'", meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
+  check("a custom range reads 'from <date> to <date>', not its label", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15", label: "Special meeting" }), "from 1 October 2026 to 15 October 2026");
+  check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 
   await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("derek@school.co.za")!, null);
   checkThat("email lists the actions", html.includes("Fix the borehole") && html.includes("Order STEM kits"));

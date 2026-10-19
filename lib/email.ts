@@ -64,11 +64,12 @@ function logoUrl(b: SchoolBranding): string {
 
 const FONT = "Arial,Helvetica,sans-serif";
 
-/** A button that keeps its colour in Outlook: the colour sits on a table
- *  cell, and the link inside only carries the text. */
+/** A button that keeps its colour and size in Outlook: the colour AND the
+ *  padding sit on the table cell (Outlook ignores padding on a link), and
+ *  the link inside only carries the text. */
 function button(href: string, label: string, bg: string, align: "left" | "center" = "left"): string {
   const fg = readableTextOn(bg);
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"${align === "center" ? ' align="center"' : ""} style="margin:16px 0;"><tr><td bgcolor="${bg}" style="background:${bg};border-radius:6px;"><a href="${href}" style="display:inline-block;padding:12px 24px;font-family:${FONT};font-size:15px;font-weight:bold;color:${fg};text-decoration:none;border-radius:6px;">${label}</a></td></tr></table>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"${align === "center" ? ' align="center"' : ""} style="margin:16px 0;"><tr><td bgcolor="${bg}" style="background:${bg};border-radius:6px;padding:12px 24px;"><a href="${href}" style="display:inline-block;font-family:${FONT};font-size:15px;font-weight:bold;color:${fg};text-decoration:none;border-radius:6px;">${label}</a></td></tr></table>`;
 }
 
 /** A tinted panel (the minutes title, a project's facts, a comment). Opened

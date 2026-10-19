@@ -2,7 +2,7 @@ import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
 import { formatPeriod, canDistribute, meetingWhen } from "./minutes";
 import { getActionItems } from "./actionItemData";
-import type { ActionItem } from "./actionItems";
+import { isClosed, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
@@ -105,15 +105,6 @@ export async function previewDistribution(record: MinutesRecord) {
   };
 }
 
-/**
- * Emails the signed minutes to the distribution list for that body.
- *
- * The audience is resolved at SEND time, never frozen: a governor elected
- * after the meeting should still receive the minutes of it. That is the
- * opposite rule to the REVIEW round, where the list is frozen so somebody
- * added tomorrow cannot un-complete a finished round - the difference is that
- * distribution is a copy and review is a decision.
- */
 /** Lowercased email -> that person's open actions raised from these minutes. */
 export function openActionsByEmail(
   minutesId: string,
@@ -123,7 +114,8 @@ export function openActionsByEmail(
   const emailOf = new Map(people.map((p) => [p.id, (p.email || "").trim().toLowerCase()]));
   const out = new Map<string, SignedEmailAction[]>();
   for (const item of items) {
-    if (item.fromMinutes?.minutesId !== minutesId || item.status === "done") continue;
+    // Cancelled counts as closed too: neither is anybody's to execute.
+    if (item.fromMinutes?.minutesId !== minutesId || isClosed(item)) continue;
     for (const pid of item.assigneeIds) {
       const email = emailOf.get(pid);
       if (email) out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
@@ -132,6 +124,15 @@ export function openActionsByEmail(
   return out;
 }
 
+/**
+ * Emails the signed minutes to the distribution list for that body.
+ *
+ * The audience is resolved at SEND time, never frozen: a governor elected
+ * after the meeting should still receive the minutes of it. That is the
+ * opposite rule to the REVIEW round, where the list is frozen so somebody
+ * added tomorrow cannot un-complete a finished round - the difference is that
+ * distribution is a copy and review is a decision.
+ */
 export async function distributeSignedMinutes(
   /**
    * 🔴 The RECORD, not an id. The final signature writes the record and then
@@ -173,7 +174,8 @@ export async function distributeSignedMinutes(
   // A failure here loses the list, never the minutes themselves.
   let actionsByEmail = new Map<string, SignedEmailAction[]>();
   try {
-    actionsByEmail = openActionsByEmail(id, await getActionItems(), await getPeople());
+    const [items, people] = await Promise.all([getActionItems(), getPeople()]);
+    actionsByEmail = openActionsByEmail(id, items, people);
   } catch (err) {
     console.error("[minutes distribution] Could not read action items, sending without them:", err);
   }
