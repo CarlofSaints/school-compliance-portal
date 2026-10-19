@@ -26,15 +26,25 @@ export function mintSigningCode(): string {
  * outside the server. Salted with the minutes id as well, so one code issued
  * for two meetings stores differently.
  */
+// Its own key, derived from the signing secret, so a signing code and a
+// session token are never made with the same key. Rotating that secret voids
+// codes already sent: a signer then sends themselves a new one from the page.
+function signingCodeKey(): Buffer {
+  return crypto.createHmac("sha256", authSigningKey()).update("minutes-signing-code").digest();
+}
+
 export function hashSigningCode(code: string, minutesId: string): string {
   return crypto
-    .createHmac("sha256", authSigningKey())
+    .createHmac("sha256", signingCodeKey())
     .update(`${minutesId}:${normaliseSigningCode(code)}`)
     .digest("hex");
 }
 
-// shortcut: codes emailed before 19 Oct 2026 were stored as a plain SHA-256 and
-// still verify against it; drop this once no minutes from then await signing.
+// Codes emailed before 19 Oct 2026 were stored as a plain SHA-256. They still
+// verify until this date, so nobody is stranded mid-signing; after it they are
+// refused and the signer sends themselves a new code.
+// shortcut: date-based cut-off; delete legacySigningHash after it passes.
+const LEGACY_CODES_UNTIL = Date.parse("2026-11-30T00:00:00+02:00");
 function legacySigningHash(code: string, minutesId: string): string {
   return crypto
     .createHash("sha256")
@@ -58,7 +68,7 @@ export function signingCodeMatches(
   if (!storedHash) return false;
   return (
     sameHex(hashSigningCode(code, minutesId), storedHash) ||
-    sameHex(legacySigningHash(code, minutesId), storedHash)
+    (Date.now() < LEGACY_CODES_UNTIL && sameHex(legacySigningHash(code, minutesId), storedHash))
   );
 }
 

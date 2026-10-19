@@ -18,7 +18,7 @@ function check(name: string, actual: unknown, expected: unknown) {
 
 async function main() {
   const { hashSigningCode, signingCodeMatches, minutesForClient } = await import("../lib/minutesSigning");
-  const { readJson, readFile, UnsafeBlobPathError } = await import("../lib/controlData");
+  const { readJson, readFile, writeJson, UnsafeBlobPathError } = await import("../lib/controlData");
 
   // --- signing code ---
   const id = "11111111-1111-4111-8111-111111111111";
@@ -28,10 +28,17 @@ async function main() {
   check("a wrong code does not", signingCodeMatches("ABC235", id, hashSigningCode("ABC234", id)), false);
   check("a code emailed before the fix still signs", signingCodeMatches("ABC234", id, plain), true);
   check("nothing stored, nothing matches", signingCodeMatches("ABC234", id, undefined), false);
+  const realNow = Date.now;
+  Date.now = () => Date.parse("2026-12-01T00:00:00Z");
+  check("an old-style code is refused after 30 Nov", signingCodeMatches("ABC234", id, plain), false);
+  check("a new-style code still works then", signingCodeMatches("ABC234", id, hashSigningCode("ABC234", id)), true);
+  Date.now = realNow;
 
   const record = {
     id,
-    signatories: [{ email: "chair@x.za", name: "Chair", codeHash: "aa", ip: "1.2.3.4", codeSentAt: "2026-10-19" }],
+    signatories: [
+      { personId: "p1", role: "chair", email: "chair@x.za", name: "Chair", codeHash: "aa", ip: "1.2.3.4", codeSentAt: "2026-10-19" },
+    ] as unknown as import("../lib/minutes").Signatory[],
   };
   const out = minutesForClient(record) as unknown as { signatories: Record<string, unknown>[] };
   check("client copy has no code hash or IP", ["codeHash", "ip"].filter((k) => k in out.signatories[0]), []);
@@ -40,21 +47,26 @@ async function main() {
   check("null passes through", minutesForClient(null), null);
 
   // --- storage paths ---
-  async function refused(p: string) {
+  // A read of an unsafe path is a miss (the route says 404); a write throws.
+  await writeJson("users/index.json", { secret: true });
+  const read = (p: string) => readJson(p, "MISSING");
+  check("'..' segment reads as missing", await read("policies/../users/index.json"), "MISSING");
+  check("'%2e%2e' segment reads as missing", await read("policies/%2e%2e/users/index.json"), "MISSING");
+  check("'%2E.' segment reads as missing", await read("policies/%2E./users/index.json"), "MISSING");
+  check("'..' between backslashes reads as missing", await read("policies\\..\\users/index.json"), "MISSING");
+  check("readFile on a bad path is a miss", await readFile("policies/../users/index.json"), null);
+  async function writeRefused(p: string) {
     try {
-      await readJson(p, null);
+      await writeJson(p, {});
       return false;
     } catch (e) {
       return e instanceof UnsafeBlobPathError;
     }
   }
-  check("'..' segment refused", await refused("policies/../users/index.json/meta.json"), true);
-  check("'%2e%2e' segment refused", await refused("policies/%2e%2e/users.json"), true);
-  check("'%2E.' segment refused", await refused("policies/%2E./users.json"), true);
-  check("backslash refused", await refused("policies/..\\users.json"), true);
-  check("an ordinary id is read", await refused(`policies/${id}/meta.json`), false);
-  check("a dotted file name is fine", await refused("compliance/x/report.v2.pdf"), false);
-  check("readFile on a bad path is a miss, not a throw", await readFile("policies/../x"), null);
+  check("writing through '..' is refused", await writeRefused("policies/../users/index.json"), true);
+  check("an ordinary path still reads", await read("users/index.json"), { secret: true });
+  check("a dotted file name is fine", await writeRefused("compliance/x/report.v2.pdf"), false);
+  check("a backslash inside a file name is fine", await writeRefused("compliance/x/budget\\2026.pdf"), false);
 
   // --- sign-up name ---
   process.env.VERCEL_API_TOKEN ||= "x";

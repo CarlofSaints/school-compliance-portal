@@ -19,16 +19,18 @@ async function scope() {
   return tenantScope();
 }
 
-// 🔴 The SDK turns a key into a URL, and a URL resolves ".." and "%2e%2e" segments and
-// treats a backslash as a slash. Ids come straight from request paths (policies/[id], checks/[id]),
-// so one route that forgot to validate its id could otherwise reach any
-// other file in the school's store. Refused here, once, for every caller.
+// 🔴 The SDK turns a key into a URL, and a URL resolves "." and ".." segments
+// (also written %2e, and also between backslashes, which it reads as slashes).
+// Ids come straight from request paths (policies/[id], checks/[id]), so one
+// route that forgot to validate its id could otherwise reach any other file in
+// the school's store. Refused here, once, for every caller. A backslash on its
+// own is fine: uploaded file names can contain one.
 export class UnsafeBlobPathError extends Error {}
+function isUnsafeBlobPath(blobPath: string): boolean {
+  return blobPath.split(/[\\/]/).some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
+}
 function blobKey(prefix: string, blobPath: string): string {
-  const bad =
-    blobPath.includes("\\") ||
-    blobPath.split("/").some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
-  if (bad) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
+  if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
   return prefix + blobPath;
 }
 
@@ -62,6 +64,8 @@ async function findBlob(blobPath: string) {
 //
 // get() also needs no separate index lookup, so it is one round trip, not two.
 async function readBlobBody(blobPath: string): Promise<Response | null> {
+  // Cannot exist, so it reads as missing: the route answers 404, not 500.
+  if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
   const result = await get(blobKey(prefix, blobPath), {
     access: "private",
@@ -208,6 +212,7 @@ export class UpdateConflictError extends Error {}
 export const NO_CHANGE = Symbol("no-change");
 
 async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: string } | null> {
+  if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
   const result = await get(blobKey(prefix, blobPath), { access: "private", useCache: false, token });
   if (!result || result.statusCode !== 200) return null;

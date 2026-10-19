@@ -7,6 +7,7 @@ import { resolveAudience } from "./minutesRecipients";
 import { getPeople } from "./peopleData";
 import { mintSigningCode, hashSigningCode } from "./minutesSigning";
 import { sendMinutesSigningCodeEmail } from "./email";
+import { LIMITS, clear } from "./rateLimit";
 
 // ---------------------------------------------------------------------------
 // Opening signing: freeze who signs, mint each of them a code, send it.
@@ -126,6 +127,8 @@ export async function openSigning(
   const periodLabel = formatPeriod(record.period);
   const failed: string[] = [];
   for (const { signatory, code } of codes) {
+    // A new code is a fresh start: wrong guesses at the old one no longer count.
+    await clear(LIMITS.signCodeAttempt, `${id}|${signatory.email}`);
     const ok = await sendMinutesSigningCodeEmail(
       signatory.email,
       signatory.name,

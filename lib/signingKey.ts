@@ -11,7 +11,7 @@
 // public here lets anyone mint a session for any user.
 //
 // Rotating whichever value is in play signs everybody out and kills
-// outstanding reset links. That is the correct behaviour, not a bug.
+// outstanding reset links and minutes signing codes (lib/minutesSigning.ts). That is the correct behaviour, not a bug.
 // ---------------------------------------------------------------------------
 
 export function authSigningKey(): string {
