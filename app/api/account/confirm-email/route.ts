@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { afterResponse } from "@/lib/activityActor";
 import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
 import { getUserById, getUsers, updateUser } from "@/lib/userData";
 import { readEmailChangeClaims, verifyEmailChangeToken } from "@/lib/emailChange";
@@ -59,9 +60,8 @@ export async function POST(req: NextRequest) {
   }
 
   const name = `${updated.name} ${updated.surname}`.trim();
-  // Awaited (its sent box record is written after the send, and serverless
-  // work after the response may never run), but a failure changes nothing.
-  await sendEmailChangeNoticeEmail(oldEmail, name, claims.n, "changed").catch(() => {});
+  // After the response, so a slow email service never delays the change.
+  await afterResponse(() => sendEmailChangeNoticeEmail(oldEmail, name, claims.n, "changed"));
   await recordActivity({
     actorId: user.id,
     actorName: name,

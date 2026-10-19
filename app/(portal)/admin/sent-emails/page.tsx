@@ -36,12 +36,18 @@ export default function SentEmailsPage() {
   const [month, setMonth] = useState("");
   const [months, setMonths] = useState<string[]>([]);
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState<(Row & { html?: string; failed?: boolean }) | null>(null);
 
-  const load = useCallback(async (m: string) => {
-    const res = await authFetch(`/api/sent-emails${m ? `?month=${encodeURIComponent(m)}` : ""}`, { cache: "no-store" });
+  // Page 0 replaces the list; a later page (Show older) is added to it.
+  const load = useCallback(async (m: string, p = 0) => {
+    const q = new URLSearchParams();
+    if (m) q.set("month", m);
+    if (p) q.set("page", String(p));
+    const res = await authFetch(`/api/sent-emails?${q}`, { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(data.error || t("Could not load the sent emails."));
@@ -51,7 +57,9 @@ export default function SentEmailsPage() {
     setError("");
     setMonth(data.month);
     setMonths(data.months || []);
-    setRows(data.emails || []);
+    setTotal(data.total || 0);
+    setPage(p);
+    setRows((prev) => (p ? [...(prev || []), ...(data.emails || [])] : data.emails || []));
   }, [t]);
 
   useEffect(() => {
@@ -60,7 +68,7 @@ export default function SentEmailsPage() {
 
   const show = async (r: Row) => {
     if (!r.hasBody) return setOpen(r);
-    const res = await authFetch(`/api/sent-emails?month=${encodeURIComponent(month)}&id=${encodeURIComponent(r.id)}`, { cache: "no-store" });
+    const res = await authFetch(`/api/sent-emails?at=${encodeURIComponent(r.at)}&id=${encodeURIComponent(r.id)}`, { cache: "no-store" });
     setOpen(res.ok ? await res.json() : { ...r, failed: true });
   };
 
@@ -125,7 +133,7 @@ export default function SentEmailsPage() {
                 <tr key={r.id} onClick={() => void show(r)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{when(r.at)}</td>
                   <td className="px-4 py-3 text-gray-700">{r.to}</td>
-                  <td className={`px-4 py-3 ${r.hidden ? "text-gray-400 italic" : "text-dark"}`}>{r.hidden ? hiddenText(r.hidden) : r.subject}</td>
+                  <td className={`px-4 py-3 ${r.hidden ? "text-gray-400 italic" : "text-dark"}`}>{r.hidden ? hiddenText(r.hidden) : r.subject || t("Personal email, wording not kept")}</td>
                   <td className="px-4 py-3 text-gray-500">{kindLabel(r.kind)}</td>
                   <td className="px-4 py-3">
                     {r.ok ? (
@@ -140,13 +148,21 @@ export default function SentEmailsPage() {
           </tbody>
         </table>
       </div>
+      {rows && rows.length < total && (
+        <button
+          onClick={() => void load(month, page + 1)}
+          className="mt-4 px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
+        >
+          {t("Show older ({n} more)", { n: total - rows.length })}
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setOpen(null)}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 text-sm space-y-1">
               <div className="flex justify-between gap-4">
-                <p className="font-semibold text-dark">{open.hidden ? hiddenText(open.hidden) : open.subject}</p>
+                <p className="font-semibold text-dark">{open.hidden ? hiddenText(open.hidden) : open.subject || t("Personal email, wording not kept")}</p>
                 <button onClick={() => setOpen(null)} className="text-gray-400 hover:text-gray-600">{t("Close")}</button>
               </div>
               <p className="text-gray-500">{t("To")}: {open.to} · {when(open.at)} · {kindLabel(open.kind)}</p>

@@ -1748,5 +1748,7 @@
   "This email is about minutes you do not have access to.": "Imeile e e malebana le metsotso e o se nang tetla ya go e bona.",
   "This email was written for one person from things only they may see, so its wording is not kept.": "Imeile e e kwaletswe motho a le mongwe ka dilo tse e leng ene fela a ka di bonang, ka jalo mafoko a yone ga a bolokwe.",
   "Could not open this email. Try again.": "Ga go kgonege go bula imeile e. Leka gape.",
-  "This email is about a fund application you do not have access to.": "Imeile e e malebana le kopo ya madi e o se nang tetla ya go e bona."
+  "This email is about a fund application you do not have access to.": "Imeile e e malebana le kopo ya madi e o se nang tetla ya go e bona.",
+  "Personal email, wording not kept": "Imeile ya motho ka esi, mafoko ga a bolokwa",
+  "Show older ({n} more)": "Bontsha tsa bogologolo ({n} tse dingwe)"
 }

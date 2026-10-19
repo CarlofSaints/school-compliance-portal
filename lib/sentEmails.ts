@@ -1,16 +1,20 @@
-import { writeJson, listFilesStrict, listFolders, readJson, readJsonTolerant } from "./controlData";
+import { writeJson, writeFile, readFile, listFilesStrict, readJson, readJsonTolerant } from "./controlData";
+import { activityMonths } from "./activityLog";
 
 // ---------------------------------------------------------------------------
 // The SENT BOX: every email the portal sends, as it was sent (Carl, 19 Oct
 // 2026: "so admins can see exactly what emails have been sent").
 //
-// One blob per email (sent-emails/<YYYY-MM>/<at>-<id>.json), the activity
-// log's pattern: two sends at once never fight over one file.
+// Per email, two blobs with the same name:
+//   sent-emails/<YYYY-MM>/<at>-<id>.json       the summary the list reads
+//   sent-email-bodies/<YYYY-MM>/<at>-<id>.html  the body, read when opened
+// One file per email (the activity log's pattern), so two sends at once
+// never fight over one file, and a list never drags every body along.
 //
 // 🔴 Never a second way to read what the reader may not: anything tied to
 // minutes carries minutesId and the list hides it from someone who cannot
-// read those minutes. Personal digests (weekly update, action summary,
-// action chases not tied to minutes) are kept WITHOUT their body.
+// read those minutes. Personal mail (weekly update, action summary, action
+// chases not tied to minutes) is kept with NEITHER its subject nor its body.
 //
 // 🔴 Never a way to act as someone else: signing codes, temporary passwords
 // and every token in a link are blanked before anything is stored.
@@ -23,7 +27,7 @@ export interface EmailMeta {
   minutesId?: string;
   /** Exact strings to blank (a signing code, a temporary password). */
   secrets?: string[];
-  /** Built for one reader from things only they may see: body not kept. */
+  /** Built for one reader from things only they may see: subject and body not kept. */
   personal?: boolean;
 }
 
@@ -31,6 +35,7 @@ export interface SentEmail {
   id: string;
   at: string;
   to: string;
+  /** Empty for personal mail. */
   subject: string;
   kind: string;
   minutesId?: string;
@@ -39,8 +44,8 @@ export interface SentEmail {
   /** Why not, in the service's words, when it refused or failed. */
   error?: string;
   attachments?: string[];
-  /** As sent, secrets blanked. Absent for personal mail. */
-  html?: string;
+  /** A body was kept (not for personal mail). */
+  hasBody: boolean;
 }
 
 const BLANK = "••••••";
@@ -55,25 +60,32 @@ export function redactEmailHtml(html: string, secrets: string[] = []): string {
     out = out.split(escaped(s)).join(BLANK).split(s).join(BLANK);
   }
   return out
-    // ?token=… / &token=… / &code=… in any link
-    .replace(/([?&](?:token|code|t)=)[^"'&<\s]+/gi, `$1${BLANK}`)
+    // ?token=… / &token=… / &amp;token=… / &code=… in any link
+    .replace(/([?&](?:amp;)?(?:token|code|t)=)[^"'&<\s]+/gi, `$1${BLANK}`)
     // /bookings/request/<token>
     .replace(/(\/bookings\/request\/)[^"'<\s]+/g, `$1${BLANK}`);
 }
 
+function names(at: string, id: string) {
+  const month = at.slice(0, 7);
+  const base = `${at}-${id.slice(0, 8)}`;
+  return { summary: `sent-emails/${month}/${base}.json`, body: `sent-email-bodies/${month}/${base}.html` };
+}
+
 /** Never throws: a sent box that cannot be written must not fail a send. */
-export async function recordSentEmail(e: Omit<SentEmail, "id" | "at">, secrets: string[] = []): Promise<void> {
+export async function recordSentEmail(
+  e: Omit<SentEmail, "id" | "at" | "hasBody">,
+  html: string | undefined,
+  secrets: string[] = []
+): Promise<void> {
   try {
     const at = new Date().toISOString();
     const id = crypto.randomUUID();
-    const entry: SentEmail = {
-      ...e,
-      id,
-      at,
-      subject: redactEmailHtml(e.subject, secrets),
-      ...(e.html !== undefined ? { html: redactEmailHtml(e.html, secrets) } : {}),
-    };
-    await writeJson(`sent-emails/${at.slice(0, 7)}/${at}-${id.slice(0, 6)}.json`, entry);
+    const files = names(at, id);
+    const entry: SentEmail = { ...e, id, at, subject: redactEmailHtml(e.subject, secrets), hasBody: html !== undefined };
+    // Body first: a summary must never point at a body that is not there.
+    if (html !== undefined) await writeFile(files.body, Buffer.from(redactEmailHtml(html, secrets), "utf8"));
+    await writeJson(files.summary, entry);
   } catch (err) {
     console.error("[sent emails] Could not record:", e.kind, err);
   }
@@ -81,22 +93,27 @@ export async function recordSentEmail(e: Omit<SentEmail, "id" | "at">, secrets: 
 
 /** Months that have mail, newest first. */
 export async function sentEmailMonths(): Promise<string[]> {
-  return (await listFolders("sent-emails")).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
+  return activityMonths(["sent-emails"]);
 }
 
-/** A month's mail, newest first, capped (a busy school sends a few hundred).
- *  A storage error THROWS: an outage must not read as "nothing sent". */
-export async function readSentEmails(month: string, limit = 500): Promise<SentEmail[]> {
-  if (!/^\d{4}-\d{2}$/.test(month)) return [];
-  const names = (await listFilesStrict(`sent-emails/${month}`)).sort().reverse().slice(0, limit);
-  const all = await Promise.all(names.map((n) => readJsonTolerant<SentEmail | null>(`sent-emails/${month}/${n}`, null)));
-  return all.filter((e): e is SentEmail => !!e);
+export const SENT_PAGE_SIZE = 200;
+
+/** A page of a month's mail, newest first. A storage error THROWS: an outage
+ *  must not read as "nothing sent". total says how many the month holds. */
+export async function readSentEmails(month: string, page = 0): Promise<{ emails: SentEmail[]; total: number }> {
+  if (!/^\d{4}-\d{2}$/.test(month)) return { emails: [], total: 0 };
+  const all = (await listFilesStrict(`sent-emails/${month}`)).filter((n) => n.endsWith(".json")).sort().reverse();
+  const slice = all.slice(page * SENT_PAGE_SIZE, (page + 1) * SENT_PAGE_SIZE);
+  const read = await Promise.all(slice.map((n) => readJsonTolerant<SentEmail | null>(`sent-emails/${month}/${n}`, null)));
+  return { emails: read.filter((e): e is SentEmail => !!e), total: all.length };
 }
 
-/** One email, read on its own: its file name ends with the id's first six. */
-export async function readSentEmail(month: string, id: string): Promise<SentEmail | null> {
-  if (!/^\d{4}-\d{2}$/.test(month) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const name = (await listFilesStrict(`sent-emails/${month}`)).find((n) => n.endsWith(`-${id.slice(0, 6)}.json`));
-  const entry = name ? await readJson<SentEmail | null>(`sent-emails/${month}/${name}`, null) : null;
-  return entry?.id === id ? entry : null;
+/** One email and its body, found directly from when it was sent and its id. */
+export async function readSentEmail(at: string, id: string): Promise<{ email: SentEmail; html?: string } | null> {
+  if (!/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(at) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const files = names(at, id);
+  const email = await readJson<SentEmail | null>(files.summary, null);
+  if (!email || email.id !== id) return null;
+  const body = email.hasBody ? await readFile(files.body) : null;
+  return { email, html: body ? body.toString("utf8") : undefined };
 }

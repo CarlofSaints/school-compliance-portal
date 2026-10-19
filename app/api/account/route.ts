@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { afterResponse } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireLogin } from "@/lib/rolesData";
 import { getUserById, getUsers, updateUser, verifyPassword } from "@/lib/userData";
@@ -124,9 +125,9 @@ export async function PUT(req: NextRequest) {
           { status: 502 }
         );
       }
-      // Awaited so its sent box record is written; a notice that fails must
-      // still not undo the request.
-      await sendEmailChangeNoticeEmail(current.email, name, wanted, "requested").catch(() => {});
+      // After the response, so a slow email service never delays the save; a
+      // notice that fails must not undo the request.
+      await afterResponse(() => sendEmailChangeNoticeEmail(current.email, name, wanted, "requested"));
       pendingEmail = wanted;
     }
 

@@ -44,27 +44,38 @@ async function main() {
   await email.sendWelcomeEmail("amp@x.za", "A", "Tom&Jerry<1>");
   refuse = false;
 
-  const sent = await readSentEmails(month);
-  const byTo = (to: string) => sent.find((e) => e.to === to);
+  // Records are written after the response; a script awaits them here.
+  const { flushAfterResponse } = await import("../lib/activityActor");
+  await flushAfterResponse();
 
+  const { emails: sent, total } = await readSentEmails(month);
+  const byTo = (to: string) => sent.find((e) => e.to === to);
+  const bodyOf = async (to: string) => {
+    const e = byTo(to);
+    return e ? (await readSentEmail(e.at, e.id))?.html : undefined;
+  };
+
+  check("every send is recorded", total, 5);
   const code = byTo("chair@x.za");
   check("the signing code email is recorded", code?.kind, "minutes.signing_code");
   check("tied to its minutes for the read rule", code?.minutesId, "m1");
-  check("🔴 the signing code itself is NOT stored", !!code?.html && !code.html.includes("K7P4QX") && code.html.includes("••••••"), true);
-  const reset = byTo("p@x.za");
-  check("🔴 the reset token is NOT stored", !!reset?.html && !reset.html.includes("tok-secret-123"), true);
-  const weekly = byTo("w@x.za");
-  check("a personal email is recorded", weekly?.kind, "action.assigned");
-  check("but kept without its body", weekly?.html, undefined);
+  const codeHtml = await bodyOf("chair@x.za");
+  check("🔴 the signing code itself is NOT stored", !!codeHtml && !codeHtml.includes("K7P4QX") && codeHtml.includes("••••••"), true);
+  const resetHtml = await bodyOf("p@x.za");
+  check("🔴 the reset token is NOT stored", !!resetHtml && !resetHtml.includes("tok-secret-123"), true);
+  const personal = byTo("w@x.za");
+  check("a personal email is recorded", personal?.kind, "action.assigned");
+  check("🔴 but with neither its subject (it names the action) nor its body", [personal?.subject, personal?.hasBody, await bodyOf("w@x.za")], ["", false, undefined]);
   const bad = byTo("bad@x.za");
   check("a refused send is recorded as not sent", bad?.ok, false);
   check("with the service's reason", bad?.error, "Invalid to address");
-  check("🔴 the temporary password is NOT stored", !!bad?.html && !bad.html.includes("TempPass99"), true);
-  const amp = byTo("amp@x.za");
-  check("🔴 a password with & < > is blanked even after HTML escaping", !!amp?.html && !amp.html.includes("Tom&amp;Jerry") && !amp.html.includes("Tom&Jerry"), true);
-  check("newest first", sent[0]?.to, "amp@x.za");
-  check("one email can be read on its own", (await readSentEmail(month, code!.id))?.to, "chair@x.za");
-  check("a wrong id finds nothing", await readSentEmail(month, "00000000-0000-0000-0000-000000000000"), null);
+  const badHtml = await bodyOf("bad@x.za");
+  check("🔴 the temporary password is NOT stored", !!badHtml && !badHtml.includes("TempPass99"), true);
+  const ampHtml = await bodyOf("amp@x.za");
+  check("🔴 a password with & < > is blanked even after HTML escaping", !!ampHtml && !ampHtml.includes("Tom&amp;Jerry") && !ampHtml.includes("Tom&Jerry"), true);
+  check("an escaped token in a link is blanked", redactEmailHtml('href="?id=1&amp;token=abc"'), 'href="?id=1&amp;token=••••••"');
+  check("newest first (by send time)", sent.every((e, i) => i === 0 || sent[i - 1].at >= e.at), true);
+  check("a wrong id finds nothing", await readSentEmail(code!.at, "00000000-0000-0000-0000-000000000000"), null);
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

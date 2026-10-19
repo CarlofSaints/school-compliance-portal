@@ -4,6 +4,7 @@ import type { SchoolBranding } from "@/lib/branding";
 import { duePhrase } from "@/lib/actionItems";
 import { readableTextOn } from "@/lib/brandingColors";
 import { recordSentEmail, type EmailMeta } from "@/lib/sentEmails";
+import { afterResponse } from "@/lib/activityActor";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -528,19 +529,25 @@ async function sendEmail(
   meta: EmailMeta = { kind: "other" }
 ): Promise<boolean> {
   const r = await deliver(from, to, subject, html, replyTo, attachments, htmlWithoutAttachments);
-  await recordSentEmail(
-    {
-      to,
-      subject,
-      kind: meta.kind,
-      ...(meta.minutesId ? { minutesId: meta.minutesId } : {}),
-      // Not configured counts as not sent here, though the caller is told true.
-      ok: r.ok && !r.error,
-      ...(r.error ? { error: r.error } : {}),
-      ...(r.attached.length ? { attachments: r.attached } : {}),
-      ...(meta.personal ? {} : { html: r.html }),
-    },
-    meta.secrets
+  // After the response (tenant-pinned, and awaited by scripts through
+  // flushAfterResponse): a send loop never waits on the sent box.
+  await afterResponse(() =>
+    recordSentEmail(
+      {
+        to,
+        // A personal mail's subject names its private content ("Action A-001:
+        // <title>"), so it is withheld with the body.
+        subject: meta.personal ? "" : subject,
+        kind: meta.kind,
+        ...(meta.minutesId ? { minutesId: meta.minutesId } : {}),
+        // Not configured counts as not sent here, though the caller is told true.
+        ok: r.ok && !r.error,
+        ...(r.error ? { error: r.error } : {}),
+        ...(r.attached.length ? { attachments: r.attached } : {}),
+      },
+      meta.personal ? undefined : r.html,
+      meta.secrets
+    )
   );
   return r.ok;
 }
