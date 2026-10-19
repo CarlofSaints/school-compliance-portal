@@ -10,6 +10,7 @@ import {
 } from "@/lib/minutes";
 import { getUserByEmail } from "@/lib/userData";
 import { openSigning, SigningSetupError } from "@/lib/minutesSigningFlow";
+import { minutesForClient } from "@/lib/minutesSigning";
 import { sendMinutesChangesRequestedEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -161,5 +162,5 @@ export async function POST(
     detail: { draftNumber: record.draftNumber, decision, comments: comments || undefined },
   });
 
-  return NextResponse.json({ record: updated, progress, signingProblem });
+  return NextResponse.json({ record: minutesForClient(updated), progress, signingProblem });
 }

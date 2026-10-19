@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { SIGNING_ALPHABET, normaliseSigningCode, canonicalMinutes } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
+import { authSigningKey } from "./signingKey";
 
 // ---------------------------------------------------------------------------
 // The crypto half of signing. Separate from lib/minutes.ts because that file is
@@ -19,29 +20,68 @@ export function mintSigningCode(): string {
 }
 
 /**
- * Salted with the minutes id, so the same code issued for two different
- * meetings hashes differently and one leaked hash cannot be matched against
- * another set of minutes.
+ * 🔴 KEYED with the server secret. A code is only ~30 bits, so a plain SHA-256
+ * of it (what this was until 19 Oct 2026) can be reversed offline in seconds
+ * by anyone who sees the stored value. With the key it cannot be tried at all
+ * outside the server. Salted with the minutes id as well, so one code issued
+ * for two meetings stores differently.
  */
+// Its own key, derived from the signing secret, so a signing code and a
+// session token are never made with the same key. Rotating that secret voids
+// codes already sent: a signer then sends themselves a new one from the page.
+function signingCodeKey(): Buffer {
+  return crypto.createHmac("sha256", authSigningKey()).update("minutes-signing-code").digest();
+}
+
 export function hashSigningCode(code: string, minutesId: string): string {
   return crypto
-    .createHash("sha256")
+    .createHmac("sha256", signingCodeKey())
     .update(`${minutesId}:${normaliseSigningCode(code)}`)
     .digest("hex");
 }
 
+function sameHex(a: string, b: string): boolean {
+  const x = Buffer.from(a, "hex");
+  const y = Buffer.from(b, "hex");
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
 /** Constant time, so the number of correct leading characters cannot be read
- *  off how long the comparison took. */
+ *  off how long the comparison took.
+ *
+ *  🔴 Codes emailed before 19 Oct 2026 were stored as a plain SHA-256 that every
+ *  reader of the minutes was sent, so they are NOT accepted: a signer holding
+ *  one gets "does not match" and sends themselves a new code. */
 export function signingCodeMatches(
   code: string,
   minutesId: string,
   storedHash: string | undefined
 ): boolean {
   if (!storedHash) return false;
-  const given = Buffer.from(hashSigningCode(code, minutesId), "hex");
-  const stored = Buffer.from(storedHash, "hex");
-  if (given.length !== stored.length) return false;
-  return crypto.timingSafeEqual(given, stored);
+  return sameHex(hashSigningCode(code, minutesId), storedHash);
+}
+
+/** Wrong-code attempts are counted per CODE (codeSentAt changes with every new
+ *  one), so a fresh code starts a fresh count with nothing to clear, and a
+ *  resend never gives more than 10 tries at any single code. */
+export function signCodeLimitKey(minutesId: string, s: { email: string; codeSentAt?: string }): string {
+  return `${minutesId}|${s.email.trim().toLowerCase()}|${s.codeSentAt || ""}`;
+}
+
+/**
+ * 🔴 Every minutes record that leaves the server goes through this. The code
+ * hash proves mailbox possession at signing and the IP is audit-only; neither
+ * is for any reader's eyes.
+ */
+export function minutesForClient<T extends Pick<MinutesRecord, "signatories"> | null>(record: T): T {
+  if (!record) return record;
+  return {
+    ...record,
+    signatories: (record.signatories || []).map((s) => {
+      const { codeHash: _codeHash, ip: _ip, ...rest } = s;
+      return rest;
+    }),
+  };
 }
 
 /** The hash a signature is bound to: what the document said at that moment. */

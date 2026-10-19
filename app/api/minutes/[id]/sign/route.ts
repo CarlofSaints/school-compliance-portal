@@ -5,6 +5,8 @@ import { getMinutes, updateMinutes, saveSignatureImage, MinutesChangeRefused } f
 import { signingProgress } from "@/lib/minutes";
 import {
   signingCodeMatches,
+  signCodeLimitKey,
+  minutesForClient,
   documentHash,
   decodeSignature,
   SignatureError,
@@ -12,6 +14,7 @@ import {
 import { distributeSignedMinutes } from "@/lib/minutesDistribution";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom, clientIp } from "@/lib/activityActor";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 
 /**
  * Signs the minutes.
@@ -81,6 +84,11 @@ export async function POST(
     }
     throw e;
   }
+  // Counted per code before it is checked, so guessing it online is capped
+  // too. After the drawing is accepted, so a blank or oversized mark does not
+  // use up a try. A new code gets its own count (see signCodeLimitKey).
+  const limited = await enforce([[LIMITS.signCodeAttempt, signCodeLimitKey(id, signatory)]]);
+  if (limited) return limited;
   if (!signingCodeMatches(code, id, signatory.codeHash)) {
     // Logged, because repeated wrong codes against a governance record are
     // worth seeing in the audit trail even when each one is an honest typo.
@@ -94,7 +102,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "That code does not match. Check the email you were sent, or ask the secretary to send it again.",
+          'That code does not match. Check the email you were sent. If your code came before 20 October, it no longer works: go back to the minutes and press "Send my code again".',
       },
       { status: 400 }
     );
@@ -206,5 +214,5 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ record: updated, progress });
+  return NextResponse.json({ record: minutesForClient(updated), progress });
 }

@@ -58,8 +58,8 @@ function emailShell(b: SchoolBranding, title: string, body: string): string {
   const LOGO_URL = logoUrl(b);
   const branding = b;
   const footerSlogan = branding.slogan
-    ? `${branding.fullName} &mdash; "${branding.slogan}"`
-    : branding.fullName;
+    ? `${esc(branding.fullName)} &mdash; "${esc(branding.slogan)}"`
+    : esc(branding.fullName);
   return `
 <!DOCTYPE html>
 <html>
@@ -82,12 +82,12 @@ function emailShell(b: SchoolBranding, title: string, body: string): string {
         // broken image reads as a forgery.
         LOGO_URL
           ? `<div style="background:#fff;border-radius:8px;padding:8px;display:inline-block;margin:0 0 12px;">
-        <img src="${LOGO_URL}" alt="${branding.logoAlt}" width="52" style="display:block;width:52px;height:auto;border:0;outline:none;text-decoration:none;">
+        <img src="${LOGO_URL}" alt="${esc(branding.logoAlt)}" width="52" style="display:block;width:52px;height:auto;border:0;outline:none;text-decoration:none;">
       </div>`
           : ""
       }
-      <h1 style="color:#fff;margin:0;font-size:24px;">${branding.fullName}</h1>
-      <p style="color:${branding.colors.primaryTint};margin:4px 0 0;font-size:14px;">${branding.tagline}</p>
+      <h1 style="color:#fff;margin:0;font-size:24px;">${esc(branding.fullName)}</h1>
+      <p style="color:${branding.colors.primaryTint};margin:4px 0 0;font-size:14px;">${esc(branding.tagline)}</p>
     </div>
     <div style="background:#fff;padding:30px;border-radius:0 0 8px 8px;">
       <h2 style="color:${branding.colors.dark};margin:0 0 16px;">${title}</h2>
@@ -110,11 +110,11 @@ export async function sendWelcomeEmail(
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
-    <p style="color:#333;">Dear ${name},</p>
-    <p style="color:#333;">Welcome to the ${branding.shortName} ${branding.tagline}. Your account has been created.</p>
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Welcome to the ${esc(branding.shortName)} ${esc(branding.tagline)}. Your account has been created.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Email:</strong> ${to}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${password}</p>
+      <p style="margin:0;color:#333;"><strong>Email:</strong> ${esc(to)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${esc(password)}</p>
     </div>
     <p style="color:#333;">Please log in and change your password immediately.</p>
     <a href="${SITE_URL}/login" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Log In Now</a>
@@ -136,10 +136,10 @@ export async function sendCredentialsSetupEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `
-    <p style="color:#333;">Dear ${name},</p>
-    <p style="color:#333;">An account has been created for you on the ${branding.shortName} ${branding.tagline}. To get in, choose your own password using the button below.</p>
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">An account has been created for you on the ${esc(branding.shortName)} ${esc(branding.tagline)}. To get in, choose your own password using the button below.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>You sign in with:</strong> ${to}</p>
+      <p style="margin:0;color:#333;"><strong>You sign in with:</strong> ${esc(to)}</p>
     </div>
     <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose your password</a>
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes. If it has expired by the time you get to it, use <strong>Forgot your password?</strong> on the sign-in page and it will send you a fresh one.</p>
@@ -158,8 +158,8 @@ export async function sendPasswordResetLinkEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `
-    <p style="color:#333;">Dear ${name},</p>
-    <p style="color:#333;">Someone asked to reset the password for your ${branding.shortName} ${branding.tagline} account. If that was you, choose a new password using the button below.</p>
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Someone asked to reset the password for your ${esc(branding.shortName)} ${esc(branding.tagline)} account. If that was you, choose a new password using the button below.</p>
     <a href="${url}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:12px 0;">Choose a new password</a>
     <p style="color:#666;font-size:13px;">This link works once and expires in ${ttlMinutes} minutes.</p>
     <p style="color:#666;font-size:13px;">If you did not ask for this, you can ignore this email. Your password has not changed.</p>
@@ -236,7 +236,7 @@ export async function sendMinutesForReviewEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/minutes/${minutesId}`;
   const body = `
-    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">${esc(fromName)} has sent you <strong>draft ${draftNumber}</strong> of the minutes below to check.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
       <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
@@ -270,7 +270,7 @@ export async function sendMinutesChangesRequestedEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/minutes/${minutesId}`;
   const body = `
-    <p style="color:#333;">Dear ${secretaryName},</p>
+    <p style="color:#333;">Dear ${esc(secretaryName)},</p>
     <p style="color:#333;"><strong>${esc(reviewerName)}</strong> has asked for changes to <strong>${esc(minutesTitle)}</strong> before it goes out for signing.</p>
     ${
       comments
@@ -301,7 +301,7 @@ export async function sendMinutesReadyToSignEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/minutes/${minutesId}`;
   const body = `
-    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
       <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
@@ -339,7 +339,7 @@ export async function sendMinutesSigningCodeEmail(
   // page: the link in a "please sign" email should open the thing to sign.
   const url = `${SITE_URL}/minutes/${minutesId}/sign`;
   const body = `
-    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
       <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
@@ -379,7 +379,7 @@ export async function sendMinutesSignedEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/minutes/${minutesId}`;
   const body = `
-    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">The minutes below have been signed and are now the final record.${
       attachment ? ` A copy is attached to this email (${esc(attachment.filename)}).` : ""
     }</p>
@@ -412,12 +412,12 @@ export async function sendSpendNotificationEmail(
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
-    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">A new spend application has been submitted and requires your review.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${submittedBy}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${esc(submittedBy)}</p>
     </div>
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Review Application</a>
   `;
@@ -441,13 +441,13 @@ export async function sendApplicantConfirmationEmail(
   const branding = b;
   const PRIMARY = b.colors.primary;
   const intro = submitterName
-    ? `${submitterName} has submitted an application for school funds spend on your behalf for: <strong>"${projectName}"</strong>`
-    : `Your application for school funds spend has been received for: <strong>"${projectName}"</strong>`;
+    ? `${esc(submitterName)} has submitted an application for school funds spend on your behalf for: <strong>"${esc(projectName)}"</strong>`
+    : `Your application for school funds spend has been received for: <strong>"${esc(projectName)}"</strong>`;
 
   // No approvers means the amount fell in a logged-only band. Saying "sent to:"
   // with an empty list would read as though the mail had gone nowhere.
   const routing = approverNames.length
-    ? `<p style="color:#333;">It has been sent for approval to: ${approverNames.join(", ")}.</p>`
+    ? `<p style="color:#333;">It has been sent for approval to: ${esc(approverNames.join(", "))}.</p>`
     : `<p style="color:#333;">This amount does not require approval, so the application has been logged and approved automatically.</p>`;
 
   const quotes = quoteCount
@@ -455,7 +455,7 @@ export async function sendApplicantConfirmationEmail(
     : "";
 
   const body = `
-    <p style="color:#333;">Dear ${applicantName},</p>
+    <p style="color:#333;">Dear ${esc(applicantName)},</p>
     <p style="color:#333;">${intro}</p>
     ${quotes}
     ${routing}
@@ -625,16 +625,16 @@ export async function sendSpendReminderEmail(
   const branding = b;
   const PRIMARY = b.colors.primary;
   const noteBlock = note
-    ? `<p style="color:#333;">${note}</p>`
+    ? `<p style="color:#333;">${esc(note)}</p>`
     : `<p style="color:#333;">This is a scheduled reminder about the project below.</p>`;
   const body = `
-    <p style="color:#333;">Dear ${recipientName},</p>
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
     ${noteBlock}
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${statusLabel}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>You are receiving this as:</strong> ${role}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${esc(statusLabel)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>You are receiving this as:</strong> ${esc(role)}</p>
     </div>
     <a href="${SITE_URL}/spend" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">Open the Project</a>
   `;
@@ -669,18 +669,18 @@ export async function sendApprovalRequestEmail(
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/spend/${spendId}`;
   const deadline = requiredBy
-    ? `<p style="margin:8px 0 0;color:#333;"><strong>Approval required by:</strong> ${requiredBy}</p>`
+    ? `<p style="margin:8px 0 0;color:#333;"><strong>Approval required by:</strong> ${esc(requiredBy)}</p>`
     : "";
   const body = `
-    <p style="color:#333;">Dear ${approverName},</p>
+    <p style="color:#333;">Dear ${esc(approverName)},</p>
     <p style="color:#333;">A fund application needs your decision.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${sourceOfFunds || "Not stated"}</p>
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${esc(sourceOfFunds || "Not stated")}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Quotes submitted:</strong> ${quoteCount}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Estimated cost:</strong> R${amount.toLocaleString()}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${submittedBy}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Approval level:</strong> ${tierLabel}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${esc(submittedBy)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Approval level:</strong> ${esc(tierLabel)}</p>
       ${deadline}
     </div>
     <p style="color:#333;">Open the application to read it in full, then approve, decline, or ask a question.</p>
@@ -719,14 +719,14 @@ export async function sendApprovalProgressEmail(
   const branding = b;
   const PRIMARY = b.colors.primary;
   const note = comments
-    ? `<p style="margin:8px 0 0;color:#333;"><strong>Their comment:</strong> ${comments}</p>`
+    ? `<p style="margin:8px 0 0;color:#333;"><strong>Their comment:</strong> ${esc(comments)}</p>`
     : "";
   const body = `
-    <p style="color:#333;">Dear ${applicantName},</p>
+    <p style="color:#333;">Dear ${esc(applicantName)},</p>
     <p style="color:#333;">There has been an update on your fund application.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>${approverName}:</strong> ${decision}</p>
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>${esc(approverName)}:</strong> ${esc(decision)}</p>
       ${note}
       <p style="margin:8px 0 0;color:#333;"><strong>Progress:</strong> ${approved} of ${total} approvals in</p>
     </div>
@@ -752,12 +752,12 @@ export async function sendFullyApprovedEmail(
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
-    <p style="color:#333;">Dear ${applicantName},</p>
+    <p style="color:#333;">Dear ${esc(applicantName)},</p>
     <p style="color:#333;">Your fund application has been <strong>fully approved</strong>.</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Approved amount:</strong> R${amount.toLocaleString()}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Approved by:</strong> ${approverNames.join(", ")}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Approved by:</strong> ${esc(approverNames.join(", "))}</p>
     </div>
     <a href="${SITE_URL}/spend/${spendId}" style="display:inline-block;background:${PRIMARY};color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin-top:12px;">View the Application</a>
   `;
@@ -790,21 +790,21 @@ export async function sendApprovalReminderEmail(
   const others = stillWaitingOn.filter((n) => n !== approverName);
   const alsoWaiting =
     others.length > 0
-      ? `<p style="margin:8px 0 0;color:#333;"><strong>Also still to decide:</strong> ${others.join(", ")}</p>`
+      ? `<p style="margin:8px 0 0;color:#333;"><strong>Also still to decide:</strong> ${esc(others.join(", "))}</p>`
       : "";
   const waited =
     waitingDays > 0
       ? `It has been waiting ${waitingDays} day${waitingDays === 1 ? "" : "s"}.`
       : "It was submitted today.";
   const body = `
-    <p style="color:#333;">Dear ${approverName},</p>
+    <p style="color:#333;">Dear ${esc(approverName)},</p>
     <p style="color:#333;">This is a reminder that a fund application is waiting for your decision. ${waited}</p>
     <div style="background:#f4f4f5;padding:16px;border-radius:6px;margin:16px 0;">
-      <p style="margin:0;color:#333;"><strong>Project:</strong> ${projectName}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${sourceOfFunds || "Not stated"}</p>
+      <p style="margin:0;color:#333;"><strong>Project:</strong> ${esc(projectName)}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Suggested source of funds:</strong> ${esc(sourceOfFunds || "Not stated")}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Quotes submitted:</strong> ${quoteCount}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Estimated cost:</strong> R${amount.toLocaleString()}</p>
-      <p style="margin:8px 0 0;color:#333;"><strong>Reminder sent by:</strong> ${chasedBy}</p>
+      <p style="margin:8px 0 0;color:#333;"><strong>Reminder sent by:</strong> ${esc(chasedBy)}</p>
       ${alsoWaiting}
     </div>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:12px;">
@@ -830,7 +830,7 @@ export async function sendApprovalReminderEmail(
 
 // Titles, descriptions and notes are typed by people, and an apostrophe or an
 // angle bracket in a title should not be able to break the layout of the mail.
-// The older templates above predate this and interpolate raw; new copy escapes.
+// Every value a person typed, in every template, goes through this.
 function esc(value: string): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")

@@ -19,10 +19,31 @@ async function scope() {
   return tenantScope();
 }
 
+// 🔴 The SDK turns a key into a URL, and a URL resolves "." and ".." segments
+// (also written %2e, also between backslashes, which it reads as slashes, and
+// after deleting any tab or newline inside them). Ids come straight from
+// request paths (policies/[id], checks/[id]), so one route that forgot to
+// validate its id could otherwise reach any other file in the school's store.
+// Checked here, once, for every caller: a read of such a path is a miss (the
+// route answers 404), a write throws. A plain backslash in a file name is fine.
+export class UnsafeBlobPathError extends Error {}
+function isUnsafeBlobPath(blobPath: string): boolean {
+  // Tab and newline are deleted by the URL parser, so a segment is judged
+  // without them; anywhere else they are just part of a file name.
+  return blobPath
+    .split(/[\\/]/)
+    .some((seg) => /^(\.|%2e){1,2}$/i.test(seg.replace(/[\t\n\r]/g, "")));
+}
+function blobKey(prefix: string, blobPath: string): string {
+  if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
+  return prefix + blobPath;
+}
+
 
 // Still needed by deleteFile, which needs a blob's URL rather than its bytes.
 // Nothing should READ through this — see readBlobBody below for why.
 async function findBlob(blobPath: string) {
+  if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
   const key = prefix + blobPath;
   const result = await list({ prefix: key, limit: 1, token });
@@ -49,6 +70,8 @@ async function findBlob(blobPath: string) {
 //
 // get() also needs no separate index lookup, so it is one round trip, not two.
 async function readBlobBody(blobPath: string): Promise<Response | null> {
+  // Cannot exist, so it reads as missing: the route answers 404, not 500.
+  if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
   const result = await get(prefix + blobPath, {
     access: "private",
@@ -158,7 +181,7 @@ export async function readJson<T>(blobPath: string, fallback: T): Promise<T> {
 
 export async function writeJson<T>(blobPath: string, data: T): Promise<void> {
   const { prefix, token } = await scope();
-  await put(prefix + blobPath, JSON.stringify(data, null, 2), {
+  await put(blobKey(prefix, blobPath), JSON.stringify(data, null, 2), {
     access: "private",
     contentType: "application/json",
     addRandomSuffix: false,
@@ -195,6 +218,7 @@ export class UpdateConflictError extends Error {}
 export const NO_CHANGE = Symbol("no-change");
 
 async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: string } | null> {
+  if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
   const result = await get(prefix + blobPath, { access: "private", useCache: false, token });
   if (!result || result.statusCode !== 200) return null;
@@ -228,7 +252,7 @@ export async function updateJson<T>(
     const next = await mutate(current);
     if (next === NO_CHANGE) return current;
     try {
-      await put(prefix + blobPath, JSON.stringify(next, null, 2), {
+      await put(blobKey(prefix, blobPath), JSON.stringify(next, null, 2), {
         access: "private",
         contentType: "application/json",
         addRandomSuffix: false,
@@ -328,7 +352,7 @@ export async function writeFile(
   data: Buffer | Uint8Array
 ): Promise<void> {
   const { prefix, token } = await scope();
-  await put(prefix + blobPath, Buffer.from(data), {
+  await put(blobKey(prefix, blobPath), Buffer.from(data), {
     access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
@@ -344,6 +368,8 @@ export async function deleteFile(blobPath: string): Promise<void> {
 
 /** deleteFile, but a storage error is THROWN, for a caller that must know. */
 export async function deleteFileStrict(blobPath: string): Promise<void> {
+  // "Deleted" must be true, so an unsafe path is an error here, not a miss.
+  if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
   const { token } = await scope();
   const blob = await findBlob(blobPath);
   if (blob) {
@@ -361,6 +387,7 @@ export async function deleteFileStrict(blobPath: string): Promise<void> {
  * somebody "deleted" is telling the truth.
  */
 export async function deleteFolder(dirPath: string): Promise<number> {
+  if (isUnsafeBlobPath(dirPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${dirPath}`);
   const { prefix: tenantPrefix, token } = await scope();
   const prefix = tenantPrefix + dirPath.replace(/\/+$/, "") + "/";
   let removed = 0;
@@ -415,6 +442,7 @@ export async function listFilesStrict(dirPath: string): Promise<string[]> {
 // Expanded: every blob, reduced to its first path segment. Folded: only the
 // folder entries the store returns. Throws on a storage error.
 async function listChildren(dirPath: string, folded: boolean): Promise<string[]> {
+  if (isUnsafeBlobPath(dirPath)) return [];
   const { prefix: tenantPrefix, token } = await scope();
   // Resolved ONCE, outside the loop.
   const prefix = tenantPrefix + dirPath + "/";

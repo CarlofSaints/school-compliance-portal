@@ -7,7 +7,6 @@ import { resolveAudience } from "./minutesRecipients";
 import { getPeople } from "./peopleData";
 import { mintSigningCode, hashSigningCode } from "./minutesSigning";
 import { sendMinutesSigningCodeEmail } from "./email";
-
 // ---------------------------------------------------------------------------
 // Opening signing: freeze who signs, mint each of them a code, send it.
 //
