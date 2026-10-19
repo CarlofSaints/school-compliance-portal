@@ -318,37 +318,6 @@ export async function sendMinutesChangesRequestedEmail(
 }
 
 // Everyone has approved and it is ready to sign.
-export async function sendMinutesReadyToSignEmail(
-  to: string,
-  recipientName: string,
-  minutesId: string,
-  minutesTitle: string,
-  periodLabel: string
-): Promise<boolean> {
-  const b = await resolveBranding();
-  const branding = b;
-  const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/minutes/${minutesId}`;
-  const body = `
-    <p style="color:#333;">Dear ${esc(recipientName)},</p>
-    <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
-    ${boxOpen("#f4f4f5", "16px", "16px 0")}
-      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
-      <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
-    ${BOX_CLOSE}
-    <p style="color:#333;">Open it, read it through, and sign it off.</p>
-    ${button(`${url}`, `Read and sign`, PRIMARY)}
-    <p style="color:#666;font-size:13px;margin-top:16px;">Once everyone has signed, the minutes are locked and cannot be changed. If something is still wrong, send it back rather than signing.</p>
-  `;
-  return sendEmail(
-    b.fromEmail,
-    to,
-    `Ready to sign: ${minutesTitle}`,
-    emailShell(b, "Ready to sign", body),
-    b.replyTo
-  );
-}
-
 // The code somebody types to sign. Sent to them, never shown on the page: what
 // makes an ordinary electronic signature stand up is that the signer did
 // something deliberate that only they could do, and clicking a button while
@@ -391,42 +360,67 @@ export async function sendMinutesSigningCodeEmail(
 
 // Everybody has signed. This goes to the distribution list for the body, so
 // the whole SGB or FINCOM gets the final record.
+/** An open action from the minutes that is this recipient's to do. */
+export interface SignedEmailAction {
+  title: string;
+  dueDate?: string;
+}
+
+// Carl's wording, 19 Oct 2026. Each recipient sees only THEIR open actions
+// from this meeting, so the list is a to-do, not the whole register.
 export async function sendMinutesSignedEmail(
   to: string,
   recipientName: string,
   minutesId: string,
   minutesTitle: string,
   periodLabel: string,
+  /** "on 15 October 2026" / "in October 2026" (meetingWhen in lib/minutes). */
+  heldWhen: string,
   signedBy: string[],
-  documentRef: string,
+  actions: SignedEmailAction[],
   /** The signed minutes themselves. Absent when the file could not be built,
    *  in which case the email still goes, with its link. */
   attachment?: EmailAttachment | null
 ): Promise<boolean> {
   const b = await resolveBranding();
-  const branding = b;
   const PRIMARY = b.colors.primary;
   const url = `${SITE_URL}/minutes/${minutesId}`;
-  const body = `
+  const actionBlock = actions.length
+    ? `
+    <p style="color:#333;margin-top:20px;">Action items from the meeting that are yours to execute are:</p>
+    <ol style="color:#333;margin:0 0 12px;padding-left:22px;">
+      ${actions
+        .map(
+          (a) =>
+            `<li style="margin:0 0 6px;">${esc(a.title)}${a.dueDate ? ` <span style="color:#666;font-size:13px;">(due ${esc(formatZaDate(a.dueDate))})</span>` : ""}</li>`
+        )
+        .join("")}
+    </ol>
+    <p style="color:#333;">Remember to check the <a href="${SITE_URL}/action-items" style="color:${b.colors.dark};font-weight:bold;">Action Item List</a> in the portal and then mark as done the ones you have completed.</p>`
+    : "";
+  // Two bodies: if the attachment is refused the mail goes without it, and
+  // must not then say a copy is attached.
+  const body = (attached: boolean) => `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
-    <p style="color:#333;">The minutes below have been signed and are now the final record.${
-      attachment ? ` A copy is attached to this email (${esc(attachment.filename)}).` : ""
-    }</p>
-    ${boxOpen("#f4f4f5", "16px", "16px 0")}
-      <p style="margin:0;color:#333;"><strong>${esc(minutesTitle)}</strong></p>
+    <p style="color:#333;">Minutes from the meeting held ${esc(heldWhen)} ${attached ? "are attached for your reference" : "have been signed"}.</p>
+    <p style="color:#333;margin-bottom:0;">You can view them online if you would like, by clicking this link:</p>
+    ${button(url, "READ", PRIMARY)}
+    ${actionBlock}
+    ${boxOpen("#f4f4f5", "16px", "20px 0 16px")}
+      <p style="margin:0;color:#333;">Minutes Name: <strong>${esc(minutesTitle)}</strong></p>
       <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
       <p style="margin:10px 0 0;color:#555;font-size:14px;">Signed by ${esc(signedBy.join(", "))}</p>
     ${BOX_CLOSE}
-    ${button(`${url}`, `Read the signed minutes`, PRIMARY)}
-    <p style="color:#666;font-size:13px;margin-top:20px;">Document reference ${esc(documentRef)}. This identifies the exact wording that was signed, so a later copy can be checked against it.</p>
+    <p style="color:#333;">Thank you</p>
   `;
   return sendEmail(
     b.fromEmail,
     to,
     `Signed: ${minutesTitle}`,
-    emailShell(b, "Signed minutes", body),
+    emailShell(b, "Signed minutes", body(!!attachment)),
     b.replyTo,
-    attachment ? [attachment] : undefined
+    attachment ? [attachment] : undefined,
+    attachment ? emailShell(b, "Signed minutes", body(false)) : undefined
   );
 }
 

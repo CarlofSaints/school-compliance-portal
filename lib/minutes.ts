@@ -64,6 +64,17 @@ export function formatPeriod(p: MeetingPeriod): string {
   }
 }
 
+/** When the meeting was, for a sentence: "on 15 October 2026" for a single
+ *  day, otherwise "in October 2026" / "in Q4 2026". Minutes keep a period,
+ *  not one meeting date. */
+export function meetingWhen(p: MeetingPeriod): string {
+  if (p.kind === "custom" && p.from && p.from === p.to) {
+    const d = new Date(`${p.from}T00:00:00Z`);
+    if (!Number.isNaN(d.getTime())) return `on ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  }
+  return `in ${formatPeriod(p)}`;
+}
+
 /** Sortable key, so a list of minutes orders correctly whichever kind of period
  *  each one uses. Quarters sort to the START of their first month, which puts a
  *  quarter ahead of the months inside it rather than interleaved oddly. */

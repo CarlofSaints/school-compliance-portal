@@ -100,5 +100,42 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   }
 }
 
-console.log(`\n${pass} passed, ${fail} failed\n`);
-process.exit(fail === 0 ? 0 : 1);
+(async () => {
+  console.log("\nThe signed-minutes email lists each person's OWN open actions");
+  process.env.RESEND_API_KEY = "re_check_not_real";
+  let html = "";
+  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
+    html = JSON.parse(init?.body || "{}").html || "";
+    return new Response(JSON.stringify({ id: "x" }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  const { openActionsByEmail } = await import("../lib/minutesDistribution");
+  const { sendMinutesSignedEmail } = await import("../lib/email");
+  const { meetingWhen } = await import("../lib/minutes");
+  const from = { minutesId: "m1", minutesTitle: "T", minutesPeriod: "October 2026" };
+  const items = [
+    { title: "Fix the borehole", dueDate: "2026-10-30", status: "in_progress", assigneeIds: ["p1"], fromMinutes: from },
+    { title: "Order STEM kits", dueDate: "", status: "not_started", assigneeIds: ["p1", "p2"], fromMinutes: from },
+    { title: "Already done", dueDate: "", status: "done", assigneeIds: ["p1"], fromMinutes: from },
+    { title: "Other meeting", dueDate: "", status: "not_started", assigneeIds: ["p1"], fromMinutes: { ...from, minutesId: "m2" } },
+  ] as Parameters<typeof openActionsByEmail>[1];
+  const people = [{ id: "p1", email: " Derek@School.co.za " }, { id: "p2", email: "dee@school.co.za" }, { id: "p3", email: "" }];
+  const map = openActionsByEmail("m1", items, people);
+  check("Derek gets his two open actions from THIS meeting", map.get("derek@school.co.za")?.map((a) => a.title), ["Fix the borehole", "Order STEM kits"]);
+  check("Dee gets only the shared one", map.get("dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
+  check("nobody else is listed", [...map.keys()].length, 2);
+
+  check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");
+  check("a month reads 'in <month>'", meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
+
+  await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("derek@school.co.za")!, null);
+  checkThat("email lists the actions", html.includes("Fix the borehole") && html.includes("Order STEM kits"));
+  checkThat("with the due date", html.includes("(due 30 October 2026)"));
+  checkThat("and the Action Item List link", html.includes("/action-items") && html.includes("Action Item List"));
+  checkThat("without an attachment it does not claim one", html.includes("have been signed") && !html.includes("attached"));
+  checkThat("the title is escaped", html.includes("Ad hoc &lt;SGB&gt;"));
+  await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], null);
+  checkThat("someone with no actions gets no action list", !html.includes("yours to execute"));
+
+  console.log(`\n${pass} passed, ${fail} failed\n`);
+  process.exit(fail === 0 ? 0 : 1);
+})();

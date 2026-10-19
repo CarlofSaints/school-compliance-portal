@@ -1,10 +1,12 @@
 import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
-import { formatPeriod, canDistribute } from "./minutes";
+import { formatPeriod, canDistribute, meetingWhen } from "./minutes";
+import { getActionItems } from "./actionItemData";
+import type { ActionItem } from "./actionItems";
+import { getPeople } from "./peopleData";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
-import { documentHash, shortHash } from "./minutesSigning";
-import { sendMinutesSignedEmail, type EmailAttachment } from "./email";
+import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
 
 /**
@@ -112,6 +114,24 @@ export async function previewDistribution(record: MinutesRecord) {
  * added tomorrow cannot un-complete a finished round - the difference is that
  * distribution is a copy and review is a decision.
  */
+/** Lowercased email -> that person's open actions raised from these minutes. */
+export function openActionsByEmail(
+  minutesId: string,
+  items: Pick<ActionItem, "title" | "dueDate" | "status" | "assigneeIds" | "fromMinutes">[],
+  people: { id: string; email?: string }[]
+): Map<string, SignedEmailAction[]> {
+  const emailOf = new Map(people.map((p) => [p.id, (p.email || "").trim().toLowerCase()]));
+  const out = new Map<string, SignedEmailAction[]>();
+  for (const item of items) {
+    if (item.fromMinutes?.minutesId !== minutesId || item.status === "done") continue;
+    for (const pid of item.assigneeIds) {
+      const email = emailOf.get(pid);
+      if (email) out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
+    }
+  }
+  return out;
+}
+
 export async function distributeSignedMinutes(
   /**
    * 🔴 The RECORD, not an id. The final signature writes the record and then
@@ -148,10 +168,15 @@ export async function distributeSignedMinutes(
     );
   }
 
-  // 🔴 The hash of the minutes AS THEY STAND, computed here rather than read
-  // off a signatory. A wet-ink record has no signatory row to read it from,
-  // and a signed record cannot have changed since, so the two agree.
-  const ref = shortHash(documentHash(record));
+  // Each recipient's OPEN actions raised from these minutes, by email. Actions
+  // are assigned to People-register ids, so the register gives the address.
+  // A failure here loses the list, never the minutes themselves.
+  let actionsByEmail = new Map<string, SignedEmailAction[]>();
+  try {
+    actionsByEmail = openActionsByEmail(id, await getActionItems(), await getPeople());
+  } catch (err) {
+    console.error("[minutes distribution] Could not read action items, sending without them:", err);
+  }
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
   const period = formatPeriod(record.period);
 
@@ -168,8 +193,9 @@ export async function distributeSignedMinutes(
       id,
       record.title,
       period,
+      meetingWhen(record.period),
       signedBy,
-      ref,
+      actionsByEmail.get(person.email.trim().toLowerCase()) ?? [],
       attachment
     );
     if (ok) sent += 1;
