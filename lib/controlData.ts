@@ -20,13 +20,15 @@ async function scope() {
 }
 
 // 🔴 The SDK turns a key into a URL, and a URL resolves "." and ".." segments
-// (also written %2e, and also between backslashes, which it reads as slashes).
-// Ids come straight from request paths (policies/[id], checks/[id]), so one
-// route that forgot to validate its id could otherwise reach any other file in
-// the school's store. Refused here, once, for every caller. A backslash on its
-// own is fine: uploaded file names can contain one.
+// (also written %2e, also between backslashes, which it reads as slashes, and
+// after deleting any tab or newline inside them). Ids come straight from
+// request paths (policies/[id], checks/[id]), so one route that forgot to
+// validate its id could otherwise reach any other file in the school's store.
+// Checked here, once, for every caller: a read of such a path is a miss (the
+// route answers 404), a write throws. A plain backslash in a file name is fine.
 export class UnsafeBlobPathError extends Error {}
 function isUnsafeBlobPath(blobPath: string): boolean {
+  if (/[\x00-\x1f\x7f]/.test(blobPath)) return true;
   return blobPath.split(/[\\/]/).some((seg) => /^(\.|%2e){1,2}$/i.test(seg));
 }
 function blobKey(prefix: string, blobPath: string): string {
@@ -38,8 +40,9 @@ function blobKey(prefix: string, blobPath: string): string {
 // Still needed by deleteFile, which needs a blob's URL rather than its bytes.
 // Nothing should READ through this — see readBlobBody below for why.
 async function findBlob(blobPath: string) {
+  if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
-  const key = blobKey(prefix, blobPath);
+  const key = prefix + blobPath;
   const result = await list({ prefix: key, limit: 1, token });
   return result.blobs.find((b) => b.pathname === key) || null;
 }
@@ -67,7 +70,7 @@ async function readBlobBody(blobPath: string): Promise<Response | null> {
   // Cannot exist, so it reads as missing: the route answers 404, not 500.
   if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
-  const result = await get(blobKey(prefix, blobPath), {
+  const result = await get(prefix + blobPath, {
     access: "private",
     // The whole point. Straight from origin storage, never the CDN copy.
     useCache: false,
@@ -214,7 +217,7 @@ export const NO_CHANGE = Symbol("no-change");
 async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: string } | null> {
   if (isUnsafeBlobPath(blobPath)) return null;
   const { prefix, token } = await scope();
-  const result = await get(blobKey(prefix, blobPath), { access: "private", useCache: false, token });
+  const result = await get(prefix + blobPath, { access: "private", useCache: false, token });
   if (!result || result.statusCode !== 200) return null;
   const text = await new Response(result.stream).text();
   try {

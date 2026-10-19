@@ -26,13 +26,8 @@ async function main() {
   check("stored hash is no longer the plain SHA-256", hashSigningCode("ABC234", id) === plain, false);
   check("the right code matches", signingCodeMatches("abc234", id, hashSigningCode("ABC234", id)), true);
   check("a wrong code does not", signingCodeMatches("ABC235", id, hashSigningCode("ABC234", id)), false);
-  check("a code emailed before the fix still signs", signingCodeMatches("ABC234", id, plain), true);
+  check("an old-style (leaked) hash no longer signs", signingCodeMatches("ABC234", id, plain), false);
   check("nothing stored, nothing matches", signingCodeMatches("ABC234", id, undefined), false);
-  const realNow = Date.now;
-  Date.now = () => Date.parse("2026-12-01T00:00:00Z");
-  check("an old-style code is refused after 30 Nov", signingCodeMatches("ABC234", id, plain), false);
-  check("a new-style code still works then", signingCodeMatches("ABC234", id, hashSigningCode("ABC234", id)), true);
-  Date.now = realNow;
 
   const record = {
     id,
@@ -54,7 +49,9 @@ async function main() {
   check("'%2e%2e' segment reads as missing", await read("policies/%2e%2e/users/index.json"), "MISSING");
   check("'%2E.' segment reads as missing", await read("policies/%2E./users/index.json"), "MISSING");
   check("'..' between backslashes reads as missing", await read("policies\\..\\users/index.json"), "MISSING");
-  check("readFile on a bad path is a miss", await readFile("policies/../users/index.json"), null);
+  check("a tab inside '..' reads as missing", await read("policies/.\t./users/index.json"), "MISSING");
+  check("a newline inside '..' reads as missing", await read("policies/.\n./users/index.json"), "MISSING");
+  check("readFile on a bad path is a miss",await readFile("policies/../users/index.json"), null);
   async function writeRefused(p: string) {
     try {
       await writeJson(p, {});

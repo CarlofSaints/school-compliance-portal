@@ -40,18 +40,9 @@ export function hashSigningCode(code: string, minutesId: string): string {
     .digest("hex");
 }
 
-// Codes emailed before 19 Oct 2026 were stored as a plain SHA-256. They still
-// verify until this date, so nobody is stranded mid-signing; after it they are
-// refused and the signer sends themselves a new code.
-// shortcut: date-based cut-off; delete legacySigningHash after it passes.
-const LEGACY_CODES_UNTIL = Date.parse("2026-11-30T00:00:00+02:00");
-function legacySigningHash(code: string, minutesId: string): string {
-  return crypto
-    .createHash("sha256")
-    .update(`${minutesId}:${normaliseSigningCode(code)}`)
-    .digest("hex");
-}
-
+// 🔴 Codes emailed before 19 Oct 2026 were stored as a plain SHA-256 that every
+// reader of the minutes was sent, so they are NOT accepted: a signer holding
+// one gets "does not match" and sends themselves a new code.
 function sameHex(a: string, b: string): boolean {
   const x = Buffer.from(a, "hex");
   const y = Buffer.from(b, "hex");
@@ -67,9 +58,13 @@ export function signingCodeMatches(
 ): boolean {
   if (!storedHash) return false;
   return (
-    sameHex(hashSigningCode(code, minutesId), storedHash) ||
-    (Date.now() < LEGACY_CODES_UNTIL && sameHex(legacySigningHash(code, minutesId), storedHash))
+    sameHex(hashSigningCode(code, minutesId), storedHash)
   );
+}
+
+/** The one key both the sign route (counts) and a resend (clears) use. */
+export function signCodeLimitKey(minutesId: string, email: string): string {
+  return `${minutesId}|${email.trim().toLowerCase()}`;
 }
 
 /**

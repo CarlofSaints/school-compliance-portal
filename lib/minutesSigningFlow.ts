@@ -5,7 +5,7 @@ import { formatPeriod } from "./minutes";
 import { signatoryRoleForPosition } from "./positions";
 import { resolveAudience } from "./minutesRecipients";
 import { getPeople } from "./peopleData";
-import { mintSigningCode, hashSigningCode } from "./minutesSigning";
+import { mintSigningCode, hashSigningCode, signCodeLimitKey } from "./minutesSigning";
 import { sendMinutesSigningCodeEmail } from "./email";
 import { LIMITS, clear } from "./rateLimit";
 
@@ -126,9 +126,9 @@ export async function openSigning(
 
   const periodLabel = formatPeriod(record.period);
   const failed: string[] = [];
+  // A new code is a fresh start: wrong guesses at the old one no longer count.
+  await Promise.all(codes.map(({ signatory }) => clear(LIMITS.signCodeAttempt, signCodeLimitKey(id, signatory.email))));
   for (const { signatory, code } of codes) {
-    // A new code is a fresh start: wrong guesses at the old one no longer count.
-    await clear(LIMITS.signCodeAttempt, `${id}|${signatory.email}`);
     const ok = await sendMinutesSigningCodeEmail(
       signatory.email,
       signatory.name,
