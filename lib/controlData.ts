@@ -224,7 +224,10 @@ async function readWithEtag<T>(blobPath: string): Promise<{ data: T; etag: strin
   if (!result || result.statusCode !== 200) return null;
   const text = await new Response(result.stream).text();
   try {
-    return { data: JSON.parse(text) as T, etag: result.blob.etag };
+    // 🔴 A larger file comes back with a WEAK etag (W/"..."), and put()'s
+    // ifMatch never matches one, so every update of it was refused as a lost
+    // race (seen 19 Oct: no minutes over ~1KB could be saved). Stripped here.
+    return { data: JSON.parse(text) as T, etag: result.blob.etag.replace(/^W\//, "") };
   } catch (err) {
     // Same fail-closed rule as readJson: an unreadable file is never "empty".
     throw new Error(
