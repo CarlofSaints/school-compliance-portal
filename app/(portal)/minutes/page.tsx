@@ -13,6 +13,7 @@ import {
   formatPeriod,
   formatMeetingDate,
   periodForDate,
+  checkMeetingDate,
   isLocked,
   periodSortKey,
   MEETING_BODY_LABELS,
@@ -355,7 +356,7 @@ function AddMinutes({
           onChange={(e) => {
             const d = e.target.value;
             setMeetingDate(d);
-            if (d) setPeriod(periodForDate(d, period));
+            if (d && !checkMeetingDate(d)) setPeriod(periodForDate(d, period));
           }}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
         />

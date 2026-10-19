@@ -165,6 +165,13 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   check("a month period follows a picked date", periodForDate("2026-11-02", { kind: "month", year: 2026, month: 10 }), { kind: "month", year: 2026, month: 11 });
   check("a quarter the secretary chose is left alone", periodForDate("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), { kind: "quarter", year: 2026, quarter: 4 });
   {
+    // Writes a record: only ever against the fake store.
+    const { createRequire } = await import("module");
+    const blob = createRequire(__filename)("@vercel/blob") as { __fakeStore?: unknown };
+    if (typeof blob.__fakeStore !== "function") {
+      console.error("Refusing to run: @vercel/blob is the REAL store. Run with --import ./scripts/fake-blob/register.mjs");
+      process.exit(1);
+    }
     const { createMinutes } = await import("../lib/minutesData");
     const { openSigning } = await import("../lib/minutesSigningFlow");
     const m = await createMinutes({ title: "Mismatch", body: "sgb", period: { kind: "month", year: 2026, month: 11 }, meetingDate: "2026-10-15", sections: [], createdBy: "x@x.za" });
