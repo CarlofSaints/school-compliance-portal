@@ -71,8 +71,9 @@ export function checkMeetingDate(d: unknown): string | null {
   if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return "Choose the meeting date.";
   const parsed = new Date(`${d}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) return "That meeting date is not a real date.";
-  const thisYear = new Date().getFullYear();
-  if (parsed.getUTCFullYear() < 2000 || parsed.getUTCFullYear() > thisYear + 5) return `The year should be between 2000 and ${thisYear + 5}.`;
+  if (parsed.getUTCFullYear() < 2000) return "The meeting date should be in 2000 or later.";
+  // Minutes may be set up a few weeks before the meeting, not years.
+  if (parsed.getTime() > Date.now() + 60 * 86_400_000) return "The meeting date cannot be more than 60 days from today.";
   return null;
 }
 

@@ -137,9 +137,10 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   const map = openActionsByEmail("m1", items, people, users);
   check("Derek gets his two open actions from THIS meeting", map.get("derek@school.co.za")?.map((a) => a.title), ["Fix the borehole", "Order STEM kits"]);
   check("Dee gets only the shared one", map.get("dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
-  check("Dee's LOGIN email wins over her stale register email", map.has("old-dee@school.co.za"), false);
+  check("Dee's actions are found under her login email", map.get("dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
+  check("and under her register email, which the list may mail instead", map.get("old-dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
   check("two register entries sharing one mailbox list the action once", map.get("office@school.co.za")?.map((a) => a.title), ["Shared mailbox job"]);
-  check("nobody else is listed", [...map.keys()].length, 3);
+  check("nobody else is listed", [...map.keys()].length, 4);
   check("a custom period with no usable dates never shows its label", meetingWhen({ kind: "custom", year: 2026, from: "", to: "", label: "Special AGM" }), "in 2026");
 
   check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");

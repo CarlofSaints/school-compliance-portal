@@ -9,6 +9,7 @@ import {
   ATTENDANCE_STATUS_LABELS,
   cleanAttendees,
   formatPeriod,
+  formatMeetingDate,
   isLocked,
   MEETING_BODY_LABELS,
   MINUTES_TEXT_FIELDS,
@@ -241,7 +242,8 @@ export function plainText(d: MinutesText, tr: (s: string) => string): string {
     if (responsible) lines.push(`${tr("Responsible")}: ${responsible}`);
     return lines.filter(Boolean).join("\n");
   });
-  const heading = [meeting ? tr(meeting) : d.body, period].filter(Boolean).join(" · ");
+  const held = typeof d.meetingDate === "string" && d.meetingDate ? formatMeetingDate(d.meetingDate) : "";
+  const heading = [meeting ? tr(meeting) : d.body, held, period].filter(Boolean).join(" · ");
   return [d.title, heading, "", sections.join("\n\n")].join("\n");
 }
 

@@ -108,8 +108,8 @@ export async function previewDistribution(record: MinutesRecord) {
 
 /**
  * Lowercased email -> that person's open actions raised from these minutes.
- * The address is the one action REMINDERS use (resolveActionRecipients): the
- * linked login's email first, else the People record's. Each action is listed
+ * Filed under BOTH of an assignee's addresses (their linked login's and their
+ * People record's), because the list may mail either. Each action is listed
  * once per address, even if two register entries share that address.
  */
 export function openActionsByEmail(
@@ -120,17 +120,22 @@ export function openActionsByEmail(
 ): Map<string, SignedEmailAction[]> {
   const norm = (e?: string) => (e || "").trim().toLowerCase();
   const userEmail = new Map(users.map((u) => [u.id, norm(u.email)]));
-  const emailOf = new Map(people.map((p) => [p.id, (p.userId && userEmail.get(p.userId)) || norm(p.email)]));
+  // Both of a person's addresses: the distribution list may mail either the
+  // register's or the login's, and the lookup must find them under each.
+  const emailsOf = new Map(
+    people.map((p) => [p.id, [...new Set([p.userId ? userEmail.get(p.userId) : "", norm(p.email)].filter((e): e is string => !!e))]])
+  );
   const out = new Map<string, SignedEmailAction[]>();
   const listed = new Set<string>();
   for (const item of items) {
     // Cancelled counts as closed too: neither is anybody's to execute.
     if (item.fromMinutes?.minutesId !== minutesId || isClosed(item)) continue;
     for (const pid of item.assigneeIds) {
-      const email = emailOf.get(pid);
-      if (!email || listed.has(`${email}|${item.id}`)) continue;
-      listed.add(`${email}|${item.id}`);
-      out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
+      for (const email of emailsOf.get(pid) ?? []) {
+        if (listed.has(`${email}|${item.id}`)) continue;
+        listed.add(`${email}|${item.id}`);
+        out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
+      }
     }
   }
   return out;

@@ -12,6 +12,7 @@ import { useT } from "@/components/I18nProvider";
 import { AttendanceGroups } from "@/components/AttendanceList";
 import {
   formatPeriod,
+  formatMeetingDate,
   numberedTitle,
   sectionListGroups,
   sectionNumbers,
@@ -42,6 +43,7 @@ interface Detail {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  meetingDate?: string;
   status: MinutesStatus;
   sections: MinutesSection[];
   signatories: Signatory[];
@@ -152,7 +154,11 @@ export default function SignMinutesPage() {
           <p className="text-gray-600 mt-2 font-medium">
             {t("Minutes of the {body} meeting", { body: t(MEETING_BODY_LABELS[record.body]) })}
           </p>
-          <p className="text-gray-500 text-sm">{formatPeriod(record.period)}</p>
+          {/* 🔴 The date is part of what is signed, so the signer must see it. */}
+          <p className="text-gray-500 text-sm">
+            {record.meetingDate ? `${formatMeetingDate(record.meetingDate)} · ` : ""}
+            {formatPeriod(record.period)}
+          </p>
           <p className="text-dark font-medium mt-2">{record.title}</p>
           {record.status !== "signed" && record.draftNumber > 0 && (
             <p className="mt-3 inline-block text-xs font-bold tracking-widest text-risk-high border border-risk-high rounded px-2 py-0.5">

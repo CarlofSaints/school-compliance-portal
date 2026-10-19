@@ -934,7 +934,17 @@ export default function MinutesDetailPage() {
             <input
               type="date"
               value={record.meetingDate ?? ""}
-              onChange={(e) => e.target.value && patch({ meetingDate: e.target.value })}
+              onChange={(e) => {
+                const d = e.target.value;
+                if (!d) return;
+                // A month period follows the date, as on Add minutes, so the
+                // two never disagree in what gets signed.
+                patch(
+                  record.period.kind === "month"
+                    ? { meetingDate: d, period: { kind: "month", year: Number(d.slice(0, 4)), month: Number(d.slice(5, 7)) } }
+                    : { meetingDate: d }
+                );
+              }}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
             />
           </div>
