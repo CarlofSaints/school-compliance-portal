@@ -378,6 +378,8 @@ export async function sendMinutesSignedEmail(
   /** "on 15 October 2026" / "in October 2026" (meetingWhen in lib/minutes). */
   heldWhen: string,
   signedBy: string[],
+  /** Identifies the exact wording signed (shortHash of documentHash). */
+  documentRef: string,
   actions: SignedEmailAction[],
   /** Has a portal login. Only then is the Action Item List mentioned: a
    *  register member without one would land on a sign-in page. */
@@ -420,6 +422,7 @@ export async function sendMinutesSignedEmail(
       <p style="margin:10px 0 0;color:#555;font-size:14px;">Signed by ${esc(signedBy.join(", "))}</p>
     ${BOX_CLOSE}
     <p style="color:#333;">Thank you</p>
+    <p style="color:#999;font-size:12px;margin-top:24px;">Document reference ${esc(documentRef)}. It identifies the exact wording that was signed, so a later copy can be checked against it.</p>
   `;
   return sendEmail(
     b.fromEmail,

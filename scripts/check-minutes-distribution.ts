@@ -157,15 +157,16 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   checkThat("the meeting date IS part of what is signed", canonicalMinutes({ ...base, meetingDate: "2026-10-15" }) !== canonicalMinutes(base));
   check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 
-  await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("derek@school.co.za")!, true, null);
+  await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", map.get("derek@school.co.za")!, true, null);
   checkThat("email lists the actions", html.includes("Fix the borehole") && html.includes("Order STEM kits"));
   checkThat("with the due date", html.includes("(due 30 October 2026)"));
   checkThat("and the Action Item List link", html.includes("/action-items") && html.includes("Action Item List"));
   checkThat("without an attachment it does not claim one", html.includes("have been signed") && !html.includes("attached"));
+  checkThat("the document reference is at the bottom", html.includes("Document reference 3F9A1C0B7E22"));
   checkThat("the title is escaped", html.includes("Ad hoc &lt;SGB&gt;"));
-  await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], true, null);
+  await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", [], true, null);
   checkThat("someone with no actions gets no action list", !html.includes("yours to execute"));
-  await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("office@school.co.za")!, false, null);
+  await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", map.get("office@school.co.za")!, false, null);
   checkThat("the crest is linked, with nothing attached", html.includes("/logo.png") && attachments.length === 0);
   checkThat("someone with no login gets their actions but no portal link", html.includes("Shared mailbox job") && !html.includes("/action-items"));
 

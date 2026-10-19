@@ -5,6 +5,7 @@ import { getActionItems } from "./actionItemData";
 import { isClosed, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
 import { getUsers } from "./userData";
+import { documentHash, shortHash } from "./minutesSigning";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
 import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
@@ -222,6 +223,10 @@ export async function distributeSignedMinutes(
       period,
       meetingWhen(record.period, record.meetingDate),
       signedBy,
+      // 🔴 Computed from the minutes AS THEY STAND: a wet-ink (uploaded)
+      // record has no signatory row to read it from, and a signed record
+      // cannot have changed since, so the two agree.
+      shortHash(documentHash(record)),
       actionsByEmail.get(person.email.trim().toLowerCase()) ?? [],
       logins.has(person.email.trim().toLowerCase()),
       attachment
