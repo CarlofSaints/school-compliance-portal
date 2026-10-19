@@ -295,6 +295,7 @@ function AddMinutes({
   const save = async () => {
     if (!title.trim()) return onError(t("Give these minutes a name."));
     if (!meetingDate) return onError(t("Choose the meeting date."));
+    if (checkMeetingDate(meetingDate)) return onError(t("That date can't be used. Pick a date from 2000 onwards."));
     if (mode === "upload" && !file) return onError(t("Choose a file, or switch to writing them here."));
 
     setSaving(true);
