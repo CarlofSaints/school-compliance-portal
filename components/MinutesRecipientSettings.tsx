@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { authFetch } from "@/lib/useAuth";
 import { tk } from "@/lib/i18n/translate";
 import { useT } from "@/components/I18nProvider";
+import { AudienceLine } from "@/components/AudiencePreview";
 
 // Which tag means which minutes list.
 //
@@ -158,29 +159,7 @@ export default function MinutesRecipientSettings({
               </div>
             </div>
 
-            {p && (
-              <div className="mt-3 text-xs text-gray-500 space-y-1">
-                <div>
-                  <span className="text-gray-400">{t("Goes to:")} </span>
-                  {p.to.length ? p.to.join(", ") : <span className="text-amber-700">{t("nobody")}</span>}
-                </div>
-                {p.cc.length > 0 && (
-                  <div>
-                    <span className="text-gray-400">{t("Copied:")} </span>
-                    {p.cc.join(", ")}
-                  </div>
-                )}
-                {p.withoutEmail.length > 0 && (
-                  // Named rather than silently skipped: somebody meant to
-                  // receive the minutes who has no address is a gap the
-                  // secretary needs to see now, not at the next meeting.
-                  <div className="text-amber-700">
-                    {t("No email address on file, so will not receive it:")}{" "}
-                    {p.withoutEmail.join(", ")}
-                  </div>
-                )}
-              </div>
-            )}
+            {p && <AudienceLine p={p} />}
           </div>
         );
       })}
