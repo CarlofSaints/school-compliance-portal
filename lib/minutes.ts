@@ -525,9 +525,8 @@ export function signingProgress(signatories: Signatory[]): {
 // ---------------------------------------------------------------------------
 // Minutes TEMPLATES: the reusable shape of a meeting.
 //
-// ⚠️ Not the Word letterhead (LetterheadTemplate in lib/minutesData.ts), which
-// is a .docx carrying the crest and footer. This is the section structure a
-// secretary picks from when starting a new set of minutes.
+// The section structure a secretary picks from when starting a new set of
+// minutes. (The Word document's look is one standard template, lib/minutesDocx.ts.)
 //
 // Pure, and here rather than in lib/minutesTemplates.ts, because the admin
 // screen is a client component: importing them from the storage module pulled

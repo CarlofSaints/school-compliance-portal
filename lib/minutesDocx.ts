@@ -85,7 +85,8 @@ function signatureBlock(name: string, role: string): Paragraph[] {
 // few letters per line.
 // ---------------------------------------------------------------------------
 
-/** docx's own default page: A4 with 1" margins. */
+/** The page every minutes document is set to (see the section properties):
+ *  A4 with 1" margins. */
 const DEFAULT_CONTENT_WIDTH = 11906 - 2 * 1440;
 
 interface Columns {
@@ -104,6 +105,31 @@ export function minutesColumns(total: number): Columns {
 
 /** Cell padding left + right in the minutes table. */
 const CELL_PAD_X = 200;
+
+/**
+ * What Word needs to embed a crest: its real format and shape. The upload
+ * accepts JPEG, WebP and SVG too, and a JPEG labelled "png" is a broken image
+ * in Word. WebP and SVG are not embeddable this way, so they are left out.
+ */
+export function crestImage(b: Buffer): { type: "png" | "jpg" | "gif" | "bmp"; width: number; height: number } | null {
+  const ok = (type: "png" | "jpg" | "gif" | "bmp", width: number, height: number) =>
+    width > 0 && height > 0 ? { type, width, height } : null;
+  if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return ok("png", b.readUInt32BE(16), b.readUInt32BE(20));
+  if (b.length > 10 && b.toString("ascii", 0, 4) === "GIF8") return ok("gif", b.readUInt16LE(6), b.readUInt16LE(8));
+  if (b.length > 26 && b.toString("ascii", 0, 2) === "BM") return ok("bmp", b.readInt32LE(18), Math.abs(b.readInt32LE(22)));
+  if (b.length > 4 && b[0] === 0xff && b[1] === 0xd8) {
+    // Walk the JPEG markers to the frame header, which holds the size.
+    for (let i = 2; i + 9 < b.length; ) {
+      if (b[i] !== 0xff) return null;
+      const marker = b[i + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        return ok("jpg", b.readUInt16BE(i + 7), b.readUInt16BE(i + 5));
+      }
+      i += 2 + b.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
 
 /** Header row, tinted with the school's own colour so the document looks like
  *  the school's rather than the software's. */
@@ -346,7 +372,9 @@ export async function buildMinutesDocx(
 
 
   // Crest, embedded. Sized by height so a wide or tall crest both sit sensibly.
-  if (crest) {
+  const crestInfo = crest ? crestImage(crest) : null;
+  if (crest && !crestInfo) console.warn("[minutes docx] Crest is not PNG, JPEG, GIF or BMP; left out.");
+  if (crest && crestInfo) {
     try {
       children.push(
         new Paragraph({
@@ -354,8 +382,11 @@ export async function buildMinutesDocx(
           children: [
             new ImageRun({
               data: crest,
-              transformation: { width: 80, height: 96 },
-              type: "png",
+              transformation: {
+                width: Math.min(200, Math.round((96 * crestInfo.width) / crestInfo.height)),
+                height: 96,
+              },
+              type: crestInfo.type,
             }),
           ],
         })
@@ -573,7 +604,14 @@ export async function buildMinutesDocx(
     description: `${MEETING_BODY_LABELS[record.body]} minutes, ${formatPeriod(record.period)}`,
     sections: [
       {
-        properties: {},
+        // Set, not left to docx's default, because DEFAULT_CONTENT_WIDTH is
+        // worked out from exactly this page and these margins.
+        properties: {
+          page: {
+            size: { width: 11906, height: 16838 },
+            margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+          },
+        },
         footers: {
           default: new Footer({
             children: [

@@ -18,8 +18,8 @@ export * from "./minutes";
 // the attendees (this barely changes from meeting to meeting, so this content
 // can be in the template itself and then editible for a specific version)."
 //
-// ⚠️ NOT the Word letterhead (lib/minutesData.ts, LetterheadTemplate). That is a
-// .docx carrying the crest and footer. This is the section structure.
+// This is the section structure, not the Word document's look (that is one
+// standard template, lib/minutesDocx.ts).
 //
 // 🔴 A template is COPIED into a set of minutes, never referenced by it.
 //
