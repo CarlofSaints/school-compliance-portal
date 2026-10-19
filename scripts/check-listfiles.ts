@@ -10,6 +10,8 @@
 // The logic is reproduced here rather than imported, because the real function
 // needs a blob store and a request scope. It is the same three lines.
 
+export {}; // a module, so its helpers do not clash with other scripts
+
 let pass = 0;
 let fail = 0;
 function check(label: string, got: unknown, want: unknown) {

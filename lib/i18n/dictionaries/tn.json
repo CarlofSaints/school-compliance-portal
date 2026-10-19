@@ -1732,5 +1732,18 @@
   "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "O na le metsotso e e sa bolokwang e e butsweng mo thebeng e nngwe. A o tswa le fa go ntse jalo mme o e latlhegelwa?",
   "Last edited by {name} at {time}": "E fetotswe la bofelo ke {name} ka {time}",
   "Meeting date": "Letlha la kopano",
-  "Choose the meeting date.": "Tlhopha letlha la kopano."
+  "Choose the meeting date.": "Tlhopha letlha la kopano.",
+  "Sent Emails": "Di-imeile tse di rometsweng",
+  "Sent emails": "Di-imeile tse di rometsweng",
+  "Every email the portal sent, who it went to and whether it was accepted. Codes and private links are blanked out.": "Imeile nngwe le nngwe e portal e e rometseng, gore e ile go mang le gore e amogetswe. Dikhoutu le dikgolagano tsa sephiri di a phimolwa.",
+  "Could not load the sent emails.": "Ga go kgonege go laola di-imeile tse di rometsweng.",
+  "Search": "Batla",
+  "Sent": "E rometswe",
+  "Subject": "Setlhogo",
+  "No emails sent yet.": "Ga go di-imeile tse di rometsweng ga jaana.",
+  "Accepted": "E amogetswe",
+  "Not sent": "Ga e a romelwa",
+  "Attached": "E kopantswe",
+  "This email is about minutes you do not have access to.": "Imeile e e malebana le metsotso e o se nang tetla ya go e bona.",
+  "This email was written for one person from things only they may see, so its wording is not kept.": "Imeile e e kwaletswe motho a le mongwe ka dilo tse e leng ene fela a ka di bonang, ka jalo mafoko a yone ga a bolokwe."
 }

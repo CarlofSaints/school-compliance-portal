@@ -1732,5 +1732,18 @@
   "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "U het ongestoorde notule oop in ’n ander oortjie. Teken in elk geval uit en verloor dit?",
   "Last edited by {name} at {time}": "Laas gewysig deur {name} om {time}",
   "Meeting date": "Vergaderdatum",
-  "Choose the meeting date.": "Kies die vergaderdatum."
+  "Choose the meeting date.": "Kies die vergaderdatum.",
+  "Sent Emails": "Gestuurde e-posse",
+  "Sent emails": "Gestuurde e-posse",
+  "Every email the portal sent, who it went to and whether it was accepted. Codes and private links are blanked out.": "Elke e-pos wat die portaal gestuur het, aan wie dit gegaan het en of dit aanvaar is. Kodes en private skakels word uitgevee.",
+  "Could not load the sent emails.": "Kon nie die gestuurde e-posse laai nie.",
+  "Search": "Soek",
+  "Sent": "Gestuur",
+  "Subject": "Onderwerp",
+  "No emails sent yet.": "Nog geen e-posse gestuur nie.",
+  "Accepted": "Aanvaar",
+  "Not sent": "Nie gestuur nie",
+  "Attached": "Aangeheg",
+  "This email is about minutes you do not have access to.": "Hierdie e-pos gaan oor notule waartoe jy nie toegang het nie.",
+  "This email was written for one person from things only they may see, so its wording is not kept.": "Hierdie e-pos is vir een persoon geskryf uit dinge wat net hulle mag sien, so die bewoording word nie gehou nie."
 }
