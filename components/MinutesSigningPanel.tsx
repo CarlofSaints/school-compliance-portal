@@ -6,6 +6,7 @@ import { authFetch } from "@/lib/useAuth";
 import type { SaveFirst } from "@/lib/minutesAutosave";
 import DownloadLink from "@/components/DownloadLink";
 import { useT } from "@/components/I18nProvider";
+import AudiencePreview from "@/components/AudiencePreview";
 import {
   canOpenSigning,
   signatureMatchesDocument,
@@ -146,6 +147,8 @@ export default function MinutesSigningPanel({
           <p className="text-sm text-gray-500 mb-4">
             {t("Each signatory is emailed their own code. Typing it is what signs the minutes, so nobody can sign on somebody else's behalf.")}
           </p>
+          {/* Signing codes go to the To list only, so no "Copied" line. */}
+          {canManage && <AudiencePreview audience="signing" showCc={false} />}
           {canManage && (
             <button
               onClick={openSigning}

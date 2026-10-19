@@ -4,6 +4,7 @@ import { useState } from "react";
 import { authFetch } from "@/lib/useAuth";
 import type { SaveFirst } from "@/lib/minutesAutosave";
 import { useT } from "@/components/I18nProvider";
+import AudiencePreview from "@/components/AudiencePreview";
 import {
   canReview,
   canSendForReview,
@@ -138,6 +139,7 @@ export default function MinutesReviewPanel({
               ? t("Somebody asked for changes. Once you have made them, send it out again as the next draft.")
               : t("Send this to the people who check minutes. They can approve it, or send it back with a note.")}
           </p>
+          {canManage && <AudiencePreview audience="draft" />}
           {canManage && (
             <button
               onClick={send}
