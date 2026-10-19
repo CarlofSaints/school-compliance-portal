@@ -128,8 +128,8 @@ function chapters(school: string, body: string): Chapter[] {
 </div>
 <h3>Uploading minutes you already have</h3>
 <p>If the secretary writes in Word, choose <span class="ui">Upload a file</span>. The file is kept as it is, and the minutes can still be checked and signed.</p>
-<h3>Your own letterhead</h3>
-<p><span class="ui">Download as Word</span> produces the document to print or circulate. If the school has uploaded its own letterhead under <span class="ui">Admin</span>, <span class="ui">School Branding</span>, the minutes are placed into it. Your crest, fonts and footer are kept exactly as they are: the letterhead is filled in, never rebuilt.</p>`,
+<h3>The Word document</h3>
+<p><span class="ui">Download as Word</span> produces the document to print or circulate. Your school's crest sits at the top, and the minutes follow in a numbered table that fits the page.</p>`,
     },
     {
       title: "Sending a draft out for checking",
@@ -212,13 +212,12 @@ function chapters(school: string, body: string): Chapter[] {
     {
       title: "Making it look like your school",
       html: `
-<p class="lede">Your crest, your colours, your letterhead.</p>
+<p class="lede">Your crest and your colours.</p>
 <p>Under <span class="ui">Admin</span>, <span class="ui">School Branding</span>:</p>
 <ul>
-  <li><strong>Your crest</strong>, which appears on the sign in page, in the sidebar and on every email the portal sends.</li>
+  <li><strong>Your crest</strong>, which appears on the sign in page, in the sidebar, on every email the portal sends and at the top of your Word minutes.</li>
   <li><strong>Two colours</strong>, a main and an accent. Everything else is worked out from them, including making sure text stays readable on your main colour.</li>
   <li><strong>A reply address</strong>, so somebody replying to a portal email reaches a mailbox a person reads.</li>
-  <li><strong>Your Word letterhead</strong>, used for minutes. Upload your own .docx with a <span class="ui">{{content}}</span> marker where the minutes should go.</li>
 </ul>
 <div class="note">
   <span class="lbl">Until you upload a crest</span>

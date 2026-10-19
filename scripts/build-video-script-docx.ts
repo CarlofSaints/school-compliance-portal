@@ -70,7 +70,7 @@ const BLOCKS: { n: number; title: string; at: string; lines: string[] }[] = [
     at: "1:00, about 24 seconds",
     lines: [
       "Write your minutes in the portal, or upload the ones you already have. Send the draft to the Chair and the Principal to check. When they approve it, everyone who has to sign gets their own one time code, opens the document, reads it, and signs it right there in the browser.",
-      "It comes out on your school's own letterhead. And the moment the last signature lands, the whole governing body gets a copy.",
+      "It comes out as a Word document with your school's crest on top. And the moment the last signature lands, the whole governing body gets a copy.",
     ],
   },
   {

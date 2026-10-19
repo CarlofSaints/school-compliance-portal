@@ -8,10 +8,10 @@
 // made it and shows a red X everywhere else. word/media holding real bytes is
 // the only proof.
 
-import { writeFileSync } from "fs";
+import { writeFileSync, readFileSync } from "fs";
 import zlib from "zlib";
 import AdmZip from "adm-zip";
-import { buildMinutesDocx } from "../lib/minutesDocx";
+import { buildMinutesDocx, crestImage } from "../lib/minutesDocx";
 import type { MinutesRecord } from "../lib/minutesData";
 import type { SchoolBranding } from "../lib/branding";
 
@@ -215,6 +215,20 @@ function check(label: string, ok: boolean, extra = "") {
   const noCrest = await buildMinutesDocx(record, branding, null, marks);
   check("still builds without a crest", noCrest.length > 5000);
   check("and still has the minutes in it", new AdmZip(noCrest).readAsText("word/document.xml").includes("Finance report"));
+
+  console.log("\nCrest format and shape");
+  const jeppe = crestImage(readFileSync("public/logo-jeppe.png"));
+  check("Jeppe's built-in crest reads as a 249x300 PNG", JSON.stringify(jeppe) === JSON.stringify({ type: "png", width: 249, height: 300 }));
+  // SOI, an APP0 segment, then SOF0 holding height 120, width 300.
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 120, 1, 44, 3, 0, 0, 0]);
+  check("a JPEG crest is embedded as jpg with its own size", JSON.stringify(crestImage(jpeg)) === JSON.stringify({ type: "jpg", width: 300, height: 120 }));
+  check("an SVG crest is left out, not mislabelled", crestImage(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>")) === null);
+  const svgDoc = await buildMinutesDocx(record, branding, Buffer.from("<svg/>"), marks);
+  const mediaCount = (b: Buffer) => new AdmZip(b).getEntries().filter((e) => e.entryName.startsWith("word/media/")).length;
+  check("an SVG crest adds no image (same as no crest)", mediaCount(svgDoc) === mediaCount(noCrest));
+  const page = new AdmZip(noCrest).readAsText("word/document.xml");
+  check("the page is set to A4 with 1\" margins", page.includes('w:w="11906"') && page.includes('w:left="1440"'));
+  check("the minutes table is exactly the space between the margins", page.includes('<w:tblW w:type="dxa" w:w="9026"/>'));
 
   console.log(`\n${fails === 0 ? "all checks passed" : fails + " FAILED"}\n`);
   process.exit(fails === 0 ? 0 : 1);

@@ -317,7 +317,7 @@ export default function TemplateEditor({
                 {isApologies(s)
                   ? t("Printed under the two lists in every set of minutes. The names themselves come from the ticks.")
                   : isAttendance(s)
-                    ? t("Printed under the list. The meeting title and date belong on your letterhead, not here.")
+                    ? t("Printed under the list. The meeting title and date are printed at the top of the document.")
                     : t("Copied into every set of minutes made from this template, and editable for each meeting. Good for a previous minutes sign off, which barely changes.")}
               </p>
               <textarea

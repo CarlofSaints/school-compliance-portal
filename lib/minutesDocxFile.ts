@@ -1,20 +1,20 @@
+import { readFile } from "fs/promises";
+import path from "path";
 import { readSignatureImage } from "./minutesData";
 import type { MinutesRecord } from "./minutesData";
-import { readLetterheadFile } from "./letterheadData";
-import { getPeople } from "./peopleData";
-import { getPositions } from "./positionsData";
 import { buildMinutesDocx } from "./minutesDocx";
 import { resolveBranding, readLogo } from "./brandingData";
 import { formatPeriod } from "./minutes";
 
 // ---------------------------------------------------------------------------
-// The minutes as a finished Word file: record plus crest, signature marks,
-// letterhead and governing body, gathered and built.
+// The minutes as a finished Word file: record plus crest and signature
+// marks, gathered and built. One standard template for every school (Carl,
+// 19 Oct 2026: per-school letterheads would each need catering for).
 //
 // 🔴 ONE place, used by the download AND by the signed-minutes email. Carl
 // asked for the Word file to be attached when signed minutes go out, and the
 // copy in a governor's inbox must be the same document the Download button
-// gives - the same letterhead, the same signatures - not a second build that
+// gives - the same signatures - not a second build that
 // quietly drifts from it.
 // ---------------------------------------------------------------------------
 
@@ -23,7 +23,13 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
   // The school's uploaded crest if it has one; null is fine and the document
   // simply has no picture. A missing crest must not fail a download somebody
   // needs for a meeting tonight.
-  const crest = await readLogo().catch(() => null);
+  // Falls back to the built-in crest (HVPS and Jeppe ship theirs in /public,
+  // never uploaded one), which next.config.ts traces into every API function.
+  const crest =
+    (await readLogo().catch(() => null)) ??
+    (branding.logo.startsWith("/") && branding.logo.endsWith(".png")
+      ? await readFile(path.join(process.cwd(), "public", branding.logo)).catch(() => null)
+      : null);
 
   // No People lookup for the sections: the responsible name was frozen into
   // each one when the template was copied, so the document shows who was
@@ -48,53 +54,7 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
     marks.filter((m): m is NonNullable<typeof m> => m !== null)
   );
 
-  // The school's own letterhead, if it uploaded one. Tolerant of failure: a
-  // letterhead that cannot be read must fall back to the generated layout, not
-  // refuse to produce the minutes at all.
-  const letterhead = await readLetterheadFile().catch(() => null);
-
-  // Who holds each governing body position now, for a letterhead using
-  // {{governors}}. patchDocument ignores a patch whose placeholder is not in
-  // the file, so this costs nothing for a letterhead without it.
-  //
-  // 🔴 Grouped, not a lookup of one name per position. Two people genuinely do
-  // share a seat (co-opted members, a joint deputy), and keeping only the
-  // first would drop somebody off the school's own letterhead.
-  const governorsByPosition = new Map<string, string[]>();
-  for (const person of await getPeople()) {
-    const position = (person.position || "").trim();
-    const name = (person.name || "").trim();
-    if (!position || !name) continue;
-    governorsByPosition.set(position, [
-      ...(governorsByPosition.get(position) ?? []),
-      name,
-    ]);
-  }
-
-  // 🔴 The school's OWN positions (Admin, Positions), not the built-in list,
-  // or a position it added never reaches the governing body table. Plus any
-  // position somebody on the register holds that has since fallen off that
-  // list, appended at the end: a table that silently drops a sitting member
-  // looks complete when it is not. Same rule the People page follows.
-  const saved = await getPositions().catch(() => undefined);
-  const positions = saved
-    ? [
-        ...saved,
-        ...[...governorsByPosition.keys()].filter(
-          (held) => !saved.some((p) => p.trim().toLowerCase() === held.toLowerCase())
-        ),
-      ]
-    : undefined;
-
-  return buildMinutesDocx(
-    record,
-    branding,
-    crest,
-    signatures,
-    letterhead,
-    governorsByPosition,
-    positions
-  );
+  return buildMinutesDocx(record, branding, crest, signatures);
 }
 
 /** "SGB meeting 7 May September-2026.docx", the name both copies share. */
