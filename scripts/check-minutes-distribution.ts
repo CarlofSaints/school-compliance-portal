@@ -104,39 +104,69 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   console.log("\nThe signed-minutes email lists each person's OWN open actions");
   process.env.RESEND_API_KEY = "re_check_not_real";
   let html = "";
-  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
-    html = JSON.parse(init?.body || "{}").html || "";
+  let attachments: { filename: string; contentId?: string; content_id?: string }[] = [];
+  let crestServes = false;
+  process.env.NEXT_PUBLIC_SCHOOL ||= "hvps"; // a school with a built-in crest
+  globalThis.fetch = (async (u: unknown, init?: { body?: string }) => {
+    // The crest URL: answer with a PNG (or, to test the fallback, a 404).
+    if (String(u).endsWith("/logo.png")) {
+      return crestServes
+        ? new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { status: 200, headers: { "content-type": "image/png" } })
+        : new Response("no", { status: 404 });
+    }
+    const body = JSON.parse(init?.body || "{}");
+    html = body.html || "";
+    attachments = body.attachments || [];
     return new Response(JSON.stringify({ id: "x" }), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   const { openActionsByEmail } = await import("../lib/minutesDistribution");
   const { sendMinutesSignedEmail } = await import("../lib/email");
   const { meetingWhen } = await import("../lib/minutes");
+
+  // First with the crest unreachable (a failed fetch is not cached), then reachable.
+  await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], false, null);
+  checkThat("a crest that cannot be fetched stays a link and the email still goes", html.includes("/logo.png") && !html.includes("cid:school-crest") && attachments.length === 0);
+  crestServes = true;
   const from = { minutesId: "m1", minutesTitle: "T", minutesPeriod: "October 2026" };
   const items = [
-    { title: "Fix the borehole", dueDate: "2026-10-30", status: "in_progress", assigneeIds: ["p1"], fromMinutes: from },
-    { title: "Order STEM kits", dueDate: "", status: "not_started", assigneeIds: ["p1", "p2"], fromMinutes: from },
-    { title: "Already done", dueDate: "", status: "done", assigneeIds: ["p1"], fromMinutes: from },
-    { title: "Cancelled", dueDate: "", status: "cancelled", assigneeIds: ["p1"], fromMinutes: from },
-    { title: "Other meeting", dueDate: "", status: "not_started", assigneeIds: ["p1"], fromMinutes: { ...from, minutesId: "m2" } },
+    { id: "a1", title: "Fix the borehole", dueDate: "2026-10-30", status: "in_progress", assigneeIds: ["p1"], fromMinutes: from },
+    { id: "a2", title: "Order STEM kits", dueDate: "", status: "not_started", assigneeIds: ["p1", "p2"], fromMinutes: from },
+    { id: "a3", title: "Already done", dueDate: "", status: "done", assigneeIds: ["p1"], fromMinutes: from },
+    { id: "a4", title: "Cancelled", dueDate: "", status: "cancelled", assigneeIds: ["p1"], fromMinutes: from },
+    { id: "a6", title: "Shared mailbox job", dueDate: "", status: "not_started", assigneeIds: ["p4", "p5"], fromMinutes: from },
+    { id: "a5", title: "Other meeting", dueDate: "", status: "not_started", assigneeIds: ["p1"], fromMinutes: { ...from, minutesId: "m2" } },
   ] as Parameters<typeof openActionsByEmail>[1];
-  const people = [{ id: "p1", email: " Derek@School.co.za " }, { id: "p2", email: "dee@school.co.za" }, { id: "p3", email: "" }];
-  const map = openActionsByEmail("m1", items, people);
+  const people = [
+    { id: "p1", email: " Derek@School.co.za " },
+    { id: "p2", email: "old-dee@school.co.za", userId: "u2" },
+    { id: "p3", email: "" },
+    { id: "p4", email: "office@school.co.za" },
+    { id: "p5", email: "Office@school.co.za" },
+  ];
+  const users = [{ id: "u2", email: "dee@school.co.za" }];
+  const map = openActionsByEmail("m1", items, people, users);
   check("Derek gets his two open actions from THIS meeting", map.get("derek@school.co.za")?.map((a) => a.title), ["Fix the borehole", "Order STEM kits"]);
   check("Dee gets only the shared one", map.get("dee@school.co.za")?.map((a) => a.title), ["Order STEM kits"]);
-  check("nobody else is listed", [...map.keys()].length, 2);
+  check("Dee's LOGIN email wins over her stale register email", map.has("old-dee@school.co.za"), false);
+  check("two register entries sharing one mailbox list the action once", map.get("office@school.co.za")?.map((a) => a.title), ["Shared mailbox job"]);
+  check("nobody else is listed", [...map.keys()].length, 3);
+  check("a custom period with no usable dates never shows its label", meetingWhen({ kind: "custom", year: 2026, from: "", to: "", label: "Special AGM" }), "in 2026");
 
   check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");
   check("a custom range reads 'from <date> to <date>', not its label", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15", label: "Special meeting" }), "from 1 October 2026 to 15 October 2026");
   check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 
-  await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("derek@school.co.za")!, null);
+  await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("derek@school.co.za")!, true, null);
   checkThat("email lists the actions", html.includes("Fix the borehole") && html.includes("Order STEM kits"));
   checkThat("with the due date", html.includes("(due 30 October 2026)"));
   checkThat("and the Action Item List link", html.includes("/action-items") && html.includes("Action Item List"));
   checkThat("without an attachment it does not claim one", html.includes("have been signed") && !html.includes("attached"));
   checkThat("the title is escaped", html.includes("Ad hoc &lt;SGB&gt;"));
-  await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], null);
+  await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], true, null);
   checkThat("someone with no actions gets no action list", !html.includes("yours to execute"));
+  await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("office@school.co.za")!, false, null);
+  checkThat("the crest is embedded, not linked", html.includes('src="cid:school-crest"') && attachments.some((a) => (a.contentId ?? a.content_id) === "school-crest"));
+  checkThat("someone with no login gets their actions but no portal link", html.includes("Shared mailbox job") && !html.includes("/action-items"));
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exit(fail === 0 ? 0 : 1);

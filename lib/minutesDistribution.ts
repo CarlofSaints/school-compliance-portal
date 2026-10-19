@@ -4,6 +4,7 @@ import { formatPeriod, canDistribute, meetingWhen } from "./minutes";
 import { getActionItems } from "./actionItemData";
 import { isClosed, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
+import { getUsers } from "./userData";
 import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
 import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
@@ -105,20 +106,31 @@ export async function previewDistribution(record: MinutesRecord) {
   };
 }
 
-/** Lowercased email -> that person's open actions raised from these minutes. */
+/**
+ * Lowercased email -> that person's open actions raised from these minutes.
+ * The address is the one action REMINDERS use (resolveActionRecipients): the
+ * linked login's email first, else the People record's. Each action is listed
+ * once per address, even if two register entries share that address.
+ */
 export function openActionsByEmail(
   minutesId: string,
-  items: Pick<ActionItem, "title" | "dueDate" | "status" | "assigneeIds" | "fromMinutes">[],
-  people: { id: string; email?: string }[]
+  items: Pick<ActionItem, "id" | "title" | "dueDate" | "status" | "assigneeIds" | "fromMinutes">[],
+  people: { id: string; email?: string; userId?: string | null }[],
+  users: { id: string; email?: string }[]
 ): Map<string, SignedEmailAction[]> {
-  const emailOf = new Map(people.map((p) => [p.id, (p.email || "").trim().toLowerCase()]));
+  const norm = (e?: string) => (e || "").trim().toLowerCase();
+  const userEmail = new Map(users.map((u) => [u.id, norm(u.email)]));
+  const emailOf = new Map(people.map((p) => [p.id, (p.userId && userEmail.get(p.userId)) || norm(p.email)]));
   const out = new Map<string, SignedEmailAction[]>();
+  const listed = new Set<string>();
   for (const item of items) {
     // Cancelled counts as closed too: neither is anybody's to execute.
     if (item.fromMinutes?.minutesId !== minutesId || isClosed(item)) continue;
     for (const pid of item.assigneeIds) {
       const email = emailOf.get(pid);
-      if (email) out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
+      if (!email || listed.has(`${email}|${item.id}`)) continue;
+      listed.add(`${email}|${item.id}`);
+      out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
     }
   }
   return out;
@@ -169,22 +181,30 @@ export async function distributeSignedMinutes(
     );
   }
 
-  // Each recipient's OPEN actions raised from these minutes, by email. Actions
-  // are assigned to People-register ids, so the register gives the address.
-  // A failure here loses the list, never the minutes themselves.
-  let actionsByEmail = new Map<string, SignedEmailAction[]>();
-  try {
-    const [items, people] = await Promise.all([getActionItems(), getPeople()]);
-    actionsByEmail = openActionsByEmail(id, items, people);
-  } catch (err) {
-    console.error("[minutes distribution] Could not read action items, sending without them:", err);
-  }
+  // Each recipient's OPEN actions raised from these minutes, by email, and who
+  // can sign in (only they are pointed at the Action Item List). A failure
+  // here loses the list, never the minutes themselves.
+  const actionLists = (async () => {
+    try {
+      const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
+      return {
+        byEmail: openActionsByEmail(id, items, people, users),
+        logins: new Set(users.map((u) => (u.email || "").trim().toLowerCase())),
+      };
+    } catch (err) {
+      console.error("[minutes distribution] Could not read action items, sending without them:", err);
+      return { byEmail: new Map<string, SignedEmailAction[]>(), logins: new Set<string>() };
+    }
+  })();
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
   const period = formatPeriod(record.period);
 
-  // Built once for the whole list. Null means it could not be built, and the
-  // minutes go out with their link regardless.
-  const attachment = await signedMinutesAttachment(record);
+  // Built once for the whole list, alongside the action lists. Null means it
+  // could not be built, and the minutes go out with their link regardless.
+  const [attachment, { byEmail: actionsByEmail, logins }] = await Promise.all([
+    signedMinutesAttachment(record),
+    actionLists,
+  ]);
 
   const failed: string[] = [];
   let sent = 0;
@@ -198,6 +218,7 @@ export async function distributeSignedMinutes(
       meetingWhen(record.period),
       signedBy,
       actionsByEmail.get(person.email.trim().toLowerCase()) ?? [],
+      logins.has(person.email.trim().toLowerCase()),
       attachment
     );
     if (ok) sent += 1;

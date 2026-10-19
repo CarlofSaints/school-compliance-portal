@@ -78,6 +78,7 @@ export function meetingWhen(p: MeetingPeriod): string {
     const to = day(p.to);
     if (from && (!to || p.from === p.to)) return `on ${from}`;
     if (from && to) return `from ${from} to ${to}`;
+    return `in ${p.year}`; // never the free-text label
   }
   return `in ${formatPeriod(p)}`;
 }
