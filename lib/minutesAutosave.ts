@@ -41,6 +41,7 @@ export interface MinutesText<P = unknown, S = unknown> {
   title: string;
   body: string;
   period: P;
+  meetingDate?: string;
   sections: S;
 }
 

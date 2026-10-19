@@ -52,6 +52,7 @@ import DangerConfirmModal from "@/components/DangerConfirmModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
+  formatMeetingDate,
   isLocked,
   MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
@@ -70,6 +71,7 @@ interface MinutesDetail {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  meetingDate?: string;
   status: MinutesStatus;
   sections: MinutesSection[];
   original?: { filename: string; size: number; uploadedAt: string };
@@ -735,7 +737,9 @@ export default function MinutesDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark">{record.title}</h1>
           <p className="text-gray-500 mt-1">
-            {t(MEETING_BODY_LABELS[record.body])} · {formatPeriod(record.period)} ·{" "}
+            {t(MEETING_BODY_LABELS[record.body])} ·{" "}
+            {record.meetingDate ? `${formatMeetingDate(record.meetingDate)} · ` : ""}
+            {formatPeriod(record.period)} ·{" "}
             {t(MINUTES_STATUS_LABELS[record.status])}
             {record.draftNumber > 0 && " · " + t("Draft {n}", { n: record.draftNumber })}
           </p>
@@ -924,6 +928,15 @@ export default function MinutesDetailPage() {
                 ))}
               </select>
             </div>
+          </div>
+          <div className="max-w-xs">
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("Meeting date")}</label>
+            <input
+              type="date"
+              value={record.meetingDate ?? ""}
+              onChange={(e) => e.target.value && patch({ meetingDate: e.target.value })}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+            />
           </div>
           <PeriodPicker value={record.period} onChange={(p) => patch({ period: p })} />
         </div>

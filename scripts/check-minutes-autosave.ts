@@ -35,12 +35,12 @@ function check(name: string, actual: unknown, expected: unknown) {
 }
 
 const server = {
-  title: "Old", body: "sgb", period: { year: 2026 }, sections: [{ id: "a", body: "" }],
+  title: "Old", body: "sgb", period: { year: 2026 }, meetingDate: "2026-10-15" as string | undefined, sections: [{ id: "a", body: "" }],
   status: "in_review" as MinutesStatus, reviews: [{ by: "x" }], draftNumber: 2,
 };
 const local = {
-  title: "New", body: "fincom", period: { year: 2027 }, sections: [{ id: "a", body: "typed" }],
-  status: "draft" as MinutesStatus, reviews: [], draftNumber: 1,
+  title: "New", body: "fincom", period: { year: 2027 }, meetingDate: "2026-10-16" as string | undefined, sections: [{ id: "a", body: "typed" }],
+  status: "draft" as MinutesStatus, reviews: [] as { by: string }[], draftNumber: 1,
 };
 
 console.log("Unsaved");

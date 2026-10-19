@@ -11,6 +11,7 @@ import {
 } from "@/lib/minutesData";
 import {
   checkPeriod,
+  checkMeetingDate,
   isLocked,
   cleanAttendees,
   isAttendance,
@@ -107,6 +108,12 @@ export async function PATCH(
       const problem = checkPeriod(body.period);
       if (problem) return NextResponse.json({ error: problem }, { status: 400 });
       updates.period = body.period;
+    }
+    // Optional here: minutes added before the date existed may still have none.
+    if (body.meetingDate !== undefined && body.meetingDate !== "") {
+      const problem = checkMeetingDate(body.meetingDate);
+      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+      updates.meetingDate = body.meetingDate;
     }
     if (body.sections !== undefined) {
       if (!Array.isArray(body.sections)) {

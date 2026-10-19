@@ -4,7 +4,7 @@ import { requireAnyPermission } from "@/lib/rolesData";
 import { getMinutes, updateMinutes } from "@/lib/minutesData";
 import {
   canSendForReview,
-  formatPeriod,
+  minutesWhenLabel,
   MINUTES_STATUS_LABELS,
   type MinutesReviewer,
 } from "@/lib/minutes";
@@ -85,7 +85,7 @@ export async function POST(
     reviewers,
   });
 
-  const periodLabel = formatPeriod(record.period);
+  const periodLabel = minutesWhenLabel(record);
   const from = `${session.name} ${session.surname}`.trim();
 
   // One at a time. A failure is reported, not thrown: minutes that went out to

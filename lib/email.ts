@@ -105,7 +105,7 @@ function emailShell(b: SchoolBranding, title: string, body: string): string {
             // 🔴 Omitted when a school has no crest, never a default file:
             // the old fallback was Hurlyvale's own crest.
             LOGO_URL
-              ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td bgcolor="#ffffff" style="background:#ffffff;padding:8px;border-radius:8px;"><img data-crest="1" src="${LOGO_URL}" alt="${esc(b.logoAlt)}" width="56" style="display:block;width:56px;height:auto;border:0;outline:none;text-decoration:none;"></td></tr></table>`
+              ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td bgcolor="#ffffff" style="background:#ffffff;padding:8px;border-radius:8px;"><img src="${LOGO_URL}" alt="${esc(b.logoAlt)}" width="56" style="display:block;width:56px;height:auto;border:0;outline:none;text-decoration:none;"></td></tr></table>`
               : ""
           }
           <div style="font-family:${FONT};font-size:22px;font-weight:bold;color:${HEAD_TEXT};margin:${LOGO_URL ? "14px" : "0"} 0 0;">${esc(b.fullName)}</div>
@@ -506,44 +506,6 @@ export interface EmailAttachment {
   content: Buffer;
 }
 
-// 🔴 The crest is EMBEDDED (an inline attachment the HTML points at by cid),
-// not linked. Outlook blocks downloaded pictures from senders it does not
-// know, which on 19 Oct 2026 left an empty white tile where the crest should
-// be. Fetched once per URL per instance; if it cannot be fetched the email
-// keeps the plain link, so a crest problem never stops a send.
-const CREST_CID = "school-crest";
-const crestCache = new Map<string, Promise<{ bytes: Buffer; ext: string } | null>>();
-function crestBytes(url: string): Promise<{ bytes: Buffer; ext: string } | null> {
-  if (!crestCache.has(url)) {
-    crestCache.set(
-      url,
-      fetch(url)
-        .then(async (r) => {
-          const type = r.headers.get("content-type") || "";
-          const ext = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif" }[type.split(";")[0].trim()];
-          // SVG and WebP stay linked: most mail clients cannot show them embedded.
-          return r.ok && ext ? { bytes: Buffer.from(await r.arrayBuffer()), ext } : null;
-        })
-        .catch(() => null)
-        .then((b) => {
-          if (!b) crestCache.delete(url); // try again next time
-          return b;
-        })
-    );
-  }
-  return crestCache.get(url)!;
-}
-async function embedCrest(html: string): Promise<{ html: string; attachment: (EmailAttachment & { contentId: string }) | null }> {
-  const m = /<img data-crest="1" src="([^"]+)"/.exec(html);
-  if (!m) return { html, attachment: null };
-  const crest = await crestBytes(m[1]);
-  if (!crest) return { html, attachment: null };
-  return {
-    html: html.replace(m[0], `<img data-crest="1" src="cid:${CREST_CID}"`),
-    attachment: { filename: `crest.${crest.ext}`, content: crest.bytes, contentId: CREST_CID },
-  };
-}
-
 async function sendEmail(
   from: string,
   to: string,
@@ -569,22 +531,18 @@ async function sendEmail(
     // missing one just means a reply goes to the (unread) From address, which
     // is no worse than before.
     const message = { from, to, subject, html, ...(replyTo ? { replyTo } : {}) };
-    const crest = await embedCrest(html);
-    const all = [...(crest.attachment ? [crest.attachment] : []), ...(attachments ?? [])];
 
     // 🔴 Resend does not THROW on a rejected message, it RETURNS { error }.
     // This used to await the call and return true regardless, so a message
     // Resend refused was counted as sent and nobody found out.
     let { error } = await resend.emails.send({
       ...message,
-      html: crest.html,
-      ...(all.length ? { attachments: all } : {}),
+      ...(attachments?.length ? { attachments } : {}),
     });
 
     // A refused attachment must not cost the email itself. Signed minutes that
-    // arrive with only their link beat signed minutes that never arrive. The
-    // retry carries the LINKED crest, since the embedded one went with them.
-    if (error && all.length) {
+    // arrive with only their link beat signed minutes that never arrive.
+    if (error && attachments?.length) {
       console.error(
         `[Email] Rejected with attachment to ${to}, retrying without it:`,
         error

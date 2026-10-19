@@ -1,6 +1,6 @@
 import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
-import { formatPeriod, canDistribute, meetingWhen } from "./minutes";
+import { canDistribute, meetingWhen, minutesWhenLabel } from "./minutes";
 import { getActionItems } from "./actionItemData";
 import { isClosed, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
@@ -197,7 +197,7 @@ export async function distributeSignedMinutes(
     }
   })();
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
-  const period = formatPeriod(record.period);
+  const period = minutesWhenLabel(record);
 
   // Built once for the whole list, alongside the action lists. Null means it
   // could not be built, and the minutes go out with their link regardless.
@@ -215,7 +215,7 @@ export async function distributeSignedMinutes(
       id,
       record.title,
       period,
-      meetingWhen(record.period),
+      meetingWhen(record.period, record.meetingDate),
       signedBy,
       actionsByEmail.get(person.email.trim().toLowerCase()) ?? [],
       logins.has(person.email.trim().toLowerCase()),

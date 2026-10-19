@@ -64,11 +64,39 @@ export function formatPeriod(p: MeetingPeriod): string {
   }
 }
 
+/** The day the meeting was held, YYYY-MM-DD. Carl, 19 Oct 2026: a period
+ *  alone ("October 2026") did not say when the meeting actually was. Optional
+ *  on the record (older minutes have none), required when adding new ones. */
+export function checkMeetingDate(d: unknown): string | null {
+  if (typeof d !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return "Choose the meeting date.";
+  const parsed = new Date(`${d}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== d) return "That meeting date is not a real date.";
+  const thisYear = new Date().getFullYear();
+  if (parsed.getUTCFullYear() < 2000 || parsed.getUTCFullYear() > thisYear + 5) return `The year should be between 2000 and ${thisYear + 5}.`;
+  return null;
+}
+
+/** "15 October 2026". */
+export function formatMeetingDate(d: string): string {
+  const parsed = new Date(`${d}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? d : `${parsed.getUTCDate()} ${MONTHS[parsed.getUTCMonth()]} ${parsed.getUTCFullYear()}`;
+}
+
+/** "Held 15 October 2026 · October 2026", or just the period when the
+ *  minutes have no meeting date (those added before 19 Oct 2026). For the
+ *  emails and the Word file, which are English. */
+export function minutesWhenLabel(m: { period: MeetingPeriod; meetingDate?: string }): string {
+  return m.meetingDate && !checkMeetingDate(m.meetingDate)
+    ? `Held ${formatMeetingDate(m.meetingDate)} · ${formatPeriod(m.period)}`
+    : formatPeriod(m.period);
+}
+
 /** When the meeting was, for a sentence: "on 15 October 2026" for one day,
  *  "from 1 October 2026 to 15 October 2026" for a custom range (its dates,
  *  not its free-text label), otherwise "in October 2026" / "in Q4 2026".
  *  Minutes keep a period, not one meeting date. */
-export function meetingWhen(p: MeetingPeriod): string {
+export function meetingWhen(p: MeetingPeriod, meetingDate?: string): string {
+  if (meetingDate && !checkMeetingDate(meetingDate)) return `on ${formatMeetingDate(meetingDate)}`;
   if (p.kind === "custom") {
     const day = (iso: string) => {
       const d = new Date(`${iso}T00:00:00Z`);
@@ -186,7 +214,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 
 /** The fields that ARE the minutes' words: what the editor saves, what a
  *  conflict is about, and (with the uploaded original) what signing freezes. */
-export const MINUTES_TEXT_FIELDS = ["title", "body", "period", "sections"] as const;
+export const MINUTES_TEXT_FIELDS = ["title", "body", "period", "meetingDate", "sections"] as const;
 
 export const APOLOGIES_TITLE = "Apologies";
 export const NOT_IN_ATTENDANCE_HEADING = "Not in Attendance";
@@ -890,6 +918,7 @@ export function canonicalMinutes(m: {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  meetingDate?: string;
   sections: MinutesSection[];
 }): string {
   const numbers = sectionNumbers(m.sections);
@@ -925,6 +954,9 @@ export function canonicalMinutes(m: {
     m.title.trim(),
     m.body,
     formatPeriod(m.period),
+    // 🔴 Only when set, so minutes without a date (all signed before 19 Oct
+    // 2026) hash exactly as they always have.
+    ...(m.meetingDate ? [`held ${m.meetingDate}`] : []),
     ...sections,
   ].join("\u001e");
 }

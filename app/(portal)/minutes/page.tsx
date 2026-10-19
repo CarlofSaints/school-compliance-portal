@@ -11,6 +11,7 @@ import DangerConfirmModal from "@/components/DangerConfirmModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
+  formatMeetingDate,
   isLocked,
   periodSortKey,
   MEETING_BODY_LABELS,
@@ -25,6 +26,7 @@ interface MinutesRow {
   title: string;
   body: MeetingBody;
   period: MeetingPeriod;
+  meetingDate?: string;
   status: MinutesStatus;
   original?: { filename: string; size: number };
   sections: unknown[];
@@ -182,7 +184,16 @@ export default function MinutesPage() {
                 <td className="px-4 py-3 text-gray-600">
                   {t(MEETING_BODY_LABELS[m.body])}
                 </td>
-                <td className="px-4 py-3 text-gray-600">{formatPeriod(m.period)}</td>
+                <td className="px-4 py-3 text-gray-600">
+                  {m.meetingDate ? (
+                    <>
+                      <div>{formatMeetingDate(m.meetingDate)}</div>
+                      <div className="text-xs text-gray-400">{formatPeriod(m.period)}</div>
+                    </>
+                  ) : (
+                    formatPeriod(m.period)
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-1 rounded ${STATUS_TONE[m.status]}`}>
                     {t(MINUTES_STATUS_LABELS[m.status])}
@@ -271,6 +282,7 @@ function AddMinutes({
     year: now.getFullYear(),
     month: now.getMonth() + 1,
   });
+  const [meetingDate, setMeetingDate] = useState("");
   const [mode, setMode] = useState<"upload" | "write">("upload");
   const [templateId, setTemplateId] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -279,6 +291,7 @@ function AddMinutes({
 
   const save = async () => {
     if (!title.trim()) return onError(t("Give these minutes a name."));
+    if (!meetingDate) return onError(t("Choose the meeting date."));
     if (mode === "upload" && !file) return onError(t("Choose a file, or switch to writing them here."));
 
     setSaving(true);
@@ -287,6 +300,7 @@ function AddMinutes({
       fd.set("title", title.trim());
       fd.set("body", body);
       fd.set("period", JSON.stringify(period));
+      fd.set("meetingDate", meetingDate);
       if (mode === "upload" && file) fd.set("file", file);
       if (mode === "write") {
         fd.set("startBlank", "1");
@@ -330,6 +344,24 @@ function AddMinutes({
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="max-w-xs">
+        <label className="block text-sm font-medium text-gray-700 mb-1">{t("Meeting date")}</label>
+        <input
+          type="date"
+          value={meetingDate}
+          onChange={(e) => {
+            const d = e.target.value;
+            setMeetingDate(d);
+            // The period follows the date while it is a plain month, the usual
+            // case. A quarter or custom period the secretary chose is left alone.
+            if (d && period.kind === "month") {
+              setPeriod({ kind: "month", year: Number(d.slice(0, 4)), month: Number(d.slice(5, 7)) });
+            }
+          }}
+          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+        />
       </div>
 
       <PeriodPicker value={period} onChange={setPeriod} />

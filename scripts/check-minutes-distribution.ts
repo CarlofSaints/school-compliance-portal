@@ -105,15 +105,8 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   process.env.RESEND_API_KEY = "re_check_not_real";
   let html = "";
   let attachments: { filename: string; contentId?: string; content_id?: string }[] = [];
-  let crestServes = false;
   process.env.NEXT_PUBLIC_SCHOOL ||= "hvps"; // a school with a built-in crest
-  globalThis.fetch = (async (u: unknown, init?: { body?: string }) => {
-    // The crest URL: answer with a PNG (or, to test the fallback, a 404).
-    if (String(u).endsWith("/logo.png")) {
-      return crestServes
-        ? new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { status: 200, headers: { "content-type": "image/png" } })
-        : new Response("no", { status: 404 });
-    }
+  globalThis.fetch = (async (_u: unknown, init?: { body?: string }) => {
     const body = JSON.parse(init?.body || "{}");
     html = body.html || "";
     attachments = body.attachments || [];
@@ -123,10 +116,7 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   const { sendMinutesSignedEmail } = await import("../lib/email");
   const { meetingWhen } = await import("../lib/minutes");
 
-  // First with the crest unreachable (a failed fetch is not cached), then reachable.
-  await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], false, null);
-  checkThat("a crest that cannot be fetched stays a link and the email still goes", html.includes("/logo.png") && !html.includes("cid:school-crest") && attachments.length === 0);
-  crestServes = true;
+
   const from = { minutesId: "m1", minutesTitle: "T", minutesPeriod: "October 2026" };
   const items = [
     { id: "a1", title: "Fix the borehole", dueDate: "2026-10-30", status: "in_progress", assigneeIds: ["p1"], fromMinutes: from },
@@ -154,6 +144,16 @@ console.log("\nThe distribution list follows the MEETING, not the status");
 
   check("a single-day meeting reads 'on <date>'", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-15", to: "2026-10-15" }), "on 15 October 2026");
   check("a custom range reads 'from <date> to <date>', not its label", meetingWhen({ kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15", label: "Special meeting" }), "from 1 October 2026 to 15 October 2026");
+  const { checkMeetingDate, minutesWhenLabel, canonicalMinutes } = await import("../lib/minutes");
+  check("a meeting date beats the period", meetingWhen({ kind: "month", year: 2026, month: 10 }, "2026-10-15"), "on 15 October 2026");
+  check("a valid meeting date passes", checkMeetingDate("2026-10-15"), null);
+  checkThat("a missing meeting date is refused", !!checkMeetingDate(""));
+  checkThat("an impossible date is refused", !!checkMeetingDate("2026-02-30"));
+  check("the label shows the date and the period", minutesWhenLabel({ period: { kind: "month", year: 2026, month: 10 }, meetingDate: "2026-10-15" }), "Held 15 October 2026 · October 2026");
+  check("without a date the label is just the period", minutesWhenLabel({ period: { kind: "month", year: 2026, month: 10 } }), "October 2026");
+  const base = { title: "T", body: "sgb" as const, period: { kind: "month" as const, year: 2026, month: 10 }, sections: [] };
+  check("🔴 minutes with no date sign exactly as before (old signatures stay valid)", canonicalMinutes(base), ["T", "sgb", "October 2026"].join("\u001e"));
+  checkThat("the meeting date IS part of what is signed", canonicalMinutes({ ...base, meetingDate: "2026-10-15" }) !== canonicalMinutes(base));
   check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 
   await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("derek@school.co.za")!, true, null);
@@ -165,7 +165,7 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   await sendMinutesSignedEmail("k@x.za", "Kubeshini", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], [], true, null);
   checkThat("someone with no actions gets no action list", !html.includes("yours to execute"));
   await sendMinutesSignedEmail("o@x.za", "Office", "m1", "T", "October 2026", "in October 2026", ["Dee (Principal)"], map.get("office@school.co.za")!, false, null);
-  checkThat("the crest is embedded, not linked", html.includes('src="cid:school-crest"') && attachments.some((a) => (a.contentId ?? a.content_id) === "school-crest"));
+  checkThat("the crest is linked, with nothing attached", html.includes("/logo.png") && attachments.length === 0);
   checkThat("someone with no login gets their actions but no portal link", html.includes("Shared mailbox job") && !html.includes("/action-items"));
 
   console.log(`\n${pass} passed, ${fail} failed\n`);

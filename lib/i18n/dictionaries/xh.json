@@ -1730,5 +1730,7 @@
   "Copy mine": "Khuphela eyam",
   "Overwrite with mine": "Bhala ngaphezulu ngeyam",
   "You have unsaved minutes open in another tab. Sign out anyway and lose them?": "Unemizuzu engagcinwanga evulekileyo kwenye ithebhu. Uyaphuma nangona kunjalo uze ulahlekelwe yiyo?",
-  "Last edited by {name} at {time}": "Kugqibele ukuhlelwa ngu-{name} ngo-{time}"
+  "Last edited by {name} at {time}": "Kugqibele ukuhlelwa ngu-{name} ngo-{time}",
+  "Meeting date": "Umhla wentlanganiso",
+  "Choose the meeting date.": "Khetha umhla wentlanganiso."
 }
