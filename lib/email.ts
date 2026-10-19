@@ -375,7 +375,7 @@ export async function sendMinutesSigningCodeEmail(
       <p style="margin:6px 0 0;color:#555;font-size:14px;">${esc(periodLabel)}</p>
     ${BOX_CLOSE}
     <p style="color:#333;">Read them through, then sign with this code:</p>
-    <p style="font-family:monospace;font-size:30px;letter-spacing:6px;font-weight:bold;color:${PRIMARY};margin:8px 0 20px;">${esc(code)}</p>
+    ${boxOpen("#f4f4f5", "14px 20px", "8px 0 20px", "text-align:center;")}<span style="font-family:'Courier New',monospace;font-size:30px;letter-spacing:8px;font-weight:bold;color:${b.colors.dark};">${esc(code)}</span>${BOX_CLOSE}
     ${button(`${url}`, `Read and sign`, PRIMARY)}
     <p style="color:#666;font-size:13px;margin-top:20px;">The code is yours alone. Do not pass it on: whoever uses it signs in your name.</p>
     <p style="color:#666;font-size:13px;">Once everyone has signed, the minutes are locked and cannot be changed. If something is still wrong, ask the secretary to pull them back rather than signing.</p>
