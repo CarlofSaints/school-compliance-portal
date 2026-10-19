@@ -221,6 +221,11 @@ export async function distributeSignedMinutes(
     actionLists,
   ]);
 
+  // 🔴 Computed from the minutes AS THEY STAND, once: a wet-ink (uploaded)
+  // record has no signatory row to read it from, and a signed record cannot
+  // have changed since, so the two agree.
+  const documentRef = shortHash(documentHash(record));
+
   const failed: string[] = [];
   let sent = 0;
   for (const person of [...preview.to, ...preview.cc]) {
@@ -232,10 +237,7 @@ export async function distributeSignedMinutes(
       period,
       meetingWhen(record.period, record.meetingDate),
       signedBy,
-      // 🔴 Computed from the minutes AS THEY STAND: a wet-ink (uploaded)
-      // record has no signatory row to read it from, and a signed record
-      // cannot have changed since, so the two agree.
-      shortHash(documentHash(record)),
+      documentRef,
       actionsByEmail.get(person.email.trim().toLowerCase()) ?? [],
       logins.has(person.email.trim().toLowerCase()),
       attachment

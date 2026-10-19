@@ -55,6 +55,7 @@ import {
   formatMeetingDate,
   periodForDate,
   meetingDateOutsidePeriod,
+  checkMeetingDate,
   isLocked,
   MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
@@ -939,7 +940,9 @@ export default function MinutesDetailPage() {
               onChange={(e) => {
                 const d = e.target.value;
                 // Empty clears it; a month period follows a date (periodForDate).
-                patch(d ? { meetingDate: d, period: periodForDate(d, record.period) } : { meetingDate: "" });
+                // A half-typed year (0002-10-15 while typing) is not sent at all.
+                if (!d) patch({ meetingDate: "" });
+                else if (!checkMeetingDate(d)) patch({ meetingDate: d, period: periodForDate(d, record.period) });
               }}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
             />

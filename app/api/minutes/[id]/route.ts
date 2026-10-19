@@ -117,9 +117,9 @@ export async function PATCH(
     if (body.meetingDate === "" || body.meetingDate === null) {
       if (existing.meetingDate) updates.meetingDate = "";
     } else if (body.meetingDate !== undefined) {
-      const problem = checkMeetingDate(body.meetingDate);
-      if (problem) return NextResponse.json({ error: problem }, { status: 400 });
-      updates.meetingDate = body.meetingDate;
+      // 🔴 A bad date is IGNORED, never refused: refusing would refuse the whole
+      // autosave and the typed words with it. The page only sends a valid one.
+      if (!checkMeetingDate(body.meetingDate)) updates.meetingDate = body.meetingDate;
     }
     if (body.sections !== undefined) {
       if (!Array.isArray(body.sections)) {
