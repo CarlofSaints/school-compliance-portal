@@ -12,6 +12,7 @@ import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
   formatMeetingDate,
+  periodForDate,
   isLocked,
   periodSortKey,
   MEETING_BODY_LABELS,
@@ -354,11 +355,7 @@ function AddMinutes({
           onChange={(e) => {
             const d = e.target.value;
             setMeetingDate(d);
-            // The period follows the date while it is a plain month, the usual
-            // case. A quarter or custom period the secretary chose is left alone.
-            if (d && period.kind === "month") {
-              setPeriod({ kind: "month", year: Number(d.slice(0, 4)), month: Number(d.slice(5, 7)) });
-            }
+            if (d) setPeriod(periodForDate(d, period));
           }}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
         />

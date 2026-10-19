@@ -135,7 +135,9 @@ export function openActionsByEmail(
       for (const email of emailsOf.get(pid) ?? []) {
         if (listed.has(`${email}|${item.id}`)) continue;
         listed.add(`${email}|${item.id}`);
-        out.set(email, [...(out.get(email) ?? []), { title: item.title, dueDate: item.dueDate || undefined }]);
+        const list = out.get(email) ?? [];
+        list.push({ title: item.title, dueDate: item.dueDate || undefined });
+        out.set(email, list);
       }
     }
   }
@@ -198,7 +200,7 @@ export async function distributeSignedMinutes(
         // Any address of someone WITH a login: their login email, or the
         // register email of a People entry linked to one.
         logins: new Set(
-          [...users.map((u) => u.email), ...people.filter((p) => p.userId).map((p) => p.email)]
+          [...users.map((u) => u.email), ...people.filter((p) => p.userId && users.some((u) => u.id === p.userId)).map((p) => p.email)]
             .map((e) => (e || "").trim().toLowerCase())
             .filter(Boolean)
         ),

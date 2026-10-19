@@ -1,7 +1,7 @@
 import { getMinutes, updateMinutes } from "./minutesData";
 import type { MinutesRecord } from "./minutesData";
 import type { Signatory } from "./minutes";
-import { minutesWhenLabel } from "./minutes";
+import { minutesWhenLabel, meetingDateOutsidePeriod } from "./minutes";
 import { signatoryRoleForPosition } from "./positions";
 import { resolveAudience } from "./minutesRecipients";
 import { getPeople } from "./peopleData";
@@ -43,6 +43,9 @@ export async function openSigning(
 ): Promise<OpenSigningResult> {
   const record = await getMinutes(id);
   if (!record) throw new SigningSetupError("Minutes not found.");
+  // Both become part of what is signed, so they must agree before anyone signs.
+  const outside = meetingDateOutsidePeriod(record.meetingDate, record.period);
+  if (outside) throw new SigningSetupError(outside);
 
   const audience = await resolveAudience("signing");
   if (audience.empty) {

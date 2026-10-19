@@ -77,10 +77,24 @@ export function checkMeetingDate(d: unknown): string | null {
   return null;
 }
 
+/** A well-formed calendar date, for SHOWING a stored date. Not checkMeetingDate,
+ *  whose limits are rules for entering one. */
+function isIsoDate(d: string | undefined): d is string {
+  return !!d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`));
+}
+
+/** The period to use once a meeting date is picked: a month period follows
+ *  the date; a quarter or custom period the secretary chose is left alone. */
+export function periodForDate(date: string, p: MeetingPeriod): MeetingPeriod {
+  return isIsoDate(date) && p.kind === "month"
+    ? { kind: "month", year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) }
+    : p;
+}
+
 /** Null when the date falls inside the period (or either is missing), else
  *  why not. Both are signed, so they must not contradict each other. */
 export function meetingDateOutsidePeriod(d: string | undefined, p: MeetingPeriod): string | null {
-  if (!d || checkMeetingDate(d)) return null;
+  if (!isIsoDate(d)) return null;
   const y = Number(d.slice(0, 4));
   const m = Number(d.slice(5, 7));
   const inside =
@@ -102,7 +116,7 @@ export function formatMeetingDate(d: string): string {
  *  minutes have no meeting date (those added before 19 Oct 2026). For the
  *  emails and the Word file, which are English. */
 export function minutesWhenLabel(m: { period: MeetingPeriod; meetingDate?: string }): string {
-  return m.meetingDate && !checkMeetingDate(m.meetingDate)
+  return isIsoDate(m.meetingDate)
     ? `Held ${formatMeetingDate(m.meetingDate)} · ${formatPeriod(m.period)}`
     : formatPeriod(m.period);
 }
@@ -112,9 +126,9 @@ export function minutesWhenLabel(m: { period: MeetingPeriod; meetingDate?: strin
  *  not its free-text label), otherwise "in October 2026" / "in Q4 2026".
  *  Minutes keep a period, not one meeting date. */
 export function meetingWhen(p: MeetingPeriod, meetingDate?: string): string {
-  if (meetingDate && !checkMeetingDate(meetingDate)) return `on ${formatMeetingDate(meetingDate)}`;
+  if (isIsoDate(meetingDate)) return `on ${formatMeetingDate(meetingDate)}`;
   if (p.kind === "custom") {
-    const day = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) && !Number.isNaN(Date.parse(`${iso}T00:00:00Z`)) ? formatMeetingDate(iso) : null);
+    const day = (iso: string) => (isIsoDate(iso) ? formatMeetingDate(iso) : null);
     const from = day(p.from);
     const to = day(p.to);
     if (from && (!to || p.from === p.to)) return `on ${from}`;
