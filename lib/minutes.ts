@@ -77,6 +77,21 @@ export function checkMeetingDate(d: unknown): string | null {
   return null;
 }
 
+/** Null when the date falls inside the period (or either is missing), else
+ *  why not. Both are signed, so they must not contradict each other. */
+export function meetingDateOutsidePeriod(d: string | undefined, p: MeetingPeriod): string | null {
+  if (!d || checkMeetingDate(d)) return null;
+  const y = Number(d.slice(0, 4));
+  const m = Number(d.slice(5, 7));
+  const inside =
+    p.kind === "month"
+      ? p.year === y && p.month === m
+      : p.kind === "quarter"
+        ? p.year === y && Math.ceil(m / 3) === p.quarter
+        : !p.from || !p.to || (d >= p.from && d <= p.to);
+  return inside ? null : `The meeting date (${formatMeetingDate(d)}) is outside ${formatPeriod(p)}. Change one so they agree.`;
+}
+
 /** "15 October 2026". */
 export function formatMeetingDate(d: string): string {
   const parsed = new Date(`${d}T00:00:00Z`);
@@ -99,10 +114,7 @@ export function minutesWhenLabel(m: { period: MeetingPeriod; meetingDate?: strin
 export function meetingWhen(p: MeetingPeriod, meetingDate?: string): string {
   if (meetingDate && !checkMeetingDate(meetingDate)) return `on ${formatMeetingDate(meetingDate)}`;
   if (p.kind === "custom") {
-    const day = (iso: string) => {
-      const d = new Date(`${iso}T00:00:00Z`);
-      return Number.isNaN(d.getTime()) ? null : `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-    };
+    const day = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) && !Number.isNaN(Date.parse(`${iso}T00:00:00Z`)) ? formatMeetingDate(iso) : null);
     const from = day(p.from);
     const to = day(p.to);
     if (from && (!to || p.from === p.to)) return `on ${from}`;

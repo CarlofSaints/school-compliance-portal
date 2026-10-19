@@ -12,6 +12,7 @@ import {
 import {
   checkPeriod,
   checkMeetingDate,
+  meetingDateOutsidePeriod,
   isLocked,
   cleanAttendees,
   isAttendance,
@@ -114,6 +115,10 @@ export async function PATCH(
       const problem = checkMeetingDate(body.meetingDate);
       if (problem) return NextResponse.json({ error: problem }, { status: 400 });
       updates.meetingDate = body.meetingDate;
+    }
+    const outside = meetingDateOutsidePeriod(updates.meetingDate ?? existing.meetingDate, updates.period ?? existing.period);
+    if ((updates.meetingDate !== undefined || updates.period !== undefined) && outside) {
+      return NextResponse.json({ error: outside }, { status: 400 });
     }
     if (body.sections !== undefined) {
       if (!Array.isArray(body.sections)) {

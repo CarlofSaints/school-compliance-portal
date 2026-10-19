@@ -1,6 +1,6 @@
 import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
-import { canDistribute, meetingWhen, minutesWhenLabel } from "./minutes";
+import { canDistribute, formatPeriod, meetingWhen } from "./minutes";
 import { getActionItems } from "./actionItemData";
 import { isClosed, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
@@ -195,7 +195,13 @@ export async function distributeSignedMinutes(
       const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
       return {
         byEmail: openActionsByEmail(id, items, people, users),
-        logins: new Set(users.map((u) => (u.email || "").trim().toLowerCase())),
+        // Any address of someone WITH a login: their login email, or the
+        // register email of a People entry linked to one.
+        logins: new Set(
+          [...users.map((u) => u.email), ...people.filter((p) => p.userId).map((p) => p.email)]
+            .map((e) => (e || "").trim().toLowerCase())
+            .filter(Boolean)
+        ),
       };
     } catch (err) {
       console.error("[minutes distribution] Could not read action items, sending without them:", err);
@@ -203,7 +209,8 @@ export async function distributeSignedMinutes(
     }
   })();
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
-  const period = minutesWhenLabel(record);
+  // The period only: the email's opening line already gives the date.
+  const period = formatPeriod(record.period);
 
   // Built once for the whole list, alongside the action lists. Null means it
   // could not be built, and the minutes go out with their link regardless.

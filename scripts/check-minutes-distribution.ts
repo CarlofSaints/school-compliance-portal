@@ -155,6 +155,12 @@ console.log("\nThe distribution list follows the MEETING, not the status");
   const base = { title: "T", body: "sgb" as const, period: { kind: "month" as const, year: 2026, month: 10 }, sections: [] };
   check("🔴 minutes with no date sign exactly as before (old signatures stay valid)", canonicalMinutes(base), ["T", "sgb", "October 2026"].join("\u001e"));
   checkThat("the meeting date IS part of what is signed", canonicalMinutes({ ...base, meetingDate: "2026-10-15" }) !== canonicalMinutes(base));
+  const { meetingDateOutsidePeriod } = await import("../lib/minutes");
+  check("a date inside its month agrees", meetingDateOutsidePeriod("2026-10-15", { kind: "month", year: 2026, month: 10 }), null);
+  checkThat("a date outside its month is refused", !!meetingDateOutsidePeriod("2026-11-02", { kind: "month", year: 2026, month: 10 }));
+  check("a date inside its quarter agrees", meetingDateOutsidePeriod("2026-11-02", { kind: "quarter", year: 2026, quarter: 4 }), null);
+  checkThat("a date outside a custom range is refused", !!meetingDateOutsidePeriod("2026-10-20", { kind: "custom", year: 2026, from: "2026-10-01", to: "2026-10-15" }));
+  check("no date: nothing to disagree with", meetingDateOutsidePeriod(undefined, { kind: "month", year: 2026, month: 10 }), null);
   check("a month reads 'in <month>'",meetingWhen({ kind: "month", year: 2026, month: 10 }), "in October 2026");
 
   await sendMinutesSignedEmail("d@x.za", "Derek", "m1", "Ad hoc <SGB>", "October 2026", "in October 2026", ["Dee (Principal)"], "3F9A1C0B7E22", map.get("derek@school.co.za")!, true, null);

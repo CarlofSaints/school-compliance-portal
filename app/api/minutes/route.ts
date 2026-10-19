@@ -7,7 +7,7 @@ import {
   saveOriginalFile,
   type MinutesRecord,
 } from "@/lib/minutesData";
-import { attendeesFromRegister, checkPeriod, checkMeetingDate, withApologiesSection, type MeetingPeriod } from "@/lib/minutes";
+import { attendeesFromRegister, checkPeriod, checkMeetingDate, meetingDateOutsidePeriod, withApologiesSection, type MeetingPeriod } from "@/lib/minutes";
 import { getTemplate, sectionsFromTemplate } from "@/lib/minutesTemplates";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -128,6 +128,8 @@ export async function POST(req: NextRequest) {
     const meetingDate = String(form.get("meetingDate") || "");
     const dateProblem = checkMeetingDate(meetingDate);
     if (dateProblem) return NextResponse.json({ error: dateProblem }, { status: 400 });
+    const outside = meetingDateOutsidePeriod(meetingDate, period);
+    if (outside) return NextResponse.json({ error: outside }, { status: 400 });
 
     const record = await createMinutes({
       id: uuidv4(),
