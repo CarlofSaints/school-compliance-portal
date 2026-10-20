@@ -17,7 +17,7 @@ import {
   TableBorders,
   TableLayoutType,
 } from "docx";
-import type { SchoolBranding } from "./branding";
+import { cleanWordFooter, type SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
   formatPeriod,
@@ -47,6 +47,9 @@ import type { MinutesRecord } from "./minutesData";
 // Building the OOXML directly embeds the crest as bytes, which is the only way
 // this survives being emailed to a Principal.
 // ---------------------------------------------------------------------------
+
+/** Every footer run: small and grey. */
+const FOOTER_RUN = { size: 16, color: "888888" } as const;
 
 /** Wide enough to write a signature on, in twips (1/20 pt). ~7cm. */
 const SIGNATURE_LINE_WIDTH = 4000;
@@ -599,6 +602,7 @@ export async function buildMinutesDocx(
     );
   }
 
+  const footerText = cleanWordFooter(branding.wordFooter ?? "");
   const doc = new Document({
     creator: branding.fullName,
     title: record.title,
@@ -617,15 +621,16 @@ export async function buildMinutesDocx(
           default: new Footer({
             children: [
               // The school's own footer text (directors, address), one run per
-              // line so its line breaks survive. docx escapes the text itself.
-              ...(branding.wordFooter
+              // line so its line breaks survive. docx escapes & < " but NOT
+              // control characters, so it is cleaned again here: a footer
+              // saved before the cleaning existed must not break the file.
+              ...(footerText
                 ? [
                     new Paragraph({
                       alignment: AlignmentType.CENTER,
                       spacing: { after: 60 },
-                      children: branding.wordFooter.split(/\r?\n/).map(
-                        (line, i) =>
-                          new TextRun({ text: line, break: i ? 1 : undefined, size: 16, color: "888888" })
+                      children: footerText.split("\n").map(
+                        (line, i) => new TextRun({ ...FOOTER_RUN, text: line, break: i ? 1 : undefined })
                       ),
                     }),
                   ]
@@ -634,13 +639,12 @@ export async function buildMinutesDocx(
                 alignment: AlignmentType.CENTER,
                 children: [
                   new TextRun({
+                    ...FOOTER_RUN,
                     text: `${branding.fullName}  |  ${MEETING_BODY_LABELS[record.body]} minutes  |  ${minutesWhenLabel(record)}  |  Page `,
-                    size: 16,
-                    color: "888888",
                   }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "888888" }),
-                  new TextRun({ text: " of ", size: 16, color: "888888" }),
-                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: "888888" }),
+                  new TextRun({ ...FOOTER_RUN, children: [PageNumber.CURRENT] }),
+                  new TextRun({ ...FOOTER_RUN, text: " of " }),
+                  new TextRun({ ...FOOTER_RUN, children: [PageNumber.TOTAL_PAGES] }),
                 ],
               }),
             ],

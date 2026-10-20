@@ -8,6 +8,7 @@ import SchoolBrandingFields, {
 } from "@/components/SchoolBrandingFields";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
+import { MAX_WORD_FOOTER } from "@/lib/branding";
 
 export default function BrandingPage() {
   const t = useT();
@@ -226,11 +227,11 @@ export default function BrandingPage() {
                 id="word-footer"
                 value={wordFooter}
                 onChange={(e) => setWordFooter(e.target.value)}
-                maxLength={500}
+                maxLength={MAX_WORD_FOOTER}
                 rows={3}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               />
-              <p className="text-xs text-gray-400 mt-1 text-right">{wordFooter.length}/500</p>
+              <p className="text-xs text-gray-400 mt-1 text-right">{wordFooter.length}/{MAX_WORD_FOOTER}</p>
             </div>
 
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">

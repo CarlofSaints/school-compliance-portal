@@ -5,8 +5,8 @@ import {
   patchStoredBranding,
   saveLogo,
   removeLogo,
-  MAX_WORD_FOOTER,
 } from "@/lib/brandingData";
+import { cleanWordFooter } from "@/lib/branding";
 import { checkColours, normaliseHex } from "@/lib/brandingColors";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
@@ -116,11 +116,15 @@ export async function PUT(req: NextRequest) {
       ...(shortName !== undefined ? { shortName: String(shortName).trim() } : {}),
       ...(primary ? { primary: normaliseHex(primary)! } : {}),
       ...(accent ? { accent: normaliseHex(accent)! } : {}),
-      ...(replyTo !== undefined ? { replyTo: String(replyTo).trim() } : {}),
-      // Cut rather than refused: the form already stops at the limit, so only
-      // a hand-made request is ever longer.
-      ...(wordFooter !== undefined
-        ? { wordFooter: String(wordFooter).trim().slice(0, MAX_WORD_FOOTER) }
+      // A string sets it, null clears it, anything else leaves it alone
+      // (String(null) used to save the word "null").
+      ...(typeof replyTo === "string" || replyTo === null
+        ? { replyTo: (replyTo ?? "").trim() }
+        : {}),
+      // Cleaned and cut rather than refused: the form already stops at the
+      // limit, so only a hand-made request is ever longer.
+      ...(typeof wordFooter === "string" || wordFooter === null
+        ? { wordFooter: cleanWordFooter(wordFooter ?? "") }
         : {}),
     }));
 

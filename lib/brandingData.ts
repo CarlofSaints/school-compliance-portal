@@ -43,9 +43,6 @@ export interface StoredBranding {
   };
 }
 
-/** Longest Word minutes footer a school can save. */
-export const MAX_WORD_FOOTER = 500;
-
 export async function getStoredBranding(): Promise<StoredBranding> {
   return readJson<StoredBranding>(BRANDING_PATH, {});
 }
@@ -145,7 +142,7 @@ export function applyStoredBranding(
     // front of it changes. See lib/emailIdentity.ts.
     fromEmail: buildFromAddress(fullName, base.fromEmail),
     replyTo: buildReplyTo(stored.replyTo),
-    wordFooter: stored.wordFooter?.trim() || undefined,
+    wordFooter: stored.wordFooter || undefined,
     fullName,
     // 🔴 Falls back to the school's OWN name before the code default.
     //

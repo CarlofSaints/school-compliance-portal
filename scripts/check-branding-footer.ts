@@ -80,6 +80,32 @@ async function main() {
   check("no raw special chars leak", xml.includes("<Pty>"), false);
   check("page numbers still there", xml.includes("PAGE"), true);
 
+  // --- bad input: control characters, lone surrogates, lines, non-strings
+  const { cleanWordFooter } = await import("../lib/branding");
+  const bad = /[\u0000-\u0009\u000B-\u001F]|[\uD800-\uDFFF]/;
+  check("control chars stripped", cleanWordFooter("A\vB\u0001C\fD\u0000E\tF"), "ABCDEF");
+  check("lone surrogates stripped, real emoji kept", cleanWordFooter("x\uD800y\uDC00z 😀"), "xyz 😀");
+  check("CR, CRLF and LF all split", cleanWordFooter("a\rb\r\nc\nd"), "a\nb\nc\nd");
+  check("blank runs collapse, ends dropped", cleanWordFooter("\n \nA\n\n \n\nB\n\n"), "A\n\nB");
+  check("at most 6 lines", cleanWordFooter("1\n2\n3\n4\n5\n6\n7\n8"), "1\n2\n3\n4\n5\n6");
+  const cut = cleanWordFooter("x".repeat(498) + " 😀😀");
+  check("cut by code point, never half an emoji", [Array.from(cut).length, cut.endsWith(" 😀")], [500, true]);
+  check("cut then trimmed, no trailing newline", cleanWordFooter("x".repeat(499) + "\ny"), "x".repeat(499));
+
+  await put(admin, { wordFooter: "Dir\vA\u0001B\nReg 1" });
+  check("route strips control chars on save", (await getStoredBranding()).wordFooter, "DirAB\nReg 1");
+  // An older, uncleaned footer straight in the store: the docx cleans it too.
+  await saveStoredBranding({ ...(await getStoredBranding()), wordFooter: "Old\vX\u0001Y\uD800" });
+  const dirty = await footerXml();
+  check("docx footer has no control chars or lone surrogates", [dirty.includes("OldXY"), bad.test(dirty.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ""))], [true, false]);
+
+  await put(admin, { wordFooter: { x: 1 }, replyTo: 42 });
+  check("non-string footer ignored", (await getStoredBranding()).wordFooter, "Old\vX\u0001Y\uD800");
+  check("non-string reply-to refused", (await put(admin, { replyTo: { a: 1 } })).status, 400);
+  await put(admin, { wordFooter: null, replyTo: null });
+  const cleared = await getStoredBranding();
+  check("null clears footer and reply-to (not the word null)", [cleared.wordFooter, cleared.replyTo], ["", ""]);
+
   await put(admin, { wordFooter: "   " });
   check("blank saves as empty", (await getStoredBranding()).wordFooter, "");
   const empty = await footerXml();

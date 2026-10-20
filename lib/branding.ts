@@ -157,6 +157,29 @@ const KEY = (process.env.NEXT_PUBLIC_SCHOOL || "generic").toLowerCase();
 
 export const branding: SchoolBranding = SCHOOLS[KEY] ?? SCHOOLS.generic;
 
+/** Longest Word minutes footer, in characters, and most lines it may have. */
+export const MAX_WORD_FOOTER = 500;
+export const MAX_WORD_FOOTER_LINES = 6;
+
+/**
+ * The Word minutes footer as it may be stored and printed. 🔴 docx writes
+ * control characters and lone surrogates into the XML as they are, and Word
+ * then refuses to open the file, so those go. Blank-line runs collapse to one,
+ * blank lines at either end go, then the line and length caps (the length by
+ * code point, so an emoji is never cut in half).
+ */
+export function cleanWordFooter(raw: string): string {
+  const lines = raw
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    .split(/\r\n|\r|\n/)
+    .map((l) => l.replace(/[\u0000-\u001F\u007F￾￿]/g, "").trimEnd())
+    .filter((l, i, all) => l.trim() !== "" || (i > 0 && all[i - 1].trim() !== ""));
+  return Array.from(lines.join("\n").trim().split("\n").slice(0, MAX_WORD_FOOTER_LINES).join("\n"))
+    .slice(0, MAX_WORD_FOOTER)
+    .join("")
+    .trim();
+}
+
 /** Convert a "#RRGGBB" hex string to an [r, g, b] tuple for jsPDF. */
 export function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
