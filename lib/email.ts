@@ -1345,9 +1345,9 @@ function bookingButton(PRIMARY: string, href: string, label: string): string {
   return `${button(`${href}`, `${label}`, PRIMARY)}`;
 }
 
-async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string) => string): Promise<boolean> {
+async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string) => string, meta: EmailMeta = { kind: "booking" }): Promise<boolean> {
   const b = await resolveBranding();
-  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary)), b.replyTo, undefined, undefined, { kind: "booking" });
+  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary)), b.replyTo, undefined, undefined, meta);
 }
 
 const CALENDAR_LINK = () => `${SITE_URL}/bookings`;
@@ -1453,7 +1453,10 @@ export function sendRoomRequestEmail(
     ${bookingButton(P, `${link}?action=approve`, "Let them have it")}
     <p style="margin:16px 0 0;"><a href="${link}?action=decline" style="color:${P};">Or decline, and say why</a></p>
     <p style="color:#666;font-size:13px;">You will need to be signed in to the portal to answer.</p>
-  `);
+  `,
+    // The reason was typed for the holder alone: not kept in the sent box.
+    { kind: "booking.request", personal: true }
+  );
 }
 
 /** How many cancelled bookings one email lists; the rest are counted. */

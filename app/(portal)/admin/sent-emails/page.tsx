@@ -64,8 +64,13 @@ export default function SentEmailsPage() {
     if (!res.ok) {
       // The page's own words, so they are translated.
       setError(t("Could not load the sent emails."));
-      // A failed "Show older" keeps the rows already shown.
-      if (!before) setRows([]);
+      // A failed "Show older" keeps the rows already shown; a failed month
+      // load drops that month's paging too.
+      if (!before) {
+        setRows([]);
+        setNext(undefined);
+        setTotal(0);
+      }
       return;
     }
     setError("");

@@ -82,20 +82,27 @@ const waiting: (() => void)[] = [];
 async function inSlot(fn: () => Promise<void>): Promise<void> {
   if (active >= MAX_WRITES) await new Promise<void>((r) => waiting.push(r));
   else active++;
-  try {
-    // A hung storage call gives its slot back after 30s (the write itself
-    // carries on), so one stuck put cannot block every later record.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      fn(),
-      new Promise<void>((r) => (timer = setTimeout(() => { console.error("[sent emails] write slow, slot released"); r(); }, 30_000))),
-    ]);
-    clearTimeout(timer);
-  } finally {
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
     // Hand the slot straight to the next in line, so none can jump in between.
     const nextUp = waiting.shift();
     if (nextUp) nextUp();
     else active--;
+  };
+  // A hung storage call gives its slot back after 30s so one stuck put cannot
+  // block every later record, but this promise still waits for the write
+  // itself: after() must not think it is done while it is mid-put.
+  const timer = setTimeout(() => {
+    console.error("[sent emails] write slow, slot released");
+    release();
+  }, 30_000);
+  try {
+    await fn();
+  } finally {
+    clearTimeout(timer);
+    release();
   }
 }
 
@@ -132,7 +139,8 @@ async function writeSentEmail(
 
 /** Months that have mail, newest first. */
 export async function sentEmailMonths(): Promise<string[]> {
-  return activityMonths(["sent-emails"]);
+  // Strict: an outage must not read as "no mail in any month".
+  return activityMonths(["sent-emails"], true);
 }
 
 export const SENT_PAGE_SIZE = 200;

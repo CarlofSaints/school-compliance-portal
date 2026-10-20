@@ -1,4 +1,4 @@
-import { readJson, readJsonTolerant, writeJson, listFiles, listFolders } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, listFiles, listFolders, listFoldersStrict } from "./controlData";
 
 // ---------------------------------------------------------------------------
 // The audit trail. One per school, and the school can see its own.
@@ -136,8 +136,8 @@ export function currentMonth(): string {
 
 /** Months with at least one entry in the given partitions, newest first.
  *  A folder-only listing: it never pages through a month's entries. */
-export async function activityMonths(folders: string[] = ["activity"]): Promise<string[]> {
-  const lists = await Promise.all(folders.map((f) => listFolders(f)));
+export async function activityMonths(folders: string[] = ["activity"], strict = false): Promise<string[]> {
+  const lists = await Promise.all(folders.map((f) => (strict ? listFoldersStrict(f) : listFolders(f))));
   return [...new Set(lists.flat())].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort().reverse();
 }
 
