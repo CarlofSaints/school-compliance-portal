@@ -31,57 +31,43 @@ export async function POST(req: NextRequest) {
     ]);
     if (limited) return limited;
 
-    // Trim before the lookup. getUserByEmail lowercases both sides but does not
-    // trim, and an address pasted into the form with a trailing space would
-    // otherwise miss an account that is sitting right there.
-    const user = await getUserByEmail(email.trim());
-    if (!user) return same;
-
-    if (!isEmailConfigured()) {
-      // sendEmail() logs and returns true when Resend is not wired up, so
-      // without this the caller would be told a link was sent that never was.
-      console.error("[forgot-password] No RESEND_API_KEY — cannot send to", user.email);
-      return NextResponse.json(
-        {
-          error:
-            "Password reset email is not configured on this site. Please contact your administrator.",
-        },
-        { status: 503 }
+    // The lookup and the send run AFTER the reply, so it takes the same time
+    // (and is the same answer) for an address with an account or without, and
+    // whether or not email is set up. Failures go to the server log.
+    const ip = ipOf(req);
+    const device = deviceOf(req.headers.get("user-agent"));
+    await afterResponse(async () => {
+      const user = await getUserByEmail(email.trim());
+      if (!user) return;
+      if (!isEmailConfigured()) {
+        // sendEmail() logs and returns true when Resend is not wired up.
+        console.error("[forgot-password] No RESEND_API_KEY, cannot send to", user.id);
+        return;
+      }
+      const at = new Date().toISOString();
+      const sent = await sendPasswordResetLinkEmail(
+        user.email,
+        user.name,
+        createResetToken(user),
+        Math.round(RESET_TTL_MS / 60000)
       );
-    }
-
-    const token = createResetToken(user);
-    const sent = await sendPasswordResetLinkEmail(
-      user.email,
-      user.name,
-      token,
-      Math.round(RESET_TTL_MS / 60000)
-    );
-    if (!sent) {
-      console.error("[forgot-password] Send failed for", user.email);
-      return NextResponse.json(
-        { error: "The reset email could not be sent. Please try again shortly." },
-        { status: 502 }
-      );
-    }
-    // Only for a real account: an unknown address is not logged here, or the
-    // log would fill with whatever a stranger types into a public form.
-    // After the reply, so a logging problem can never fail the request. (Not
-    // a timing measure here: sending the email already makes a real account
-    // answer slower than an unknown address.)
-    const actor = { ...actorFromUser(req, user), ip: ipOf(req) };
-    const at = new Date().toISOString();
-    await afterResponse(() =>
-      recordActivity({
+      if (!sent) {
+        console.error("[forgot-password] Send failed for", user.id);
+        return;
+      }
+      // Only for a real account: an unknown address is not logged, or the
+      // log would fill with whatever a stranger types into a public form.
+      await recordActivity({
         at,
-        ...actor,
+        ...actorFromUser(req, user),
+        ip,
         action: "auth.password_reset_requested",
         entity: "password",
         entityId: user.id,
         summary: "Asked for a password reset link",
-        detail: { device: deviceOf(req.headers.get("user-agent")) },
-      })
-    );
+        detail: { device },
+      });
+    });
     return same;
   } catch (err) {
     console.error("[forgot-password] Failed:", err);

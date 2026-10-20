@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LIMITS, peek, hit, clear, tooMany, ipOf, type Limit } from "@/lib/rateLimit";
-import { getUserByEmail, getUserById, verifyPassword, type User } from "@/lib/userData";
+import { LIMITS, hit, clear, tooMany, ipOf, type Limit } from "@/lib/rateLimit";
+import { getUserByEmail, getUserById, verifyPassword, repairUserIndex, type User } from "@/lib/userData";
 import { getRoleById, resolveRolePermissions, requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { afterResponse, actorFromUser } from "@/lib/activityActor";
@@ -74,10 +74,8 @@ export async function POST(req: NextRequest) {
     // once the reply has gone: every sign-in and every wrong password for a
     // real account; ONE entry per connection per window for unknown
     // addresses; ONE entry when a connection is blocked or an account locks.
-    // Attempts on an already-locked account write NOTHING (no lookup, no
-    // tally): the one "Account locked" entry covers them, a bot gets no
-    // storage work per request, and a right password typed during the lock
-    // is not miscounted as a wrong one.
+    // Attempts on an already-locked account are counted but never looked up
+    // or logged: the one "Account locked" entry covers them.
     // Logged as the address the limiter counted, so an investigator sees
     // the one that was actually counted or locked.
     const ip = ipOf(req);
@@ -111,16 +109,24 @@ export async function POST(req: NextRequest) {
       return tooMany(LIMITS.loginIp, ipHit);
     }
     const account = String(email).trim().toLowerCase();
-    const locked = await peek(LIMITS.loginAccount, account);
-    if (!locked.ok) return tooMany(LIMITS.loginAccount, locked);
+    // Counted BEFORE the password is checked, in one guarded write, so
+    // attempts sent at the same moment cannot all pass on the old count. The
+    // right password clears it below.
+    const accountHit = await hit(LIMITS.loginAccount, account);
+    if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
 
-    const user = await getUserByEmail(email);
+    // Index only, and the password is compared even with no account, so an
+    // unknown address answers in the same time as a wrong password.
+    const user = await getUserByEmail(email, false);
+    const valid = await verifyPassword(user, password);
     if (!user) {
-      await hit(LIMITS.loginAccount, account);
       await afterResponse(async () => {
         // Only the first unknown address from this connection in a window.
         const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
         if (marker.count !== 1) return;
+        // An account missing from the index is found by the slow scan here,
+        // after the reply, and put back so the next attempt works.
+        if (await getUserByEmail(email)) await repairUserIndex();
         await recordActivity({
           at,
           actorName: UNKNOWN_ADDRESS,
@@ -137,9 +143,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = await verifyPassword(user, password);
     if (!valid) {
-      const accountHit = await hit(LIMITS.loginAccount, account);
       // When the lock lifts, from the limiter's own answer, taken NOW (not
       // when the log write runs) so summary and detail say the same thing.
       const lockedUntil = Date.now() + accountHit.retryAfter * 1000;

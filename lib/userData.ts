@@ -83,7 +83,10 @@ export async function getUserById(id: string): Promise<User | undefined> {
 }
 
 export async function getUserByEmail(
-  email: string
+  email: string,
+  // false = index only. Sign-in passes it so the slow scan below never runs
+  // while somebody waits on the reply (its time would say "no such account").
+  scanOwnCopies = true
 ): Promise<User | undefined> {
   // Trim as well as lowercase. An address is a join key, and one pasted into a
   // form with a trailing space would otherwise miss an account sitting right
@@ -99,6 +102,7 @@ export async function getUserByEmail(
   // version of the shared list came back — the difference between a password
   // change that takes effect now and one that takes effect in a minute.
   if (fromIndex) return (await getUserById(fromIndex.id)) ?? fromIndex;
+  if (!scanOwnCopies) return undefined;
 
   // Not in the index at all. That is recoverable, because every account also
   // keeps its own copy: scan those rather than telling somebody who really does
@@ -246,9 +250,15 @@ export async function repairUserIndex(): Promise<{
   return { restored, backfilled, scanned: ids.length };
 }
 
+// A real bcrypt hash (same cost as every account) that no account carries.
+// With no user, the password is still compared against it, so a sign-in for an
+// address with no account takes as long as one with a wrong password.
+const NO_ACCOUNT_HASH = "$2b$10$z4bmtVRYEwY96ZKLlJYI2uWTaw6cyKw0.YLUo1.8obyLm/1ct3B8G";
+
 export async function verifyPassword(
-  user: User,
+  user: User | undefined,
   password: string
 ): Promise<boolean> {
-  return bcrypt.compare(password, user.password);
+  const match = await bcrypt.compare(password, user?.password || NO_ACCOUNT_HASH);
+  return !!user && match;
 }
