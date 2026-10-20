@@ -435,6 +435,11 @@ export async function listFolders(dirPath: string): Promise<string[]> {
   return listChildren(dirPath, true).catch(() => []);
 }
 
+/** listFolders, but a storage error is THROWN. */
+export async function listFoldersStrict(dirPath: string): Promise<string[]> {
+  return listChildren(dirPath, true);
+}
+
 /** listFiles, but a storage error is THROWN rather than read as an empty
  *  folder, for callers where "nothing there" would be a wrong answer. */
 export async function listFilesStrict(dirPath: string): Promise<string[]> {

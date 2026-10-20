@@ -7,6 +7,7 @@ import SchoolCrest from "@/components/SchoolCrest";
 import { useState } from "react";
 import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
+import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityAccess";
 
 interface NavChild {
   label: string;
@@ -185,6 +186,11 @@ const navItems: NavItem[] = [
         permissions: ["manage_action_items", "manage_people"],
       },
       { label: tk("Activity Log"), href: "/activity", permission: "manage_users" },
+      {
+        label: tk("Sent Emails"),
+        href: "/admin/sent-emails",
+        permissions: ACTIVITY_VIEW_PERMISSIONS, // the same people the API lets in
+      },
       { label: tk("Backup Data"), href: "/admin/backup", permission: "manage_roles" },
     ],
   },

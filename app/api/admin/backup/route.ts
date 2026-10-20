@@ -45,6 +45,9 @@ export async function GET(req: NextRequest) {
         token,
       });
       for (const blob of result.blobs) {
+        // The sent box is a copy of mail already sent, and it grows with every
+        // email: left out so the school's own data keeps fitting the zip.
+        if (/(^|\/)sent-email(s|-bodies)\//.test(blob.pathname)) continue;
         allBlobs.push({ pathname: blob.pathname, url: blob.url, size: blob.size });
       }
       cursor = result.hasMore ? result.cursor : undefined;
