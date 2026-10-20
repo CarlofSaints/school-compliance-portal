@@ -43,32 +43,33 @@ export default function SentEmailsPage() {
   const [open, setOpen] = useState<(Row & { html?: string; failed?: boolean }) | null>(null);
 
   // Without "before" the list is replaced; with it (Show older) the next page
-  // is added. A response for a month no longer shown is ignored.
-  const shownMonth = useRef("");
+  // is added. Any response overtaken by a newer month load is ignored.
+  const loadSeq = useRef(0);
   const load = useCallback(async (m: string, before?: string) => {
     const q = new URLSearchParams();
     if (m) q.set("month", m);
     if (before) q.set("before", before);
-    if (!before) shownMonth.current = m;
+    const mine = before ? loadSeq.current : ++loadSeq.current;
     let res: Response;
     try {
       res = await authFetch(`/api/sent-emails?${q}`, { cache: "no-store" });
     } catch {
+      if (mine !== loadSeq.current) return;
       setError(t("Could not load the sent emails."));
       setRows((prev) => prev ?? []);
       return;
     }
     const data = await res.json().catch(() => ({}));
-    if (before && data.month !== shownMonth.current) return;
+    if (mine !== loadSeq.current) return;
     if (!res.ok) {
       setError(data.error || t("Could not load the sent emails."));
-      setRows([]);
+      // A failed "Show older" keeps the rows already shown.
+      if (!before) setRows([]);
       return;
     }
     setError("");
     setMonth(data.month);
     setMonths(data.months || []);
-    shownMonth.current = data.month;
     setTotal(data.total || 0);
     setNext(data.next);
     setRows((prev) => {
@@ -194,10 +195,10 @@ export default function SentEmailsPage() {
               <iframe sandbox="" srcDoc={open.html} title={open.subject || t("Sent emails")} className="w-full flex-1 min-h-[60vh] rounded-b-xl" />
             ) : (
               <p className="p-6 text-gray-500 text-sm">
-                {open.failed
-                  ? t("Could not open this email. Try again.")
-                  : open.hidden
-                    ? hiddenText(open.hidden)
+                {open.hidden
+                  ? hiddenText(open.hidden)
+                  : open.failed || open.hasBody
+                    ? t("Could not open this email. Try again.")
                     : t("This email was written for one person from things only they may see, so its wording is not kept.")}
               </p>
             )}

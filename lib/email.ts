@@ -910,7 +910,7 @@ export async function sendApprovalReminderEmail(
 // Titles, descriptions and notes are typed by people, and an apostrophe or an
 // angle bracket in a title should not be able to break the layout of the mail.
 // Every value a person typed, in every template, goes through this.
-function esc(value: string): string {
+export function esc(value: string): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

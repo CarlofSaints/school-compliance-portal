@@ -1,5 +1,6 @@
-import { writeFile, readFile, listFilesStrict, readJson, readJsonTolerant } from "./controlData";
+import { writeFile, readFile, listFilesStrict, readJson } from "./controlData";
 import { activityMonths } from "./activityLog";
+import { esc } from "./email";
 
 // ---------------------------------------------------------------------------
 // The SENT BOX: every email the portal sends, as it was sent (Carl, 19 Oct
@@ -54,10 +55,9 @@ const BLANK = "••••••";
 export function redactEmailHtml(html: string, secrets: string[] = []): string {
   let out = html;
   // As typed AND as the template escaped it: a password "Tom&Jerry1" sits in
-  // the HTML as "Tom&amp;Jerry1".
-  const escaped = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // the HTML as "Tom&amp;Jerry1". The templates' own esc(), so the two can never drift.
   for (const s of secrets.filter((x) => x && x.length >= 3)) {
-    out = out.split(escaped(s)).join(BLANK).split(s).join(BLANK);
+    out = out.split(esc(s)).join(BLANK).split(s).join(BLANK);
   }
   return out
     // ?token=… / &token=… / &amp;token=… / &code=… in any link
@@ -72,9 +72,25 @@ function names(at: string, id: string) {
   return { summary: `sent-emails/${month}/${base}.json`, body: `sent-email-bodies/${month}/${base}.html` };
 }
 
-// One write at a time per instance: a mailout to 300 people queues its
-// records instead of firing 600 storage writes at once.
-let queue: Promise<void> = Promise.resolve();
+// At most a few writes at once per instance: a mailout to 300 people neither
+// fires 600 storage writes at once nor trickles them one by one past the
+// function's time limit (which would drop the rest unlogged).
+const MAX_WRITES = 8;
+let active = 0;
+const waiting: (() => void)[] = [];
+
+async function inSlot(fn: () => Promise<void>): Promise<void> {
+  if (active >= MAX_WRITES) await new Promise<void>((r) => waiting.push(r));
+  else active++;
+  try {
+    await fn();
+  } finally {
+    // Hand the slot straight to the next in line, so none can jump in between.
+    const nextUp = waiting.shift();
+    if (nextUp) nextUp();
+    else active--;
+  }
+}
 
 /** Never throws: a sent box that cannot be written must not fail a send. */
 export function recordSentEmail(
@@ -82,18 +98,18 @@ export function recordSentEmail(
   html: string | undefined,
   secrets: string[] = []
 ): Promise<void> {
-  const run = queue.then(() => writeSentEmail(e, html, secrets));
-  queue = run;
-  return run;
+  // The time it was sent, not the time the record gets written.
+  const at = new Date().toISOString();
+  return inSlot(() => writeSentEmail(at, e, html, secrets));
 }
 
 async function writeSentEmail(
+  at: string,
   e: Omit<SentEmail, "id" | "at" | "hasBody">,
   html: string | undefined,
   secrets: string[] = []
 ): Promise<void> {
   try {
-    const at = new Date().toISOString();
     const id = crypto.randomUUID();
     const files = names(at, id);
     const entry: SentEmail = { ...e, id, at, subject: redactEmailHtml(e.subject, secrets), hasBody: html !== undefined };
@@ -125,7 +141,8 @@ export async function readSentEmails(
   const all = (await listFilesStrict(`sent-emails/${month}`)).filter((n) => n.endsWith(".json")).sort().reverse();
   const older = before ? all.filter((n) => n < before) : all;
   const slice = older.slice(0, SENT_PAGE_SIZE);
-  const read = await Promise.all(slice.map((n) => readJsonTolerant<SentEmail | null>(`sent-emails/${month}/${n}`, null)));
+  // readJson: a missing file is skipped, any other storage error throws.
+  const read = await Promise.all(slice.map((n) => readJson<SentEmail | null>(`sent-emails/${month}/${n}`, null)));
   return {
     emails: read.filter((e): e is SentEmail => !!e),
     total: all.length,

@@ -77,6 +77,11 @@ async function main() {
   check("newest first (by send time)", sent.every((e, i) => i === 0 || sent[i - 1].at >= e.at), true);
   check("a wrong id finds nothing", await readSentEmail(code!.at, "00000000-0000-0000-0000-000000000000"), null);
 
+  // --- many at once: the write limiter loses none ---
+  const { recordSentEmail } = await import("../lib/sentEmails");
+  await Promise.all(Array.from({ length: 30 }, (_, i) => recordSentEmail({ to: `b${i}@x.za`, subject: "Bulk", kind: "check.bulk", ok: true }, "<p>hi</p>")));
+  check("30 records at once are all written", (await readSentEmails(month)).total, 35);
+
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);
 }
