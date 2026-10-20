@@ -2,7 +2,7 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
-import { evaluateProgress } from "@/lib/approvalEngine";
+import { evaluateProgress, mayActOnApproved } from "@/lib/approvalEngine";
 import type { RequiredApprover } from "@/lib/approvalEngine";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -318,11 +318,13 @@ export default function SpendDetailPage() {
     canApprove &&
     !alreadyApproved &&
     (data.status === "pending" || data.status === "pending_decision");
-  const canComplete = data.status === "approved" && (canApprove || isAdmin);
+  // Same rule as the server (select-quote, complete).
+  const actsOnApproved = !!session && mayActOnApproved(data, session);
+  const canComplete = data.status === "approved" && actsOnApproved;
   const canSelectQuote =
     data.status === "approved" &&
     data.selectedQuoteIndex === undefined &&
-    (canApprove || isAdmin);
+    actsOnApproved;
 
   // Manual execution progress (falls back to a status-derived default).
   const PROGRESS_OPTS = [

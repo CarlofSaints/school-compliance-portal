@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { mayActOnApproved } from "@/lib/approvalEngine";
 
 export async function POST(
   req: NextRequest,
@@ -16,6 +17,12 @@ export async function POST(
       { error: "Spend application not found" },
       { status: 404 }
     );
+  }
+
+  // The permission alone is not enough: only this application's approvers or
+  // a spend admin, and never the person whose application it is.
+  if (!mayActOnApproved(app, session)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (app.status !== "approved") {

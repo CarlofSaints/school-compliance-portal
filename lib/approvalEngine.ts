@@ -171,6 +171,16 @@ export function isRequiredApprover(
   return (app.requiredApprovers || []).some((a) => a.userId === userId);
 }
 
+/** Who may pick the quote, or close the project, on an APPROVED application:
+ *  one of its required approvers or a spend admin, never its own submitter. */
+export function mayActOnApproved(
+  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId">,
+  user: { id: string; permissions: string[] }
+): boolean {
+  if (app.submittedBy === user.id || app.applicantUserId === user.id) return false;
+  return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
+}
+
 // Names are passed in rather than looked up so this stays pure and usable on
 // the client. personNames is keyed by person id, tagNames by tag id.
 export function summariseRequirements(

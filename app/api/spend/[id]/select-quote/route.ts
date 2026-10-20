@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { mayActOnApproved } from "@/lib/approvalEngine";
+import { getApprovalSettings, tierForAmount } from "@/lib/approvalSettings";
 
 export async function POST(
   req: NextRequest,
@@ -16,6 +18,12 @@ export async function POST(
       { error: "Spend application not found" },
       { status: 404 }
     );
+  }
+
+  // The permission alone is not enough: only this application's approvers or
+  // a spend admin, and never the person whose application it is.
+  if (!mayActOnApproved(app, session)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (app.status !== "approved") {
@@ -49,6 +57,17 @@ export async function POST(
 
     const selectedQuote = app.quoteDetails[quoteIndex];
     const approvedAmount = selectedQuote.priceExclVat || 0;
+    // A quote above what was approved may not carry the application into a
+    // band whose approvers never saw it.
+    const basis = app.approvedAmount ?? app.estimatedAmount;
+    const { tiers } = await getApprovalSettings();
+    const band = tierForAmount(tiers, approvedAmount);
+    if (approvedAmount > basis && (!band || band.id !== tierForAmount(tiers, basis)?.id)) {
+      return NextResponse.json(
+        { error: "This quote is above the approval band this application was approved in. Submit a new application for the higher amount." },
+        { status: 409 }
+      );
+    }
 
     await updateSpendApplication(id, {
       selectedQuoteIndex: quoteIndex,
