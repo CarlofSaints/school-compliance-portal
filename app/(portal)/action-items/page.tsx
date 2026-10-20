@@ -29,6 +29,7 @@ import {
   addDays,
 } from "@/lib/actionItems";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
+import { csvCell } from "@/lib/csv";
 
 export interface DirectoryPerson {
   id: string;
@@ -414,7 +415,7 @@ export default function ActionItemsPage() {
       "Last update",
       "Raised by",
     ];
-    const quote = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const quote = csvCell;
     const rows = sorted.map((item) => [
       quote(item.ref),
       quote(item.title),
