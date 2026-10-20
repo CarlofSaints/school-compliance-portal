@@ -154,7 +154,7 @@ export default function SentEmailsPage() {
             {rows === null ? (
               <tr><td colSpan={5} className="px-4 py-6 text-gray-400">{t("Loading...")}</td></tr>
             ) : shown.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-gray-400">{q ? t("No loaded emails match your search.") : t("No emails sent yet.")}</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-gray-400">{q ? t("No loaded emails match your search.") : error ? "" : t("No emails sent yet.")}</td></tr>
             ) : (
               shown.map((r) => (
                 <tr key={r.id} onClick={() => void show(r)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">

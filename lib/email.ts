@@ -528,7 +528,8 @@ async function sendEmail(
   /** The body to send instead if the message has to go without its
    *  attachments, so it does not promise a file that is not there. */
   htmlWithoutAttachments?: string,
-  meta: EmailMeta = { kind: "other" }
+  // Fails CLOSED: a send that forgets its meta keeps neither subject nor body.
+  meta: EmailMeta = { kind: "other", personal: true }
 ): Promise<boolean> {
   const r = await deliver(from, to, subject, html, replyTo, attachments, htmlWithoutAttachments);
   // Started now, not awaited here: a send loop never waits on the sent box.

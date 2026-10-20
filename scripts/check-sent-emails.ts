@@ -28,6 +28,8 @@ async function main() {
   // --- blanking ---
   check("a reset token in a link is blanked", redactEmailHtml('<a href="https://x/reset-password?token=abc.def">'), '<a href="https://x/reset-password?token=••••••">');
   check("a credits approval link keeps its id, loses its token", redactEmailHtml('href="https://x/credits-approve?id=r1&token=zz9"'), 'href="https://x/credits-approve?id=r1&token=••••••"');
+  check("any *token / key / sig param is blanked", redactEmailHtml('href="?setup_token=a1&key=b2&sig=c3"'), 'href="?setup_token=••••••&key=••••••&sig=••••••"');
+  check("an ?author= param is left alone", redactEmailHtml('href="?author=sam"'), 'href="?author=sam"');
   check("a booking request link is blanked", redactEmailHtml('href="https://x/bookings/request/t0k3n"'), 'href="https://x/bookings/request/••••••"');
   check("a named secret is blanked everywhere", redactEmailHtml("code K7P4QX, again K7P4QX", ["K7P4QX"]), "code ••••••, again ••••••");
 

@@ -60,8 +60,8 @@ export function redactEmailHtml(html: string, secrets: string[] = []): string {
     out = out.split(esc(s)).join(BLANK).split(s).join(BLANK);
   }
   return out
-    // ?token=… / &token=… / &amp;token=… / &code=… in any link
-    .replace(/([?&](?:amp;)?(?:token|code|t)=)[^"'&<\s]+/gi, `$1${BLANK}`)
+    // ?token=… / &token=… / &amp;token=… / &code=… (and any key/sig/otp) in any link
+    .replace(/([?&](?:amp;)?(?:\w*token|code|t|key|sig|signature|otp|auth)=)[^"'&<\s]+/gi, `$1${BLANK}`)
     // /bookings/request/<token>
     .replace(/(\/bookings\/request\/)[^"'<\s]+/g, `$1${BLANK}`);
 }
@@ -83,7 +83,14 @@ async function inSlot(fn: () => Promise<void>): Promise<void> {
   if (active >= MAX_WRITES) await new Promise<void>((r) => waiting.push(r));
   else active++;
   try {
-    await fn();
+    // A hung storage call gives its slot back after 30s (the write itself
+    // carries on), so one stuck put cannot block every later record.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      fn(),
+      new Promise<void>((r) => (timer = setTimeout(() => { console.error("[sent emails] write slow, slot released"); r(); }, 30_000))),
+    ]);
+    clearTimeout(timer);
   } finally {
     // Hand the slot straight to the next in line, so none can jump in between.
     const nextUp = waiting.shift();
@@ -138,6 +145,8 @@ export async function readSentEmails(
   before?: string
 ): Promise<{ emails: SentEmail[]; total: number; next?: string }> {
   if (!/^\d{4}-\d{2}$/.test(month)) return { emails: [], total: 0 };
+  // shortcut: lists the whole month per page; fine for a school's few thousand
+  // mails a month, keep a per-month index if a month ever reaches ~20k.
   const all = (await listFilesStrict(`sent-emails/${month}`)).filter((n) => n.endsWith(".json")).sort().reverse();
   const older = before ? all.filter((n) => n < before) : all;
   const slice = older.slice(0, SENT_PAGE_SIZE);
