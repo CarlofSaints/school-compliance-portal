@@ -1,9 +1,12 @@
 // Checks the fixes from the 19 Oct 2026 security scan: the minutes signing
 // code is keyed and never leaves the server, unsafe storage paths are refused,
-// and the school name of a public sign-up cannot carry markup.
+// and the school name of a public sign-up cannot carry markup. Batch 2: CSV
+// cells, sign-in counting and timing, spend quote rights, signature files,
+// PDF page count, tag members, and restricted-minutes actions.
 //
 //   npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-security-scan-fixes.ts
 import crypto from "crypto";
+import fs from "fs";
 
 process.env.AUTH_SECRET = "check-scan-fixes-secret";
 
@@ -75,6 +78,111 @@ async function main() {
   check("markup in a school name is refused", bad?.reason, "invalid");
   const long = await validateNewSchool({ name: "x".repeat(101), key: "abc-school", adminEmail: "a@b.co.za" });
   check("a 101-character name is refused", long?.reason, "invalid");
+
+  // ===== batch 2 =====
+
+  // --- CSV cells (every CSV export) ---
+  const { csvCell } = await import("../lib/csv");
+  check("a formula gets a leading quote", csvCell('=HYPERLINK("x")'), `"'=HYPERLINK(""x"")"`);
+  check("@, + and - formulas too", [csvCell("@SUM(A1)"), csvCell("+A1"), csvCell("-A1")], [`"'@SUM(A1)"`, `"'+A1"`, `"'-A1"`]);
+  check("a leading tab or CR too", [csvCell("\t=1"), csvCell("\r=1")], [`"'\t=1"`, `"'\r=1"`]);
+  check("a plain negative number is left alone", csvCell("-500"), `"-500"`);
+  check("a phone number is left alone", csvCell("+27 82 123 4567"), `"+27 82 123 4567"`);
+  check("null is an empty cell", csvCell(null), `""`);
+  const pages = ["app/(portal)/action-items/page.tsx", "app/(portal)/spend/page.tsx", "lib/activityLog.ts"];
+  check("every CSV export uses csvCell", pages.filter((f) => !fs.readFileSync(f, "utf8").includes("csvCell")), []);
+
+  // --- sign-in counting: parallel attempts on one account ---
+  const { LIMITS, hit } = await import("../lib/rateLimit");
+  const quiet = console.error;
+  console.error = () => {};
+  const burst = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginAccount, "burst@school.co.za")));
+  console.error = quiet;
+  check("30 attempts at once: no more than 5 get through", burst.filter((r) => r.ok).length <= LIMITS.loginAccount.max, true);
+  check("sign-in and reset limits refuse on contention", [LIMITS.loginIp, LIMITS.loginAccount, LIMITS.resetRequestEmail, LIMITS.resetCompleteIp, LIMITS.confirmEmailIp].every((l) => l.failClosed), true);
+  const auth = fs.readFileSync("app/api/auth/route.ts", "utf8");
+  check("sign-in counts the account BEFORE checking the password", auth.indexOf("hit(LIMITS.loginAccount") < auth.indexOf("verifyPassword(user"), true);
+  check("sign-in no longer peeks", /\bpeek\(/.test(auth), false);
+
+  // --- sign-in and reset timing ---
+  const bcrypt = (await import("bcryptjs")).default;
+  const { verifyPassword, getUserByEmail } = await import("../lib/userData");
+  const real = { id: "u1", email: "a@school.co.za", password: await bcrypt.hash("right-one", 10) } as never;
+  check("no account: the compare still runs and fails", await verifyPassword(undefined, "not-a-real-password"), false);
+  check("right password still signs in", await verifyPassword(real, "right-one"), true);
+  check("wrong password still fails", await verifyPassword(real, "wrong"), false);
+  await writeJson("users.json", []);
+  await writeJson("users/u9/record.json", { id: "u9", email: "lost@school.co.za", name: "L", surname: "S", password: "x", role: "r" });
+  check("index-only lookup skips the slow scan", await getUserByEmail("lost@school.co.za", false), undefined);
+  check("the full lookup still recovers it", (await getUserByEmail("lost@school.co.za"))?.id, "u9");
+  const forgot = fs.readFileSync("app/api/auth/forgot-password/route.ts", "utf8");
+  check("forgot-password looks up and sends after the reply", forgot.indexOf("afterResponse(") < forgot.indexOf("getUserByEmail("), true);
+  check("forgot-password has one answer only", /status: 50[23]/.test(forgot), false);
+
+  // --- spend: who may act on an approved application ---
+  const { mayActOnApproved } = await import("../lib/approvalEngine");
+  const approvedApp = { submittedBy: "sub", applicantUserId: "appl", requiredApprovers: [{ userId: "boss" }] } as never;
+  check("the submitter may not", mayActOnApproved(approvedApp, { id: "sub", permissions: ["manage_spend_settings"] }), false);
+  check("the applicant may not", mayActOnApproved(approvedApp, { id: "appl", permissions: ["manage_spend_settings"] }), false);
+  check("a required approver may", mayActOnApproved(approvedApp, { id: "boss", permissions: [] }), true);
+  check("a spend admin may", mayActOnApproved(approvedApp, { id: "adm", permissions: ["manage_spend_settings"] }), true);
+  check("approve_spend alone is not enough", mayActOnApproved(approvedApp, { id: "x", permissions: ["approve_spend"] }), false);
+
+  // --- signature images ---
+  const { signatureKey, saveSignatureImage, readSignatureImage } = await import("../lib/minutesData");
+  check("look-alike addresses get different files", signatureKey("chair.smith@school.co.za") === signatureKey("chair_smith@school-co.za"), false);
+  check("same address, any case or spacing, same file", signatureKey(" Chair@School.co.za ") === signatureKey("chair@school.co.za"), true);
+  await saveSignatureImage("m1", "chair.smith@school.co.za", Buffer.from("victim"));
+  await saveSignatureImage("m1", "chair_smith@school-co.za", Buffer.from("other"));
+  check("one signatory cannot replace another's image", String(await readSignatureImage("m1", "chair.smith@school.co.za")), "victim");
+  const { writeFile } = await import("../lib/controlData");
+  await writeFile("minutes/m2/signatures/old_x_za.png", Buffer.from("legacy"));
+  check("an image stored before the change still reads", String(await readSignatureImage("m2", "old@x.za")), "legacy");
+
+  // --- PDF page count on a crafted file ---
+  process.env.ANTHROPIC_API_KEY ||= "unused";
+  const { pdfPages } = await import("../lib/contentTranslation");
+  const crafted = Buffer.from("/Type/Pages ".repeat(100_000) + "<< /Type /Pages /Kids [] /Count 7 >>", "latin1");
+  const t0pdf = Date.now();
+  const n = await pdfPages(crafted);
+  check("a crafted PDF is counted quickly", Date.now() - t0pdf < 2000, true);
+  check("and the real /Count is still found", n, 7);
+
+  // --- tag membership and email change ---
+  const tagsRoute = fs.readFileSync("app/api/tags/[id]/route.ts", "utf8");
+  check("tag members are not for every signed-in user", /requireLogin\(/.test(tagsRoute), false);
+  const { addressCarriesTags } = await import("../lib/peopleData");
+  await writeJson("people.json", [
+    { id: "p1", position: "", userId: null, name: "Treasurer", email: "Treasurer@School.co.za", phone: "", profilePic: "", tagIds: ["tag-fincom"] },
+    { id: "p2", position: "", userId: null, name: "Parent", email: "parent@school.co.za", phone: "", profilePic: "", tagIds: [] },
+    { id: "p3", position: "", userId: "u5", name: "Linked", email: "linked@school.co.za", phone: "", profilePic: "", tagIds: ["tag-fincom"] },
+  ]);
+  check("an unlinked tagged entry's address carries tags", await addressCarriesTags(" treasurer@school.co.za"), true);
+  check("an untagged entry's does not", await addressCarriesTags("parent@school.co.za"), false);
+  check("an entry linked to a login does not", await addressCarriesTags("linked@school.co.za"), false);
+  check("confirm-email checks it", fs.readFileSync("app/api/account/confirm-email/route.ts", "utf8").includes("addressCarriesTags("), true);
+
+  // --- restricted-minutes actions: chase emails and the run log ---
+  // FINCOM minutes with no distribution list: only minutes admins and the
+  // people carrying the action may read them.
+  await writeJson("roles.json", [{ id: "secretary", name: "Secretary", permissions: ["manage_people"] }]);
+  await writeJson("users.json", [
+    { id: "s1", name: "Sec", surname: "R", email: "sec@school.co.za", password: "x", role: "secretary", forcePasswordChange: false, createdAt: "", updatedAt: "" },
+  ]);
+  await writeJson("minutes/fin1/record.json", { id: "fin1", body: "fincom", title: "FINCOM", reviewers: [], signatories: [] });
+  const { resolveActionRecipients } = await import("../lib/actionItemRecipients");
+  const action = {
+    id: "a1", ref: "A-1", title: "Write off arrears", assigneeIds: ["p1"], assigneeNames: ["Treasurer"],
+    raisedById: "s1", raisedByName: "Sec", fromMinutes: { minutesId: "fin1" },
+  } as never;
+  const got = await resolveActionRecipients(action, ["assignees", "admins"]);
+  check("the assignee is still written to", got.resolved.map((r) => r.email), ["Treasurer@School.co.za"]);
+  check("an admin who may not read the minutes is not", got.missing.some((m) => m.includes("may not read")), true);
+  const notFromMinutes = await resolveActionRecipients({ ...(action as object), fromMinutes: undefined } as never, ["admins"]);
+  check("an action not from minutes still reaches admins", notFromMinutes.resolved.map((r) => r.email), ["sec@school.co.za"]);
+  const cron = fs.readFileSync("app/api/cron/reminders/route.ts", "utf8");
+  check("the run log names meeting actions by reference only", /Action \$\{item\.ref\} \$\{item\.title\}/.test(cron), false);
+  check("old run logs are cut per reader", fs.readFileSync("app/api/reminders/runs/route.ts", "utf8").includes("visibleActionsFor("), true);
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

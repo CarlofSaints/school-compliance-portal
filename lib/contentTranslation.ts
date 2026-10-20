@@ -41,10 +41,12 @@ export const textPages = (text: string) => Math.max(1, Math.ceil(text.length / C
  */
 export async function pdfPages(file: Buffer): Promise<number> {
   const raw = file.toString("latin1");
-  const counts = [
-    ...raw.matchAll(/\/Type\s*\/Pages\b[^>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]*?\/Type\s*\/Pages\b/g),
-  ].map((m) => Number(m[1] || m[2]));
-  const counted = Math.max(0, ...counts);
+  // Gaps bounded to 200 characters: an unbounded one rescans to the end of the
+  // file for every /Type/Pages with no /Count after it, quadratic on a crafted file.
+  let counted = 0;
+  for (const m of raw.matchAll(/\/Type\s*\/Pages\b[^>]{0,200}?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]{0,200}?\/Type\s*\/Pages\b/g)) {
+    counted = Math.max(counted, Number(m[1] || m[2]));
+  }
   if (counted > 0) return counted;
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");

@@ -35,11 +35,12 @@ const norm = (e: string | undefined | null) => String(e || "").trim().toLowerCas
  * own email. Most schools tag FINCOM on the register entry, often unlinked, so
  * counting only links would quietly cut FINCOM members off.
  *
- * 🔴 The email half is safe only because of two guards: a login's email can
+ * 🔴 The email half is safe only because of three guards: a login's email can
  * change only to an address its owner proved they receive (lib/emailChange),
- * and nobody without manage_roles may put their OWN login email on a tagged
- * register entry (the People routes). An entry linked to SOMEBODY ELSE never
- * counts, whatever its email.
+ * nobody without manage_roles may put their OWN login email on a tagged
+ * register entry (the People routes), nor move their own login onto the
+ * address of one (addressCarriesTags: confirm-email, users/[id]). An entry
+ * linked to SOMEBODY ELSE never counts, whatever its email.
  */
 function ownPeople(user: { id: string; email?: string | null }, people: Person[]): Person[] {
   const email = norm(user.email);

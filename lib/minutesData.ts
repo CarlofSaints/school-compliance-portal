@@ -468,8 +468,15 @@ const signaturePath = (id: string, personKey: string) =>
 
 /** Keyed on the signatory's EMAIL, normalised, not their personId: somebody can
  *  be on the signing list without a People-register entry, and personId is ""
- *  for them. Two such signatories would otherwise overwrite each other. */
+ *  for them. Two such signatories would otherwise overwrite each other.
+ *  A hash, so two different addresses can never share one file. */
 export function signatureKey(email: string): string {
+  return crypto.createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
+
+/** The key images were stored under before 20 Oct 2026: lossy (a.b@x and
+ *  a_b@x share it), so it is only ever READ, as a fallback for those. */
+function legacySignatureKey(email: string): string {
   return email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
 }
 
@@ -485,5 +492,8 @@ export async function readSignatureImage(
   id: string,
   email: string
 ): Promise<Buffer | null> {
-  return readFile(signaturePath(id, signatureKey(email)));
+  return (
+    (await readFile(signaturePath(id, signatureKey(email)))) ??
+    readFile(signaturePath(id, legacySignatureKey(email)))
+  );
 }

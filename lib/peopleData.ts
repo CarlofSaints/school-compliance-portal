@@ -57,6 +57,16 @@ export async function getPeople(): Promise<Person[]> {
   return readJson<Person[]>(PEOPLE_PATH, []);
 }
 
+/** True when an UNLINKED, tagged register entry carries this address: a login
+ *  moving to it would take on those tags (lib/minutesAccess.ts ownPeople), so
+ *  moving your own login there needs manage_roles, like tagging yourself. */
+export async function addressCarriesTags(email: string): Promise<boolean> {
+  const e = email.trim().toLowerCase();
+  return (await getPeople()).some(
+    (p) => !p.userId && (p.tagIds?.length ?? 0) > 0 && String(p.email || "").trim().toLowerCase() === e
+  );
+}
+
 /** Replaces the whole register. Only for seeding demo data. */
 export async function savePeople(people: Person[]): Promise<void> {
   return writeJson(PEOPLE_PATH, people);
