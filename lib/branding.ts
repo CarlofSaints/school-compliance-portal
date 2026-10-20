@@ -47,6 +47,8 @@ export interface SchoolBranding {
   /** Where replies go. Set by the school, needs no DNS. Absent means the
    *  Reply-To header is left off entirely. */
   replyTo?: string;
+  /** Set by the school under Branding; printed in the Word minutes footer. */
+  wordFooter?: string;
   colors: {
     /** Brand primary — buttons, headings, email header. White text sits on
      *  this, so it must be dark enough for white to read (cyan, black, navy…). */

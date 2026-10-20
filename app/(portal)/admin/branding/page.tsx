@@ -27,6 +27,7 @@ export default function BrandingPage() {
   const [fullName, setFullName] = useState(branding.fullName);
   const [shortName, setShortName] = useState(branding.shortName);
   const [replyTo, setReplyTo] = useState("");
+  const [wordFooter, setWordFooter] = useState("");
   const [hadLogo, setHadLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -48,6 +49,7 @@ export default function BrandingPage() {
       setFullName(stored.fullName || branding.fullName);
       setShortName(stored.shortName || branding.shortName);
       setReplyTo(stored.replyTo || "");
+      setWordFooter(stored.wordFooter || "");
       setValue({
         // The existing crest is shown by URL, not as a data URL. Only a NEWLY
         // chosen file produces a data URL, which is how the save route tells
@@ -84,6 +86,7 @@ export default function BrandingPage() {
           primary: value.primary,
           accent: value.accent,
           replyTo,
+          wordFooter,
           // Only send the image when it is a newly chosen file. Re-sending the
           // existing one on every save would rewrite the crest and bump its
           // version for nothing, busting every cached copy.
@@ -210,6 +213,24 @@ export default function BrandingPage() {
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
                 />
               </div>
+            </div>
+
+            <div className="pt-6 border-t border-gray-100">
+              <label htmlFor="word-footer" className="block text-sm font-medium text-gray-700 mb-1">
+                {t("Footer on Word minutes")}
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                {t("For example directors' names, address or registration number. Leave empty for no footer.")}
+              </p>
+              <textarea
+                id="word-footer"
+                value={wordFooter}
+                onChange={(e) => setWordFooter(e.target.value)}
+                maxLength={500}
+                rows={3}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-right">{wordFooter.length}/500</p>
             </div>
 
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">

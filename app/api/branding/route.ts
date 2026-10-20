@@ -5,6 +5,7 @@ import {
   patchStoredBranding,
   saveLogo,
   removeLogo,
+  MAX_WORD_FOOTER,
 } from "@/lib/brandingData";
 import { checkColours, normaliseHex } from "@/lib/brandingColors";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
@@ -38,6 +39,7 @@ export async function PUT(req: NextRequest) {
       primary,
       accent,
       replyTo,
+      wordFooter,
       logoDataUrl,
       removeExistingLogo,
     } = body ?? {};
@@ -115,6 +117,11 @@ export async function PUT(req: NextRequest) {
       ...(primary ? { primary: normaliseHex(primary)! } : {}),
       ...(accent ? { accent: normaliseHex(accent)! } : {}),
       ...(replyTo !== undefined ? { replyTo: String(replyTo).trim() } : {}),
+      // Cut rather than refused: the form already stops at the limit, so only
+      // a hand-made request is ever longer.
+      ...(wordFooter !== undefined
+        ? { wordFooter: String(wordFooter).trim().slice(0, MAX_WORD_FOOTER) }
+        : {}),
     }));
 
     // Hand back what was saved. A re-read moments after a write can still serve

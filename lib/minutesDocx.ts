@@ -616,6 +616,20 @@ export async function buildMinutesDocx(
         footers: {
           default: new Footer({
             children: [
+              // The school's own footer text (directors, address), one run per
+              // line so its line breaks survive. docx escapes the text itself.
+              ...(branding.wordFooter
+                ? [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { after: 60 },
+                      children: branding.wordFooter.split(/\r?\n/).map(
+                        (line, i) =>
+                          new TextRun({ text: line, break: i ? 1 : undefined, size: 16, color: "888888" })
+                      ),
+                    }),
+                  ]
+                : []),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
