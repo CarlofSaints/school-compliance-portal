@@ -1,3 +1,4 @@
+import { formatMeetingDate } from "./minutes";
 import { Resend } from "resend";
 import { resolveBranding } from "@/lib/brandingData";
 import type { SchoolBranding } from "@/lib/branding";
@@ -1112,7 +1113,7 @@ export function buildWeeklyUpdateEmail(
           .slice(0, WEEKLY_LIST_CAP)
           .map(
             (a) => `<tr>
-          <td style="padding:8px 0;border-bottom:1px solid #eee;color:#333;"><strong>${esc(a.ref)}</strong> ${esc(a.title)}<br><span style="color:#777;font-size:13px;">${esc(a.owners)}</span></td>
+          <td style="padding:8px 0;border-bottom:1px solid #eee;color:#333;"><strong>${esc(a.ref)}</strong> ${esc(a.title)}<br><span style="color:#777;font-size:13px;">${esc(a.owners)}${a.meetingDate ? ` · Meeting ${esc(formatMeetingDate(a.meetingDate))}` : ""}</span></td>
           <td style="padding:8px 0 8px 12px;border-bottom:1px solid #eee;color:${RED};white-space:nowrap;text-align:right;" valign="top">${a.daysLate} day${a.daysLate === 1 ? "" : "s"} late</td>
         </tr>`
           )

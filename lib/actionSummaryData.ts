@@ -1,3 +1,4 @@
+import { withMeetingDates } from "./actionItems";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
@@ -119,7 +120,8 @@ export async function resolveSummaryRecipients(s: ActionSummarySettings): Promis
 /** The open register as it stands, with owners named as the register names
  *  them today (the same refresh the Action Items page does). */
 export async function gatherSummaryRows(dueSoonDays: number, now: Date = new Date()): Promise<SummaryRow[]> {
-  const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
+  const [stored, people, users, minutesById] = await Promise.all([getActionItems(), getPeople(), getUsers(), minutesIndex()]);
+  const items = withMeetingDates(stored, minutesById);
   const owners = new Map(
     items.map((i) => [
       i.id,

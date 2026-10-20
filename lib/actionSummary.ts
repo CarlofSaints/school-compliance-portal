@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ActionItem } from "./actionItems";
+import { formatMeetingDate } from "./minutes";
 import { lastOccurrence } from "./weeklyUpdate";
 import {
   isClosed,
@@ -325,11 +326,13 @@ export function buildSummaryRows(
       const daysLeft = daysUntilDue(i, now);
       const latest = [...(i.updates || [])].sort((a, b) => (a.at < b.at ? 1 : -1))[0];
       const names = ownerNames?.get(i.id) ?? i.assigneeNames;
-      const fromMeeting = i.fromMinutes
-        ? [i.fromMinutes.minutesTitle, i.fromMinutes.minutesPeriod && `(${i.fromMinutes.minutesPeriod})`]
-            .filter(Boolean)
-            .join(" ")
-        : i.meetingDate || "";
+      const held = i.fromMinutes?.meetingDate || i.meetingDate;
+      const fromMeeting = [
+        i.fromMinutes && [i.fromMinutes.minutesTitle, i.fromMinutes.minutesPeriod && `(${i.fromMinutes.minutesPeriod})`].filter(Boolean).join(" "),
+        held && (i.fromMinutes ? `held ${formatMeetingDate(held)}` : formatMeetingDate(held)),
+      ]
+        .filter(Boolean)
+        .join(", ");
       return {
         ref: i.ref,
         title: i.title,

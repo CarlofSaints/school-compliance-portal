@@ -5,6 +5,7 @@ import { getRecipientSettings } from "./minutesRecipients";
 import { getRoles, resolveRolePermissions } from "./rolesData";
 import { listMinutes, getMinutes, type MinutesRecord } from "./minutesData";
 import type { SessionPayload } from "./roles";
+import { withMeetingDates } from "./actionItems";
 import {
   canReadMinutes,
   effectiveAccess,
@@ -211,13 +212,17 @@ async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, Minu
   return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
 }
 
-/** For a session reading the action register. */
-export async function visibleActionsFor<T extends ActionOrigin>(session: SessionPayload, items: T[]): Promise<T[]> {
+/** For a session reading the action register: the actions they may see,
+ *  each with its minutes' meeting date (the minutes are read here anyway). */
+export async function visibleActionsFor<T extends ActionOrigin & { fromMinutes?: { meetingDate?: string } }>(
+  session: SessionPayload,
+  items: T[]
+): Promise<T[]> {
   if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
   const [ctx, byId] = await Promise.all([
     loadMinutesAccessContext(),
     minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
   ]);
   const reader = await readerForSession(session, ctx);
-  return items.filter((i) => actionVisible(i, reader, byId, ctx));
+  return withMeetingDates(items.filter((i) => actionVisible(i, reader, byId, ctx)), byId);
 }
