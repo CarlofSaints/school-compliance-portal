@@ -161,12 +161,15 @@ export async function GET(req: NextRequest) {
   const dueActions = actionsDueForChase(actions, now);
 
   for (const item of dueActions) {
+    // The run log is read by admins who may not read every set of minutes, so
+    // an action raised in a meeting is named by its reference only.
+    const label = item.fromMinutes ? item.ref : `${item.ref} ${item.title}`;
     // Claimed first, in one guarded write, so an overlapping run cannot send
     // the same chase twice.
     const claim = await claimActionChase(item.id, todayIso(now));
     if (!claim.claimed) {
       skipped++;
-      detail.push(`Action ${item.ref} ${item.title}: already chased today by another run`);
+      detail.push(`Action ${label}: already chased today by another run`);
       continue;
     }
     let outcome;
@@ -182,13 +185,13 @@ export async function GET(req: NextRequest) {
         lastReminderResult: `failed: ${why}`.slice(0, 300),
       }).catch(() => {});
       failed++;
-      detail.push(`Action ${item.ref} ${item.title}: failed (${why}), will try again next run`);
+      detail.push(`Action ${label}: failed (${why}), will try again next run`);
       continue;
     }
     sent += outcome.sent;
     failed += outcome.failed;
     if (outcome.sent === 0) skipped++;
-    detail.push(`Action ${item.ref} ${item.title}: ${outcome.result}`);
+    detail.push(`Action ${label}: ${outcome.result}`);
   }
 
   // --- Weekly SGB update ------------------------------------------------------
