@@ -1750,5 +1750,6 @@
   "Could not open this email. Try again.": "Ga go kgonege go bula imeile e. Leka gape.",
   "This email is about a fund application you do not have access to.": "Imeile e e malebana le kopo ya madi e o se nang tetla ya go e bona.",
   "Personal email, wording not kept": "Imeile ya motho ka esi, mafoko ga a bolokwa",
-  "Show older ({n} more)": "Bontsha tsa bogologolo ({n} tse dingwe)"
+  "Show older ({n} more)": "Bontsha tsa bogologolo ({n} tse dingwe)",
+  "No loaded emails match your search.": "Ga go na di-imeili tse di laisitsweng tse di tsamaisanang le patlo ya gago."
 }

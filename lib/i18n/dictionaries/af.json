@@ -1750,5 +1750,6 @@
   "Could not open this email. Try again.": "Kon nie hierdie e-pos oopmaak nie. Probeer weer.",
   "This email is about a fund application you do not have access to.": "Hierdie e-pos gaan oor 'n fondsaansoek waartoe jy nie toegang het nie.",
   "Personal email, wording not kept": "Persoonlike e-pos, bewoording nie gehou nie",
-  "Show older ({n} more)": "Wys ouer ({n} meer)"
+  "Show older ({n} more)": "Wys ouer ({n} meer)",
+  "No loaded emails match your search.": "Geen gelaaide e-posse pas by jou soektog nie."
 }

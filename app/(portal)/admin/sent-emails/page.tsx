@@ -62,14 +62,15 @@ export default function SentEmailsPage() {
     const data = await res.json().catch(() => ({}));
     if (mine !== loadSeq.current) return;
     if (!res.ok) {
-      setError(data.error || t("Could not load the sent emails."));
+      // The page's own words, so they are translated.
+      setError(t("Could not load the sent emails."));
       // A failed "Show older" keeps the rows already shown.
       if (!before) setRows([]);
       return;
     }
     setError("");
     setMonth(data.month);
-    setMonths(data.months || []);
+    if (data.months) setMonths(data.months);
     setTotal(data.total || 0);
     setNext(data.next);
     setRows((prev) => {
@@ -83,14 +84,19 @@ export default function SentEmailsPage() {
     if (session) void load("");
   }, [session, load]);
 
+  // A slow reply for an email clicked earlier must not replace a later one.
+  const openSeq = useRef(0);
   const show = async (r: Row) => {
+    const mine = ++openSeq.current;
     if (!r.hasBody) return setOpen(r);
+    let shown: Row & { html?: string; failed?: boolean };
     try {
       const res = await authFetch(`/api/sent-emails?at=${encodeURIComponent(r.at)}&id=${encodeURIComponent(r.id)}`, { cache: "no-store" });
-      setOpen(res.ok ? await res.json() : { ...r, failed: true });
+      shown = res.ok ? await res.json() : { ...r, failed: true };
     } catch {
-      setOpen({ ...r, failed: true });
+      shown = { ...r, failed: true };
     }
+    if (mine === openSeq.current) setOpen(shown);
   };
 
   const hiddenText = (why: "minutes" | "spend") =>
@@ -148,7 +154,7 @@ export default function SentEmailsPage() {
             {rows === null ? (
               <tr><td colSpan={5} className="px-4 py-6 text-gray-400">{t("Loading...")}</td></tr>
             ) : shown.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-6 text-gray-400">{t("No emails sent yet.")}</td></tr>
+              <tr><td colSpan={5} className="px-4 py-6 text-gray-400">{q ? t("No loaded emails match your search.") : t("No emails sent yet.")}</td></tr>
             ) : (
               shown.map((r) => (
                 <tr key={r.id} onClick={() => void show(r)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
@@ -179,12 +185,12 @@ export default function SentEmailsPage() {
       )}
 
       {open && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setOpen(null)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { openSeq.current++; setOpen(null); }}>
           <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-gray-100 text-sm space-y-1">
               <div className="flex justify-between gap-4">
                 <p className="font-semibold text-dark">{open.hidden ? hiddenText(open.hidden) : open.subject || t("Personal email, wording not kept")}</p>
-                <button onClick={() => setOpen(null)} className="text-gray-400 hover:text-gray-600">{t("Close")}</button>
+                <button onClick={() => { openSeq.current++; setOpen(null); }} className="text-gray-400 hover:text-gray-600">{t("Close")}</button>
               </div>
               <p className="text-gray-500">{t("To")}: {open.to} · {when(open.at)} · {kindLabel(open.kind)}</p>
               {open.attachments?.length ? <p className="text-gray-500">{t("Attached")}: {open.attachments.join(", ")}</p> : null}

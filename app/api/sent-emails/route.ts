@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission } from "@/lib/rolesData";
 import { ACTIVITY_VIEW_PERMISSIONS } from "@/lib/activityAccess";
 import { redactMinutesActivity } from "@/lib/minutesAccess";
-import { readSentEmail, readSentEmails, sentEmailMonths, SENT_PAGE_SIZE, type SentEmail } from "@/lib/sentEmails";
+import { readSentEmail, readSentEmailBody, readSentEmails, sentEmailMonths, SENT_PAGE_SIZE, type SentEmail } from "@/lib/sentEmails";
 import type { SessionPayload } from "@/lib/roles";
 
 // Who may read every fund application: exactly the spend pages' own rule.
@@ -43,20 +43,23 @@ export async function GET(req: NextRequest) {
     const id = sp.get("id");
     const at = sp.get("at");
     if (id && at) {
-      const found = await readSentEmail(at, id);
+      // Access first: a body the reader may not see is never even read.
+      const found = await readSentEmail(at, id, false);
       if (!found) return NextResponse.json({ error: "Email not found" }, { status: 404 });
       const [one] = await applyAccess(session, [found.email]);
       return NextResponse.json(
-        { ...one, ...(one.hidden ? {} : { html: found.html }) },
+        { ...one, ...(one.hidden ? {} : { html: await readSentEmailBody(found.email) }) },
         { headers: { "Cache-Control": "no-store" } }
       );
     }
 
-    const months = await sentEmailMonths();
-    const month = sp.get("month") || months[0] || new Date().toISOString().slice(0, 7);
     // "before" is the last file name already shown: paging by name, not by
     // position, so mail sent meanwhile cannot shift a page and repeat rows.
-    const { emails, total, next } = await readSentEmails(month, sp.get("before") || undefined);
+    // A next page already has its month list, so it is not listed again.
+    const before = sp.get("before") || undefined;
+    const months = before ? undefined : await sentEmailMonths();
+    const month = sp.get("month") || months?.[0] || new Date().toISOString().slice(0, 7);
+    const { emails, total, next } = await readSentEmails(month, before);
     return NextResponse.json(
       { month, months, pageSize: SENT_PAGE_SIZE, total, next, emails: await applyAccess(session, emails) },
       { headers: { "Cache-Control": "no-store" } }

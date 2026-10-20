@@ -1,6 +1,6 @@
 import { writeFile, readFile, listFilesStrict, readJson } from "./controlData";
 import { activityMonths } from "./activityLog";
-import { esc } from "./email";
+import { esc } from "./escapeHtml";
 
 // ---------------------------------------------------------------------------
 // The SENT BOX: every email the portal sends, as it was sent (Carl, 19 Oct
@@ -150,12 +150,18 @@ export async function readSentEmails(
   };
 }
 
-/** One email and its body, found directly from when it was sent and its id. */
-export async function readSentEmail(at: string, id: string): Promise<{ email: SentEmail; html?: string } | null> {
+/** One email, found directly from when it was sent and its id. Its body
+ *  only when withBody: a caller that must check access first reads it after
+ *  with readSentEmailBody. */
+export async function readSentEmail(at: string, id: string, withBody = true): Promise<{ email: SentEmail; html?: string } | null> {
   if (!/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(at) || !/^[0-9a-f-]{36}$/i.test(id)) return null;
-  const files = names(at, id);
-  const email = await readJson<SentEmail | null>(files.summary, null);
+  const email = await readJson<SentEmail | null>(names(at, id).summary, null);
   if (!email || email.id !== id) return null;
-  const body = email.hasBody ? await readFile(files.body) : null;
-  return { email, html: body ? body.toString("utf8") : undefined };
+  return { email, html: withBody ? await readSentEmailBody(email) : undefined };
+}
+
+export async function readSentEmailBody(email: SentEmail): Promise<string | undefined> {
+  if (!email.hasBody) return undefined;
+  const body = await readFile(names(email.at, email.id).body);
+  return body ? body.toString("utf8") : undefined;
 }

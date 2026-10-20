@@ -1750,5 +1750,6 @@
   "Could not open this email. Try again.": "Ha ho kgonehe ho bula imeile ena. Leka hape.",
   "This email is about a fund application you do not have access to.": "Imeile ena e mabapi le kopo ya tjhelete eo o se nang tumello ya ho e bona.",
   "Personal email, wording not kept": "Imeile ya motho ka seqo, mantswe ha a bolokwe",
-  "Show older ({n} more)": "Bontsha tsa kgale ({n} tse ding)"
+  "Show older ({n} more)": "Bontsha tsa kgale ({n} tse ding)",
+  "No loaded emails match your search.": "Ha ho na di-imeile tse kentsweng tse tsamaisanang le patlo ya hao."
 }

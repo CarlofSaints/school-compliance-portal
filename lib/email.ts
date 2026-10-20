@@ -4,6 +4,7 @@ import type { SchoolBranding } from "@/lib/branding";
 import { duePhrase } from "@/lib/actionItems";
 import { readableTextOn } from "@/lib/brandingColors";
 import { recordSentEmail, type EmailMeta } from "@/lib/sentEmails";
+import { esc } from "@/lib/escapeHtml";
 import { afterResponse } from "@/lib/activityActor";
 
 const resend = process.env.RESEND_API_KEY
@@ -513,8 +514,9 @@ export interface EmailAttachment {
 
 /**
  * Sends one email AND records it in the sent box (lib/sentEmails). The record
- * is written after the send, awaited (an un-awaited write on serverless may
- * never happen), and can never fail the send.
+ * is started right after the send (so it carries the send time and a long
+ * mailout writes as it goes, not all at the end), kept alive past the
+ * response by after(), and can never fail the send.
  */
 async function sendEmail(
   from: string,
@@ -529,10 +531,10 @@ async function sendEmail(
   meta: EmailMeta = { kind: "other" }
 ): Promise<boolean> {
   const r = await deliver(from, to, subject, html, replyTo, attachments, htmlWithoutAttachments);
-  // After the response (tenant-pinned, and awaited by scripts through
-  // flushAfterResponse): a send loop never waits on the sent box.
-  await afterResponse(() =>
-    recordSentEmail(
+  // Started now, not awaited here: a send loop never waits on the sent box.
+  // afterResponse keeps it alive past the response (scripts await it through
+  // flushAfterResponse).
+  const recording = recordSentEmail(
       {
         to,
         // A personal mail's subject names its private content ("Action A-001:
@@ -547,8 +549,8 @@ async function sendEmail(
       },
       meta.personal ? undefined : r.html,
       meta.secrets
-    )
-  );
+    );
+  await afterResponse(() => recording);
   return r.ok;
 }
 
@@ -907,16 +909,6 @@ export async function sendApprovalReminderEmail(
 
 // --- Action items -----------------------------------------------------------
 
-// Titles, descriptions and notes are typed by people, and an apostrophe or an
-// angle bracket in a title should not be able to break the layout of the mail.
-// Every value a person typed, in every template, goes through this.
-export function esc(value: string): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 // A progress bar that survives a mail client, so it is a table and not a div.
 function progressBar(percent: number, PRIMARY: string): string {

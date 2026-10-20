@@ -1750,5 +1750,6 @@
   "Could not open this email. Try again.": "Akukwazekanga ukuvula le imeyile. Zama kwakhona.",
   "This email is about a fund application you do not have access to.": "Le imeyile imalunga nesicelo semali ongenayo imvume yokusibona.",
   "Personal email, wording not kept": "I-imeyile yobuqu, amagama akagcinwa",
-  "Show older ({n} more)": "Bonisa ezindala ({n} ezongezelelweyo)"
+  "Show older ({n} more)": "Bonisa ezindala ({n} ezongezelelweyo)",
+  "No loaded emails match your search.": "Akukho ii-imeyile ezilayishiweyo ezihambelana nokukhangela kwakho."
 }
