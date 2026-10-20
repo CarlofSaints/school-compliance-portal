@@ -27,7 +27,8 @@ async function applyAccess(session: SessionPayload, emails: SentEmail[]): Promis
     const hidden = probes[i].summary !== e.id ? "minutes" : e.kind.startsWith("spend.") && !seesSpend ? "spend" : undefined;
     // Hidden: only that it was sent, to whom and when. Not even which minutes.
     return hidden
-      ? { ...e, subject: "", attachments: undefined, minutesId: undefined, error: undefined, hasBody: false, hidden }
+      // kind cut to its area: "minutes.signing_code" would tell the stage.
+      ? { ...e, kind: e.kind.split(".")[0], subject: "", attachments: undefined, minutesId: undefined, error: undefined, hasBody: false, hidden }
       : e;
   });
 }

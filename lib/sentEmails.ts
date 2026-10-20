@@ -57,7 +57,7 @@ export function redactEmailHtml(html: string, secrets: string[] = []): string {
   // As typed AND as the template escaped it: a password "Tom&Jerry1" sits in
   // the HTML as "Tom&amp;Jerry1". The templates' own esc(), so the two can never drift.
   for (const s of secrets.filter((x) => x && x.length >= 3)) {
-    out = out.split(esc(s)).join(BLANK).split(s).join(BLANK);
+    out = out.split(encodeURIComponent(s)).join(BLANK).split(esc(s)).join(BLANK).split(s).join(BLANK);
   }
   return out
     // ?token=… / &token=… / &amp;token=… / &code=… (and any key/sig/otp) in any link

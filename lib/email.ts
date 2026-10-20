@@ -1557,5 +1557,8 @@ export function sendRoomRequestDeclinedEmail(
     <p style="color:#333;">Their reason:</p>
     <blockquote style="margin:0 0 16px;padding:8px 12px;border-left:4px solid ${P};background:#fafafa;color:#333;">${esc(reason)}</blockquote>
     ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
-  `);
+  `,
+    // The holder's reason was typed for the requester alone: not kept.
+    { kind: "booking.declined", personal: true }
+  );
 }
