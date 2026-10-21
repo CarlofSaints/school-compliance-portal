@@ -6,7 +6,7 @@ import {
   saveLogo,
   removeLogo,
 } from "@/lib/brandingData";
-import { MAX_WORD_FOOTER_LINES, cleanWordFooter, wordFooterLineCount } from "@/lib/branding";
+import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES, cleanWordFooter, wordFooterLineCount } from "@/lib/branding";
 import { checkColours, normaliseHex } from "@/lib/brandingColors";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
@@ -44,37 +44,39 @@ export async function PUT(req: NextRequest) {
       removeExistingLogo,
     } = body ?? {};
 
-    // Blank is fine and means "no Reply-To header". Anything non-blank has to
-    // look like an address: a bad one can get the whole message rejected, and
-    // the check also refuses the newlines that would let somebody inject a
-    // header of their own.
-    // Not a string (an array, a number) is refused too: it would otherwise
-    // pass this check and then quietly not be saved.
-    if (
-      (replyTo != null && typeof replyTo !== "string") ||
-      (replyTo && !isPlausibleEmail(replyTo))
-    ) {
-      return NextResponse.json(
-        { error: "The reply-to address does not look like an email address." },
-        { status: 400 }
-      );
-    }
-
     // Text fields are text or absent. String() would save the words "null" or
-    // "[object Object]" as the school's name. (The footer may also be null,
-    // which clears it.)
+    // "[object Object]" as the school's name. (Reply-to and footer may also be
+    // null, which clears them.)
     for (const [label, value] of [
       ["The school name", fullName],
       ["The short name", shortName],
+      ["The reply-to address", replyTo === null ? undefined : replyTo],
       ["The Word minutes footer", wordFooter === null ? undefined : wordFooter],
     ] as const) {
       if (value !== undefined && typeof value !== "string") {
         return NextResponse.json({ error: `${label} must be text.` }, { status: 400 });
       }
     }
+
+    // Blank is fine and means "no Reply-To header". Anything non-blank has to
+    // look like an address: a bad one can get the whole message rejected, and
+    // the check also refuses the newlines that would let somebody inject a
+    // header of their own.
+    if (replyTo && !isPlausibleEmail(replyTo)) {
+      return NextResponse.json(
+        { error: "The reply-to address does not look like an email address." },
+        { status: 400 }
+      );
+    }
     if (typeof wordFooter === "string" && wordFooterLineCount(wordFooter) > MAX_WORD_FOOTER_LINES) {
       return NextResponse.json(
         { error: `The Word minutes footer can have at most ${MAX_WORD_FOOTER_LINES} lines.` },
+        { status: 400 }
+      );
+    }
+    if (typeof wordFooter === "string" && Array.from(cleanWordFooter(wordFooter)).length > MAX_WORD_FOOTER) {
+      return NextResponse.json(
+        { error: `The Word minutes footer can have at most ${MAX_WORD_FOOTER} characters.` },
         { status: 400 }
       );
     }
@@ -145,8 +147,7 @@ export async function PUT(req: NextRequest) {
       ...(typeof replyTo === "string" || replyTo === null
         ? { replyTo: (replyTo ?? "").trim() }
         : {}),
-      // Cleaned and cut to the length rather than refused: the form already
-      // stops at the limit, so only a hand-made request is ever longer.
+      // Cleaned (the line and length caps were checked above).
       ...(typeof wordFooter === "string" || wordFooter === null
         ? { wordFooter: cleanWordFooter(wordFooter ?? "") }
         : {}),

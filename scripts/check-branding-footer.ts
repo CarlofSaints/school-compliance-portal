@@ -54,10 +54,12 @@ async function main() {
   check("footer trimmed and saved", saved.wordFooter, text);
   check("other branding kept", [saved.fullName, saved.replyTo, saved.logo?.version], ["Test School", "sgb@example.test", 3]);
 
-  await put(admin, { wordFooter: "y".repeat(800) });
-  check("footer cut to 500", (await getStoredBranding()).wordFooter?.length, 500);
+  check("over 500 refused, not cut", (await put(admin, { wordFooter: "y".repeat(501) })).status, 400);
+  check("500 by code point accepted", (await put(admin, { wordFooter: "y".repeat(490) + "😀".repeat(10) })).status, 200);
+  check("500 by code point saved whole", Array.from((await getStoredBranding()).wordFooter ?? "").length, 500);
+  check("whitespace the cleaning removes does not count", (await put(admin, { wordFooter: "y".repeat(500) + "\t \n\n\n" })).status, 200);
   await put(admin, { fullName: "Test School" });
-  check("a save without the field leaves it alone", (await getStoredBranding()).wordFooter?.length, 500);
+  check("a save without the field leaves it alone", (await getStoredBranding()).wordFooter, "y".repeat(500));
 
   const record = {
     id: "m1", title: "SGB meeting", body: "sgb", period: { kind: "month", year: 2026, month: 5 },
@@ -93,9 +95,7 @@ async function main() {
   check("blank runs collapse, ends dropped", cleanWordFooter("\n \nA\n\n \n\nB\n\n"), "A\n\nB");
   check("lines are counted after cleaning", [wordFooterLineCount(""), wordFooterLineCount("1\n\n\n2\n"), wordFooterLineCount("1\n2\n3\n4\n5\n6\n7")], [0, 3, 7]);
   check("docxText keeps tab/LF/CR, drops the rest", docxText("a\tb\nc\rd\u0001\u000B\uFFFE\uFFFF\uD800e😀"), "a\tb\nc\rde😀");
-  const cut = cleanWordFooter("x".repeat(498) + " 😀😀");
-  check("cut by code point, never half an emoji", [Array.from(cut).length, cut.endsWith(" 😀")], [500, true]);
-  check("cut then trimmed, no trailing newline", cleanWordFooter("x".repeat(499) + "\ny"), "x".repeat(499));
+  check("nothing cut by the cleaner", Array.from(cleanWordFooter("x".repeat(600) + " 😀")).length, 602);
 
   await put(admin, { wordFooter: "Dir\vA\u0001B\nReg 1" });
   check("route strips control chars on save", (await getStoredBranding()).wordFooter, "DirAB\nReg 1");

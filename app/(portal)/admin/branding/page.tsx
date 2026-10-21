@@ -8,7 +8,7 @@ import SchoolBrandingFields, {
 } from "@/components/SchoolBrandingFields";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
-import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES, wordFooterLineCount } from "@/lib/branding";
+import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES, cleanWordFooter, wordFooterLineCount } from "@/lib/branding";
 
 export default function BrandingPage() {
   const t = useT();
@@ -123,7 +123,11 @@ export default function BrandingPage() {
 
   if (loading || !session) return null;
 
+  // Counted on the cleaned text, as the server counts it. Never cut while
+  // typing: an over-limit footer turns red and Save waits.
   const footerTooManyLines = wordFooterLineCount(wordFooter) > MAX_WORD_FOOTER_LINES;
+  const footerChars = Array.from(cleanWordFooter(wordFooter)).length;
+  const footerTooLong = footerChars > MAX_WORD_FOOTER;
 
   return (
     <div className="p-6 max-w-3xl">
@@ -233,20 +237,18 @@ export default function BrandingPage() {
               <textarea
                 id="word-footer"
                 value={wordFooter}
-                // Capped by code point, as the server counts. maxLength counts
-                // UTF-16 units, so an emoji would stop typing early.
-                onChange={(e) => setWordFooter(Array.from(e.target.value).slice(0, MAX_WORD_FOOTER).join(""))}
-                aria-invalid={footerTooManyLines}
+                onChange={(e) => setWordFooter(e.target.value)}
+                aria-invalid={footerTooManyLines || footerTooLong}
                 rows={3}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               />
-              <p className="text-xs text-gray-400 mt-1 text-right">{Array.from(wordFooter).length}/{MAX_WORD_FOOTER}</p>
+              <p className={`text-xs mt-1 text-right ${footerTooLong ? "text-red-600 font-medium" : "text-gray-400"}`}>{footerChars}/{MAX_WORD_FOOTER}</p>
             </div>
 
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
               <button
                 onClick={save}
-                disabled={saving || loadError || footerTooManyLines}
+                disabled={saving || loadError || footerTooManyLines || footerTooLong}
                 className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? t("Saving...") : t("Save branding")}

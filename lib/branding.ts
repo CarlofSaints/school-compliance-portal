@@ -178,16 +178,16 @@ export function docxText(raw: string): string {
 /**
  * The Word minutes footer as it may be stored and printed: docxText, a tab
  * becomes a space, blank-line runs collapse to one, blank lines at either end
- * go, then the length cap (by code point, so an emoji is never cut in half).
- * Lines are NOT cut here: more than MAX_WORD_FOOTER_LINES is refused on save
- * (wordFooterLineCount), so nobody loses a line without being told.
+ * go. Nothing is cut here: more than MAX_WORD_FOOTER_LINES lines or
+ * MAX_WORD_FOOTER characters (by code point) is refused on save, so nobody
+ * loses text without being told.
  */
 export function cleanWordFooter(raw: string): string {
   const lines = docxText(raw.replace(/\t/g, " "))
     .split(/\r\n|\r|\n/)
     .map((l) => l.trimEnd())
     .filter((l, i, all) => l.trim() !== "" || (i > 0 && all[i - 1].trim() !== ""));
-  return Array.from(lines.join("\n").trim()).slice(0, MAX_WORD_FOOTER).join("").trim();
+  return lines.join("\n").trim();
 }
 
 /** Lines the footer will print as, after cleaning (0 when empty). */

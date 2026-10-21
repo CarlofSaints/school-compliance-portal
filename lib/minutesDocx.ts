@@ -31,9 +31,19 @@ import {
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
 
-// Every run in this file goes through docxText, so no field (school name,
-// title, a pasted section body) can carry a character that stops Word opening
-// the file.
+// Every string of the record and branding is cleaned once at the top of
+// buildMinutesDocx, so no field (school name, title, a pasted section body)
+// can carry a character that stops Word opening the file.
+function docxTextDeep<T>(v: T): T {
+  if (typeof v === "string") return docxText(v) as T;
+  if (Array.isArray(v)) return v.map(docxTextDeep) as T;
+  if (v && Object.getPrototypeOf(v) === Object.prototype) {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, docxTextDeep(x)])) as T;
+  }
+  return v;
+}
+
+// Backstop: a run built from text that did not come from those two.
 class TextRun extends DocxTextRun {
   constructor(options: Exclude<ConstructorParameters<typeof DocxTextRun>[0], string>) {
     super(options.text === undefined ? options : { ...options, text: docxText(options.text) });
@@ -381,6 +391,9 @@ export async function buildMinutesDocx(
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
   // office holders.
+  const footerText = cleanWordFooter(branding.wordFooter ?? "");
+  record = docxTextDeep(record);
+  branding = docxTextDeep(branding);
   const children: (Paragraph | Table)[] = [];
 
 
@@ -611,11 +624,10 @@ export async function buildMinutesDocx(
     );
   }
 
-  const footerText = cleanWordFooter(branding.wordFooter ?? "");
   const doc = new Document({
-    creator: docxText(branding.fullName),
-    title: docxText(record.title),
-    description: docxText(`${MEETING_BODY_LABELS[record.body]} minutes, ${formatPeriod(record.period)}`),
+    creator: branding.fullName,
+    title: record.title,
+    description: `${MEETING_BODY_LABELS[record.body]} minutes, ${formatPeriod(record.period)}`,
     sections: [
       {
         // Set, not left to docx's default, because DEFAULT_CONTENT_WIDTH is
@@ -630,16 +642,15 @@ export async function buildMinutesDocx(
           default: new Footer({
             children: [
               // The school's own footer text (directors, address), one run per
-              // line so its line breaks survive. docx escapes & < " but NOT
-              // control characters, so it is cleaned again here: a footer
-              // saved before the cleaning existed must not break the file.
+              // line so its line breaks survive. Cleaned once, by
+              // cleanWordFooter above, so these runs skip the backstop.
               ...(footerText
                 ? [
                     new Paragraph({
                       alignment: AlignmentType.CENTER,
                       spacing: { after: 60 },
                       children: footerText.split("\n").slice(0, MAX_WORD_FOOTER_LINES).map(
-                        (line, i) => new TextRun({ ...FOOTER_RUN, text: line, break: i ? 1 : undefined })
+                        (line, i) => new DocxTextRun({ ...FOOTER_RUN, text: line, break: i ? 1 : undefined })
                       ),
                     }),
                   ]
