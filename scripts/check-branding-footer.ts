@@ -92,7 +92,7 @@ async function main() {
   check("CR, CRLF and LF all split", cleanWordFooter("a\rb\r\nc\nd"), "a\nb\nc\nd");
   check("blank runs collapse, ends dropped", cleanWordFooter("\n \nA\n\n \n\nB\n\n"), "A\n\nB");
   check("lines are counted after cleaning", [wordFooterLineCount(""), wordFooterLineCount("1\n\n\n2\n"), wordFooterLineCount("1\n2\n3\n4\n5\n6\n7")], [0, 3, 7]);
-  check("docxText keeps tab/LF/CR, drops the rest", docxText("a\tb\nc\rd\u0001\u000B￾￿\uD800e😀"), "a\tb\nc\rde😀");
+  check("docxText keeps tab/LF/CR, drops the rest", docxText("a\tb\nc\rd\u0001\u000B\uFFFE\uFFFF\uD800e😀"), "a\tb\nc\rde😀");
   const cut = cleanWordFooter("x".repeat(498) + " 😀😀");
   check("cut by code point, never half an emoji", [Array.from(cut).length, cut.endsWith(" 😀")], [500, true]);
   check("cut then trimmed, no trailing newline", cleanWordFooter("x".repeat(499) + "\ny"), "x".repeat(499));
