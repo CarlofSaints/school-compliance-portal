@@ -3,7 +3,7 @@ import { getUserById, getUsers, type User } from "./userData";
 import { getPeople, type Person } from "./peopleData";
 import { getRecipientSettings } from "./minutesRecipients";
 import { getRoles, resolveRolePermissions } from "./rolesData";
-import { listMinutes, getMinutes, type MinutesRecord } from "./minutesData";
+import { minutesByIdStrict, getMinutes, type MinutesRecord } from "./minutesData";
 import type { SessionPayload } from "./roles";
 import {
   canReadMinutes,
@@ -202,8 +202,8 @@ export async function redactMinutesActivity<
 }
 
 /** The minutes, keyed by id, for actionVisible. */
-export async function minutesIndex(): Promise<Map<string, MinutesRecord>> {
-  return new Map((await listMinutes()).map((m) => [m.id, m]));
+export async function minutesIndex(): Promise<Map<string, MinutesRecord | null>> {
+  return minutesByIdStrict();
 }
 
 /** Only the sets these ids name, read one by one, rather than every set:

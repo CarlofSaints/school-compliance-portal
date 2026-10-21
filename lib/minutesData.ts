@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { readJson, readJsonTolerant, writeJson, updateJson, NO_CHANGE, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, updateJson, NO_CHANGE, readFile, writeFile, deleteFile, deleteFolder, listFiles, listFilesStrict } from "./controlData";
 import type {
   MeetingBody,
   MeetingPeriod,
@@ -133,6 +133,26 @@ export async function listMinutes(): Promise<MinutesRecord[]> {
   return all
     .filter((m): m is MinutesRecord => m !== null)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** For a VISIBILITY decision (minutesIndex): a listing error throws, and a set
+ *  that cannot be read is a null entry, never left out. Left out reads as
+ *  deleted, and a deleted set's actions are shown. */
+export async function minutesByIdStrict(): Promise<Map<string, MinutesRecord | null>> {
+  const ids = await listFilesStrict(DIR);
+  const out = new Map<string, MinutesRecord | null>();
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const m = await getMinutes(id);
+        if (m) out.set(id, m);
+      } catch (err) {
+        console.error(`[minutes] unreadable ${id}, its actions are hidden:`, err);
+        out.set(id, null);
+      }
+    })
+  );
+  return out;
 }
 
 export class MinutesLockedError extends Error {

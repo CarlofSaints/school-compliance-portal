@@ -7,6 +7,7 @@ import {
   readerForUser,
   viewerMayRead,
   actionVisible,
+  minutesIndex,
   type MinutesAccessContext,
 } from "./minutesAccess";
 import { getSpendApplications } from "./spendData";
@@ -128,7 +129,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function factsFor(
   facts: WeeklyFacts,
   who: { id: string; email: string; tagIds: string[]; permissions: string[] },
-  records: Map<string, MinutesRecord>,
+  records: Map<string, MinutesRecord | null>,
   ctx: MinutesAccessContext
 ): WeeklyFacts {
   const reader = readerForUser({ id: who.id, email: who.email, tagIds: who.tagIds }, who.permissions, ctx);
@@ -177,14 +178,14 @@ export async function sendWeeklyUpdate(opts: {
   };
 }): Promise<WeeklySendResult> {
   const now = opts.now ?? new Date();
-  const [settings, branding, facts, minutesList, accessCtx] = await Promise.all([
+  const [settings, branding, facts, minutesById, accessCtx] = await Promise.all([
     getWeeklyUpdateSettings(),
     resolveBranding(),
     gatherWeeklyFacts(now),
-    listMinutes(),
+    // Strict: an unreadable set hides its actions instead of reading as deleted.
+    minutesIndex(),
     loadMinutesAccessContext(),
   ]);
-  const minutesById = new Map(minutesList.map((m) => [m.id, m]));
   const teamName = teamNameFor(settings, branding.fullName);
   const today = todayIso(now);
   const weekOf = lastOccurrence(today, 1); // the Monday of this week

@@ -216,6 +216,13 @@ async function main() {
   const actx = await loadMinutesAccessContext();
   const outsider = readerForUser({ id: "zz", email: "zz@school.co.za", tagIds: [] }, [], actx);
   check("an unreadable set hides its action", actionVisible({ fromMinutes: { minutesId: "broken" }, assigneeIds: [] }, outsider, new Map([["broken", null]]), actx), false);
+  const { minutesIndex } = await import("../lib/minutesAccess");
+  console.error = () => {};
+  const index = await minutesIndex();
+  console.error = quiet;
+  check("the weekly/summary index keeps an unreadable set as null", [index.has("broken"), index.get("broken")], [true, null]);
+  check("...so its action is hidden from the weekly update and summary", actionVisible({ fromMinutes: { minutesId: "broken" }, assigneeIds: [] }, outsider, index, actx), false);
+  check("weekly update and action summary both use that index", ["lib/weeklyUpdateData.ts", "lib/actionSummaryData.ts"].map((f) => fs.readFileSync(f, "utf8").includes("minutesIndex()")), [true, true]);
   check("a deleted set still shows it", actionVisible({ fromMinutes: { minutesId: "gone" }, assigneeIds: [] }, outsider, new Map(), actx), true);
   const { loadActionRecipientContext } = await import("../lib/actionItemRecipients");
   const sharedCtx = await loadActionRecipientContext();
