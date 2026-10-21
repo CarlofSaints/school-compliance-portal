@@ -142,7 +142,7 @@ export function applyStoredBranding(
     // front of it changes. See lib/emailIdentity.ts.
     fromEmail: buildFromAddress(fullName, base.fromEmail),
     replyTo: buildReplyTo(stored.replyTo),
-    wordFooter: stored.wordFooter || undefined,
+    wordFooter: stored.wordFooter ?? base.wordFooter,
     fullName,
     // 🔴 Falls back to the school's OWN name before the code default.
     //

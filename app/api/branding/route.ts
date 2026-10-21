@@ -6,7 +6,7 @@ import {
   saveLogo,
   removeLogo,
 } from "@/lib/brandingData";
-import { cleanWordFooter } from "@/lib/branding";
+import { MAX_WORD_FOOTER_LINES, cleanWordFooter, wordFooterLineCount } from "@/lib/branding";
 import { checkColours, normaliseHex } from "@/lib/brandingColors";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
@@ -56,6 +56,25 @@ export async function PUT(req: NextRequest) {
     ) {
       return NextResponse.json(
         { error: "The reply-to address does not look like an email address." },
+        { status: 400 }
+      );
+    }
+
+    // Text fields are text or absent. String() would save the words "null" or
+    // "[object Object]" as the school's name. (The footer may also be null,
+    // which clears it.)
+    for (const [label, value] of [
+      ["The school name", fullName],
+      ["The short name", shortName],
+      ["The Word minutes footer", wordFooter === null ? undefined : wordFooter],
+    ] as const) {
+      if (value !== undefined && typeof value !== "string") {
+        return NextResponse.json({ error: `${label} must be text.` }, { status: 400 });
+      }
+    }
+    if (typeof wordFooter === "string" && wordFooterLineCount(wordFooter) > MAX_WORD_FOOTER_LINES) {
+      return NextResponse.json(
+        { error: `The Word minutes footer can have at most ${MAX_WORD_FOOTER_LINES} lines.` },
         { status: 400 }
       );
     }
@@ -126,8 +145,8 @@ export async function PUT(req: NextRequest) {
       ...(typeof replyTo === "string" || replyTo === null
         ? { replyTo: (replyTo ?? "").trim() }
         : {}),
-      // Cleaned and cut rather than refused: the form already stops at the
-      // limit, so only a hand-made request is ever longer.
+      // Cleaned and cut to the length rather than refused: the form already
+      // stops at the limit, so only a hand-made request is ever longer.
       ...(typeof wordFooter === "string" || wordFooter === null
         ? { wordFooter: cleanWordFooter(wordFooter ?? "") }
         : {}),

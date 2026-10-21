@@ -8,7 +8,7 @@ import SchoolBrandingFields, {
 } from "@/components/SchoolBrandingFields";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
-import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES } from "@/lib/branding";
+import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES, wordFooterLineCount } from "@/lib/branding";
 
 export default function BrandingPage() {
   const t = useT();
@@ -123,6 +123,8 @@ export default function BrandingPage() {
 
   if (loading || !session) return null;
 
+  const footerTooManyLines = wordFooterLineCount(wordFooter) > MAX_WORD_FOOTER_LINES;
+
   return (
     <div className="p-6 max-w-3xl">
       {toast && (
@@ -224,13 +226,17 @@ export default function BrandingPage() {
               </label>
               <p className="text-xs text-gray-500 mb-2">
                 {t("For example directors' names, address or registration number. Leave empty for no footer.")}{" "}
-                {t("Up to {lines} lines.", { lines: MAX_WORD_FOOTER_LINES })}
+                <span className={footerTooManyLines ? "text-red-600 font-medium" : ""}>
+                  {t("Up to {lines} lines.", { lines: MAX_WORD_FOOTER_LINES })}
+                </span>
               </p>
               <textarea
                 id="word-footer"
                 value={wordFooter}
-                onChange={(e) => setWordFooter(e.target.value)}
-                maxLength={MAX_WORD_FOOTER}
+                // Capped by code point, as the server counts. maxLength counts
+                // UTF-16 units, so an emoji would stop typing early.
+                onChange={(e) => setWordFooter(Array.from(e.target.value).slice(0, MAX_WORD_FOOTER).join(""))}
+                aria-invalid={footerTooManyLines}
                 rows={3}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               />
@@ -240,7 +246,7 @@ export default function BrandingPage() {
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
               <button
                 onClick={save}
-                disabled={saving || loadError}
+                disabled={saving || loadError || footerTooManyLines}
                 className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? t("Saving...") : t("Save branding")}

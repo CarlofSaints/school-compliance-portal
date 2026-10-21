@@ -2,7 +2,7 @@ import {
   Document,
   Packer,
   Paragraph,
-  TextRun,
+  TextRun as DocxTextRun,
   HeadingLevel,
   AlignmentType,
   ImageRun,
@@ -17,7 +17,7 @@ import {
   TableBorders,
   TableLayoutType,
 } from "docx";
-import { cleanWordFooter, type SchoolBranding } from "./branding";
+import { MAX_WORD_FOOTER_LINES, cleanWordFooter, docxText, type SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
   formatPeriod,
@@ -30,6 +30,15 @@ import {
   type ListGroup,
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
+
+// Every run in this file goes through docxText, so no field (school name,
+// title, a pasted section body) can carry a character that stops Word opening
+// the file.
+class TextRun extends DocxTextRun {
+  constructor(options: Exclude<ConstructorParameters<typeof DocxTextRun>[0], string>) {
+    super(options.text === undefined ? options : { ...options, text: docxText(options.text) });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Minutes as an editable Word document.
@@ -604,9 +613,9 @@ export async function buildMinutesDocx(
 
   const footerText = cleanWordFooter(branding.wordFooter ?? "");
   const doc = new Document({
-    creator: branding.fullName,
-    title: record.title,
-    description: `${MEETING_BODY_LABELS[record.body]} minutes, ${formatPeriod(record.period)}`,
+    creator: docxText(branding.fullName),
+    title: docxText(record.title),
+    description: docxText(`${MEETING_BODY_LABELS[record.body]} minutes, ${formatPeriod(record.period)}`),
     sections: [
       {
         // Set, not left to docx's default, because DEFAULT_CONTENT_WIDTH is
@@ -629,7 +638,7 @@ export async function buildMinutesDocx(
                     new Paragraph({
                       alignment: AlignmentType.CENTER,
                       spacing: { after: 60 },
-                      children: footerText.split("\n").map(
+                      children: footerText.split("\n").slice(0, MAX_WORD_FOOTER_LINES).map(
                         (line, i) => new TextRun({ ...FOOTER_RUN, text: line, break: i ? 1 : undefined })
                       ),
                     }),

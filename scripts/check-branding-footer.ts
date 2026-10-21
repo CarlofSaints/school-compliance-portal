@@ -81,7 +81,7 @@ async function main() {
   check("page numbers still there", xml.includes("PAGE"), true);
 
   // --- bad input: control characters, lone surrogates, lines, non-strings
-  const { cleanWordFooter } = await import("../lib/branding");
+  const { cleanWordFooter, docxText, wordFooterLineCount } = await import("../lib/branding");
   const bad = /[\u0000-\u0009\u000B-\u001F]|[\uD800-\uDFFF]/;
   check("control chars stripped", cleanWordFooter("A\vB\u0001C\fD\u0000E\tF"), "ABCDE F");
   check("tabs become spaces", cleanWordFooter("Reg\t1\t\t2"), "Reg 1  2");
@@ -91,7 +91,8 @@ async function main() {
   check("lone surrogates stripped, real emoji kept", cleanWordFooter("x\uD800y\uDC00z 😀"), "xyz 😀");
   check("CR, CRLF and LF all split", cleanWordFooter("a\rb\r\nc\nd"), "a\nb\nc\nd");
   check("blank runs collapse, ends dropped", cleanWordFooter("\n \nA\n\n \n\nB\n\n"), "A\n\nB");
-  check("at most 6 lines", cleanWordFooter("1\n2\n3\n4\n5\n6\n7\n8"), "1\n2\n3\n4\n5\n6");
+  check("lines are counted after cleaning", [wordFooterLineCount(""), wordFooterLineCount("1\n\n\n2\n"), wordFooterLineCount("1\n2\n3\n4\n5\n6\n7")], [0, 3, 7]);
+  check("docxText keeps tab/LF/CR, drops the rest", docxText("a\tb\nc\rd\u0001\u000B￾￿\uD800e😀"), "a\tb\nc\rde😀");
   const cut = cleanWordFooter("x".repeat(498) + " 😀😀");
   check("cut by code point, never half an emoji", [Array.from(cut).length, cut.endsWith(" 😀")], [500, true]);
   check("cut then trimmed, no trailing newline", cleanWordFooter("x".repeat(499) + "\ny"), "x".repeat(499));
@@ -103,8 +104,21 @@ async function main() {
   const dirty = await footerXml();
   check("docx footer has no control chars or lone surrogates", [dirty.includes("OldXY"), bad.test(dirty.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ""))], [true, false]);
 
-  await put(admin, { wordFooter: { x: 1 }, replyTo: 42 });
-  check("non-string footer ignored", (await getStoredBranding()).wordFooter, "Old\vX\u0001Y\uD800");
+  // Every other text field in the docx is cleaned too: name, title, bodies.
+  await saveStoredBranding({ ...(await getStoredBranding()), fullName: "Sch\u0001ool\uFFFF" });
+  const dirtyRecord = { ...record, title: "Ti\vtle\uD800", sections: [{ id: "a", title: "Op\u0002en", body: "Bo\u0000dy\u001F", order: 1 }] } as typeof record;
+  const zip = await JSZip.loadAsync(await buildMinutesDocxFile(dirtyRecord));
+  const allXml = (await Promise.all(Object.keys(zip.files).filter((n) => n.endsWith(".xml")).map((n) => zip.file(n)!.async("string")))).join("");
+  check("no bad chars anywhere in the docx", [allXml.includes("School"), allXml.includes("Title"), allXml.includes("Body"), /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/.test(allXml), bad.test(allXml.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "").replace(/[\t\n\r]/g, ""))], [true, true, true, false, false]);
+  await saveStoredBranding({ ...(await getStoredBranding()), fullName: "Test School" });
+
+  const before = (await getStoredBranding()).wordFooter;
+  check("non-string footer refused", (await put(admin, { wordFooter: { x: 1 } })).status, 400);
+  check("non-string footer not saved", (await getStoredBranding()).wordFooter, before);
+  check("7 lines refused, not cut", (await put(admin, { wordFooter: "1\n2\n3\n4\n5\n6\n7" })).status, 400);
+  check("6 lines accepted", (await put(admin, { wordFooter: "1\n2\n3\n4\n5\n6" })).status, 200);
+  check("null / object school name refused", [(await put(admin, { fullName: null })).status, (await put(admin, { shortName: { a: 1 } })).status], [400, 400]);
+  check("school name not saved as the word null", (await getStoredBranding()).fullName, "Test School");
   check("non-string reply-to refused", (await put(admin, { replyTo: { a: 1 } })).status, 400);
   check("array reply-to refused", (await put(admin, { replyTo: ["a@example.test"] })).status, 400);
   await put(admin, { wordFooter: null, replyTo: null });

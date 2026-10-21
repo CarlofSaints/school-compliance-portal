@@ -162,24 +162,38 @@ export const MAX_WORD_FOOTER = 500;
 export const MAX_WORD_FOOTER_LINES = 6;
 
 /**
- * The Word minutes footer as it may be stored and printed. 🔴 docx writes
- * control characters (a tab becomes a space) and lone surrogates into the XML as they are, and Word
- * then refuses to open the file, so those go. Blank-line runs collapse to one,
- * blank lines at either end go, then the line and length caps (the length by
- * code point, so an emoji is never cut in half).
+ * Text as docx may write it into a Word file. 🔴 docx escapes & < > " but
+ * writes control characters, lone surrogates and U+FFFE/U+FFFF into the XML
+ * as they are, and Word then refuses to open the file. Tab, LF and CR are
+ * legal XML and kept.
  */
-export function cleanWordFooter(raw: string): string {
-  const lines = raw
+export function docxText(raw: string): string {
+  return raw
     // Keep pairs, drop lone halves. No lookbehind: this file loads on every
     // page and Safari before 16.4 throws a SyntaxError on one.
     .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (m) => (m.length === 2 ? m : ""))
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F￾￿]/g, "");
+}
+
+/**
+ * The Word minutes footer as it may be stored and printed: docxText, a tab
+ * becomes a space, blank-line runs collapse to one, blank lines at either end
+ * go, then the length cap (by code point, so an emoji is never cut in half).
+ * Lines are NOT cut here: more than MAX_WORD_FOOTER_LINES is refused on save
+ * (wordFooterLineCount), so nobody loses a line without being told.
+ */
+export function cleanWordFooter(raw: string): string {
+  const lines = docxText(raw.replace(/\t/g, " "))
     .split(/\r\n|\r|\n/)
-    .map((l) => l.replace(/\t/g, " ").replace(/[\u0000-\u001F\u007F￾￿]/g, "").trimEnd())
+    .map((l) => l.trimEnd())
     .filter((l, i, all) => l.trim() !== "" || (i > 0 && all[i - 1].trim() !== ""));
-  return Array.from(lines.join("\n").trim().split("\n").slice(0, MAX_WORD_FOOTER_LINES).join("\n"))
-    .slice(0, MAX_WORD_FOOTER)
-    .join("")
-    .trim();
+  return Array.from(lines.join("\n").trim()).slice(0, MAX_WORD_FOOTER).join("").trim();
+}
+
+/** Lines the footer will print as, after cleaning (0 when empty). */
+export function wordFooterLineCount(raw: string): number {
+  const clean = cleanWordFooter(raw);
+  return clean ? clean.split("\n").length : 0;
 }
 
 /** Convert a "#RRGGBB" hex string to an [r, g, b] tuple for jsPDF. */
