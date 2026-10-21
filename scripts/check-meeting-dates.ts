@@ -7,7 +7,9 @@ import { withMeetingDates, type ActionItem } from "../lib/actionItems";
 import { buildSummaryRows } from "../lib/actionSummary";
 import { buildWeeklyFacts } from "../lib/weeklyUpdate";
 import type { MinutesRecord } from "../lib/minutesData";
-import { formatDayMonthYear, LOCALES } from "../lib/i18n/locales";
+import { formatMeetingDate } from "../lib/minutes";
+import { makeT } from "../lib/i18n/translate";
+import { readFileSync } from "node:fs";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -61,12 +63,13 @@ check("weekly: a date typed on the item wins over the minutes'", line("A-004"), 
 const edited = { ...items[0], title: "Edited" } as ActionItem;
 check("an edited item re-enriched keeps the minutes' date", withMeetingDates([edited], byId)[0].fromMinutes?.meetingDate, "2026-10-15");
 
-// The page's date: day month year in every UI language, never M/D/Y or Y M D.
-for (const { code } of LOCALES) {
-  const out = formatDayMonthYear("2026-10-15", code);
-  check(`page date in ${code} starts with the day, ends with the year`, /^15 \S+ 2026$/.test(out), true);
+// The page's date: day month year, the month from that language's dictionary.
+const october: Record<string, string> = { af: "Oktober", zu: "Okthoba", xh: "Oktobha", nso: "Oktobore", tn: "Diphalane", st: "Mphalane" };
+for (const [code, month] of Object.entries(october)) {
+  const t = makeT(JSON.parse(readFileSync(`lib/i18n/dictionaries/${code}.json`, "utf8")));
+  check(`page date in ${code}`, formatMeetingDate("2026-10-15", t), `15 ${month} 2026`);
 }
-check("page date in English", formatDayMonthYear("2026-10-15", "en"), "15 October 2026");
+check("English (emails, Word) unchanged", formatMeetingDate("2026-10-15"), "15 October 2026");
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

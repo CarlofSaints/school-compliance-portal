@@ -10,7 +10,7 @@ import ActionItemForm from "@/components/ActionItemForm";
 import ActionProgressModal from "@/components/ActionProgressModal";
 import { useTableSort, useColumnWidths } from "@/lib/useTable";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
-import { useT, useLocale } from "@/components/I18nProvider";
+import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
 import {
   PRIORITY_LABELS,
@@ -30,7 +30,7 @@ import {
   meetingDateOf,
 } from "@/lib/actionItems";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
-import { formatDayMonthYear } from "@/lib/i18n/locales";
+import { formatMeetingDate } from "@/lib/minutes";
 
 export interface DirectoryPerson {
   id: string;
@@ -125,7 +125,6 @@ function SummaryTile({
 
 export default function ActionItemsPage() {
   const t = useT();
-  const locale = useLocale();
   // No permission to read: who agreed to do what belongs to everybody in the
   // portal, the same way the People register does. Raising and editing is
   // gated below.
@@ -712,7 +711,7 @@ export default function ActionItemsPage() {
                       )}
                       {meetingDate && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {t("Raised at the meeting of {date}", { date: formatDayMonthYear(meetingDate, locale) })}
+                          {t("Raised at the meeting of {date}", { date: formatMeetingDate(meetingDate, t) })}
                         </p>
                       )}
                       {/* Where it came from, linking back to the minute that

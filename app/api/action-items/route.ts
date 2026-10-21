@@ -23,8 +23,8 @@ import {
   displayNameFor,
 } from "@/lib/actionItemRecipients";
 import { notifyAssignees } from "@/lib/actionItemNotify";
-import type { FromMinutes } from "@/lib/actionItems";
-import { getMinutes } from "@/lib/minutesData";
+import { withMeetingDates, type FromMinutes } from "@/lib/actionItems";
+import { getMinutes, type MinutesRecord } from "@/lib/minutesData";
 import { formatPeriod } from "@/lib/minutes";
 import { v4 as uuidv4 } from "uuid";
 
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
     // a meeting that never agreed it - and an action item's authority is
     // entirely "the SGB minuted this".
     let fromMinutes: FromMinutes | undefined;
-    let minutesDate: string | undefined;
+    let minutes: MinutesRecord | null = null;
     const minutesId = String(body?.fromMinutesId ?? "").trim();
     if (minutesId) {
       const record = await getMinutes(minutesId);
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      minutesDate = record.meetingDate;
+      minutes = record;
       const sectionId = String(body?.fromSectionId ?? "").trim();
       const section = record.sections.find((s) => s.id === sectionId);
       fromMinutes = {
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
 
     // The minutes' date in the response only (never stored), from the record
     // read and access-checked above.
-    const dated = item.fromMinutes && minutesDate ? { ...item, fromMinutes: { ...item.fromMinutes, meetingDate: minutesDate } } : item;
+    const [dated] = minutes ? withMeetingDates([item], new Map([[minutes.id, minutes]])) : [item];
     return NextResponse.json({ ...dated, notified }, { status: 201 });
   } catch (err) {
     console.error("[action-items] create failed:", err);

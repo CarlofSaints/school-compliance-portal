@@ -212,36 +212,32 @@ async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, Minu
   return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
 }
 
-/** The access context, the minutes these actions came from, and this
- *  session as a reader: what both functions below need. */
-async function loadActionAccess(session: SessionPayload, items: ActionOrigin[]) {
+type Datable = ActionOrigin & { fromMinutes?: { meetingDate?: string } };
+
+/** The one body behind both functions below: the minutes' date on every
+ *  action this session may see. An action it may not see is dropped
+ *  (`hidden: "drop"`, the register) or handed back undated (`"keep"`, a
+ *  write's own response). */
+async function datedFor<T extends Datable>(session: SessionPayload, items: T[], hidden: "drop" | "keep"): Promise<T[]> {
+  if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
   const [ctx, byId] = await Promise.all([
     loadMinutesAccessContext(),
     minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
   ]);
-  return { ctx, byId, reader: await readerForSession(session, ctx) };
+  const reader = await readerForSession(session, ctx);
+  const dated = withMeetingDates(items, byId);
+  return items.flatMap((i, n) => (actionVisible(i, reader, byId, ctx) ? [dated[n]] : hidden === "keep" ? [i] : []));
 }
 
 /** Every response that hands back action items goes through this (or
  *  visibleActionsFor), so the meeting date survives an edit on the client.
  *  Same rule as GET: the date only on an action this session may see. */
-export async function withMinutesMeetingDates<T extends ActionOrigin & { fromMinutes?: { meetingDate?: string } }>(
-  session: SessionPayload,
-  items: T[]
-): Promise<T[]> {
-  if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
-  const { ctx, byId, reader } = await loadActionAccess(session, items);
-  const dated = withMeetingDates(items, byId);
-  return items.map((i, n) => (actionVisible(i, reader, byId, ctx) ? dated[n] : i));
+export function withMinutesMeetingDates<T extends Datable>(session: SessionPayload, items: T[]): Promise<T[]> {
+  return datedFor(session, items, "keep");
 }
 
 /** For a session reading the action register: the actions they may see,
- *  each with its minutes' meeting date (the minutes are read here anyway). */
-export async function visibleActionsFor<T extends ActionOrigin & { fromMinutes?: { meetingDate?: string } }>(
-  session: SessionPayload,
-  items: T[]
-): Promise<T[]> {
-  if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
-  const { ctx, byId, reader } = await loadActionAccess(session, items);
-  return withMeetingDates(items.filter((i) => actionVisible(i, reader, byId, ctx)), byId);
+ *  each with its minutes' meeting date. */
+export function visibleActionsFor<T extends Datable>(session: SessionPayload, items: T[]): Promise<T[]> {
+  return datedFor(session, items, "drop");
 }
