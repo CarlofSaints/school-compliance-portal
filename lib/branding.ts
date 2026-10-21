@@ -47,6 +47,8 @@ export interface SchoolBranding {
   /** Where replies go. Set by the school, needs no DNS. Absent means the
    *  Reply-To header is left off entirely. */
   replyTo?: string;
+  /** Set by the school under Branding; printed in the Word minutes footer. */
+  wordFooter?: string;
   colors: {
     /** Brand primary — buttons, headings, email header. White text sits on
      *  this, so it must be dark enough for white to read (cyan, black, navy…). */
@@ -154,6 +156,45 @@ const SCHOOLS: Record<string, SchoolBranding> = {
 const KEY = (process.env.NEXT_PUBLIC_SCHOOL || "generic").toLowerCase();
 
 export const branding: SchoolBranding = SCHOOLS[KEY] ?? SCHOOLS.generic;
+
+/** Longest Word minutes footer, in characters, and most lines it may have. */
+export const MAX_WORD_FOOTER = 500;
+export const MAX_WORD_FOOTER_LINES = 6;
+
+/**
+ * Text as docx may write it into a Word file. 🔴 docx escapes & < > " but
+ * writes control characters, lone surrogates and U+FFFE/U+FFFF into the XML
+ * as they are, and Word then refuses to open the file. Tab, LF and CR are
+ * legal XML and kept.
+ */
+export function docxText(raw: string): string {
+  return raw
+    // Keep pairs, drop lone halves. No lookbehind: this file loads on every
+    // page and Safari before 16.4 throws a SyntaxError on one.
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (m) => (m.length === 2 ? m : ""))
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFE\uFFFF]/g, "");
+}
+
+/**
+ * The Word minutes footer as it may be stored and printed: docxText, a tab
+ * becomes a space, blank-line runs collapse to one, blank lines at either end
+ * go. Nothing is cut here: more than MAX_WORD_FOOTER_LINES lines or
+ * MAX_WORD_FOOTER characters (by code point) is refused on save, so nobody
+ * loses text without being told.
+ */
+export function cleanWordFooter(raw: string): string {
+  const lines = docxText(raw.replace(/\t/g, " "))
+    .split(/\r\n|\r|\n/)
+    .map((l) => l.trimEnd())
+    .filter((l, i, all) => l.trim() !== "" || (i > 0 && all[i - 1].trim() !== ""));
+  return lines.join("\n").trim();
+}
+
+/** Lines the footer will print as, after cleaning (0 when empty). */
+export function wordFooterLineCount(raw: string): number {
+  const clean = cleanWordFooter(raw);
+  return clean ? clean.split("\n").length : 0;
+}
 
 /** Convert a "#RRGGBB" hex string to an [r, g, b] tuple for jsPDF. */
 export function hexToRgb(hex: string): [number, number, number] {

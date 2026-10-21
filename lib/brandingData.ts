@@ -28,6 +28,9 @@ export interface StoredBranding {
   /** Where a REPLY goes. Nobody reads noreply@, so without this a reply to a
    *  reminder is silently discarded. Needs no DNS, unlike the From address. */
   replyTo?: string;
+  /** Free text printed in the footer of every page of the Word minutes:
+   *  a private school's directors, an address, a registration number. */
+  wordFooter?: string;
   /** Set once a crest has been uploaded. The bytes live at LOGO_PATH; this
    *  records the type and a version so a changed crest busts caches. */
   logo?: {
@@ -139,6 +142,7 @@ export function applyStoredBranding(
     // front of it changes. See lib/emailIdentity.ts.
     fromEmail: buildFromAddress(fullName, base.fromEmail),
     replyTo: buildReplyTo(stored.replyTo),
+    wordFooter: stored.wordFooter ?? base.wordFooter,
     fullName,
     // 🔴 Falls back to the school's OWN name before the code default.
     //

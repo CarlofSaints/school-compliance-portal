@@ -2,7 +2,7 @@ import {
   Document,
   Packer,
   Paragraph,
-  TextRun,
+  TextRun as DocxTextRun,
   HeadingLevel,
   AlignmentType,
   ImageRun,
@@ -17,7 +17,7 @@ import {
   TableBorders,
   TableLayoutType,
 } from "docx";
-import type { SchoolBranding } from "./branding";
+import { MAX_WORD_FOOTER_LINES, cleanWordFooter, docxText, type SchoolBranding } from "./branding";
 import { readableTextOn } from "./brandingColors";
 import {
   formatPeriod,
@@ -30,6 +30,25 @@ import {
   type ListGroup,
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
+
+// Every string of the record and branding is cleaned once at the top of
+// buildMinutesDocx, so no field (school name, title, a pasted section body)
+// can carry a character that stops Word opening the file.
+function docxTextDeep<T>(v: T): T {
+  if (typeof v === "string") return docxText(v) as T;
+  if (Array.isArray(v)) return v.map(docxTextDeep) as T;
+  if (v && Object.getPrototypeOf(v) === Object.prototype) {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, docxTextDeep(x)])) as T;
+  }
+  return v;
+}
+
+// Backstop: a run built from text that did not come from those two.
+class TextRun extends DocxTextRun {
+  constructor(options: Exclude<ConstructorParameters<typeof DocxTextRun>[0], string>) {
+    super(options.text === undefined ? options : { ...options, text: docxText(options.text) });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Minutes as an editable Word document.
@@ -47,6 +66,9 @@ import type { MinutesRecord } from "./minutesData";
 // Building the OOXML directly embeds the crest as bytes, which is the only way
 // this survives being emailed to a Principal.
 // ---------------------------------------------------------------------------
+
+/** Every footer run: small and grey. */
+const FOOTER_RUN = { size: 16, color: "888888" } as const;
 
 /** Wide enough to write a signature on, in twips (1/20 pt). ~7cm. */
 const SIGNATURE_LINE_WIDTH = 4000;
@@ -369,6 +391,9 @@ export async function buildMinutesDocx(
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
   // office holders.
+  const footerText = cleanWordFooter(branding.wordFooter ?? "");
+  record = docxTextDeep(record);
+  branding = docxTextDeep(branding);
   const children: (Paragraph | Table)[] = [];
 
 
@@ -616,17 +641,30 @@ export async function buildMinutesDocx(
         footers: {
           default: new Footer({
             children: [
+              // The school's own footer text (directors, address), one run per
+              // line so its line breaks survive. Cleaned once, by
+              // cleanWordFooter above, so these runs skip the backstop.
+              ...(footerText
+                ? [
+                    new Paragraph({
+                      alignment: AlignmentType.CENTER,
+                      spacing: { after: 60 },
+                      children: footerText.split("\n").slice(0, MAX_WORD_FOOTER_LINES).map(
+                        (line, i) => new DocxTextRun({ ...FOOTER_RUN, text: line, break: i ? 1 : undefined })
+                      ),
+                    }),
+                  ]
+                : []),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [
                   new TextRun({
+                    ...FOOTER_RUN,
                     text: `${branding.fullName}  |  ${MEETING_BODY_LABELS[record.body]} minutes  |  ${minutesWhenLabel(record)}  |  Page `,
-                    size: 16,
-                    color: "888888",
                   }),
-                  new TextRun({ children: [PageNumber.CURRENT], size: 16, color: "888888" }),
-                  new TextRun({ text: " of ", size: 16, color: "888888" }),
-                  new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: "888888" }),
+                  new TextRun({ ...FOOTER_RUN, children: [PageNumber.CURRENT] }),
+                  new TextRun({ ...FOOTER_RUN, text: " of " }),
+                  new TextRun({ ...FOOTER_RUN, children: [PageNumber.TOTAL_PAGES] }),
                 ],
               }),
             ],
