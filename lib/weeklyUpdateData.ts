@@ -189,12 +189,13 @@ export async function sendWeeklyUpdate(opts: {
   const now = opts.now ?? new Date();
   // One strict read of the minutes feeds both the facts and the per-reader
   // filter: an unreadable set hides its actions instead of reading as deleted.
-  const minutesById = await minutesByIdStrict();
-  const [settings, branding, facts, accessCtx] = await Promise.all([
+  const minutes = minutesByIdStrict(); // started now, awaited with the rest
+  const [settings, branding, facts, accessCtx, minutesById] = await Promise.all([
     getWeeklyUpdateSettings(),
     resolveBranding(),
-    gatherWeeklyFacts(now, minutesById),
+    minutes.then((m) => gatherWeeklyFacts(now, m)),
     loadMinutesAccessContext(),
+    minutes,
   ]);
   const teamName = teamNameFor(settings, branding.fullName);
   const today = todayIso(now);

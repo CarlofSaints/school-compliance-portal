@@ -39,6 +39,15 @@ const INDEX_REPAIR: Limit = {
   message: "",
 };
 
+// Not a refusal either: how many of those scans one connection may cause per
+// window (a school's few real misses fit easily; a bot's random list does not).
+const INDEX_SCAN_IP: Limit = {
+  scope: "login-index-scan-ip",
+  max: 5,
+  windowSec: LIMITS.loginIp.windowSec,
+  message: "",
+};
+
 // Not a limit anybody is refused by: a once-per-window marker, so failed
 // sign-ins for addresses with no account log ONE entry per connection per
 // window, however many addresses a bot tries.
@@ -129,8 +138,10 @@ export async function POST(req: NextRequest) {
       // in, and the index is put back after the reply. Once per address per
       // window (a counter that could not be saved allows it), so a truly
       // unknown address does not pay for the scan every time.
+      // ...and at most INDEX_SCAN_IP.max scans per connection per window, so
+      // random addresses cannot make one connection force thousands of reads.
       const scan = await hit(INDEX_REPAIR, account);
-      if (scan.count === undefined || scan.count === 1) {
+      if ((scan.count === undefined || scan.count === 1) && (await hit(INDEX_SCAN_IP, ip)).ok) {
         user = await getUserByEmail(email);
         if (user) await afterResponse(() => repairUserIndex());
       }

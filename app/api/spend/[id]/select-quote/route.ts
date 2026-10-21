@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
-import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
 import { mayActOnApproved } from "@/lib/approvalEngine";
-import { getApprovalSettings, quoteBandProblem } from "@/lib/approvalSettings";
+import { getApprovalSettings, quoteBandProblem, type QuoteBandProblem } from "@/lib/approvalSettings";
 
 export async function POST(
   req: NextRequest,
@@ -55,25 +55,38 @@ export async function POST(
       );
     }
 
-    const selectedQuote = app.quoteDetails[quoteIndex];
-    const approvedAmount = selectedQuote.priceExclVat || 0;
-    // A quote above what was approved may not carry the application into a
-    // band whose approvers never saw it.
+    // 🔴 Every check again INSIDE the guarded write, on the row as it is NOW:
+    // two selections at once (two approvers, a double click) cannot both
+    // land, and the band is judged against the amount actually approved.
     const { tiers } = await getApprovalSettings();
-    const problem = quoteBandProblem(tiers, approvedAmount, app.approvedAmount ?? app.estimatedAmount, app.approvalTierId);
-    if (problem) {
-      // The spend page says this in the reader's language from code, limit
-      // and quote; `error` is only a short fallback for anything else.
-      return NextResponse.json(
-        { error: "This quote is outside the approval band this request was approved in.", ...problem, quote: approvedAmount },
-        { status: 409 }
-      );
+    let band: QuoteBandProblem | null = null;
+    let approvedAmount = 0;
+    try {
+      await updateSpendApplication(id, (current) => {
+        band = null;
+        if (current.status !== "approved") throw new SpendChangeRefused("Can only select a quote for approved applications", 400);
+        if (current.selectedQuoteIndex !== undefined) throw new SpendChangeRefused("A quote has already been selected", 400);
+        const quote = current.quoteDetails[quoteIndex];
+        if (!quote) throw new SpendChangeRefused("Invalid quote index", 400);
+        approvedAmount = quote.priceExclVat || 0;
+        // A quote above what was approved may not carry the application into
+        // a band whose approvers never saw it.
+        band = quoteBandProblem(tiers, approvedAmount, current.approvedAmount ?? current.estimatedAmount, current.approvalTierId);
+        if (band) throw new SpendChangeRefused("band", 409);
+        return { selectedQuoteIndex: quoteIndex, approvedAmount };
+      });
+    } catch (err) {
+      if (!(err instanceof SpendChangeRefused)) throw err;
+      if (band) {
+        // The spend page says this in the reader's language from code, limit
+        // and quote; `error` is only a short fallback for anything else.
+        return NextResponse.json(
+          { error: "This quote is outside the approval band this request was approved in.", ...(band as QuoteBandProblem), quote: approvedAmount },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
-
-    await updateSpendApplication(id, {
-      selectedQuoteIndex: quoteIndex,
-      approvedAmount,
-    });
 
     return NextResponse.json({ success: true, approvedAmount });
   } catch {

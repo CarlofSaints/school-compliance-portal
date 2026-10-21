@@ -128,6 +128,7 @@ async function main() {
   check("forgot-password: per-user failures have one answer", /status: 502/.test(forgot), false);
   check("forgot-password: no email set up is a 503 for every address, before any lookup", forgot.indexOf("status: 503") > 0 && forgot.indexOf("status: 503") < forgot.indexOf("getUserByEmail("), true);
   check("index miss: a counter that could not be saved still allows the scan", auth.includes("scan.count === undefined || scan.count === 1"), true);
+  check("index-miss scans are also capped per connection", auth.includes("(await hit(INDEX_SCAN_IP, ip)).ok"), true);
   check("index miss: the address is counted only after a wrong or unknown answer", /if \(!user \|\| !valid\) \{\s*accountHit \?\?= await hit\(LIMITS\.loginAccount/.test(auth), true);
   check("a LOCKED account found by the scan is still refused: counted before the password", auth.indexOf("user = await getUserByEmail(email);") < auth.indexOf("accountHit = await hit(LIMITS.loginAccount") && auth.indexOf("accountHit = await hit(LIMITS.loginAccount") < auth.indexOf("verifyPassword(user"), true);
   const { tooMany } = await import("../lib/rateLimit");
@@ -144,6 +145,9 @@ async function main() {
   check("a spend admin with approve_spend may", mayActOnApproved(approvedApp, { id: "adm", permissions: ["approve_spend", "manage_spend_settings"] }), true);
   check("a spend admin without approve_spend may not (the route requires it)", mayActOnApproved(approvedApp, { id: "adm", permissions: ["manage_spend_settings"] }), false);
   check("approve_spend alone is not enough", mayActOnApproved(approvedApp, { id: "x", permissions: ["approve_spend"] }), false);
+  const importedRow = { submittedBy: "adm", requiredApprovers: [], importBatchId: "batch-1" } as never;
+  check("an imported row: the importing admin may still pick its quote / complete it", mayActOnApproved(importedRow, { id: "adm", permissions: ["approve_spend"] }), true);
+  check("...but approve_spend is still needed", mayActOnApproved(importedRow, { id: "adm", permissions: ["manage_spend_settings"] }), false);
   const { quoteBandProblem } = await import("../lib/approvalSettings");
   const bands = [
     { id: "low", label: "", minAmount: 0, maxAmount: 5000, logOnly: true, requirements: [] },
@@ -162,6 +166,7 @@ async function main() {
   check("the spend page says a refused band change in the reader's language", spendPage.includes('err.code === "over_band"') && spendPage.includes("{limit}"), true);
   const selectQuote = fs.readFileSync("app/api/spend/[id]/select-quote/route.ts", "utf8");
   check("quote index must be a whole number", selectQuote.includes("Number.isInteger(quoteIndex)"), true);
+  check("already-selected and band checks run inside the guarded write", selectQuote.includes("current.selectedQuoteIndex !== undefined") && selectQuote.includes("quoteBandProblem(tiers, approvedAmount, current."), true);
   const usersRoute = fs.readFileSync("app/api/users/[id]/route.ts", "utf8");
   check("tagged-address guard covers every user's email, not only your own", usersRoute.includes("if (!maySelfTag(session) && (await addressCarriesTags(email)))"), true);
 
@@ -221,6 +226,12 @@ async function main() {
     Buffer.from("\nendstream\nendobj", "latin1"),
   ]);
   check("an object stream holding 'endobj' is read by its /Length", await pdfPages(tricky), 300);
+  const indirect = Buffer.concat([
+    Buffer.from(`15 0 obj << /Type /ObjStm /N 2 /First ${header.length} /Filter /FlateDecode /Length 245 0 R >>\nstream\n`, "latin1"),
+    body,
+    Buffer.from("\nendstream\nendobj 245 0 obj " + body.length + " endobj", "latin1"),
+  ]);
+  check("an indirect /Length 245 0 R is not misread as 24 (found by endstream)", await pdfPages(indirect), 250);
 
   // --- tag membership and email change ---
   const tagsRoute = fs.readFileSync("app/api/tags/[id]/route.ts", "utf8");
@@ -287,7 +298,7 @@ async function main() {
   const remind = fs.readFileSync("app/api/action-items/[id]/remind/route.ts", "utf8");
   check("Remind now: a failed chase is recorded and answered with 503", remind.includes("lastReminderResult: `failed:") && remind.includes("status: 503"), true);
   const cron = fs.readFileSync("app/api/cron/reminders/route.ts", "utf8");
-  check("the cron loads recipients once per run", cron.includes("loadActionRecipientContext()") && cron.includes("recipientCtx)"), true);
+  check("the cron loads recipients once per run", cron.includes("loadActionRecipientContext(false)") && cron.includes("recipientCtx)"), true);
   check("the run log names meeting actions by reference only", /Action \$\{item\.ref\} \$\{item\.title\}/.test(cron), false);
   const runsRoute = fs.readFileSync("app/api/reminders/runs/route.ts", "utf8");
   check("old run logs are cut per reader, by reference alone", runsRoute.includes("visibleActionsFor(") && !runsRoute.includes("i.title"), true);

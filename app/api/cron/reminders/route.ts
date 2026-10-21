@@ -162,7 +162,9 @@ export async function GET(req: NextRequest) {
   const dueActions = actionsDueForChase(actions, now);
   // Read once for the run. If it fails, each action reads its own and fails
   // (and is retried) on its own below.
-  const recipientCtx = dueActions.length ? await loadActionRecipientContext().catch(() => undefined) : undefined;
+  // Minutes access is NOT loaded here: only a meeting action needs it, and it
+  // is filled in (and retried, if it fails) by the first one that does.
+  const recipientCtx = dueActions.length ? await loadActionRecipientContext(false).catch(() => undefined) : undefined;
 
   for (const item of dueActions) {
     // The run log is read by admins who may not read every set of minutes, so

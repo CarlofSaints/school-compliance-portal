@@ -83,7 +83,8 @@ function objStmObjects(raw: string, at: number, obj: string): string[] | null {
   // A direct /Length is exact, so the bytes may end in a newline or even hold
   // "endobj" (which split `obj`). Only an indirect one (/Length 12 0 R) is
   // found by its endstream instead, inside this piece.
-  const direct = /\/Length\s+(\d+)(?!\s+\d+\s+R)/.exec(dict);
+  // (?!\d...): no backtracking into a shorter number ("24" of "245 0 R").
+  const direct = /\/Length\s+(\d+)(?!\d|\s+\d+\s+R)/.exec(dict);
   let body: string;
   if (direct) {
     body = raw.slice(dataStart, dataStart + Number(direct[1]));
