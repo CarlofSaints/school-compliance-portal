@@ -28,7 +28,7 @@ export async function GET(
     return NextResponse.json({ error: "No signature" }, { status: 404 });
   }
 
-  const bytes = await readSignatureImage(id, address);
+  const bytes = await readSignatureImage(id, address, record.signatories.map((s) => s.email));
   if (!bytes) {
     return NextResponse.json({ error: "No signature" }, { status: 404 });
   }

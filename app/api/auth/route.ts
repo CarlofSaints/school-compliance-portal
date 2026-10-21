@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LIMITS, peek, hit, clear, tooMany, ipOf, type Limit } from "@/lib/rateLimit";
-import { getUserByEmail, getUserById, verifyPassword, type User } from "@/lib/userData";
+import { LIMITS, hit, clear, tooMany, ipOf, type Limit, type LimitResult } from "@/lib/rateLimit";
+import { getUserByEmail, getUserById, verifyPassword, repairUserIndex, type User } from "@/lib/userData";
 import { getRoleById, resolveRolePermissions, requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { afterResponse, actorFromUser } from "@/lib/activityActor";
@@ -29,6 +29,24 @@ function fromThisSite(req: NextRequest): boolean {
   );
 }
 import { tenantScope } from "@/lib/tenantContext";
+
+// Not a limit anybody is refused by: a once-per-window marker per ADDRESS
+// that gates the inline scan for an account missing from the index.
+const INDEX_REPAIR: Limit = {
+  scope: "login-index-repair",
+  max: 1,
+  windowSec: LIMITS.loginIp.windowSec,
+  message: "",
+};
+
+// Not a refusal either: how many of those scans one connection may cause per
+// window (a school's few real misses fit easily; a bot's random list does not).
+const INDEX_SCAN_IP: Limit = {
+  scope: "login-index-scan-ip",
+  max: 5,
+  windowSec: LIMITS.loginIp.windowSec,
+  message: "",
+};
 
 // Not a limit anybody is refused by: a once-per-window marker, so failed
 // sign-ins for addresses with no account log ONE entry per connection per
@@ -74,10 +92,8 @@ export async function POST(req: NextRequest) {
     // once the reply has gone: every sign-in and every wrong password for a
     // real account; ONE entry per connection per window for unknown
     // addresses; ONE entry when a connection is blocked or an account locks.
-    // Attempts on an already-locked account write NOTHING (no lookup, no
-    // tally): the one "Account locked" entry covers them, a bot gets no
-    // storage work per request, and a right password typed during the lock
-    // is not miscounted as a wrong one.
+    // Attempts on an already-locked account are counted but never logged:
+    // the one "Account locked" entry covers them.
     // Logged as the address the limiter counted, so an investigator sees
     // the one that was actually counted or locked.
     const ip = ipOf(req);
@@ -88,9 +104,11 @@ export async function POST(req: NextRequest) {
     const typed = maskTypedEmail(email);
     const actorOf = (u: User) => ({ ...actorFromUser(req, u), ip });
 
-    // Rate limits: every attempt counts against the connection; WRONG
-    // passwords count against the address, whether or not it has an account,
-    // so the lock cannot be used to find out which addresses exist.
+    // Rate limits: every attempt counts against the connection. Against the
+    // address: every attempt on an indexed account (before the password check,
+    // cleared by the right one), and every wrong or unknown answer otherwise,
+    // whether or not it has an account, so the lock cannot be used to find out
+    // which addresses exist.
     const ipHit = await hit(LIMITS.loginIp, ip);
     if (!ipHit.ok) {
       // Only the FIRST refusal in a window is logged, so a bot hammering the
@@ -111,12 +129,45 @@ export async function POST(req: NextRequest) {
       return tooMany(LIMITS.loginIp, ipHit);
     }
     const account = String(email).trim().toLowerCase();
-    const locked = await peek(LIMITS.loginAccount, account);
-    if (!locked.ok) return tooMany(LIMITS.loginAccount, locked);
-
-    const user = await getUserByEmail(email);
+    // Index first. The password is compared even with no account, so a
+    // repeated unknown address answers in the same time as a wrong password.
+    let user = await getUserByEmail(email, false);
+    // Whether "no account" is CERTAIN. Not when the scan was skipped by the
+    // per-connection cap: a real user missing from the index could be the one
+    // typing, and the right password must never add to a lock.
+    let certain = true;
     if (!user) {
-      await hit(LIMITS.loginAccount, account);
+      // Missing from the index (rare): the slow scan of every account's own
+      // copy runs INLINE, so a real user dropped from the index still signs
+      // in, and the index is put back after the reply. Once per address per
+      // window (a counter that could not be saved allows it), so a truly
+      // unknown address does not pay for the scan every time.
+      // ...and at most INDEX_SCAN_IP.max scans per connection per window, so
+      // random addresses cannot make one connection force thousands of reads.
+      // (A later attempt this window, skipped by the per-address marker, is
+      // certain: this window's scan found nobody, or put them back.)
+      const scan = await hit(INDEX_REPAIR, account);
+      if (scan.count === undefined || scan.count === 1) {
+        if ((await hit(INDEX_SCAN_IP, ip)).ok) {
+          user = await getUserByEmail(email);
+          if (user) await afterResponse(() => repairUserIndex());
+        } else {
+          certain = false;
+        }
+      }
+    }
+    let accountHit: LimitResult | undefined;
+    if (user || certain) {
+      // Counted BEFORE the password is checked, in one guarded write, for a
+      // real account and a certain unknown address alike: a LOCKED address is
+      // refused at the same point either way (both 429s cost the same), and
+      // the lock cannot tell addresses with an account apart. The right
+      // password clears it below.
+      accountHit = await hit(LIMITS.loginAccount, account);
+      if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
+    }
+    const valid = await verifyPassword(user, password);
+    if (!user) {
       await afterResponse(async () => {
         // Only the first unknown address from this connection in a window.
         const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
@@ -137,12 +188,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const valid = await verifyPassword(user, password);
     if (!valid) {
-      const accountHit = await hit(LIMITS.loginAccount, account);
+      const wrongHit = accountHit!; // always counted just above for a wrong answer
       // When the lock lifts, from the limiter's own answer, taken NOW (not
       // when the log write runs) so summary and detail say the same thing.
-      const lockedUntil = Date.now() + accountHit.retryAfter * 1000;
+      const lockedUntil = Date.now() + wrongHit.retryAfter * 1000;
       await afterResponse(async () => {
         await Promise.all([
           recordActivity({
@@ -157,7 +207,7 @@ export async function POST(req: NextRequest) {
           countSignIn(user, "failed", ip, device, at),
         ]);
         // The wrong password that locks the account, logged once per lock.
-        if (accountHit.count === LIMITS.loginAccount.max) {
+        if (wrongHit.count === LIMITS.loginAccount.max) {
           const until = sastIso(lockedUntil).slice(11, 16);
           await recordActivity({
             at,

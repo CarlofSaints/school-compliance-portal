@@ -32,6 +32,9 @@ export interface CreditRequest {
   status: "pending" | "approved";
   approvedAt?: string;
   tokenHash: string;
+  // Random per write: see the "OUR write may be the one" note in updateJson. Two approvals of one link
+  // must not both win the claim and both add the credits.
+  rev?: string;
 }
 
 const path = (id: string) => `translations/credit-requests/${id}.json`;
@@ -98,7 +101,7 @@ export async function approveCreditRequest(
   let claimed: CreditRequest | null = null;
   await updateJson<CreditRequest | null>(path(id), null, (r) => {
     if (!r || r.status !== "pending") return NO_CHANGE;
-    claimed = { ...r, status: "approved", approvedAt: new Date().toISOString() };
+    claimed = { ...r, status: "approved", approvedAt: new Date().toISOString(), rev: randomBytes(8).toString("hex") };
     return claimed;
   });
   if (!claimed) return { ok: false, status: 409, error: "These credits were already added." };

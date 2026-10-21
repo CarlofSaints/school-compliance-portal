@@ -1,5 +1,5 @@
 import { withMeetingDates } from "./actionItems";
-import type { MinutesRecord } from "./minutesData";
+import { minutesByIdStrict, type MinutesRecord } from "./minutesData";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
@@ -25,7 +25,6 @@ import { buildSummaryWorkbook, summaryFilename } from "./actionSummaryWorkbook";
 import {
   loadMinutesAccessContext,
   loadRecipientResolver,
-  minutesIndex,
   actionVisible,
   type Reader,
 } from "./minutesAccess";
@@ -53,10 +52,12 @@ export async function patchActionSummarySettings(
   change: (current: ActionSummarySettings) => Partial<ActionSummarySettings> | typeof NO_CHANGE
 ): Promise<ActionSummarySettings> {
   return parseActionSummary(
-    await updateJson<ActionSummarySettings>(PATH, DEFAULT_ACTION_SUMMARY, (raw) => {
+    // rev: random per write, so two runs claiming the day cannot both win.
+    // See the "OUR write may be the one" note in updateJson.
+    await updateJson<ActionSummarySettings & { rev?: string }>(PATH, DEFAULT_ACTION_SUMMARY, (raw) => {
       const current = parseActionSummary(raw);
       const patch = change(current);
-      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch };
+      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch, rev: crypto.randomUUID() };
     })
   );
 }
@@ -124,7 +125,7 @@ export async function gatherSummaryRows(
   dueSoonDays: number,
   now: Date = new Date(),
   /** Opt-in: only callers that show the meeting date pay for reading every minutes set. */
-  minutes?: Promise<Map<string, MinutesRecord>>
+  minutes?: Promise<Map<string, MinutesRecord | null>>
 ): Promise<SummaryRow[]> {
   const [stored, people, users, minutesById] = await Promise.all([getActionItems(), getPeople(), getUsers(), minutes]);
   const items = minutesById ? withMeetingDates(stored, minutesById) : stored;
@@ -142,7 +143,7 @@ export async function gatherSummaryRows(
  * may not read is left out, unless they are carrying it. Built once per send,
  * then applied per recipient.
  */
-async function rowFilterFactory(minutes: Promise<Map<string, MinutesRecord>>) {
+async function rowFilterFactory(minutes: Promise<Map<string, MinutesRecord | null>>) {
   const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutes]);
   const resolver = await loadRecipientResolver(ctx);
   const forReader = (reader: Reader) => (rows: SummaryRow[]) =>
@@ -171,7 +172,7 @@ export async function buildSummaryFile(
 ): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const minutes = minutesIndex(); // started now, awaited alongside the other reads
+  const minutes = minutesByIdStrict(); // started now, awaited alongside the other reads
   let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   if (forUserId) rows = (await rowFilterFactory(minutes)).forUserId(forUserId)(rows);
   const content = await buildSummaryWorkbook({
@@ -210,7 +211,7 @@ export async function sendActionSummary(opts: {
   const now = opts.now ?? new Date();
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const minutes = minutesIndex(); // started now, awaited alongside the other reads
+  const minutes = minutesByIdStrict(); // started now, awaited alongside the other reads
   const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   const scheduleText = settings.enabled ? describeSchedule(settings, WEEKDAY_LABELS) : "";
   const filename = summaryFilename(branding.shortName, asOf);

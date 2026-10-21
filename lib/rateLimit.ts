@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { readJson, updateJson, writeJson } from "./controlData";
+import { updateJson, writeJson, UpdateConflictError } from "./controlData";
 import { runInControlStore } from "./tenantContext";
 
 // ---------------------------------------------------------------------------
@@ -22,6 +22,10 @@ import { runInControlStore } from "./tenantContext";
 // ⚠️ FAILS OPEN on a storage error, deliberately: a limiter that cannot read
 // its own counter must not lock the whole school out of signing in. The error
 // is logged. The firewall still applies.
+//
+// 🔴 EXCEPT a limit marked failClosed, when its counter keeps losing write
+// races (updateJson has already retried): that is a burst on one key, not an
+// outage, and a guessing limit must refuse it rather than wave it through.
 // ---------------------------------------------------------------------------
 
 export interface Limit {
@@ -34,13 +38,19 @@ export interface Limit {
   /** Counted in the platform's control store, for requests that arrive before
    *  there is a school (new-school signup). */
   platform?: boolean;
+  /** Refuse, not allow, when the count cannot be saved for lost write races. */
+  failClosed?: boolean;
 }
 
 export const LIMITS = {
+  // Every per-IP limit fails OPEN: a whole school shares one NAT address, and
+  // 30 staff signing in at 07:45 is contention, not an attack. loginAccount too:
+  // it is hit on every sign-in, so contention must not lock a known user out
+  // (five wrong passwords still lock it). The rest stay closed.
   loginIp: { scope: "login-ip", max: 20, windowSec: 15 * 60, message: "Too many sign-in attempts from this connection. Try again in {wait}." },
   loginAccount: { scope: "login-account", max: 5, windowSec: 15 * 60, message: "Too many wrong passwords for this account. Try again in {wait}, or reset your password." },
   resetRequestIp: { scope: "reset-request-ip", max: 5, windowSec: 60 * 60, message: "Too many reset requests from this connection. Try again in {wait}." },
-  resetRequestEmail: { scope: "reset-request-email", max: 3, windowSec: 60 * 60, message: "Too many reset requests for this address. Check your inbox, or try again in {wait}." },
+  resetRequestEmail: { scope: "reset-request-email", failClosed: true, max: 3, windowSec: 60 * 60, message: "Too many reset requests for this address. Check your inbox, or try again in {wait}." },
   resetCompleteIp: { scope: "reset-complete-ip", max: 10, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailChangeUser: { scope: "email-change-user", max: 3, windowSec: 60 * 60, message: "Too many email change requests. Try again in {wait}." },
   confirmEmailIp: { scope: "confirm-email-ip", max: 10, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
@@ -55,12 +65,13 @@ export const LIMITS = {
   creditApproveIp: { scope: "credit-approve-ip", max: 20, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },
   bookingWriteUser: { scope: "booking-write-user", max: 120, windowSec: 60 * 60, message: "You have made a lot of room booking changes this hour. Try again in {wait}." },
-  signCodeAttempt: { scope: "sign-code-attempt", max: 10, windowSec: 60 * 60, message: "Too many signing attempts. Try again in {wait}, or ask the secretary to send a new code." },
+  signCodeAttempt: { scope: "sign-code-attempt", failClosed: true, max: 10, windowSec: 60 * 60, message: "Too many signing attempts. Try again in {wait}, or ask the secretary to send a new code." },
 } satisfies Record<string, Limit>;
 
 interface Bucket {
   start: number; // ms
   count: number;
+  w?: string;
 }
 
 function pathFor(limit: Limit, key: string): string {
@@ -75,6 +86,9 @@ export interface LimitResult {
   retryAfter: number;
   /** Hits in this window, when counted. count === max + 1 is the FIRST refusal. */
   count?: number;
+  /** Refused only because the counter could not be saved (failClosed), not
+   *  because anybody is over the limit: told so, not "too many". */
+  busy?: true;
 }
 
 function decide(limit: Limit, b: Bucket, now: number): LimitResult {
@@ -97,25 +111,23 @@ export function nextBucket(limit: Limit, b: Bucket | null, now: number): Bucket 
 export async function hit(limit: Limit, key: string, now = Date.now()): Promise<LimitResult> {
   if (!key) return { ok: true, remaining: limit.max, retryAfter: 0 };
   try {
-    const write = () => updateJson<Bucket | null>(pathFor(limit, key), null, (cur) => nextBucket(limit, cur, now));
+    // A random mark on every write: two requests that both turn count 3 into
+    // count 4 would otherwise write IDENTICAL files, and updateJson takes a
+    // file that already holds exactly what it wrote as its own write landing,
+    // so the loser of the race was never counted.
+    const write = () =>
+      updateJson<Bucket | null>(pathFor(limit, key), null, (cur) => ({
+        ...nextBucket(limit, cur, now),
+        w: crypto.randomBytes(6).toString("hex"),
+      }));
     const b = limit.platform ? await runInControlStore(write) : await write();
     return decide(limit, b as Bucket, now);
   } catch (err) {
+    if (limit.failClosed && err instanceof UpdateConflictError) {
+      console.error(`[rate-limit] ${limit.scope}: counter contended, refusing:`, err);
+      return { ok: false, remaining: 0, retryAfter: 60, busy: true };
+    }
     console.error(`[rate-limit] ${limit.scope}: could not count, allowing:`, err);
-    return { ok: true, remaining: limit.max, retryAfter: 0 };
-  }
-}
-
-/** Reads the count WITHOUT adding to it (for "is this account locked?"). */
-export async function peek(limit: Limit, key: string, now = Date.now()): Promise<LimitResult> {
-  if (!key) return { ok: true, remaining: limit.max, retryAfter: 0 };
-  try {
-    const b = await readJson<Bucket | null>(pathFor(limit, key), null);
-    if (!b || now - b.start >= limit.windowSec * 1000) return { ok: true, remaining: limit.max, retryAfter: 0 };
-    // At the limit already means the NEXT attempt would be over it.
-    return { ...decide(limit, b, now), ok: b.count < limit.max };
-  } catch (err) {
-    console.error(`[rate-limit] ${limit.scope}: could not read, allowing:`, err);
     return { ok: true, remaining: limit.max, retryAfter: 0 };
   }
 }
@@ -138,7 +150,9 @@ function humanWait(seconds: number): string {
 export function tooMany(limit: Limit, result: LimitResult): NextResponse {
   return NextResponse.json(
     {
-      error: limit.message.replace("{wait}", humanWait(result.retryAfter)),
+      error: result.busy
+        ? "This is busy right now. Please try again in a minute."
+        : limit.message.replace("{wait}", humanWait(result.retryAfter)),
       retryAfterSeconds: result.retryAfter,
       limit: `${limit.max} per ${humanWait(limit.windowSec)}`,
     },

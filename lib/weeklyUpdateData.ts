@@ -1,7 +1,7 @@
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
-import { listMinutes, type MinutesRecord } from "./minutesData";
+import { listMinutes, minutesByIdStrict, type MinutesRecord } from "./minutesData";
 import {
   loadMinutesAccessContext,
   readerForUser,
@@ -45,10 +45,12 @@ export async function patchWeeklyUpdateSettings(
   change: (current: WeeklyUpdateSettings) => Partial<WeeklyUpdateSettings> | typeof NO_CHANGE
 ): Promise<WeeklyUpdateSettings> {
   return parseWeeklyUpdate(
-    await updateJson<WeeklyUpdateSettings>(PATH, DEFAULT_WEEKLY_UPDATE, (raw) => {
+    // rev: random per write, so two runs claiming the day cannot both win.
+    // See the "OUR write may be the one" note in updateJson.
+    await updateJson<WeeklyUpdateSettings & { rev?: string }>(PATH, DEFAULT_WEEKLY_UPDATE, (raw) => {
       const current = parseWeeklyUpdate(raw);
       const patch = change(current);
-      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch };
+      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch, rev: crypto.randomUUID() };
     })
   );
 }
@@ -101,14 +103,22 @@ export async function weeklyRecipients(): Promise<{
   return { recipients, noEmail };
 }
 
-export async function gatherWeeklyFacts(now: Date = new Date()): Promise<WeeklyFacts> {
-  const [actions, users, minutes, spend] = await Promise.all([
+/** `minutes`: the send's one strict read, when it already has it. */
+export async function gatherWeeklyFacts(
+  now: Date = new Date(),
+  minutes?: Map<string, MinutesRecord | null>
+): Promise<WeeklyFacts> {
+  const [actions, users, list, spend] = await Promise.all([
     getActionItems(),
     getUsers(),
-    listMinutes(),
+    minutes
+      ? [...minutes.values()]
+          .filter((m): m is MinutesRecord => !!m)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)) // listMinutes' order
+      : listMinutes(),
     getSpendApplications(),
   ]);
-  return buildWeeklyFacts(actions, users, minutes, spend, now);
+  return buildWeeklyFacts(actions, users, list, spend, now);
 }
 
 export interface WeeklySendResult {
@@ -128,7 +138,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function factsFor(
   facts: WeeklyFacts,
   who: { id: string; email: string; tagIds: string[]; permissions: string[] },
-  records: Map<string, MinutesRecord>,
+  records: Map<string, MinutesRecord | null>,
   ctx: MinutesAccessContext
 ): WeeklyFacts {
   const reader = readerForUser({ id: who.id, email: who.email, tagIds: who.tagIds }, who.permissions, ctx);
@@ -177,14 +187,16 @@ export async function sendWeeklyUpdate(opts: {
   };
 }): Promise<WeeklySendResult> {
   const now = opts.now ?? new Date();
-  const [settings, branding, facts, minutesList, accessCtx] = await Promise.all([
+  // One strict read of the minutes feeds both the facts and the per-reader
+  // filter: an unreadable set hides its actions instead of reading as deleted.
+  const minutes = minutesByIdStrict(); // started now, awaited with the rest
+  const [settings, branding, facts, accessCtx, minutesById] = await Promise.all([
     getWeeklyUpdateSettings(),
     resolveBranding(),
-    gatherWeeklyFacts(now),
-    listMinutes(),
+    minutes.then((m) => gatherWeeklyFacts(now, m)),
     loadMinutesAccessContext(),
+    minutes,
   ]);
-  const minutesById = new Map(minutesList.map((m) => [m.id, m]));
   const teamName = teamNameFor(settings, branding.fullName);
   const today = todayIso(now);
   const weekOf = lastOccurrence(today, 1); // the Monday of this week

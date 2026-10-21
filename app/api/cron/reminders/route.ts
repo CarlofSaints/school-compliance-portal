@@ -10,6 +10,7 @@ import {
 import { resolveRecipients } from "@/lib/reminderRecipients";
 import { getActionItems, claimActionChase, updateActionItem, todayIso } from "@/lib/actionItemData";
 import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
+import { loadActionRecipientContext } from "@/lib/actionItemRecipients";
 import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
 import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
 import {
@@ -159,19 +160,27 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const actions = await getActionItems();
   const dueActions = actionsDueForChase(actions, now);
+  // Read once for the run. If it fails, each action reads its own and fails
+  // (and is retried) on its own below.
+  // Minutes access is NOT loaded here: only a meeting action needs it, and it
+  // is filled in (and retried, if it fails) by the first one that does.
+  const recipientCtx = dueActions.length ? await loadActionRecipientContext(false).catch(() => undefined) : undefined;
 
   for (const item of dueActions) {
+    // The run log is read by admins who may not read every set of minutes, so
+    // an action raised in a meeting is named by its reference only.
+    const label = item.fromMinutes ? item.ref : `${item.ref} ${item.title}`;
     // Claimed first, in one guarded write, so an overlapping run cannot send
     // the same chase twice.
     const claim = await claimActionChase(item.id, todayIso(now));
     if (!claim.claimed) {
       skipped++;
-      detail.push(`Action ${item.ref} ${item.title}: already chased today by another run`);
+      detail.push(`Action ${label}: already chased today by another run`);
       continue;
     }
     let outcome;
     try {
-      outcome = await chaseActionItem(item, now);
+      outcome = await chaseActionItem(item, now, "", recipientCtx);
     } catch (err) {
       // 🔴 The claim stamped today BEFORE sending. A failure here must hand the
       // day back, or the action looks chased, waits a whole cycle, and nobody
@@ -182,13 +191,13 @@ export async function GET(req: NextRequest) {
         lastReminderResult: `failed: ${why}`.slice(0, 300),
       }).catch(() => {});
       failed++;
-      detail.push(`Action ${item.ref} ${item.title}: failed (${why}), will try again next run`);
+      detail.push(`Action ${label}: failed (${why}), will try again next run`);
       continue;
     }
     sent += outcome.sent;
     failed += outcome.failed;
     if (outcome.sent === 0) skipped++;
-    detail.push(`Action ${item.ref} ${item.title}: ${outcome.result}`);
+    detail.push(`Action ${label}: ${outcome.result}`);
   }
 
   // --- Weekly SGB update ------------------------------------------------------

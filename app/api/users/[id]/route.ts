@@ -9,6 +9,7 @@ const outOfReach = () =>
     { status: 403 }
   );
 import { getUserById, updateUser, deleteUser, getUsers } from "@/lib/userData";
+import { addressCarriesTags } from "@/lib/peopleData";
 
 export async function GET(
   req: NextRequest,
@@ -58,6 +59,15 @@ export async function PUT(
         const users = await getUsers();
         if (users.some((u) => u.id !== id && u.email.toLowerCase() === email.toLowerCase())) {
           return NextResponse.json({ error: "Another user already has that email address." }, { status: 409 });
+        }
+        // Same rule as My Account (confirm-email): ANY login moved onto a
+        // tagged register entry's address gains its tags, so moving one (yours
+        // or somebody else's) there needs manage_roles.
+        if (!maySelfTag(session) && (await addressCarriesTags(email))) {
+          return NextResponse.json(
+            { error: "That address is on a tagged People entry, so moving a login to it needs a Super Admin." },
+            { status: 403 }
+          );
         }
       }
       updates.email = email;

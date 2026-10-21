@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { randomUUID } from "crypto";
+import { inflateSync } from "zlib";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { LOCALES, type Locale } from "./i18n/locales";
 
@@ -35,17 +37,79 @@ export const textPages = (text: string) => Math.max(1, Math.ceil(text.length / C
 /**
  * Pages in a PDF: the /Count on its page tree (the root holds the largest).
  * Not the page objects themselves, which re-saved PDFs keep stale copies of.
- * A PDF that hides its page tree inside compressed object streams has no
- * readable /Count, so that one falls back to the model's own token count
- * (free to ask) at about 2,000 tokens a page.
+ * Compressed object streams (most PDFs since 1.5) are inflated with zlib and
+ * read the same way. Only a file that cannot be read like that (another
+ * filter, a broken stream, no root) asks the model's own token count (free)
+ * at about 2,000 tokens a page, and pays the larger of the two.
  */
 export async function pdfPages(file: Buffer): Promise<number> {
   const raw = file.toString("latin1");
-  const counts = [
-    ...raw.matchAll(/\/Type\s*\/Pages\b[^>]*?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]*?\/Type\s*\/Pages\b/g),
-  ].map((m) => Number(m[1] || m[2]));
-  const counted = Math.max(0, ...counts);
-  if (counted > 0) return counted;
+  // Object by object (split on endobj: linear, no gap to cap, so padding or a
+  // long /Kids array cannot hide a /Count). The MAX /Count of any page-tree
+  // node: a crafted file can only make itself cost more this way, never less.
+  const objects = raw.split("endobj");
+  let readable = true;
+  let at = 0; // where each piece starts in raw
+  for (const obj of [...objects]) {
+    if (/\/Type\s*\/ObjStm\b/.test(obj)) {
+      const inner = objStmObjects(raw, at, obj);
+      if (inner) for (const o of inner) objects.push(o);
+      else readable = false;
+    }
+    at += obj.length + "endobj".length;
+  }
+  let counted = 0;
+  let rootSeen = false;
+  for (const obj of objects) {
+    if (!/\/Type\s*\/Pages(?![A-Za-z])/.test(obj)) continue;
+    for (const m of obj.matchAll(/\/Count\s+(\d+)/g)) counted = Math.max(counted, Number(m[1]));
+    if (!/\/Parent\b/.test(obj)) rootSeen = true;
+  }
+  // An unreadable object stream could hide the real tree behind a decoy.
+  if (counted > 0 && rootSeen && readable) return counted;
+  return Math.max(counted, await apiPages(file));
+}
+
+// Bounded, so a crafted stream cannot inflate into gigabytes.
+const OBJSTM_MAX_BYTES = 20 * 1024 * 1024;
+
+/** The objects packed in one /Type /ObjStm (PDF 1.5 object stream), or null
+ *  when it cannot be read (not plain FlateDecode, broken, too big). */
+function objStmObjects(raw: string, at: number, obj: string): string[] | null {
+  const kw = /stream\r?\n/.exec(obj);
+  if (!kw) return null;
+  const dict = obj.slice(0, kw.index);
+  const dataStart = at + kw.index + kw[0].length;
+  // A direct /Length is exact, so the bytes may end in a newline or even hold
+  // "endobj" (which split `obj`). Only an indirect one (/Length 12 0 R) is
+  // found by its endstream instead, inside this piece.
+  // (?!\d...): no backtracking into a shorter number ("24" of "245 0 R").
+  const direct = /\/Length\s+(\d+)(?!\d|\s+\d+\s+R)/.exec(dict);
+  let body: string;
+  if (direct) {
+    body = raw.slice(dataStart, dataStart + Number(direct[1]));
+  } else {
+    const end = obj.lastIndexOf("endstream");
+    if (end < kw.index) return null;
+    body = obj.slice(kw.index + kw[0].length, end).replace(/\r?\n$/, "");
+  }
+  const n = Number(/\/N\s+(\d+)/.exec(dict)?.[1]);
+  const first = Number(/\/First\s+(\d+)/.exec(dict)?.[1]);
+  if (!/\/Filter\s*\/FlateDecode\b/.test(dict) || /\/DecodeParms/.test(dict) || !(n > 0) || !(first >= 0)) return null;
+  let text: string;
+  try {
+    text = inflateSync(Buffer.from(body, "latin1"), { maxOutputLength: OBJSTM_MAX_BYTES }).toString("latin1");
+  } catch {
+    return null;
+  }
+  // The header: N pairs of "object-number offset", offsets from /First.
+  const nums = text.slice(0, first).trim().split(/\s+/).map(Number);
+  if (nums.length < n * 2 || nums.some((x) => !Number.isFinite(x))) return null;
+  const offsets = Array.from({ length: n }, (_, i) => first + nums[i * 2 + 1]);
+  return offsets.map((o, i) => text.slice(o, offsets[i + 1] ?? text.length));
+}
+
+async function apiPages(file: Buffer): Promise<number> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
   const { input_tokens } = await new Anthropic({ apiKey }).messages.countTokens({
@@ -65,6 +129,8 @@ const MODEL = "claude-opus-5-5";
 interface Credits {
   balance: number;
   updatedAt?: string;
+  // Random per write: see the "OUR write may be the one" note in updateJson.
+  rev?: string;
 }
 
 const CREDITS_PATH = "settings/translation-credits.json";
@@ -82,7 +148,7 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     balance = Math.max(0, c.balance + n);
     applied = balance - c.balance;
-    return { balance, updatedAt: new Date().toISOString() };
+    return { balance, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
   return { balance, applied };
 }
@@ -93,7 +159,7 @@ async function spend(n: number): Promise<boolean> {
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     if (c.balance < n) return NO_CHANGE;
     ok = true;
-    return { balance: c.balance - n, updatedAt: new Date().toISOString() };
+    return { balance: c.balance - n, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
   return ok;
 }
@@ -168,10 +234,11 @@ const IN_FLIGHT_MS = 15 * 60_000;
 
 async function claimInFlight(kind: ContentKind, id: string, locale: Locale): Promise<boolean> {
   let ok = false;
-  await updateJson<{ at: number } | null>(inFlightPath(kind, id, locale), null, (cur) => {
+  await updateJson<{ at: number; rev?: string } | null>(inFlightPath(kind, id, locale), null, (cur) => {
     if (cur && Date.now() - cur.at < IN_FLIGHT_MS) return NO_CHANGE;
     ok = true;
-    return { at: Date.now() };
+    // rev: two claims in the same millisecond must not both win (updateJson note).
+    return { at: Date.now(), rev: randomUUID() };
   });
   return ok;
 }

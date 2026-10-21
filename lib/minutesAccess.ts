@@ -3,7 +3,7 @@ import { getUserById, getUsers, type User } from "./userData";
 import { getPeople, type Person } from "./peopleData";
 import { getRecipientSettings } from "./minutesRecipients";
 import { getRoles, resolveRolePermissions } from "./rolesData";
-import { listMinutes, getMinutes, type MinutesRecord } from "./minutesData";
+import { getMinutes, type MinutesRecord } from "./minutesData";
 import type { SessionPayload } from "./roles";
 import { withMeetingDates } from "./actionItems";
 import {
@@ -36,11 +36,12 @@ const norm = (e: string | undefined | null) => String(e || "").trim().toLowerCas
  * own email. Most schools tag FINCOM on the register entry, often unlinked, so
  * counting only links would quietly cut FINCOM members off.
  *
- * 🔴 The email half is safe only because of two guards: a login's email can
+ * 🔴 The email half is safe only because of three guards: a login's email can
  * change only to an address its owner proved they receive (lib/emailChange),
- * and nobody without manage_roles may put their OWN login email on a tagged
- * register entry (the People routes). An entry linked to SOMEBODY ELSE never
- * counts, whatever its email.
+ * nobody without manage_roles may put their OWN login email on a tagged
+ * register entry (the People routes), nor move their own login onto the
+ * address of one (addressCarriesTags: confirm-email, users/[id]). An entry
+ * linked to SOMEBODY ELSE never counts, whatever its email.
  */
 function ownPeople(user: { id: string; email?: string | null }, people: Person[]): Person[] {
   const email = norm(user.email);
@@ -159,13 +160,15 @@ export interface ActionOrigin {
 export function actionVisible(
   item: ActionOrigin,
   reader: Reader,
-  minutesById: Map<string, MinutesForAccess>,
+  // null = the read FAILED (not the same as deleted): hidden, fail closed.
+  minutesById: Map<string, MinutesForAccess | null>,
   ctx: MinutesAccessContext
 ): boolean {
   const id = item.fromMinutes?.minutesId;
   if (!id) return true;
   if (item.assigneeIds.some((a) => reader.personIds.includes(a))) return true;
   const record = minutesById.get(id);
+  if (record === null) return false;
   // The minutes were deleted: nothing left to protect but a title, and the
   // action itself still stands. Shown.
   if (!record) return true;
@@ -199,17 +202,17 @@ export async function redactMinutesActivity<
   });
 }
 
-/** The minutes, keyed by id, for actionVisible. */
-export async function minutesIndex(): Promise<Map<string, MinutesRecord>> {
-  return new Map((await listMinutes()).map((m) => [m.id, m]));
-}
-
 /** Only the sets these ids name, read one by one, rather than every set:
  *  the action register and the activity log are opened all day. */
-async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, MinutesRecord>> {
+async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, MinutesRecord | null>> {
   const unique = [...new Set(ids.filter((i): i is string => !!i))];
-  const found = await Promise.all(unique.map((id) => getMinutes(id).catch(() => null)));
-  return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
+  // A deleted set is left out; one that could not be READ is null (actionVisible).
+  const found = await Promise.all(
+    unique.map((id) => getMinutes(id).then((m) => [id, m] as const, () => [id, "failed"] as const))
+  );
+  const out = new Map<string, MinutesRecord | null>();
+  for (const [id, m] of found) if (m) out.set(id, m === "failed" ? null : m);
+  return out;
 }
 
 type Datable = ActionOrigin & { fromMinutes?: { meetingDate?: string } };

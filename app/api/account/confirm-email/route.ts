@@ -6,6 +6,8 @@ import { readEmailChangeClaims, verifyEmailChangeToken } from "@/lib/emailChange
 import { sendEmailChangeNoticeEmail } from "@/lib/email";
 import { isSameOriginWrite } from "@/lib/session";
 import { recordActivity } from "@/lib/activityLog";
+import { getRoleById, maySelfTag, resolveRolePermissions } from "@/lib/rolesData";
+import { addressCarriesTags } from "@/lib/peopleData";
 
 // Finishes an email change (lib/emailChange.ts).
 //
@@ -51,6 +53,15 @@ export async function POST(req: NextRequest) {
   const users = await getUsers();
   if (users.some((u) => u.id !== user.id && u.email.trim().toLowerCase() === claims.n)) {
     return NextResponse.json({ error: "That email address is already used by another account." }, { status: 409 });
+  }
+  // Checked here, at the moment the address becomes theirs, so the order of
+  // steps (People entry edited before or after the change) does not matter.
+  const role = await getRoleById(user.role);
+  if (!maySelfTag({ permissions: resolveRolePermissions(user.role, role) }) && (await addressCarriesTags(claims.n))) {
+    return NextResponse.json(
+      { error: "That address is on a tagged People entry, so moving your login to it needs a Super Admin." },
+      { status: 403 }
+    );
   }
 
   const oldEmail = user.email;

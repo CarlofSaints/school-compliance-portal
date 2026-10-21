@@ -189,3 +189,31 @@ export function validateTiers(tiers: ApprovalTier[]): string[] {
 
   return problems;
 }
+
+/** Why a quote may not be selected, or null when it may. A quote above what
+ *  was approved may not carry the application into a band whose approvers
+ *  never saw it. No bands set up: nothing to move between, allowed. Approved
+ *  amount unknown: cannot be checked, refused. */
+export function quoteBandProblem(
+  tiers: ApprovalTier[],
+  quote: number,
+  basis: number | undefined | null,
+  // The band frozen at submission (app.approvalTierId): what the approvers
+  // actually signed off. Today's band for `basis` only when it is missing.
+  approvedTierId?: string
+): QuoteBandProblem | null {
+  if (tiers.length === 0) return null;
+  const hasBasis = typeof basis === "number" && Number.isFinite(basis);
+  if (hasBasis && quote <= basis) return null;
+  // The band it was approved in: frozen at submission, or (a tier since
+  // rebuilt, or none frozen) today's band for the approved amount.
+  const approvedBand = (approvedTierId && tiers.find((t) => t.id === approvedTierId)) || (hasBasis ? tierForAmount(tiers, basis) : null);
+  if (!approvedBand) return hasBasis ? { code: "over_band", limit: null } : { code: "no_amount" };
+  // Refused only when the quote exceeds that band's approval limit (its
+  // exclusive maxAmount). A band with no upper limit never refuses.
+  if (approvedBand.maxAmount === null || quote < approvedBand.maxAmount) return null;
+  return { code: "over_band", limit: approvedBand.maxAmount };
+}
+
+/** Codes, so the page can say it in the reader's language (spend/[id]). */
+export type QuoteBandProblem = { code: "no_amount" } | { code: "over_band"; limit: number | null };

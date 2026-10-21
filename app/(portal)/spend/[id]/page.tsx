@@ -2,7 +2,8 @@
 
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
-import { evaluateProgress } from "@/lib/approvalEngine";
+import { evaluateProgress, mayActOnApproved } from "@/lib/approvalEngine";
+import { formatRand } from "@/lib/spendReport";
 import type { RequiredApprover } from "@/lib/approvalEngine";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -223,8 +224,19 @@ export default function SpendDetailPage() {
       setToast({ message: t("Quote confirmed"), type: "success" });
       fetchData();
     } else {
-      const err = await res.json();
-      setToast({ message: err.error || t("Failed"), type: "error" });
+      const err = await res.json().catch(() => ({}));
+      // A refused band change, in the reader's language (codes from the
+      // select-quote route); anything else as the server said it.
+      const quote = formatRand(Number(err.quote) || 0);
+      const message =
+        err.code === "no_amount"
+          ? t("This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.")
+          : err.code === "over_band" && typeof err.limit === "number"
+            ? t("This quote ({quote}) is above the approval limit of the band this request was approved in ({limit}). It needs a new approval at the higher band.", { quote, limit: formatRand(err.limit) })
+            : err.code === "over_band"
+              ? t("This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.", { quote })
+              : err.error || t("Failed");
+      setToast({ message, type: "error" });
     }
     setSubmitting(false);
   };
@@ -318,11 +330,13 @@ export default function SpendDetailPage() {
     canApprove &&
     !alreadyApproved &&
     (data.status === "pending" || data.status === "pending_decision");
-  const canComplete = data.status === "approved" && (canApprove || isAdmin);
+  // Same rule as the server (select-quote, complete).
+  const actsOnApproved = !!session && mayActOnApproved(data, session);
+  const canComplete = data.status === "approved" && actsOnApproved;
   const canSelectQuote =
     data.status === "approved" &&
     data.selectedQuoteIndex === undefined &&
-    (canApprove || isAdmin);
+    actsOnApproved;
 
   // Manual execution progress (falls back to a status-derived default).
   const PROGRESS_OPTS = [

@@ -1,7 +1,9 @@
 import { getPeople } from "./peopleData";
-import { getUsers } from "./userData";
 import { getRoles, resolveRolePermissions } from "./rolesData";
 import type { ActionItem, ActionRecipient } from "./actionItemData";
+import { actionVisible, loadMinutesAccessContext, loadRecipientResolver } from "./minutesAccess";
+import { getMinutes, type MinutesRecord } from "./minutesData";
+import { getUsers } from "./userData";
 
 export interface ResolvedActionRecipient {
   email: string;
@@ -29,13 +31,12 @@ export const ACTION_ADMIN_PERMISSIONS = [
 // keeps receiving the chases.
 export async function resolveActionRecipients(
   item: ActionItem,
-  recipients: ActionRecipient[]
-): Promise<{ resolved: ResolvedActionRecipient[]; missing: string[] }> {
-  const [people, users, roles] = await Promise.all([
-    getPeople(),
-    getUsers(),
-    getRoles(),
-  ]);
+  recipients: ActionRecipient[],
+  // Loaded once by a caller sending many (the cron), else read here.
+  shared?: ActionRecipientContext
+): Promise<{ resolved: ResolvedActionRecipient[]; missing: string[]; notAllowed?: number }> {
+  const run = shared ?? (await loadActionRecipientContext(false));
+  const { people, users, roles } = run;
   const userById = new Map(users.map((u) => [u.id, u]));
   const personById = new Map(people.map((p) => [p.id, p]));
 
@@ -92,7 +93,51 @@ export async function resolveActionRecipients(
     return true;
   });
 
-  return { resolved: deduped, missing };
+  // An action raised in a meeting follows that meeting's read access: the
+  // email carries its title and description. The people carrying it always
+  // qualify (actionVisible).
+  // Assignees alone always qualify, so the assignment mail needs no read.
+  const minutesId = item.fromMinutes?.minutesId;
+  if (!minutesId || recipients.every((r) => r === "assignees")) return { resolved: deduped, missing };
+  // 🔴 FAIL CLOSED: null is only a confirmed-missing file (readJson); a failed
+  // read THROWS and aborts this email rather than counting as "deleted".
+  run.access ??= await loadAccess();
+  const { ctx, resolver } = run.access;
+  // Cached for the run: many due actions come from the same few meetings.
+  let record = run.minutes.get(minutesId);
+  if (record === undefined) run.minutes.set(minutesId, (record = await getMinutes(minutesId)));
+  const byId = new Map(record ? [[minutesId, record]] : []);
+  const allowed = deduped.filter((r) => actionVisible(item, resolver.forEmail(r.email), byId, ctx));
+  // Their own count, never "no address for": their addresses are fine.
+  return { resolved: allowed, missing, notAllowed: deduped.length - allowed.length };
+}
+
+async function loadAccess() {
+  const ctx = await loadMinutesAccessContext();
+  return { ctx, resolver: await loadRecipientResolver(ctx) };
+}
+
+export interface ActionRecipientContext {
+  people: Awaited<ReturnType<typeof getPeople>>;
+  users: Awaited<ReturnType<typeof getUsers>>;
+  roles: Awaited<ReturnType<typeof getRoles>>;
+  /** Minutes read access: loaded only when a meeting action needs it. */
+  access?: Awaited<ReturnType<typeof loadAccess>>;
+  /** Minutes records read so far (null = confirmed missing). A failed read
+   *  throws and is never cached. */
+  minutes: Map<string, MinutesRecord | null>;
+}
+
+/** People, logins and roles (and, for a run, minutes access), read once per
+ *  send run and reused for every action in it. */
+export async function loadActionRecipientContext(withAccess = true): Promise<ActionRecipientContext> {
+  const [people, users, roles, access] = await Promise.all([
+    getPeople(),
+    getUsers(),
+    getRoles(),
+    withAccess ? loadAccess() : undefined,
+  ]);
+  return { people, users, roles, access, minutes: new Map() };
 }
 
 // The register's own view of a person's name, used when an item is written or

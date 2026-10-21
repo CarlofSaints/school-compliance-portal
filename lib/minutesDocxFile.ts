@@ -42,7 +42,7 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
     record.signatories
       .filter((s) => s.signedAt)
       .map(async (s) => {
-        const png = await readSignatureImage(record.id, s.email).catch(() => null);
+        const png = await readSignatureImage(record.id, s.email, record.signatories.map((x) => x.email)).catch(() => null);
         if (!png || !s.signature) return null;
         return [
           s.email.trim().toLowerCase(),

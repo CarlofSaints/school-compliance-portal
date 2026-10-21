@@ -91,6 +91,8 @@ export function pendingWithdrawals(b: RoomBooking, reason: WithdrawReason, keep?
 }
 
 export interface RoomBooking {
+  /** Random per write (touch): see the updateJson note. */
+  rev?: string;
   id: string;
   roomId: string;
   title: string;
@@ -165,7 +167,9 @@ export function touch(b: RoomBooking, patch: Partial<RoomBooking> = {}): RoomBoo
   const prev = Date.parse(b.updatedAt);
   let t = Date.now();
   if (Number.isFinite(prev) && t <= prev) t = prev + 1;
-  return { ...b, ...patch, updatedAt: new Date(t).toISOString() };
+  // rev: every booking write is unique, so two racing claims (a reminder, an
+  // answer, a withdrawal) cannot both win. See the updateJson note.
+  return { ...b, ...patch, updatedAt: new Date(t).toISOString(), rev: crypto.randomUUID() };
 }
 
 /** The fields an edit sets. Another write that changes one of these conflicts

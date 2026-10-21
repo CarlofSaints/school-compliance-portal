@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/rolesData";
-import { requireLogin } from "@/lib/rolesData";
+import { requirePermission, requireAnyPermission } from "@/lib/rolesData";
 import { updateTag, deleteTag, getTagMembers } from "@/lib/tagData";
 import { getApprovalSettings } from "@/lib/approvalSettings";
 
 // Who currently carries this tag - used by the tags page and by the approval
-// settings page to show what a requirement actually resolves to.
+// settings page to show what a requirement actually resolves to. Names and
+// login emails, so only for those who manage tags, approvals or users.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireLogin(req);
+  const session = await requireAnyPermission(req, ["manage_tags", "manage_approval_settings", "view_users", "manage_users"]);
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;

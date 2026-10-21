@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { readJson, readJsonTolerant, writeJson, updateJson, NO_CHANGE, readFile, writeFile, deleteFile, deleteFolder, listFiles } from "./controlData";
+import { readJson, readJsonTolerant, writeJson, updateJson, NO_CHANGE, readFile, writeFile, deleteFile, deleteFolder, listFiles, listFilesStrict } from "./controlData";
 import type {
   MeetingBody,
   MeetingPeriod,
@@ -133,6 +133,26 @@ export async function listMinutes(): Promise<MinutesRecord[]> {
   return all
     .filter((m): m is MinutesRecord => m !== null)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/** For a VISIBILITY decision (weekly update, action summary): a listing error throws, and a set
+ *  that cannot be read is a null entry, never left out. Left out reads as
+ *  deleted, and a deleted set's actions are shown. */
+export async function minutesByIdStrict(): Promise<Map<string, MinutesRecord | null>> {
+  const ids = await listFilesStrict(DIR);
+  const out = new Map<string, MinutesRecord | null>();
+  await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const m = await getMinutes(id);
+        if (m) out.set(id, m);
+      } catch (err) {
+        console.error(`[minutes] unreadable ${id}, its actions are hidden:`, err);
+        out.set(id, null);
+      }
+    })
+  );
+  return out;
 }
 
 export class MinutesLockedError extends Error {
@@ -468,8 +488,15 @@ const signaturePath = (id: string, personKey: string) =>
 
 /** Keyed on the signatory's EMAIL, normalised, not their personId: somebody can
  *  be on the signing list without a People-register entry, and personId is ""
- *  for them. Two such signatories would otherwise overwrite each other. */
+ *  for them. Two such signatories would otherwise overwrite each other.
+ *  A hash, so two different addresses can never share one file. */
 export function signatureKey(email: string): string {
+  return crypto.createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
+
+/** The key images were stored under before 20 Oct 2026: lossy (a.b@x and
+ *  a_b@x share it), so it is only ever READ, as a fallback for those. */
+function legacySignatureKey(email: string): string {
   return email.trim().toLowerCase().replace(/[^a-z0-9]/g, "_");
 }
 
@@ -481,9 +508,18 @@ export async function saveSignatureImage(
   await writeFile(signaturePath(id, signatureKey(email)), png);
 }
 
+/** `signatoryEmails`: everybody on this record's signing list. Only they could
+ *  write its images, so a legacy file is provably this person's only when no
+ *  OTHER address on the list shares its lossy key; otherwise no fallback. */
 export async function readSignatureImage(
   id: string,
-  email: string
+  email: string,
+  signatoryEmails: string[]
 ): Promise<Buffer | null> {
-  return readFile(signaturePath(id, signatureKey(email)));
+  const hashed = await readFile(signaturePath(id, signatureKey(email)));
+  if (hashed) return hashed;
+  const me = email.trim().toLowerCase();
+  const legacy = legacySignatureKey(email);
+  const shared = signatoryEmails.some((e) => e.trim().toLowerCase() !== me && legacySignatureKey(e) === legacy);
+  return shared ? null : readFile(signaturePath(id, legacy));
 }

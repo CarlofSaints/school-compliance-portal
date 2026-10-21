@@ -1755,5 +1755,8 @@
   "This email is about a fund application you do not have access to.": "Hierdie e-pos gaan oor 'n fondsaansoek waartoe jy nie toegang het nie.",
   "Personal email, wording not kept": "Persoonlike e-pos, bewoording nie gehou nie",
   "Show older ({n} more)": "Wys ouer ({n} meer)",
-  "No loaded emails match your search.": "Geen gelaaide e-posse pas by jou soektog nie."
+  "No loaded emails match your search.": "Geen gelaaide e-posse pas by jou soektog nie.",
+  "This quote ({quote}) is above the approval limit of the band this request was approved in ({limit}). It needs a new approval at the higher band.": "Hierdie kwotasie ({quote}) is bo die goedkeuringslimiet van die band waarin hierdie versoek goedgekeur is ({limit}). Dit het 'n nuwe goedkeuring in die hoër band nodig.",
+  "This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.": "Hierdie kwotasie ({quote}) is bo die goedkeuringsband waarin hierdie versoek goedgekeur is. Dit het 'n nuwe goedkeuring in die hoër band nodig.",
+  "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Hierdie aansoek het geen goedgekeurde of beraamde bedrag nie, so 'n kwotasie kan nie teen sy goedkeuringsband nagegaan word nie. Wysig eers die aansoek om die bedrag by te voeg."
 }

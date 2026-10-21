@@ -206,7 +206,7 @@ export interface FromMinutes {
  *  minutes as they are now. */
 export function withMeetingDates<T extends { fromMinutes?: { minutesId: string; meetingDate?: string } }>(
   items: T[],
-  minutesById: Map<string, { meetingDate?: string }>
+  minutesById: Map<string, { meetingDate?: string } | null>
 ): T[] {
   return items.map((i) => {
     const d = i.fromMinutes && minutesById.get(i.fromMinutes.minutesId)?.meetingDate;

@@ -1755,5 +1755,8 @@
   "This email is about a fund application you do not have access to.": "Le imeyile imalunga nesicelo semali ongenayo imvume yokusibona.",
   "Personal email, wording not kept": "I-imeyile yobuqu, amagama akagcinwa",
   "Show older ({n} more)": "Bonisa ezindala ({n} ezongezelelweyo)",
-  "No loaded emails match your search.": "Akukho ii-imeyile ezilayishiweyo ezihambelana nokukhangela kwakho."
+  "No loaded emails match your search.": "Akukho ii-imeyile ezilayishiweyo ezihambelana nokukhangela kwakho.",
+  "This quote ({quote}) is above the approval limit of the band this request was approved in ({limit}). It needs a new approval at the higher band.": "Le kowuthu ({quote}) ingaphezu komda wokuvunywa webhendi esavunywa kuyo esi sicelo ({limit}). Ifuna ukuvunywa okutsha kwibhendi ephezulu.",
+  "This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.": "Le kowuthu ({quote}) ingaphezu kwebhendi yokuvunywa esavunywa kuyo esi sicelo. Ifuna ukuvunywa okutsha kwibhendi ephezulu.",
+  "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Esi sicelo asinayo imali evunyiweyo okanye eqikelelweyo, ngoko ikowuthu ayinakujongwa ngokuthelekiswa nebhendi yaso yokuvunywa. Hlela isicelo ufake imali kuqala."
 }

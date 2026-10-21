@@ -12,6 +12,7 @@ import { evaluateProgress } from "@/lib/approvalEngine";
 import type { RequiredApprover } from "@/lib/approvalEngine";
 import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
+import { csvCell } from "@/lib/csv";
 
 const STATUS_DISPLAY: Record<string, string> = {
   pending: tk("APPLIED"),
@@ -424,7 +425,7 @@ export default function SpendPage() {
       t("Stuck to Budget"),
     ];
 
-    const quote = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const quote = csvCell;
 
     const rows = sorted.map((app) => [
       quote(app.projectName),
