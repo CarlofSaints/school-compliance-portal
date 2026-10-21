@@ -173,7 +173,8 @@ export function isRequiredApprover(
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
  *  approve_spend AND (one of its required approvers or a spend admin), never
- *  its own submitter (an imported row: any approve_spend holder). The whole rule the routes apply, so the page shows the
+ *  its own submitter (an imported row, or one with no approvers: any
+ *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
   app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId">,
@@ -181,10 +182,11 @@ export function mayActOnApproved(
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;
   if (app.applicantUserId === user.id) return false;
-  // An imported row (spend/import) names the importing admin as submitter and
-  // has no approvers of its own: any approve_spend holder, the importer
-  // included, may pick its quote or complete it.
-  if (app.importBatchId) return true;
+  // An imported row (spend/import) names the importing admin as submitter, and
+  // a log-only or untagged band has no approvers at all: any approve_spend
+  // holder (the importer, the submitter included) may pick the quote or
+  // complete it, as before.
+  if (app.importBatchId || !app.requiredApprovers?.length) return true;
   if (app.submittedBy === user.id) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }

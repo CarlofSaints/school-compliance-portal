@@ -99,7 +99,8 @@ async function main() {
   const burst = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginAccount, "burst@school.co.za")));
   console.error = quiet;
   check("30 attempts at once: no more than 5 get through", burst.filter((r) => r.ok).length <= LIMITS.loginAccount.max, true);
-  check("per-account and code limits refuse on contention", [LIMITS.loginAccount, LIMITS.resetRequestEmail, LIMITS.signCodeAttempt].every((l) => l.failClosed), true);
+  check("reset-address and signing-code limits refuse on contention", [LIMITS.resetRequestEmail, LIMITS.signCodeAttempt].every((l) => l.failClosed), true);
+  check("loginAccount fails OPEN on contention (hit on every sign-in), the 5-wrong lock still counts", "failClosed" in LIMITS.loginAccount, false);
   check("every per-IP limit fails OPEN (one school NAT)", [LIMITS.loginIp, LIMITS.resetRequestIp, LIMITS.resetCompleteIp, LIMITS.confirmEmailIp].map((l) => "failClosed" in l), [false, false, false, false]);
   console.error = () => {};
   const nat = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginIp, "10.0.0.1")));
@@ -129,7 +130,8 @@ async function main() {
   check("forgot-password: no email set up is a 503 for every address, before any lookup", forgot.indexOf("status: 503") > 0 && forgot.indexOf("status: 503") < forgot.indexOf("getUserByEmail("), true);
   check("index miss: a counter that could not be saved still allows the scan", auth.includes("scan.count === undefined || scan.count === 1"), true);
   check("index-miss scans are also capped per connection", auth.includes("(await hit(INDEX_SCAN_IP, ip)).ok"), true);
-  check("index miss: the address is counted only after a wrong or unknown answer", /if \(!user \|\| !valid\) \{\s*accountHit \?\?= await hit\(LIMITS\.loginAccount/.test(auth), true);
+  check("a locked UNKNOWN address is refused at the same point as a real one (before the compare)", auth.includes("if (user || certain) {") && auth.indexOf("if (user || certain) {") < auth.indexOf("verifyPassword(user"), true);
+  check("a scan skipped by the per-connection cap does not count against the address", auth.includes("certain = false;") && !/accountHit \?\?= await hit/.test(auth), true);
   check("a LOCKED account found by the scan is still refused: counted before the password", auth.indexOf("user = await getUserByEmail(email);") < auth.indexOf("accountHit = await hit(LIMITS.loginAccount") && auth.indexOf("accountHit = await hit(LIMITS.loginAccount") < auth.indexOf("verifyPassword(user"), true);
   const { tooMany } = await import("../lib/rateLimit");
   const busyBody = await tooMany(LIMITS.loginAccount, { ok: false, remaining: 0, retryAfter: 60, busy: true }).json();
@@ -147,6 +149,9 @@ async function main() {
   check("approve_spend alone is not enough", mayActOnApproved(approvedApp, { id: "x", permissions: ["approve_spend"] }), false);
   const importedRow = { submittedBy: "adm", requiredApprovers: [], importBatchId: "batch-1" } as never;
   check("an imported row: the importing admin may still pick its quote / complete it", mayActOnApproved(importedRow, { id: "adm", permissions: ["approve_spend"] }), true);
+  const logOnlyRow = { submittedBy: "sub", applicantUserId: "appl", requiredApprovers: [] } as never;
+  check("no approvers (log-only band): any approve_spend holder may act, as before", mayActOnApproved(logOnlyRow, { id: "x", permissions: ["approve_spend"] }), true);
+  check("...but never the applicant", mayActOnApproved(logOnlyRow, { id: "appl", permissions: ["approve_spend"] }), false);
   check("...but approve_spend is still needed", mayActOnApproved(importedRow, { id: "adm", permissions: ["manage_spend_settings"] }), false);
   const { quoteBandProblem } = await import("../lib/approvalSettings");
   const bands = [
@@ -160,6 +165,8 @@ async function main() {
   check("no bands set up: allowed", quoteBandProblem([], 12000, 6000), null);
   check("the FROZEN band decides: same band today, different band at approval, refused", quoteBandProblem(bands, 9000, 6000, "low"), { code: "over_band", limit: 5000 });
   check("the frozen band matches: allowed", quoteBandProblem(bands, 12000, 11000, "high"), null);
+  check("a top band with no limit never refuses", quoteBandProblem(bands, 99999, 11000), null);
+  check("exactly at the band's limit is over it (maxAmount is exclusive)", quoteBandProblem(bands, 10000, 6000), { code: "over_band", limit: 10000 });
   check("a frozen band id since rebuilt falls back to today's band, not refuse-all", quoteBandProblem(bands, 6000, 5500, "t-old"), null);
   check("no approved or estimated amount: refused", quoteBandProblem(bands, 100, undefined), { code: "no_amount" });
   const spendPage = fs.readFileSync("app/(portal)/spend/[id]/page.tsx", "utf8");

@@ -44,10 +44,11 @@ export interface Limit {
 
 export const LIMITS = {
   // Every per-IP limit fails OPEN: a whole school shares one NAT address, and
-  // 30 staff signing in at 07:45 is contention, not an attack. Per-account and
-  // per-address limits stay closed.
+  // 30 staff signing in at 07:45 is contention, not an attack. loginAccount too:
+  // it is hit on every sign-in, so contention must not lock a known user out
+  // (five wrong passwords still lock it). The rest stay closed.
   loginIp: { scope: "login-ip", max: 20, windowSec: 15 * 60, message: "Too many sign-in attempts from this connection. Try again in {wait}." },
-  loginAccount: { scope: "login-account", failClosed: true, max: 5, windowSec: 15 * 60, message: "Too many wrong passwords for this account. Try again in {wait}, or reset your password." },
+  loginAccount: { scope: "login-account", max: 5, windowSec: 15 * 60, message: "Too many wrong passwords for this account. Try again in {wait}, or reset your password." },
   resetRequestIp: { scope: "reset-request-ip", max: 5, windowSec: 60 * 60, message: "Too many reset requests from this connection. Try again in {wait}." },
   resetRequestEmail: { scope: "reset-request-email", failClosed: true, max: 3, windowSec: 60 * 60, message: "Too many reset requests for this address. Check your inbox, or try again in {wait}." },
   resetCompleteIp: { scope: "reset-complete-ip", max: 10, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },

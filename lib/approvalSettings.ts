@@ -203,15 +203,16 @@ export function quoteBandProblem(
   approvedTierId?: string
 ): QuoteBandProblem | null {
   if (tiers.length === 0) return null;
-  if (typeof basis !== "number" || !Number.isFinite(basis)) return { code: "no_amount" };
-  if (quote <= basis) return null;
-  const approvedBand = (approvedTierId && tiers.find((t) => t.id === approvedTierId)) || tierForAmount(tiers, basis);
-  const band = tierForAmount(tiers, quote);
-  // The resolved band: a frozen id whose tier was since rebuilt falls back
-  // to today's band for the approved amount, never "refuse everything".
-  if (band && band.id === approvedBand?.id) return null;
-  // The approved band's upper limit, for the message (null: none known).
-  return { code: "over_band", limit: approvedBand?.maxAmount ?? null };
+  const hasBasis = typeof basis === "number" && Number.isFinite(basis);
+  if (hasBasis && quote <= basis) return null;
+  // The band it was approved in: frozen at submission, or (a tier since
+  // rebuilt, or none frozen) today's band for the approved amount.
+  const approvedBand = (approvedTierId && tiers.find((t) => t.id === approvedTierId)) || (hasBasis ? tierForAmount(tiers, basis) : null);
+  if (!approvedBand) return hasBasis ? { code: "over_band", limit: null } : { code: "no_amount" };
+  // Refused only when the quote exceeds that band's approval limit (its
+  // exclusive maxAmount). A band with no upper limit never refuses.
+  if (approvedBand.maxAmount === null || quote < approvedBand.maxAmount) return null;
+  return { code: "over_band", limit: approvedBand.maxAmount };
 }
 
 /** Codes, so the page can say it in the reader's language (spend/[id]). */

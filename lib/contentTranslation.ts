@@ -53,7 +53,7 @@ export async function pdfPages(file: Buffer): Promise<number> {
   for (const obj of [...objects]) {
     if (/\/Type\s*\/ObjStm\b/.test(obj)) {
       const inner = objStmObjects(raw, at, obj);
-      if (inner) objects.push(...inner);
+      if (inner) for (const o of inner) objects.push(o);
       else readable = false;
     }
     at += obj.length + "endobj".length;

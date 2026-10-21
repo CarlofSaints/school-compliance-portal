@@ -132,6 +132,10 @@ export async function POST(req: NextRequest) {
     // Index first. The password is compared even with no account, so a
     // repeated unknown address answers in the same time as a wrong password.
     let user = await getUserByEmail(email, false);
+    // Whether "no account" is CERTAIN. Not when the scan was skipped by the
+    // per-connection cap: a real user missing from the index could be the one
+    // typing, and the right password must never add to a lock.
+    let certain = true;
     if (!user) {
       // Missing from the index (rare): the slow scan of every account's own
       // copy runs INLINE, so a real user dropped from the index still signs
@@ -140,28 +144,29 @@ export async function POST(req: NextRequest) {
       // unknown address does not pay for the scan every time.
       // ...and at most INDEX_SCAN_IP.max scans per connection per window, so
       // random addresses cannot make one connection force thousands of reads.
+      // (A later attempt this window, skipped by the per-address marker, is
+      // certain: this window's scan found nobody, or put them back.)
       const scan = await hit(INDEX_REPAIR, account);
-      if ((scan.count === undefined || scan.count === 1) && (await hit(INDEX_SCAN_IP, ip)).ok) {
-        user = await getUserByEmail(email);
-        if (user) await afterResponse(() => repairUserIndex());
+      if (scan.count === undefined || scan.count === 1) {
+        if ((await hit(INDEX_SCAN_IP, ip)).ok) {
+          user = await getUserByEmail(email);
+          if (user) await afterResponse(() => repairUserIndex());
+        } else {
+          certain = false;
+        }
       }
     }
     let accountHit: LimitResult | undefined;
-    if (user) {
-      // Any real account, indexed or found by the scan: counted BEFORE the
-      // password is checked, in one guarded write, so attempts sent at the
-      // same moment cannot all pass on the old count, and a LOCKED account is
-      // refused even with the right password. The right password clears it.
+    if (user || certain) {
+      // Counted BEFORE the password is checked, in one guarded write, for a
+      // real account and a certain unknown address alike: a LOCKED address is
+      // refused at the same point either way (both 429s cost the same), and
+      // the lock cannot tell addresses with an account apart. The right
+      // password clears it below.
       accountHit = await hit(LIMITS.loginAccount, account);
       if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
     }
-    // No account: counted after the (dummy) compare below, like a wrong
-    // password, so the lock cannot tell addresses with an account apart.
     const valid = await verifyPassword(user, password);
-    if (!user || !valid) {
-      accountHit ??= await hit(LIMITS.loginAccount, account);
-      if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
-    }
     if (!user) {
       await afterResponse(async () => {
         // Only the first unknown address from this connection in a window.
