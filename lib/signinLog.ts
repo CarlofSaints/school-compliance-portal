@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { readJson, readJsonTolerant, updateJson, listFilesStrict, deleteFileStrict, NO_CHANGE } from "./controlData";
 import { getUserById } from "./userData";
 import { isPlausibleEmail } from "./emailIdentity";
@@ -33,6 +34,8 @@ export interface SignInStat {
   days: Record<string, number>;
   /** Wrong passwords per SAST day, last 31 days only. */
   failedDays: Record<string, number>;
+  // Random per write: see the "OUR write may be the one" note in updateJson.
+  rev?: string;
 }
 
 const KEEP_DAYS = 31;
@@ -144,6 +147,7 @@ export async function countSignIn(
       } else {
         s.failedDays = bump(s.failedDays || {}, day, oldest);
       }
+      s.rev = randomUUID();
       return s;
     });
     // Deleted while this write was in flight: erase what it just created.

@@ -10,6 +10,7 @@ import {
 import { resolveRecipients } from "@/lib/reminderRecipients";
 import { getActionItems, claimActionChase, updateActionItem, todayIso } from "@/lib/actionItemData";
 import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
+import { loadActionRecipientContext } from "@/lib/actionItemRecipients";
 import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
 import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
 import {
@@ -159,6 +160,9 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const actions = await getActionItems();
   const dueActions = actionsDueForChase(actions, now);
+  // Read once for the run. If it fails, each action reads its own and fails
+  // (and is retried) on its own below.
+  const recipientCtx = dueActions.length ? await loadActionRecipientContext().catch(() => undefined) : undefined;
 
   for (const item of dueActions) {
     // The run log is read by admins who may not read every set of minutes, so
@@ -174,7 +178,7 @@ export async function GET(req: NextRequest) {
     }
     let outcome;
     try {
-      outcome = await chaseActionItem(item, now);
+      outcome = await chaseActionItem(item, now, "", recipientCtx);
     } catch (err) {
       // 🔴 The claim stamped today BEFORE sending. A failure here must hand the
       // day back, or the action looks chased, waits a whole cycle, and nobody

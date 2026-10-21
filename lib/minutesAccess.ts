@@ -159,13 +159,15 @@ export interface ActionOrigin {
 export function actionVisible(
   item: ActionOrigin,
   reader: Reader,
-  minutesById: Map<string, MinutesForAccess>,
+  // null = the read FAILED (not the same as deleted): hidden, fail closed.
+  minutesById: Map<string, MinutesForAccess | null>,
   ctx: MinutesAccessContext
 ): boolean {
   const id = item.fromMinutes?.minutesId;
   if (!id) return true;
   if (item.assigneeIds.some((a) => reader.personIds.includes(a))) return true;
   const record = minutesById.get(id);
+  if (record === null) return false;
   // The minutes were deleted: nothing left to protect but a title, and the
   // action itself still stands. Shown.
   if (!record) return true;
@@ -206,10 +208,15 @@ export async function minutesIndex(): Promise<Map<string, MinutesRecord>> {
 
 /** Only the sets these ids name, read one by one, rather than every set:
  *  the action register and the activity log are opened all day. */
-async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, MinutesRecord>> {
+async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, MinutesRecord | null>> {
   const unique = [...new Set(ids.filter((i): i is string => !!i))];
-  const found = await Promise.all(unique.map((id) => getMinutes(id).catch(() => null)));
-  return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
+  // A deleted set is left out; one that could not be READ is null (actionVisible).
+  const found = await Promise.all(
+    unique.map((id) => getMinutes(id).then((m) => [id, m] as const, () => [id, "failed"] as const))
+  );
+  const out = new Map<string, MinutesRecord | null>();
+  for (const [id, m] of found) if (m) out.set(id, m === "failed" ? null : m);
+  return out;
 }
 
 /** For a session reading the action register. */

@@ -1,5 +1,4 @@
 import { getPeople } from "./peopleData";
-import { getUsers } from "./userData";
 import { getRoles, resolveRolePermissions } from "./rolesData";
 import type { ActionItem, ActionRecipient } from "./actionItemData";
 import { actionVisible, loadMinutesAccessContext, loadRecipientResolver } from "./minutesAccess";
@@ -31,13 +30,11 @@ export const ACTION_ADMIN_PERMISSIONS = [
 // keeps receiving the chases.
 export async function resolveActionRecipients(
   item: ActionItem,
-  recipients: ActionRecipient[]
+  recipients: ActionRecipient[],
+  // Loaded once by a caller sending many (the cron), else read here.
+  shared?: ActionRecipientContext
 ): Promise<{ resolved: ResolvedActionRecipient[]; missing: string[] }> {
-  const [people, users, roles] = await Promise.all([
-    getPeople(),
-    getUsers(),
-    getRoles(),
-  ]);
+  const { people, users, roles, ctx, resolver } = shared ?? (await loadActionRecipientContext());
   const userById = new Map(users.map((u) => [u.id, u]));
   const personById = new Map(people.map((p) => [p.id, p]));
 
@@ -97,10 +94,12 @@ export async function resolveActionRecipients(
   // An action raised in a meeting follows that meeting's read access: the
   // email carries its title and description. The people carrying it always
   // qualify (actionVisible).
+  // Assignees alone always qualify, so the assignment mail needs no read.
   const minutesId = item.fromMinutes?.minutesId;
-  if (!minutesId) return { resolved: deduped, missing };
-  const [ctx, record] = await Promise.all([loadMinutesAccessContext(), getMinutes(minutesId).catch(() => null)]);
-  const resolver = await loadRecipientResolver(ctx);
+  if (!minutesId || recipients.every((r) => r === "assignees")) return { resolved: deduped, missing };
+  // 🔴 FAIL CLOSED: null is only a confirmed-missing file (readJson); a failed
+  // read THROWS and aborts this email rather than counting as "deleted".
+  const record = await getMinutes(minutesId);
   const byId = new Map(record ? [[minutesId, record]] : []);
   const allowed = deduped.filter((r) => actionVisible(item, resolver.forEmail(r.email), byId, ctx));
   if (allowed.length < deduped.length) {
@@ -108,6 +107,14 @@ export async function resolveActionRecipients(
   }
   return { resolved: allowed, missing };
 }
+
+/** People, logins, roles and minutes access, read once per send run. */
+export async function loadActionRecipientContext() {
+  const ctx = await loadMinutesAccessContext();
+  const [resolver, roles] = await Promise.all([loadRecipientResolver(ctx), getRoles()]);
+  return { people: ctx.people, users: resolver.users, roles, ctx, resolver };
+}
+export type ActionRecipientContext = Awaited<ReturnType<typeof loadActionRecipientContext>>;
 
 // The register's own view of a person's name, used when an item is written or
 // displayed. Falls back to whatever was stored on the item.

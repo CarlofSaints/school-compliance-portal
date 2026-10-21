@@ -31,19 +31,24 @@ export async function POST(req: NextRequest) {
     ]);
     if (limited) return limited;
 
+    // A site with no email set up answers this for EVERY address, so it says
+    // nothing about who has an account, and the user learns to ask an admin.
+    if (!isEmailConfigured()) {
+      console.error("[forgot-password] No RESEND_API_KEY, reset emails cannot be sent");
+      return NextResponse.json(
+        { error: "Password reset email is not configured on this site. Please contact your administrator." },
+        { status: 503 }
+      );
+    }
+
     // The lookup and the send run AFTER the reply, so it takes the same time
-    // (and is the same answer) for an address with an account or without, and
-    // whether or not email is set up. Failures go to the server log.
+    // (and is the same answer) for an address with an account or without.
+    // Failures go to the server log.
     const ip = ipOf(req);
     const device = deviceOf(req.headers.get("user-agent"));
     await afterResponse(async () => {
       const user = await getUserByEmail(email.trim());
       if (!user) return;
-      if (!isEmailConfigured()) {
-        // sendEmail() logs and returns true when Resend is not wired up.
-        console.error("[forgot-password] No RESEND_API_KEY, cannot send to", user.id);
-        return;
-      }
       const at = new Date().toISOString();
       const sent = await sendPasswordResetLinkEmail(
         user.email,

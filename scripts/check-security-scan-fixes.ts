@@ -111,13 +111,18 @@ async function main() {
   check("no account: the compare still runs and fails", await verifyPassword(undefined, "not-a-real-password"), false);
   check("right password still signs in", await verifyPassword(real, "right-one"), true);
   check("wrong password still fails", await verifyPassword(real, "wrong"), false);
+  const empty = { id: "u2", email: "e@school.co.za", password: "" } as never;
+  check("a real user with an empty password never signs in", await verifyPassword(empty, "not-a-real-password"), false);
+  check("...not even with an empty password typed", await verifyPassword(empty, ""), false);
   await writeJson("users.json", []);
   await writeJson("users/u9/record.json", { id: "u9", email: "lost@school.co.za", name: "L", surname: "S", password: "x", role: "r" });
   check("index-only lookup skips the slow scan", await getUserByEmail("lost@school.co.za", false), undefined);
   check("the full lookup still recovers it", (await getUserByEmail("lost@school.co.za"))?.id, "u9");
   const forgot = fs.readFileSync("app/api/auth/forgot-password/route.ts", "utf8");
   check("forgot-password looks up and sends after the reply", forgot.indexOf("afterResponse(") < forgot.indexOf("getUserByEmail("), true);
-  check("forgot-password has one answer only", /status: 50[23]/.test(forgot), false);
+  check("forgot-password: per-user failures have one answer", /status: 502/.test(forgot), false);
+  check("forgot-password: no email set up is a 503 for every address, before any lookup", forgot.indexOf("status: 503") > 0 && forgot.indexOf("status: 503") < forgot.indexOf("getUserByEmail("), true);
+  check("index repair is per address, not behind the per-connection log marker", auth.indexOf("hit(INDEX_REPAIR, account)") > 0 && auth.indexOf("hit(INDEX_REPAIR") < auth.indexOf("hit(UNKNOWN_ADDRESS_LOG"), true);
 
   // --- spend: who may act on an approved application ---
   const { mayActOnApproved } = await import("../lib/approvalEngine");
@@ -127,6 +132,21 @@ async function main() {
   check("a required approver may", mayActOnApproved(approvedApp, { id: "boss", permissions: [] }), true);
   check("a spend admin may", mayActOnApproved(approvedApp, { id: "adm", permissions: ["manage_spend_settings"] }), true);
   check("approve_spend alone is not enough", mayActOnApproved(approvedApp, { id: "x", permissions: ["approve_spend"] }), false);
+  const { quoteBandProblem } = await import("../lib/approvalSettings");
+  const bands = [
+    { id: "low", label: "", minAmount: 0, maxAmount: 5000, logOnly: true, requirements: [] },
+    { id: "mid", label: "", minAmount: 5000, maxAmount: 10000, logOnly: false, requirements: [] },
+    { id: "high", label: "", minAmount: 10000, maxAmount: null, logOnly: false, requirements: [] },
+  ];
+  check("a quote above approval in the same band is allowed", quoteBandProblem(bands, 9000, 6000), null);
+  check("a quote below approval is allowed", quoteBandProblem(bands, 4000, 6000), null);
+  check("a quote that lands in a higher band is refused", typeof quoteBandProblem(bands, 12000, 6000), "string");
+  check("no bands set up: allowed", quoteBandProblem([], 12000, 6000), null);
+  check("no approved or estimated amount: refused", typeof quoteBandProblem(bands, 100, undefined), "string");
+  const selectQuote = fs.readFileSync("app/api/spend/[id]/select-quote/route.ts", "utf8");
+  check("quote index must be a whole number", selectQuote.includes("Number.isInteger(quoteIndex)"), true);
+  const usersRoute = fs.readFileSync("app/api/users/[id]/route.ts", "utf8");
+  check("tagged-address guard covers every user's email, not only your own", usersRoute.includes("if (!maySelfTag(session) && (await addressCarriesTags(email)))"), true);
 
   // --- signature images ---
   const { signatureKey, saveSignatureImage, readSignatureImage } = await import("../lib/minutesData");
@@ -134,10 +154,14 @@ async function main() {
   check("same address, any case or spacing, same file", signatureKey(" Chair@School.co.za ") === signatureKey("chair@school.co.za"), true);
   await saveSignatureImage("m1", "chair.smith@school.co.za", Buffer.from("victim"));
   await saveSignatureImage("m1", "chair_smith@school-co.za", Buffer.from("other"));
-  check("one signatory cannot replace another's image", String(await readSignatureImage("m1", "chair.smith@school.co.za")), "victim");
+  check("one signatory cannot replace another's image", String(await readSignatureImage("m1", "chair.smith@school.co.za", [])), "victim");
   const { writeFile } = await import("../lib/controlData");
   await writeFile("minutes/m2/signatures/old_x_za.png", Buffer.from("legacy"));
-  check("an image stored before the change still reads", String(await readSignatureImage("m2", "old@x.za")), "legacy");
+  check("an image stored before the change still reads", String(await readSignatureImage("m2", "old@x.za", ["old@x.za"])), "legacy");
+  await writeFile("minutes/m3/signatures/chair_smith_school_co_za.png", Buffer.from("whose"));
+  check("a legacy image two signatories could share is read by neither",
+    [await readSignatureImage("m3", "chair.smith@school.co.za", ["chair.smith@school.co.za", "chair_smith@school-co.za"]),
+     await readSignatureImage("m3", "chair_smith@school-co.za", ["chair.smith@school.co.za", "chair_smith@school-co.za"])], [null, null]);
 
   // --- PDF page count on a crafted file ---
   process.env.ANTHROPIC_API_KEY ||= "unused";
@@ -180,9 +204,39 @@ async function main() {
   check("an admin who may not read the minutes is not", got.missing.some((m) => m.includes("may not read")), true);
   const notFromMinutes = await resolveActionRecipients({ ...(action as object), fromMinutes: undefined } as never, ["admins"]);
   check("an action not from minutes still reaches admins", notFromMinutes.resolved.map((r) => r.email), ["sec@school.co.za"]);
+  // A minutes read that FAILS is not "deleted": the email is aborted (the
+  // cron hands the day back), and the register hides the action.
+  await writeFile("minutes/broken/record.json", Buffer.from("{ not json"));
+  const fromBroken = { ...(action as object), fromMinutes: { minutesId: "broken" } } as never;
+  let aborted = false;
+  await resolveActionRecipients(fromBroken, ["assignees", "admins"]).catch(() => (aborted = true));
+  check("a failed minutes read aborts the chase instead of mailing admins", aborted, true);
+  check("the assignment mail (assignees only) needs no minutes read", (await resolveActionRecipients(fromBroken, ["assignees"])).resolved.length, 1);
+  const { actionVisible, loadMinutesAccessContext, readerForUser } = await import("../lib/minutesAccess");
+  const actx = await loadMinutesAccessContext();
+  const outsider = readerForUser({ id: "zz", email: "zz@school.co.za", tagIds: [] }, [], actx);
+  check("an unreadable set hides its action", actionVisible({ fromMinutes: { minutesId: "broken" }, assigneeIds: [] }, outsider, new Map([["broken", null]]), actx), false);
+  check("a deleted set still shows it", actionVisible({ fromMinutes: { minutesId: "gone" }, assigneeIds: [] }, outsider, new Map(), actx), true);
+  const { loadActionRecipientContext } = await import("../lib/actionItemRecipients");
+  const sharedCtx = await loadActionRecipientContext();
+  check("one context serves many actions", (await resolveActionRecipients(action, ["assignees", "admins"], sharedCtx)).resolved.length, got.resolved.length);
   const cron = fs.readFileSync("app/api/cron/reminders/route.ts", "utf8");
+  check("the cron loads recipients once per run", cron.includes("loadActionRecipientContext()") && cron.includes("recipientCtx)"), true);
   check("the run log names meeting actions by reference only", /Action \$\{item\.ref\} \$\{item\.title\}/.test(cron), false);
-  check("old run logs are cut per reader", fs.readFileSync("app/api/reminders/runs/route.ts", "utf8").includes("visibleActionsFor("), true);
+  const runsRoute = fs.readFileSync("app/api/reminders/runs/route.ts", "utf8");
+  check("old run logs are cut per reader, by reference alone", runsRoute.includes("visibleActionsFor(") && !runsRoute.includes("i.title"), true);
+
+  // --- counters: two identical writes must never count as one ---
+  const { addCredits, getCredits } = await import("../lib/contentTranslation");
+  await writeJson("settings/translation-credits.json", { balance: 0 });
+  console.error = () => {};
+  const adds = await Promise.allSettled(Array.from({ length: 10 }, () => addCredits(1)));
+  console.error = quiet;
+  check("10 top-ups at once: every one that reported success is counted",
+    await getCredits(), adds.filter((r) => r.status === "fulfilled").length);
+  const signin = fs.readFileSync("lib/signinLog.ts", "utf8");
+  const credits = fs.readFileSync("lib/contentTranslation.ts", "utf8");
+  check("credits and sign-in tallies carry a random rev per write", [(credits.match(/rev: randomUUID\(\)/g) || []).length, signin.includes("s.rev = randomUUID()")], [2, true]);
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

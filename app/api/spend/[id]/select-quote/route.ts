@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import { mayActOnApproved } from "@/lib/approvalEngine";
-import { getApprovalSettings, tierForAmount } from "@/lib/approvalSettings";
+import { getApprovalSettings, quoteBandProblem } from "@/lib/approvalSettings";
 
 export async function POST(
   req: NextRequest,
@@ -45,7 +45,7 @@ export async function POST(
     const { quoteIndex } = body;
 
     if (
-      typeof quoteIndex !== "number" ||
+      !Number.isInteger(quoteIndex) ||
       quoteIndex < 0 ||
       quoteIndex >= app.quoteDetails.length
     ) {
@@ -59,15 +59,9 @@ export async function POST(
     const approvedAmount = selectedQuote.priceExclVat || 0;
     // A quote above what was approved may not carry the application into a
     // band whose approvers never saw it.
-    const basis = app.approvedAmount ?? app.estimatedAmount;
     const { tiers } = await getApprovalSettings();
-    const band = tierForAmount(tiers, approvedAmount);
-    if (approvedAmount > basis && (!band || band.id !== tierForAmount(tiers, basis)?.id)) {
-      return NextResponse.json(
-        { error: "This quote is above the approval band this application was approved in. Submit a new application for the higher amount." },
-        { status: 409 }
-      );
-    }
+    const problem = quoteBandProblem(tiers, approvedAmount, app.approvedAmount ?? app.estimatedAmount);
+    if (problem) return NextResponse.json({ error: problem }, { status: 409 });
 
     await updateSpendApplication(id, {
       selectedQuoteIndex: quoteIndex,

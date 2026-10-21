@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { randomUUID } from "crypto";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { LOCALES, type Locale } from "./i18n/locales";
 
@@ -67,6 +68,8 @@ const MODEL = "claude-opus-5-5";
 interface Credits {
   balance: number;
   updatedAt?: string;
+  // Random per write: see the "OUR write may be the one" note in updateJson.
+  rev?: string;
 }
 
 const CREDITS_PATH = "settings/translation-credits.json";
@@ -84,7 +87,7 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     balance = Math.max(0, c.balance + n);
     applied = balance - c.balance;
-    return { balance, updatedAt: new Date().toISOString() };
+    return { balance, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
   return { balance, applied };
 }
@@ -95,7 +98,7 @@ async function spend(n: number): Promise<boolean> {
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     if (c.balance < n) return NO_CHANGE;
     ok = true;
-    return { balance: c.balance - n, updatedAt: new Date().toISOString() };
+    return { balance: c.balance - n, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
   return ok;
 }

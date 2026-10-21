@@ -60,11 +60,12 @@ export async function PUT(
         if (users.some((u) => u.id !== id && u.email.toLowerCase() === email.toLowerCase())) {
           return NextResponse.json({ error: "Another user already has that email address." }, { status: 409 });
         }
-        // Same rule as My Account (confirm-email): your own login onto a
-        // tagged register entry's address hands you its tags.
-        if (id === session.id && !maySelfTag(session) && (await addressCarriesTags(email))) {
+        // Same rule as My Account (confirm-email): ANY login moved onto a
+        // tagged register entry's address gains its tags, so moving one (yours
+        // or somebody else's) there needs manage_roles.
+        if (!maySelfTag(session) && (await addressCarriesTags(email))) {
           return NextResponse.json(
-            { error: "That address is on a tagged People entry, so moving your login to it needs a Super Admin." },
+            { error: "That address is on a tagged People entry, so moving a login to it needs a Super Admin." },
             { status: 403 }
           );
         }

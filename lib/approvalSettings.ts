@@ -189,3 +189,22 @@ export function validateTiers(tiers: ApprovalTier[]): string[] {
 
   return problems;
 }
+
+/** Why a quote may not be selected, or null when it may. A quote above what
+ *  was approved may not carry the application into a band whose approvers
+ *  never saw it. No bands set up: nothing to move between, allowed. Approved
+ *  amount unknown: cannot be checked, refused. */
+export function quoteBandProblem(
+  tiers: ApprovalTier[],
+  quote: number,
+  basis: number | undefined | null
+): string | null {
+  if (tiers.length === 0) return null;
+  if (typeof basis !== "number" || !Number.isFinite(basis)) {
+    return "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.";
+  }
+  if (quote <= basis) return null;
+  const band = tierForAmount(tiers, quote);
+  if (band && band.id === tierForAmount(tiers, basis)?.id) return null;
+  return "This quote is above the approval band this application was approved in. Submit a new application for the higher amount.";
+}

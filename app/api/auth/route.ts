@@ -33,6 +33,13 @@ import { tenantScope } from "@/lib/tenantContext";
 // Not a limit anybody is refused by: a once-per-window marker, so failed
 // sign-ins for addresses with no account log ONE entry per connection per
 // window, however many addresses a bot tries.
+const INDEX_REPAIR: Limit = {
+  scope: "login-index-repair",
+  max: 1,
+  windowSec: LIMITS.loginIp.windowSec,
+  message: "",
+};
+
 const UNKNOWN_ADDRESS_LOG: Limit = {
   scope: "login-unknown-ip",
   max: 1,
@@ -121,12 +128,16 @@ export async function POST(req: NextRequest) {
     const valid = await verifyPassword(user, password);
     if (!user) {
       await afterResponse(async () => {
+        // An account missing from the index is found by the slow scan here,
+        // after the reply, and put back so the next attempt works. Once per
+        // ADDRESS per window, never tied to the connection's log marker, so
+        // other addresses typed from the same place cannot lock a user out.
+        if ((await hit(INDEX_REPAIR, account)).count === 1 && (await getUserByEmail(email))) {
+          await repairUserIndex();
+        }
         // Only the first unknown address from this connection in a window.
         const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
         if (marker.count !== 1) return;
-        // An account missing from the index is found by the slow scan here,
-        // after the reply, and put back so the next attempt works.
-        if (await getUserByEmail(email)) await repairUserIndex();
         await recordActivity({
           at,
           actorName: UNKNOWN_ADDRESS,

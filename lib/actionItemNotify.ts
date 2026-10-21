@@ -8,7 +8,7 @@ import {
   updateActionItem,
 } from "./actionItemData";
 import type { ActionItem } from "./actionItemData";
-import { resolveActionRecipients } from "./actionItemRecipients";
+import { resolveActionRecipients, type ActionRecipientContext } from "./actionItemRecipients";
 import { sendActionAssignedEmail, sendActionReminderEmail } from "./email";
 
 // Resend accepts roughly two messages a second, and a burst comes back as 429s
@@ -105,11 +105,13 @@ function whyNow(item: ActionItem, now: Date): string {
 export async function chaseActionItem(
   item: ActionItem,
   now: Date = new Date(),
-  note = ""
+  note = "",
+  shared?: ActionRecipientContext
 ): Promise<ActionChaseResult> {
   const { resolved, missing } = await resolveActionRecipients(
     item,
-    item.reminder.recipients
+    item.reminder.recipients,
+    shared
   );
 
   if (resolved.length === 0) {

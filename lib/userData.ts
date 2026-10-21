@@ -259,6 +259,7 @@ export async function verifyPassword(
   user: User | undefined,
   password: string
 ): Promise<boolean> {
-  const match = await bcrypt.compare(password, user?.password || NO_ACCOUNT_HASH);
+  // Never `||`: a real user with an empty password must not get the dummy hash.
+  const match = await bcrypt.compare(password, user ? user.password : NO_ACCOUNT_HASH);
   return !!user && match;
 }

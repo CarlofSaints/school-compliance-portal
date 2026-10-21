@@ -488,12 +488,18 @@ export async function saveSignatureImage(
   await writeFile(signaturePath(id, signatureKey(email)), png);
 }
 
+/** `signatoryEmails`: everybody on this record's signing list. Only they could
+ *  write its images, so a legacy file is provably this person's only when no
+ *  OTHER address on the list shares its lossy key; otherwise no fallback. */
 export async function readSignatureImage(
   id: string,
-  email: string
+  email: string,
+  signatoryEmails: string[]
 ): Promise<Buffer | null> {
-  return (
-    (await readFile(signaturePath(id, signatureKey(email)))) ??
-    readFile(signaturePath(id, legacySignatureKey(email)))
-  );
+  const hashed = await readFile(signaturePath(id, signatureKey(email)));
+  if (hashed) return hashed;
+  const me = email.trim().toLowerCase();
+  const legacy = legacySignatureKey(email);
+  const shared = signatoryEmails.some((e) => e.trim().toLowerCase() !== me && legacySignatureKey(e) === legacy);
+  return shared ? null : readFile(signaturePath(id, legacy));
 }
