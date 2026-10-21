@@ -240,8 +240,7 @@ export function buildWeeklyFacts(
 ): WeeklyFacts {
   const s = summarise(actions, now);
   const minutesById = new Map(minutes.map((m) => [m.id, m]));
-  const overdueList = withMeetingDates(actions, minutesById)
-    .filter((a) => isOverdue(a, now))
+  const overdueList = withMeetingDates(actions.filter((a) => isOverdue(a, now)), minutesById)
     .map((a) => ({
       fromMinutes: a.fromMinutes ? { minutesId: a.fromMinutes.minutesId } : undefined,
       assigneeIds: a.assigneeIds,

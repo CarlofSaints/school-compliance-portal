@@ -212,6 +212,16 @@ async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, Minu
   return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
 }
 
+/** The access context, the minutes these actions came from, and this
+ *  session as a reader: what both functions below need. */
+async function loadActionAccess(session: SessionPayload, items: ActionOrigin[]) {
+  const [ctx, byId] = await Promise.all([
+    loadMinutesAccessContext(),
+    minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
+  ]);
+  return { ctx, byId, reader: await readerForSession(session, ctx) };
+}
+
 /** Every response that hands back action items goes through this (or
  *  visibleActionsFor), so the meeting date survives an edit on the client.
  *  Same rule as GET: the date only on an action this session may see. */
@@ -220,11 +230,7 @@ export async function withMinutesMeetingDates<T extends ActionOrigin & { fromMin
   items: T[]
 ): Promise<T[]> {
   if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
-  const [ctx, byId] = await Promise.all([
-    loadMinutesAccessContext(),
-    minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
-  ]);
-  const reader = await readerForSession(session, ctx);
+  const { ctx, byId, reader } = await loadActionAccess(session, items);
   const dated = withMeetingDates(items, byId);
   return items.map((i, n) => (actionVisible(i, reader, byId, ctx) ? dated[n] : i));
 }
@@ -236,10 +242,6 @@ export async function visibleActionsFor<T extends ActionOrigin & { fromMinutes?:
   items: T[]
 ): Promise<T[]> {
   if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
-  const [ctx, byId] = await Promise.all([
-    loadMinutesAccessContext(),
-    minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
-  ]);
-  const reader = await readerForSession(session, ctx);
+  const { ctx, byId, reader } = await loadActionAccess(session, items);
   return withMeetingDates(items.filter((i) => actionVisible(i, reader, byId, ctx)), byId);
 }

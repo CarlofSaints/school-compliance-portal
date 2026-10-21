@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { visibleActionsFor, sessionMayReadMinutes, withMinutesMeetingDates } from "@/lib/minutesAccess";
+import { visibleActionsFor, sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
     // a meeting that never agreed it - and an action item's authority is
     // entirely "the SGB minuted this".
     let fromMinutes: FromMinutes | undefined;
+    let minutesDate: string | undefined;
     const minutesId = String(body?.fromMinutesId ?? "").trim();
     if (minutesId) {
       const record = await getMinutes(minutesId);
@@ -126,6 +127,7 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      minutesDate = record.meetingDate;
       const sectionId = String(body?.fromSectionId ?? "").trim();
       const section = record.sections.find((s) => s.id === sectionId);
       fromMinutes = {
@@ -170,7 +172,9 @@ export async function POST(req: NextRequest) {
       notified = await notifyAssignees(item);
     }
 
-    const [dated] = await withMinutesMeetingDates(session, [item]);
+    // The minutes' date in the response only (never stored), from the record
+    // read and access-checked above.
+    const dated = item.fromMinutes && minutesDate ? { ...item, fromMinutes: { ...item.fromMinutes, meetingDate: minutesDate } } : item;
     return NextResponse.json({ ...dated, notified }, { status: 201 });
   } catch (err) {
     console.error("[action-items] create failed:", err);

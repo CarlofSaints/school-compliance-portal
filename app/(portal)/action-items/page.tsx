@@ -10,7 +10,7 @@ import ActionItemForm from "@/components/ActionItemForm";
 import ActionProgressModal from "@/components/ActionProgressModal";
 import { useTableSort, useColumnWidths } from "@/lib/useTable";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
-import { useT } from "@/components/I18nProvider";
+import { useT, useLocale } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
 import {
   PRIORITY_LABELS,
@@ -27,10 +27,10 @@ import {
   summarise,
   todayIso,
   addDays,
+  meetingDateOf,
 } from "@/lib/actionItems";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
-import { meetingDateOf } from "@/lib/actionItems";
-import { formatMeetingDate } from "@/lib/minutes";
+import { formatDayMonthYear } from "@/lib/i18n/locales";
 
 export interface DirectoryPerson {
   id: string;
@@ -125,6 +125,7 @@ function SummaryTile({
 
 export default function ActionItemsPage() {
   const t = useT();
+  const locale = useLocale();
   // No permission to read: who agreed to do what belongs to everybody in the
   // portal, the same way the People register does. Raising and editing is
   // gated below.
@@ -338,13 +339,7 @@ export default function ActionItemsPage() {
       const idx = prev.findIndex((i) => i.id === saved.id);
       if (idx === -1) return [...prev, saved];
       const next = [...prev];
-      // A response that came back without the minutes' date keeps the one the
-      // row already had, so a route that forgets to add it cannot wipe it.
-      const had = prev[idx].fromMinutes;
-      next[idx] =
-        saved.fromMinutes && !saved.fromMinutes.meetingDate && had?.meetingDate && had.minutesId === saved.fromMinutes.minutesId
-          ? { ...saved, fromMinutes: { ...saved.fromMinutes, meetingDate: had.meetingDate } }
-          : saved;
+      next[idx] = saved;
       return next;
     });
   }, []);
@@ -696,6 +691,7 @@ export default function ActionItemsPage() {
                   });
                 }
 
+                const meetingDate = meetingDateOf(item);
                 return (
                   <tr
                     key={item.id}
@@ -714,9 +710,9 @@ export default function ActionItemsPage() {
                           {item.description}
                         </p>
                       )}
-                      {meetingDateOf(item) && (
+                      {meetingDate && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {t("Raised at the meeting of {date}", { date: formatMeetingDate(meetingDateOf(item)!) })}
+                          {t("Raised at the meeting of {date}", { date: formatDayMonthYear(meetingDate, locale) })}
                         </p>
                       )}
                       {/* Where it came from, linking back to the minute that

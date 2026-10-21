@@ -7,6 +7,7 @@ import { withMeetingDates, type ActionItem } from "../lib/actionItems";
 import { buildSummaryRows } from "../lib/actionSummary";
 import { buildWeeklyFacts } from "../lib/weeklyUpdate";
 import type { MinutesRecord } from "../lib/minutesData";
+import { formatDayMonthYear, LOCALES } from "../lib/i18n/locales";
 
 let failures = 0;
 function check(name: string, actual: unknown, expected: unknown) {
@@ -59,6 +60,13 @@ check("weekly: a date typed on the item wins over the minutes'", line("A-004"), 
 // it back, so the row the client swaps in still shows it.
 const edited = { ...items[0], title: "Edited" } as ActionItem;
 check("an edited item re-enriched keeps the minutes' date", withMeetingDates([edited], byId)[0].fromMinutes?.meetingDate, "2026-10-15");
+
+// The page's date: day month year in every UI language, never M/D/Y or Y M D.
+for (const { code } of LOCALES) {
+  const out = formatDayMonthYear("2026-10-15", code);
+  check(`page date in ${code} starts with the day, ends with the year`, /^15 \S+ 2026$/.test(out), true);
+}
+check("page date in English", formatDayMonthYear("2026-10-15", "en"), "15 October 2026");
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);
