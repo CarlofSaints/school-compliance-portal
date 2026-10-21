@@ -197,6 +197,27 @@ export interface FromMinutes {
    *  document. Optional: "the meeting agreed X" is a real case too. */
   sectionId?: string;
   sectionTitle?: string;
+  /** The minutes' meeting date, filled on READ by withMeetingDates (never
+   *  stored), so actions raised before the date existed show it too. */
+  meetingDate?: string;
+}
+
+/** Each action raised in minutes gets those minutes' meeting date, from the
+ *  minutes as they are now. */
+export function withMeetingDates<T extends { fromMinutes?: { minutesId: string; meetingDate?: string } }>(
+  items: T[],
+  minutesById: Map<string, { meetingDate?: string }>
+): T[] {
+  return items.map((i) => {
+    const d = i.fromMinutes && minutesById.get(i.fromMinutes.minutesId)?.meetingDate;
+    return d && i.fromMinutes ? { ...i, fromMinutes: { ...i.fromMinutes, meetingDate: d } } : i;
+  });
+}
+
+/** The date the action's meeting was held: a date typed on the item wins,
+ *  else the minutes' date (filled by withMeetingDates). */
+export function meetingDateOf(i: { meetingDate?: string; fromMinutes?: { meetingDate?: string } }): string | undefined {
+  return i.meetingDate || i.fromMinutes?.meetingDate;
 }
 
 export interface ActionItem {

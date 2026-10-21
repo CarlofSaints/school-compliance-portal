@@ -27,8 +27,10 @@ import {
   summarise,
   todayIso,
   addDays,
+  meetingDateOf,
 } from "@/lib/actionItems";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
+import { formatMeetingDate } from "@/lib/minutes";
 
 export interface DirectoryPerson {
   id: string;
@@ -688,6 +690,7 @@ export default function ActionItemsPage() {
                   });
                 }
 
+                const meetingDate = meetingDateOf(item);
                 return (
                   <tr
                     key={item.id}
@@ -706,9 +709,9 @@ export default function ActionItemsPage() {
                           {item.description}
                         </p>
                       )}
-                      {item.meetingDate && (
+                      {meetingDate && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {t("Raised at the meeting of {date}", { date: item.meetingDate })}
+                          {t("Raised at the meeting of {date}", { date: formatMeetingDate(meetingDate, t) })}
                         </p>
                       )}
                       {/* Where it came from, linking back to the minute that

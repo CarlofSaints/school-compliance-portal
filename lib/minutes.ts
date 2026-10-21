@@ -49,8 +49,8 @@ export function isLocked(status: MinutesStatus): boolean {
 }
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  tk("January"), tk("February"), tk("March"), tk("April"), tk("May"), tk("June"),
+  tk("July"), tk("August"), tk("September"), tk("October"), tk("November"), tk("December"),
 ];
 
 export function formatPeriod(p: MeetingPeriod): string {
@@ -110,10 +110,12 @@ export function meetingDateOutsidePeriod(d: string | undefined, p: MeetingPeriod
   return inside ? null : `The meeting date (${formatMeetingDate(d)}) is outside ${formatPeriod(p)}. Change one so they agree.`;
 }
 
-/** "15 October 2026". */
-export function formatMeetingDate(d: string): string {
+/** "15 October 2026", always day month year. Pass the page's t() for the
+ *  month in the reader's language (the dictionaries, not Intl: browsers lack
+ *  nso/tn/st); emails and Word files leave it out and stay English. */
+export function formatMeetingDate(d: string, t: (english: string) => string = (s) => s): string {
   const parsed = new Date(`${d}T00:00:00Z`);
-  return Number.isNaN(parsed.getTime()) ? d : `${parsed.getUTCDate()} ${MONTHS[parsed.getUTCMonth()]} ${parsed.getUTCFullYear()}`;
+  return Number.isNaN(parsed.getTime()) ? d : `${parsed.getUTCDate()} ${t(MONTHS[parsed.getUTCMonth()])} ${parsed.getUTCFullYear()}`;
 }
 
 /** "Held 15 October 2026 · October 2026", or just the period when the
