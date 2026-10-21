@@ -99,8 +99,8 @@ async function main() {
   const burst = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginAccount, "burst@school.co.za")));
   console.error = quiet;
   check("30 attempts at once: no more than 5 get through", burst.filter((r) => r.ok).length <= LIMITS.loginAccount.max, true);
-  check("per-account and code limits refuse on contention", [LIMITS.loginAccount, LIMITS.resetRequestEmail, LIMITS.resetCompleteIp, LIMITS.confirmEmailIp].every((l) => l.failClosed), true);
-  check("per-IP sign-in and reset limits fail OPEN (one school NAT)", ["failClosed" in LIMITS.loginIp, "failClosed" in LIMITS.resetRequestIp], [false, false]);
+  check("per-account and code limits refuse on contention", [LIMITS.loginAccount, LIMITS.resetRequestEmail, LIMITS.signCodeAttempt].every((l) => l.failClosed), true);
+  check("every per-IP limit fails OPEN (one school NAT)", [LIMITS.loginIp, LIMITS.resetRequestIp, LIMITS.resetCompleteIp, LIMITS.confirmEmailIp].map((l) => "failClosed" in l), [false, false, false, false]);
   console.error = () => {};
   const nat = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginIp, "10.0.0.1")));
   console.error = quiet;
@@ -127,6 +127,8 @@ async function main() {
   check("forgot-password looks up and sends after the reply", forgot.indexOf("afterResponse(") < forgot.indexOf("getUserByEmail("), true);
   check("forgot-password: per-user failures have one answer", /status: 502/.test(forgot), false);
   check("forgot-password: no email set up is a 503 for every address, before any lookup", forgot.indexOf("status: 503") > 0 && forgot.indexOf("status: 503") < forgot.indexOf("getUserByEmail("), true);
+  check("index miss: a counter that could not be saved still allows the scan", auth.includes("scan.count === undefined || scan.count === 1"), true);
+  check("index miss: the address is counted only after a wrong or unknown answer", /if \(!user \|\| !valid\) \{\s*accountHit \?\?= await hit\(LIMITS\.loginAccount/.test(auth), true);
   check("an index miss scans INLINE, before the password is checked", auth.indexOf("hit(INDEX_REPAIR, account)") > 0 && auth.indexOf("user = await getUserByEmail(email);") > 0 && auth.indexOf("user = await getUserByEmail(email);") < auth.indexOf("verifyPassword(user"), true);
 
   // --- spend: who may act on an approved application ---
@@ -190,7 +192,17 @@ async function main() {
   check("padding and a decoy /Count 1 cannot make it pay less", await pdfPages(Buffer.from(padded, "latin1")), 500);
   let askedApi = false;
   await pdfPages(Buffer.from("2 0 obj << /Type /Pages /Count 1 >> endobj 3 0 obj << /Type /ObjStm /N 9 >> endobj", "latin1")).catch(() => (askedApi = true));
-  check("compressed object streams: the AI count is asked as well", askedApi, true);
+  check("an object stream that cannot be read: the AI count is asked as well", askedApi, true);
+  const { deflateSync } = await import("zlib");
+  const packed = "<< /Type /Pages /Kids [10 0 R] /Count 250 >> << /Type /Pages /Parent 2 0 R /Count 250 >>";
+  const header = `2 0 11 ${packed.indexOf("<< /Type /Pages /Parent")} `;
+  const body = deflateSync(Buffer.from(header + packed, "latin1"));
+  const objStm = Buffer.concat([
+    Buffer.from(`5 0 obj << /Type /ObjStm /N 2 /First ${header.length} /Filter /FlateDecode /Length ${body.length} >>\nstream\n`, "latin1"),
+    body,
+    Buffer.from("\nendstream\nendobj 9 0 obj << /Type /Pages /Count 1 >> endobj", "latin1"),
+  ]);
+  check("a compressed (object stream) page tree is read without the AI, decoy and all", await pdfPages(objStm), 250);
 
   // --- tag membership and email change ---
   const tagsRoute = fs.readFileSync("app/api/tags/[id]/route.ts", "utf8");
@@ -204,6 +216,7 @@ async function main() {
   check("an unlinked tagged entry's address carries tags", await addressCarriesTags(" treasurer@school.co.za"), true);
   check("an untagged entry's does not", await addressCarriesTags("parent@school.co.za"), false);
   check("an entry linked to a login does not", await addressCarriesTags("linked@school.co.za"), false);
+  check("creating a user checks it too", fs.readFileSync("app/api/users/route.ts", "utf8").includes("!maySelfTag(session) && (await addressCarriesTags("), true);
   check("confirm-email checks it", fs.readFileSync("app/api/account/confirm-email/route.ts", "utf8").includes("addressCarriesTags("), true);
 
   // --- restricted-minutes actions: chase emails and the run log ---
@@ -247,6 +260,11 @@ async function main() {
   const { loadActionRecipientContext } = await import("../lib/actionItemRecipients");
   const sharedCtx = await loadActionRecipientContext();
   check("one context serves many actions", (await resolveActionRecipients(action, ["assignees", "admins"], sharedCtx)).resolved.length, got.resolved.length);
+  check("...and caches each minutes record for the run", sharedCtx.minutes.has("fin1"), true);
+  const assigneeOnly = await loadActionRecipientContext(false);
+  check("the assignee-only path does not load minutes access", assigneeOnly.access, undefined);
+  const remind = fs.readFileSync("app/api/action-items/[id]/remind/route.ts", "utf8");
+  check("Remind now: a failed chase is recorded and answered with 503", remind.includes("lastReminderResult: `failed:") && remind.includes("status: 503"), true);
   const cron = fs.readFileSync("app/api/cron/reminders/route.ts", "utf8");
   check("the cron loads recipients once per run", cron.includes("loadActionRecipientContext()") && cron.includes("recipientCtx)"), true);
   check("the run log names meeting actions by reference only", /Action \$\{item\.ref\} \$\{item\.title\}/.test(cron), false);
@@ -261,9 +279,15 @@ async function main() {
   console.error = quiet;
   check("10 top-ups at once: every one that reported success is counted",
     await getCredits(), adds.filter((r) => r.status === "fulfilled").length);
+  const { touch } = await import("../lib/roomBookingData");
+  const row = { id: "b1", updatedAt: "2026-10-21T05:00:00.000Z" } as never;
+  check("two identical booking writes still differ (rev)", JSON.stringify(touch(row)) === JSON.stringify(touch(row)), false);
+  const marked = ["lib/actionItemData.ts", "lib/creditRequests.ts", "lib/weeklyUpdateData.ts", "lib/actionSummaryData.ts", "lib/spendData.ts"];
+  check("every claim / counter file writes a random rev", marked.filter((f) => !/rev: (crypto\.randomUUID\(\)|randomBytes)/.test(fs.readFileSync(f, "utf8"))), []);
+  check("the translation in-flight claim too", fs.readFileSync("lib/contentTranslation.ts", "utf8").includes("return { at: Date.now(), rev: randomUUID() }"), true);
   const signin = fs.readFileSync("lib/signinLog.ts", "utf8");
   const credits = fs.readFileSync("lib/contentTranslation.ts", "utf8");
-  check("credits and sign-in tallies carry a random rev per write", [(credits.match(/rev: randomUUID\(\)/g) || []).length, signin.includes("s.rev = randomUUID()")], [2, true]);
+  check("credits and sign-in tallies carry a random rev per write", [(credits.match(/rev: randomUUID\(\)/g) || []).length, signin.includes("s.rev = randomUUID()")], [3, true]);
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
   process.exit(failures === 0 ? 0 : 1);

@@ -138,7 +138,9 @@ export async function updateSpendApplication(
       return NO_CHANGE;
     }
     const updates = typeof change === "function" ? change(apps[idx]) : change;
-    apps[idx] = { ...apps[idx], ...updates };
+    // rev: two identical decisions at once (a double click) must not both
+    // win and both send their emails. See the updateJson note.
+    apps[idx] = { ...apps[idx], ...updates, rev: crypto.randomUUID() };
     updated = apps[idx];
     return apps;
   });

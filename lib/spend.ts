@@ -31,6 +31,8 @@ export interface FundingAllocation {
 
 export interface SpendApplication {
   id: string;
+  /** Random per write (updateSpendApplication): see the updateJson note. */
+  rev?: string;
   projectName: string;
   description: string;
   estimatedAmount: number;

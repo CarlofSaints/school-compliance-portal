@@ -46,10 +46,12 @@ export async function patchWeeklyUpdateSettings(
   change: (current: WeeklyUpdateSettings) => Partial<WeeklyUpdateSettings> | typeof NO_CHANGE
 ): Promise<WeeklyUpdateSettings> {
   return parseWeeklyUpdate(
-    await updateJson<WeeklyUpdateSettings>(PATH, DEFAULT_WEEKLY_UPDATE, (raw) => {
+    // rev: random per write, so two runs claiming the day cannot both win.
+    // See the "OUR write may be the one" note in updateJson.
+    await updateJson<WeeklyUpdateSettings & { rev?: string }>(PATH, DEFAULT_WEEKLY_UPDATE, (raw) => {
       const current = parseWeeklyUpdate(raw);
       const patch = change(current);
-      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch };
+      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch, rev: crypto.randomUUID() };
     })
   );
 }

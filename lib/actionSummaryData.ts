@@ -51,10 +51,12 @@ export async function patchActionSummarySettings(
   change: (current: ActionSummarySettings) => Partial<ActionSummarySettings> | typeof NO_CHANGE
 ): Promise<ActionSummarySettings> {
   return parseActionSummary(
-    await updateJson<ActionSummarySettings>(PATH, DEFAULT_ACTION_SUMMARY, (raw) => {
+    // rev: random per write, so two runs claiming the day cannot both win.
+    // See the "OUR write may be the one" note in updateJson.
+    await updateJson<ActionSummarySettings & { rev?: string }>(PATH, DEFAULT_ACTION_SUMMARY, (raw) => {
       const current = parseActionSummary(raw);
       const patch = change(current);
-      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch };
+      return patch === NO_CHANGE ? NO_CHANGE : { ...current, ...patch, rev: crypto.randomUUID() };
     })
   );
 }

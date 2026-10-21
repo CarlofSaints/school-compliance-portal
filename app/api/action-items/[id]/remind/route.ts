@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireAnyPermission } from "@/lib/rolesData";
-import { getActionItemById } from "@/lib/actionItemData";
+import { getActionItemById, updateActionItem } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { chaseActionItem } from "@/lib/actionItemNotify";
 import { isEmailConfigured } from "@/lib/email";
@@ -48,7 +48,20 @@ export async function POST(
     // A bare POST with no body is a plain nudge.
   }
 
-  const outcome = await chaseActionItem(item, new Date(), note);
+  let outcome;
+  try {
+    outcome = await chaseActionItem(item, new Date(), note);
+  } catch (err) {
+    // A read failed (the minutes behind a meeting action, say): nothing was
+    // sent. Said on the item too, like the cron, and to the person who asked.
+    const why = err instanceof Error ? err.message : String(err);
+    console.error("[action-items] remind failed:", id, err);
+    await updateActionItem(id, { lastReminderResult: `failed: ${why}`.slice(0, 300) }).catch(() => {});
+    return NextResponse.json(
+      { error: "The reminder could not be sent just now, so nothing went out. Please try again in a minute." },
+      { status: 503 }
+    );
+  }
   return NextResponse.json({
     ...outcome,
     by: `${session.name} ${session.surname}`.trim(),

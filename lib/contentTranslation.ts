@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
+import { inflateSync } from "zlib";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { LOCALES, type Locale } from "./i18n/locales";
 
@@ -36,26 +37,61 @@ export const textPages = (text: string) => Math.max(1, Math.ceil(text.length / C
 /**
  * Pages in a PDF: the /Count on its page tree (the root holds the largest).
  * Not the page objects themselves, which re-saved PDFs keep stale copies of.
- * A PDF with compressed object streams, or no readable root, also asks the
- * model's own token count (free) at about 2,000 tokens a page, and pays the
- * larger of the two.
+ * Compressed object streams (most PDFs since 1.5) are inflated with zlib and
+ * read the same way. Only a file that cannot be read like that (another
+ * filter, a broken stream, no root) asks the model's own token count (free)
+ * at about 2,000 tokens a page, and pays the larger of the two.
  */
 export async function pdfPages(file: Buffer): Promise<number> {
   const raw = file.toString("latin1");
   // Object by object (split on endobj: linear, no gap to cap, so padding or a
   // long /Kids array cannot hide a /Count). The MAX /Count of any page-tree
   // node: a crafted file can only make itself cost more this way, never less.
+  const objects = raw.split("endobj");
+  let readable = true;
+  for (const obj of [...objects]) {
+    if (!/\/Type\s*\/ObjStm\b/.test(obj)) continue;
+    const inner = objStmObjects(obj);
+    if (inner) objects.push(...inner);
+    else readable = false;
+  }
   let counted = 0;
   let rootSeen = false;
-  for (const obj of raw.split("endobj")) {
+  for (const obj of objects) {
     if (!/\/Type\s*\/Pages(?![A-Za-z])/.test(obj)) continue;
     for (const m of obj.matchAll(/\/Count\s+(\d+)/g)) counted = Math.max(counted, Number(m[1]));
     if (!/\/Parent\b/.test(obj)) rootSeen = true;
   }
-  // Trusted only with a readable root and no compressed object streams, where
-  // the real tree (with a larger /Count) could sit unseen behind a decoy.
-  if (counted > 0 && rootSeen && !/\/ObjStm\b/.test(raw)) return counted;
+  // An unreadable object stream could hide the real tree behind a decoy.
+  if (counted > 0 && rootSeen && readable) return counted;
   return Math.max(counted, await apiPages(file));
+}
+
+// Bounded, so a crafted stream cannot inflate into gigabytes.
+const OBJSTM_MAX_BYTES = 20 * 1024 * 1024;
+
+/** The objects packed in one /Type /ObjStm (PDF 1.5 object stream), or null
+ *  when it cannot be read (not plain FlateDecode, broken, too big). */
+function objStmObjects(obj: string): string[] | null {
+  const start = obj.search(/stream\r?\n/);
+  const end = obj.lastIndexOf("endstream");
+  if (start < 0 || end < start) return null;
+  const dict = obj.slice(0, start);
+  const n = Number(/\/N\s+(\d+)/.exec(dict)?.[1]);
+  const first = Number(/\/First\s+(\d+)/.exec(dict)?.[1]);
+  if (!/\/Filter\s*\/FlateDecode\b/.test(dict) || /\/DecodeParms/.test(dict) || !(n > 0) || !(first >= 0)) return null;
+  let text: string;
+  try {
+    const body = obj.slice(obj.indexOf("\n", start) + 1, end).replace(/\r?\n$/, "");
+    text = inflateSync(Buffer.from(body, "latin1"), { maxOutputLength: OBJSTM_MAX_BYTES }).toString("latin1");
+  } catch {
+    return null;
+  }
+  // The header: N pairs of "object-number offset", offsets from /First.
+  const nums = text.slice(0, first).trim().split(/\s+/).map(Number);
+  if (nums.length < n * 2 || nums.some((x) => !Number.isFinite(x))) return null;
+  const offsets = Array.from({ length: n }, (_, i) => first + nums[i * 2 + 1]);
+  return offsets.map((o, i) => text.slice(o, offsets[i + 1] ?? text.length));
 }
 
 async function apiPages(file: Buffer): Promise<number> {
@@ -183,10 +219,11 @@ const IN_FLIGHT_MS = 15 * 60_000;
 
 async function claimInFlight(kind: ContentKind, id: string, locale: Locale): Promise<boolean> {
   let ok = false;
-  await updateJson<{ at: number } | null>(inFlightPath(kind, id, locale), null, (cur) => {
+  await updateJson<{ at: number; rev?: string } | null>(inFlightPath(kind, id, locale), null, (cur) => {
     if (cur && Date.now() - cur.at < IN_FLIGHT_MS) return NO_CHANGE;
     ok = true;
-    return { at: Date.now() };
+    // rev: two claims in the same millisecond must not both win (updateJson note).
+    return { at: Date.now(), rev: randomUUID() };
   });
   return ok;
 }

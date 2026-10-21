@@ -17,6 +17,10 @@ export * from "./actionItems";
 interface ActionStore {
   items: ActionItem[];
   nextRef: number;
+  // Random per write: see the "OUR write may be the one" note in updateJson.
+  // Without it two overlapping chase claims (or two refs taken at once) can
+  // write identical files and BOTH be told they won.
+  rev?: string;
 }
 
 const STORE_PATH = "action-items.json";
@@ -51,7 +55,7 @@ async function changeStore<R>(
     const store = tidy(raw);
     const out = change(store);
     result = out.result;
-    return out.write ? store : NO_CHANGE;
+    return out.write ? { ...store, rev: crypto.randomUUID() } : NO_CHANGE;
   });
   return result;
 }
