@@ -1,5 +1,5 @@
 import { withMeetingDates } from "./actionItems";
-import type { MinutesRecord } from "./minutesData";
+import { minutesByIdStrict, type MinutesRecord } from "./minutesData";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
@@ -25,7 +25,6 @@ import { buildSummaryWorkbook, summaryFilename } from "./actionSummaryWorkbook";
 import {
   loadMinutesAccessContext,
   loadRecipientResolver,
-  minutesIndex,
   actionVisible,
   type Reader,
 } from "./minutesAccess";
@@ -173,7 +172,7 @@ export async function buildSummaryFile(
 ): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const minutes = minutesIndex(); // started now, awaited alongside the other reads
+  const minutes = minutesByIdStrict(); // started now, awaited alongside the other reads
   let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   if (forUserId) rows = (await rowFilterFactory(minutes)).forUserId(forUserId)(rows);
   const content = await buildSummaryWorkbook({
@@ -212,7 +211,7 @@ export async function sendActionSummary(opts: {
   const now = opts.now ?? new Date();
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const minutes = minutesIndex(); // started now, awaited alongside the other reads
+  const minutes = minutesByIdStrict(); // started now, awaited alongside the other reads
   const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   const scheduleText = settings.enabled ? describeSchedule(settings, WEEKDAY_LABELS) : "";
   const filename = summaryFilename(branding.shortName, asOf);

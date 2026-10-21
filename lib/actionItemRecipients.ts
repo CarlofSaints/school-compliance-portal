@@ -34,7 +34,7 @@ export async function resolveActionRecipients(
   recipients: ActionRecipient[],
   // Loaded once by a caller sending many (the cron), else read here.
   shared?: ActionRecipientContext
-): Promise<{ resolved: ResolvedActionRecipient[]; missing: string[] }> {
+): Promise<{ resolved: ResolvedActionRecipient[]; missing: string[]; notAllowed?: number }> {
   const run = shared ?? (await loadActionRecipientContext(false));
   const { people, users, roles } = run;
   const userById = new Map(users.map((u) => [u.id, u]));
@@ -108,10 +108,8 @@ export async function resolveActionRecipients(
   if (record === undefined) run.minutes.set(minutesId, (record = await getMinutes(minutesId)));
   const byId = new Map(record ? [[minutesId, record]] : []);
   const allowed = deduped.filter((r) => actionVisible(item, resolver.forEmail(r.email), byId, ctx));
-  if (allowed.length < deduped.length) {
-    missing.push(`${deduped.length - allowed.length} who may not read these minutes`);
-  }
-  return { resolved: allowed, missing };
+  // Their own count, never "no address for": their addresses are fine.
+  return { resolved: allowed, missing, notAllowed: deduped.length - allowed.length };
 }
 
 async function loadAccess() {

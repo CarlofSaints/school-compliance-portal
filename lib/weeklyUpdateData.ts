@@ -1,13 +1,12 @@
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
-import { listMinutes, type MinutesRecord } from "./minutesData";
+import { listMinutes, minutesByIdStrict, type MinutesRecord } from "./minutesData";
 import {
   loadMinutesAccessContext,
   readerForUser,
   viewerMayRead,
   actionVisible,
-  minutesIndex,
   type MinutesAccessContext,
 } from "./minutesAccess";
 import { getSpendApplications } from "./spendData";
@@ -190,7 +189,7 @@ export async function sendWeeklyUpdate(opts: {
   const now = opts.now ?? new Date();
   // One strict read of the minutes feeds both the facts and the per-reader
   // filter: an unreadable set hides its actions instead of reading as deleted.
-  const minutesById = await minutesIndex();
+  const minutesById = await minutesByIdStrict();
   const [settings, branding, facts, accessCtx] = await Promise.all([
     getWeeklyUpdateSettings(),
     resolveBranding(),

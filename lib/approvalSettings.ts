@@ -207,7 +207,9 @@ export function quoteBandProblem(
   if (quote <= basis) return null;
   const approvedBand = (approvedTierId && tiers.find((t) => t.id === approvedTierId)) || tierForAmount(tiers, basis);
   const band = tierForAmount(tiers, quote);
-  if (band && band.id === (approvedTierId ?? approvedBand?.id)) return null;
+  // The resolved band: a frozen id whose tier was since rebuilt falls back
+  // to today's band for the approved amount, never "refuse everything".
+  if (band && band.id === approvedBand?.id) return null;
   // The approved band's upper limit, for the message (null: none known).
   return { code: "over_band", limit: approvedBand?.maxAmount ?? null };
 }

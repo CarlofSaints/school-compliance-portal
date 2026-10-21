@@ -3,7 +3,7 @@ import { getUserById, getUsers, type User } from "./userData";
 import { getPeople, type Person } from "./peopleData";
 import { getRecipientSettings } from "./minutesRecipients";
 import { getRoles, resolveRolePermissions } from "./rolesData";
-import { minutesByIdStrict, getMinutes, type MinutesRecord } from "./minutesData";
+import { getMinutes, type MinutesRecord } from "./minutesData";
 import type { SessionPayload } from "./roles";
 import { withMeetingDates } from "./actionItems";
 import {
@@ -200,11 +200,6 @@ export async function redactMinutesActivity<
     if (record && viewerMayRead(record, viewer, ctx)) return e;
     return { ...e, summary: "Activity on minutes you do not have access to", detail: undefined };
   });
-}
-
-/** The minutes, keyed by id, for actionVisible. */
-export async function minutesIndex(): Promise<Map<string, MinutesRecord | null>> {
-  return minutesByIdStrict();
 }
 
 /** Only the sets these ids name, read one by one, rather than every set:

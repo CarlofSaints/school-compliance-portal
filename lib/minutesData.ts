@@ -135,7 +135,7 @@ export async function listMinutes(): Promise<MinutesRecord[]> {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-/** For a VISIBILITY decision (minutesIndex): a listing error throws, and a set
+/** For a VISIBILITY decision (weekly update, action summary): a listing error throws, and a set
  *  that cannot be read is a null entry, never left out. Left out reads as
  *  deleted, and a deleted set's actions are shown. */
 export async function minutesByIdStrict(): Promise<Map<string, MinutesRecord | null>> {

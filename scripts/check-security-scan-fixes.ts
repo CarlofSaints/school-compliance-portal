@@ -129,6 +129,10 @@ async function main() {
   check("forgot-password: no email set up is a 503 for every address, before any lookup", forgot.indexOf("status: 503") > 0 && forgot.indexOf("status: 503") < forgot.indexOf("getUserByEmail("), true);
   check("index miss: a counter that could not be saved still allows the scan", auth.includes("scan.count === undefined || scan.count === 1"), true);
   check("index miss: the address is counted only after a wrong or unknown answer", /if \(!user \|\| !valid\) \{\s*accountHit \?\?= await hit\(LIMITS\.loginAccount/.test(auth), true);
+  check("a LOCKED account found by the scan is still refused: counted before the password", auth.indexOf("user = await getUserByEmail(email);") < auth.indexOf("accountHit = await hit(LIMITS.loginAccount") && auth.indexOf("accountHit = await hit(LIMITS.loginAccount") < auth.indexOf("verifyPassword(user"), true);
+  const { tooMany } = await import("../lib/rateLimit");
+  const busyBody = await tooMany(LIMITS.loginAccount, { ok: false, remaining: 0, retryAfter: 60, busy: true }).json();
+  check("a counter that could not be saved says busy, not 'too many wrong passwords'", busyBody.error, "This is busy right now. Please try again in a minute.");
   check("an index miss scans INLINE, before the password is checked", auth.indexOf("hit(INDEX_REPAIR, account)") > 0 && auth.indexOf("user = await getUserByEmail(email);") > 0 && auth.indexOf("user = await getUserByEmail(email);") < auth.indexOf("verifyPassword(user"), true);
 
   // --- spend: who may act on an approved application ---
@@ -152,6 +156,7 @@ async function main() {
   check("no bands set up: allowed", quoteBandProblem([], 12000, 6000), null);
   check("the FROZEN band decides: same band today, different band at approval, refused", quoteBandProblem(bands, 9000, 6000, "low"), { code: "over_band", limit: 5000 });
   check("the frozen band matches: allowed", quoteBandProblem(bands, 12000, 11000, "high"), null);
+  check("a frozen band id since rebuilt falls back to today's band, not refuse-all", quoteBandProblem(bands, 6000, 5500, "t-old"), null);
   check("no approved or estimated amount: refused", quoteBandProblem(bands, 100, undefined), { code: "no_amount" });
   const spendPage = fs.readFileSync("app/(portal)/spend/[id]/page.tsx", "utf8");
   check("the spend page says a refused band change in the reader's language", spendPage.includes('err.code === "over_band"') && spendPage.includes("{limit}"), true);
@@ -205,6 +210,17 @@ async function main() {
     Buffer.from("\nendstream\nendobj 9 0 obj << /Type /Pages /Count 1 >> endobj", "latin1"),
   ]);
   check("a compressed (object stream) page tree is read without the AI, decoy and all", await pdfPages(objStm), 250);
+  // Stored (level 0) deflate keeps the text as is, so "endobj" inside the
+  // stream really splits the file there: the direct /Length must still read it.
+  const packed2 = "(endobj) << /Type /Pages /Kids [10 0 R] /Count 300 >>";
+  const header2 = `7 0 2 9 `;
+  const body2 = deflateSync(Buffer.from(header2 + packed2, "latin1"), { level: 0 });
+  const tricky = Buffer.concat([
+    Buffer.from(`5 0 obj << /Type /ObjStm /N 2 /First ${header2.length} /Filter /FlateDecode /Length ${body2.length} >>\nstream\n`, "latin1"),
+    body2,
+    Buffer.from("\nendstream\nendobj", "latin1"),
+  ]);
+  check("an object stream holding 'endobj' is read by its /Length", await pdfPages(tricky), 300);
 
   // --- tag membership and email change ---
   const tagsRoute = fs.readFileSync("app/api/tags/[id]/route.ts", "utf8");
@@ -218,7 +234,7 @@ async function main() {
   check("an unlinked tagged entry's address carries tags", await addressCarriesTags(" treasurer@school.co.za"), true);
   check("an untagged entry's does not", await addressCarriesTags("parent@school.co.za"), false);
   check("an entry linked to a login does not", await addressCarriesTags("linked@school.co.za"), false);
-  check("creating a user checks it too", fs.readFileSync("app/api/users/route.ts", "utf8").includes("!maySelfTag(session) && (await addressCarriesTags("), true);
+  check("creating a login for a tagged member stays a user-admin job (only MOVING a login is guarded)", fs.readFileSync("app/api/users/route.ts", "utf8").includes("addressCarriesTags("), false);
   check("confirm-email checks it", fs.readFileSync("app/api/account/confirm-email/route.ts", "utf8").includes("addressCarriesTags("), true);
 
   // --- restricted-minutes actions: chase emails and the run log ---
@@ -236,7 +252,10 @@ async function main() {
   } as never;
   const got = await resolveActionRecipients(action, ["assignees", "admins"]);
   check("the assignee is still written to", got.resolved.map((r) => r.email), ["Treasurer@School.co.za"]);
-  check("an admin who may not read the minutes is not", got.missing.some((m) => m.includes("may not read")), true);
+  check("an admin who may not read the minutes is not", got.notAllowed, 1);
+  check("...and is counted apart, never as 'no address'", got.missing.some((m) => m.includes("may not read")), false);
+  const notify = fs.readFileSync("lib/actionItemNotify.ts", "utf8");
+  check("a chase whose result cannot be saved after sending never throws (no resend)", notify.includes("do not send it again"), true);
   const notFromMinutes = await resolveActionRecipients({ ...(action as object), fromMinutes: undefined } as never, ["admins"]);
   check("an action not from minutes still reaches admins", notFromMinutes.resolved.map((r) => r.email), ["sec@school.co.za"]);
   // A minutes read that FAILS is not "deleted": the email is aborted (the
@@ -251,13 +270,13 @@ async function main() {
   const actx = await loadMinutesAccessContext();
   const outsider = readerForUser({ id: "zz", email: "zz@school.co.za", tagIds: [] }, [], actx);
   check("an unreadable set hides its action", actionVisible({ fromMinutes: { minutesId: "broken" }, assigneeIds: [] }, outsider, new Map([["broken", null]]), actx), false);
-  const { minutesIndex } = await import("../lib/minutesAccess");
+  const { minutesByIdStrict } = await import("../lib/minutesData");
   console.error = () => {};
-  const index = await minutesIndex();
+  const index = await minutesByIdStrict();
   console.error = quiet;
   check("the weekly/summary index keeps an unreadable set as null", [index.has("broken"), index.get("broken")], [true, null]);
   check("...so its action is hidden from the weekly update and summary", actionVisible({ fromMinutes: { minutesId: "broken" }, assigneeIds: [] }, outsider, index, actx), false);
-  check("weekly update and action summary both use that index", ["lib/weeklyUpdateData.ts", "lib/actionSummaryData.ts"].map((f) => fs.readFileSync(f, "utf8").includes("minutesIndex()")), [true, true]);
+  check("weekly update and action summary both use that index", ["lib/weeklyUpdateData.ts", "lib/actionSummaryData.ts"].map((f) => fs.readFileSync(f, "utf8").includes("minutesByIdStrict()")), [true, true]);
   check("a deleted set still shows it", actionVisible({ fromMinutes: { minutesId: "gone" }, assigneeIds: [] }, outsider, new Map(), actx), true);
   const { loadActionRecipientContext } = await import("../lib/actionItemRecipients");
   const sharedCtx = await loadActionRecipientContext();

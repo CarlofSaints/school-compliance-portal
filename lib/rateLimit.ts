@@ -85,6 +85,9 @@ export interface LimitResult {
   retryAfter: number;
   /** Hits in this window, when counted. count === max + 1 is the FIRST refusal. */
   count?: number;
+  /** Refused only because the counter could not be saved (failClosed), not
+   *  because anybody is over the limit: told so, not "too many". */
+  busy?: true;
 }
 
 function decide(limit: Limit, b: Bucket, now: number): LimitResult {
@@ -121,7 +124,7 @@ export async function hit(limit: Limit, key: string, now = Date.now()): Promise<
   } catch (err) {
     if (limit.failClosed && err instanceof UpdateConflictError) {
       console.error(`[rate-limit] ${limit.scope}: counter contended, refusing:`, err);
-      return { ok: false, remaining: 0, retryAfter: 5 };
+      return { ok: false, remaining: 0, retryAfter: 60, busy: true };
     }
     console.error(`[rate-limit] ${limit.scope}: could not count, allowing:`, err);
     return { ok: true, remaining: limit.max, retryAfter: 0 };
@@ -146,7 +149,9 @@ function humanWait(seconds: number): string {
 export function tooMany(limit: Limit, result: LimitResult): NextResponse {
   return NextResponse.json(
     {
-      error: limit.message.replace("{wait}", humanWait(result.retryAfter)),
+      error: result.busy
+        ? "This is busy right now. Please try again in a minute."
+        : limit.message.replace("{wait}", humanWait(result.retryAfter)),
       retryAfterSeconds: result.retryAfter,
       limit: `${limit.max} per ${humanWait(limit.windowSec)}`,
     },

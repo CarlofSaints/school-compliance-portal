@@ -123,27 +123,29 @@ export async function POST(req: NextRequest) {
     // Index first. The password is compared even with no account, so a
     // repeated unknown address answers in the same time as a wrong password.
     let user = await getUserByEmail(email, false);
-    let accountHit: LimitResult | undefined;
-    if (user) {
-      // Counted BEFORE the password is checked, in one guarded write, so
-      // attempts sent at the same moment cannot all pass on the old count.
-      // The right password clears it below.
-      accountHit = await hit(LIMITS.loginAccount, account);
-      if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
-    } else {
+    if (!user) {
       // Missing from the index (rare): the slow scan of every account's own
       // copy runs INLINE, so a real user dropped from the index still signs
       // in, and the index is put back after the reply. Once per address per
       // window (a counter that could not be saved allows it), so a truly
-      // unknown address does not pay for the scan every time. On this path
-      // the address is counted only AFTER a wrong or unknown answer, so the
-      // right password never adds to a lock.
+      // unknown address does not pay for the scan every time.
       const scan = await hit(INDEX_REPAIR, account);
       if (scan.count === undefined || scan.count === 1) {
         user = await getUserByEmail(email);
         if (user) await afterResponse(() => repairUserIndex());
       }
     }
+    let accountHit: LimitResult | undefined;
+    if (user) {
+      // Any real account, indexed or found by the scan: counted BEFORE the
+      // password is checked, in one guarded write, so attempts sent at the
+      // same moment cannot all pass on the old count, and a LOCKED account is
+      // refused even with the right password. The right password clears it.
+      accountHit = await hit(LIMITS.loginAccount, account);
+      if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
+    }
+    // No account: counted after the (dummy) compare below, like a wrong
+    // password, so the lock cannot tell addresses with an account apart.
     const valid = await verifyPassword(user, password);
     if (!user || !valid) {
       accountHit ??= await hit(LIMITS.loginAccount, account);

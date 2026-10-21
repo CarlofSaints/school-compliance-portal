@@ -49,11 +49,14 @@ export async function pdfPages(file: Buffer): Promise<number> {
   // node: a crafted file can only make itself cost more this way, never less.
   const objects = raw.split("endobj");
   let readable = true;
+  let at = 0; // where each piece starts in raw
   for (const obj of [...objects]) {
-    if (!/\/Type\s*\/ObjStm\b/.test(obj)) continue;
-    const inner = objStmObjects(obj);
-    if (inner) objects.push(...inner);
-    else readable = false;
+    if (/\/Type\s*\/ObjStm\b/.test(obj)) {
+      const inner = objStmObjects(raw, at, obj);
+      if (inner) objects.push(...inner);
+      else readable = false;
+    }
+    at += obj.length + "endobj".length;
   }
   let counted = 0;
   let rootSeen = false;
@@ -72,17 +75,28 @@ const OBJSTM_MAX_BYTES = 20 * 1024 * 1024;
 
 /** The objects packed in one /Type /ObjStm (PDF 1.5 object stream), or null
  *  when it cannot be read (not plain FlateDecode, broken, too big). */
-function objStmObjects(obj: string): string[] | null {
-  const start = obj.search(/stream\r?\n/);
-  const end = obj.lastIndexOf("endstream");
-  if (start < 0 || end < start) return null;
-  const dict = obj.slice(0, start);
+function objStmObjects(raw: string, at: number, obj: string): string[] | null {
+  const kw = /stream\r?\n/.exec(obj);
+  if (!kw) return null;
+  const dict = obj.slice(0, kw.index);
+  const dataStart = at + kw.index + kw[0].length;
+  // A direct /Length is exact, so the bytes may end in a newline or even hold
+  // "endobj" (which split `obj`). Only an indirect one (/Length 12 0 R) is
+  // found by its endstream instead, inside this piece.
+  const direct = /\/Length\s+(\d+)(?!\s+\d+\s+R)/.exec(dict);
+  let body: string;
+  if (direct) {
+    body = raw.slice(dataStart, dataStart + Number(direct[1]));
+  } else {
+    const end = obj.lastIndexOf("endstream");
+    if (end < kw.index) return null;
+    body = obj.slice(kw.index + kw[0].length, end).replace(/\r?\n$/, "");
+  }
   const n = Number(/\/N\s+(\d+)/.exec(dict)?.[1]);
   const first = Number(/\/First\s+(\d+)/.exec(dict)?.[1]);
   if (!/\/Filter\s*\/FlateDecode\b/.test(dict) || /\/DecodeParms/.test(dict) || !(n > 0) || !(first >= 0)) return null;
   let text: string;
   try {
-    const body = obj.slice(obj.indexOf("\n", start) + 1, end).replace(/\r?\n$/, "");
     text = inflateSync(Buffer.from(body, "latin1"), { maxOutputLength: OBJSTM_MAX_BYTES }).toString("latin1");
   } catch {
     return null;

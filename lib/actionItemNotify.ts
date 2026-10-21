@@ -108,14 +108,16 @@ export async function chaseActionItem(
   note = "",
   shared?: ActionRecipientContext
 ): Promise<ActionChaseResult> {
-  const { resolved, missing } = await resolveActionRecipients(
+  const { resolved, missing, notAllowed = 0 } = await resolveActionRecipients(
     item,
     item.reminder.recipients,
     shared
   );
+  const barred = notAllowed > 0 ? `; ${notAllowed} not allowed to read these minutes` : "";
 
   if (resolved.length === 0) {
-    const result = `nobody to write to (${missing.join(", ") || "no recipients chosen"})`;
+    const why = [...missing, ...(notAllowed > 0 ? [`${notAllowed} not allowed to read these minutes`] : [])];
+    const result = `nobody to write to (${why.join(", ") || "no recipients chosen"})`;
     // The date is still stamped. Without it a due action with no addresses is
     // retried on every run forever, and the log fills with the same failure.
     const saved = await updateActionItem(item.id, {
@@ -145,16 +147,23 @@ export async function chaseActionItem(
   }
 
   const result =
-    missing.length > 0
+    (missing.length > 0
       ? `sent to ${sent} of ${resolved.length}; no address for: ${missing.join(", ")}`
-      : `sent to ${sent} of ${resolved.length}`;
+      : `sent to ${sent} of ${resolved.length}`) + barred;
 
-  const saved = await updateActionItem(item.id, {
-    lastRemindedOn: todayIso(now),
-    lastReminderResult: result,
-  });
-
-  return { sent, failed, result, item: saved };
+  // 🔴 The emails have gone. A failure to save the result must not throw:
+  // callers would read that as "nothing went out", hand the day back and
+  // send everybody the same chase again.
+  try {
+    const saved = await updateActionItem(item.id, {
+      lastRemindedOn: todayIso(now),
+      lastReminderResult: result,
+    });
+    return { sent, failed, result, item: saved };
+  } catch (err) {
+    console.error("[action-items] chase sent but its result could not be saved:", item.id, err);
+    return { sent, failed, result: `${result} (the emails went out, but this result could not be saved: do not send it again)`, item: null };
+  }
 }
 
 // Everything the daily run should chase today. Exported so the cron reads as a

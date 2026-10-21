@@ -9,7 +9,6 @@ import {
   maySelfTag,
 } from "@/lib/rolesData";
 import { getUsers, createUser } from "@/lib/userData";
-import { addressCarriesTags } from "@/lib/peopleData";
 import { sendWelcomeEmail } from "@/lib/email";
 import { v4 as uuidv4 } from "uuid";
 
@@ -65,14 +64,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Email already exists" },
         { status: 409 }
-      );
-    }
-    // Same rule as editing a login (users/[id]): a login on a tagged register
-    // entry's address gains its tags, so creating one there needs manage_roles.
-    if (!maySelfTag(session) && (await addressCarriesTags(String(email)))) {
-      return NextResponse.json(
-        { error: "That address is on a tagged People entry, so a login for it needs a Super Admin." },
-        { status: 403 }
       );
     }
 
