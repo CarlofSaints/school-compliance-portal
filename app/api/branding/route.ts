@@ -48,7 +48,12 @@ export async function PUT(req: NextRequest) {
     // look like an address: a bad one can get the whole message rejected, and
     // the check also refuses the newlines that would let somebody inject a
     // header of their own.
-    if (replyTo && !isPlausibleEmail(replyTo)) {
+    // Not a string (an array, a number) is refused too: it would otherwise
+    // pass this check and then quietly not be saved.
+    if (
+      (replyTo != null && typeof replyTo !== "string") ||
+      (replyTo && !isPlausibleEmail(replyTo))
+    ) {
       return NextResponse.json(
         { error: "The reply-to address does not look like an email address." },
         { status: 400 }

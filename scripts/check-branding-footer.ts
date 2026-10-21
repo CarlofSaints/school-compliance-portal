@@ -83,7 +83,11 @@ async function main() {
   // --- bad input: control characters, lone surrogates, lines, non-strings
   const { cleanWordFooter } = await import("../lib/branding");
   const bad = /[\u0000-\u0009\u000B-\u001F]|[\uD800-\uDFFF]/;
-  check("control chars stripped", cleanWordFooter("A\vB\u0001C\fD\u0000E\tF"), "ABCDEF");
+  check("control chars stripped", cleanWordFooter("A\vB\u0001C\fD\u0000E\tF"), "ABCDE F");
+  check("tabs become spaces", cleanWordFooter("Reg\t1\t\t2"), "Reg 1  2");
+  check("lone surrogates at the edges and back to back", cleanWordFooter("\uDC00😀\uD800\uD800😀\uDC00\uDC00"), "😀😀");
+  const fs = await import("fs");
+  check("no regex lookbehind in lib/branding.ts (old Safari)", /\(\?<[=!]/.test(fs.readFileSync("lib/branding.ts", "utf8")), false);
   check("lone surrogates stripped, real emoji kept", cleanWordFooter("x\uD800y\uDC00z 😀"), "xyz 😀");
   check("CR, CRLF and LF all split", cleanWordFooter("a\rb\r\nc\nd"), "a\nb\nc\nd");
   check("blank runs collapse, ends dropped", cleanWordFooter("\n \nA\n\n \n\nB\n\n"), "A\n\nB");
@@ -102,6 +106,7 @@ async function main() {
   await put(admin, { wordFooter: { x: 1 }, replyTo: 42 });
   check("non-string footer ignored", (await getStoredBranding()).wordFooter, "Old\vX\u0001Y\uD800");
   check("non-string reply-to refused", (await put(admin, { replyTo: { a: 1 } })).status, 400);
+  check("array reply-to refused", (await put(admin, { replyTo: ["a@example.test"] })).status, 400);
   await put(admin, { wordFooter: null, replyTo: null });
   const cleared = await getStoredBranding();
   check("null clears footer and reply-to (not the word null)", [cleared.wordFooter, cleared.replyTo], ["", ""]);

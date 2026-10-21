@@ -163,16 +163,18 @@ export const MAX_WORD_FOOTER_LINES = 6;
 
 /**
  * The Word minutes footer as it may be stored and printed. 🔴 docx writes
- * control characters and lone surrogates into the XML as they are, and Word
+ * control characters (a tab becomes a space) and lone surrogates into the XML as they are, and Word
  * then refuses to open the file, so those go. Blank-line runs collapse to one,
  * blank lines at either end go, then the line and length caps (the length by
  * code point, so an emoji is never cut in half).
  */
 export function cleanWordFooter(raw: string): string {
   const lines = raw
-    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "")
+    // Keep pairs, drop lone halves. No lookbehind: this file loads on every
+    // page and Safari before 16.4 throws a SyntaxError on one.
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]|[\uD800-\uDFFF]/g, (m) => (m.length === 2 ? m : ""))
     .split(/\r\n|\r|\n/)
-    .map((l) => l.replace(/[\u0000-\u001F\u007F￾￿]/g, "").trimEnd())
+    .map((l) => l.replace(/\t/g, " ").replace(/[\u0000-\u001F\u007F￾￿]/g, "").trimEnd())
     .filter((l, i, all) => l.trim() !== "" || (i > 0 && all[i - 1].trim() !== ""));
   return Array.from(lines.join("\n").trim().split("\n").slice(0, MAX_WORD_FOOTER_LINES).join("\n"))
     .slice(0, MAX_WORD_FOOTER)

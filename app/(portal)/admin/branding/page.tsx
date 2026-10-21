@@ -8,7 +8,7 @@ import SchoolBrandingFields, {
 } from "@/components/SchoolBrandingFields";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
-import { MAX_WORD_FOOTER } from "@/lib/branding";
+import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES } from "@/lib/branding";
 
 export default function BrandingPage() {
   const t = useT();
@@ -106,6 +106,8 @@ export default function BrandingPage() {
         type: "success",
       });
       setHadLogo(!!data.logo);
+      // Show what the server actually stored (cleaned, cut to the caps).
+      setWordFooter(data.wordFooter || "");
       if (data.logo) {
         setValue((v) => ({
           ...v,
@@ -221,7 +223,8 @@ export default function BrandingPage() {
                 {t("Footer on Word minutes")}
               </label>
               <p className="text-xs text-gray-500 mb-2">
-                {t("For example directors' names, address or registration number. Leave empty for no footer.")}
+                {t("For example directors' names, address or registration number. Leave empty for no footer.")}{" "}
+                {t("Up to {lines} lines.", { lines: MAX_WORD_FOOTER_LINES })}
               </p>
               <textarea
                 id="word-footer"
@@ -231,7 +234,7 @@ export default function BrandingPage() {
                 rows={3}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               />
-              <p className="text-xs text-gray-400 mt-1 text-right">{wordFooter.length}/{MAX_WORD_FOOTER}</p>
+              <p className="text-xs text-gray-400 mt-1 text-right">{Array.from(wordFooter).length}/{MAX_WORD_FOOTER}</p>
             </div>
 
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
