@@ -213,12 +213,20 @@ async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, Minu
 }
 
 /** Every response that hands back action items goes through this (or
- *  visibleActionsFor), so the meeting date survives an edit on the client. */
-export async function withMinutesMeetingDates<T extends { fromMinutes?: { minutesId: string; meetingDate?: string } }>(
+ *  visibleActionsFor), so the meeting date survives an edit on the client.
+ *  Same rule as GET: the date only on an action this session may see. */
+export async function withMinutesMeetingDates<T extends ActionOrigin & { fromMinutes?: { meetingDate?: string } }>(
+  session: SessionPayload,
   items: T[]
 ): Promise<T[]> {
   if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
-  return withMeetingDates(items, await minutesFor(items.map((i) => i.fromMinutes?.minutesId)));
+  const [ctx, byId] = await Promise.all([
+    loadMinutesAccessContext(),
+    minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
+  ]);
+  const reader = await readerForSession(session, ctx);
+  const dated = withMeetingDates(items, byId);
+  return items.map((i, n) => (actionVisible(i, reader, byId, ctx) ? dated[n] : i));
 }
 
 /** For a session reading the action register: the actions they may see,

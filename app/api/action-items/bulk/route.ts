@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       refs: saved.map((s) => s.ref),
       notified,
       missing,
-      items: await withMinutesMeetingDates(saved),
+      items: await withMinutesMeetingDates(session, saved),
     });
   } catch (err) {
     console.error("[action-items] bulk update failed:", err);

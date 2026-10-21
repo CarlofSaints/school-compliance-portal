@@ -29,6 +29,8 @@ import {
   addDays,
 } from "@/lib/actionItems";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
+import { meetingDateOf } from "@/lib/actionItems";
+import { formatMeetingDate } from "@/lib/minutes";
 
 export interface DirectoryPerson {
   id: string;
@@ -336,7 +338,13 @@ export default function ActionItemsPage() {
       const idx = prev.findIndex((i) => i.id === saved.id);
       if (idx === -1) return [...prev, saved];
       const next = [...prev];
-      next[idx] = saved;
+      // A response that came back without the minutes' date keeps the one the
+      // row already had, so a route that forgets to add it cannot wipe it.
+      const had = prev[idx].fromMinutes;
+      next[idx] =
+        saved.fromMinutes && !saved.fromMinutes.meetingDate && had?.meetingDate && had.minutesId === saved.fromMinutes.minutesId
+          ? { ...saved, fromMinutes: { ...saved.fromMinutes, meetingDate: had.meetingDate } }
+          : saved;
       return next;
     });
   }, []);
@@ -706,9 +714,9 @@ export default function ActionItemsPage() {
                           {item.description}
                         </p>
                       )}
-                      {(item.meetingDate || item.fromMinutes?.meetingDate) && (
+                      {meetingDateOf(item) && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {t("Raised at the meeting of {date}", { date: item.meetingDate || item.fromMinutes?.meetingDate || "" })}
+                          {t("Raised at the meeting of {date}", { date: formatMeetingDate(meetingDateOf(item)!) })}
                         </p>
                       )}
                       {/* Where it came from, linking back to the minute that

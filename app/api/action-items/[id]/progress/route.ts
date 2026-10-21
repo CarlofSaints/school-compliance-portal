@@ -85,7 +85,7 @@ export async function POST(
       updates: [update, ...(current.updates || [])].slice(0, 100),
     }));
 
-    return NextResponse.json(saved && (await withMinutesMeetingDates([saved]))[0]);
+    return NextResponse.json(saved && (await withMinutesMeetingDates(session, [saved]))[0]);
   } catch (err) {
     console.error("[action-items] progress update failed:", err);
     return NextResponse.json(

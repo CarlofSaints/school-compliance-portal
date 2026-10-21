@@ -123,10 +123,11 @@ export async function resolveSummaryRecipients(s: ActionSummarySettings): Promis
 export async function gatherSummaryRows(
   dueSoonDays: number,
   now: Date = new Date(),
-  minutes?: Map<string, MinutesRecord>
+  /** Opt-in: only callers that show the meeting date pay for reading every minutes set. */
+  minutes?: Promise<Map<string, MinutesRecord>>
 ): Promise<SummaryRow[]> {
-  const [stored, people, users, minutesById] = await Promise.all([getActionItems(), getPeople(), getUsers(), minutes ?? minutesIndex()]);
-  const items = withMeetingDates(stored, minutesById);
+  const [stored, people, users, minutesById] = await Promise.all([getActionItems(), getPeople(), getUsers(), minutes]);
+  const items = minutesById ? withMeetingDates(stored, minutesById) : stored;
   const owners = new Map(
     items.map((i) => [
       i.id,
@@ -141,8 +142,8 @@ export async function gatherSummaryRows(
  * may not read is left out, unless they are carrying it. Built once per send,
  * then applied per recipient.
  */
-async function rowFilterFactory(byId: Map<string, MinutesRecord>) {
-  const ctx = await loadMinutesAccessContext();
+async function rowFilterFactory(minutes: Promise<Map<string, MinutesRecord>>) {
+  const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutes]);
   const resolver = await loadRecipientResolver(ctx);
   const forReader = (reader: Reader) => (rows: SummaryRow[]) =>
     rows.filter((r) =>
@@ -170,7 +171,7 @@ export async function buildSummaryFile(
 ): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const minutes = await minutesIndex();
+  const minutes = minutesIndex(); // started now, awaited alongside the other reads
   let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   if (forUserId) rows = (await rowFilterFactory(minutes)).forUserId(forUserId)(rows);
   const content = await buildSummaryWorkbook({
@@ -209,7 +210,7 @@ export async function sendActionSummary(opts: {
   const now = opts.now ?? new Date();
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const minutes = await minutesIndex();
+  const minutes = minutesIndex(); // started now, awaited alongside the other reads
   const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   const scheduleText = settings.enabled ? describeSchedule(settings, WEEKDAY_LABELS) : "";
   const filename = summaryFilename(branding.shortName, asOf);

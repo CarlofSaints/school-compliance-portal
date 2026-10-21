@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ActionItem } from "./actionItems";
+import { meetingDateOf } from "./actionItems";
 import { formatMeetingDate } from "./minutes";
 import { lastOccurrence } from "./weeklyUpdate";
 import {
@@ -326,10 +327,12 @@ export function buildSummaryRows(
       const daysLeft = daysUntilDue(i, now);
       const latest = [...(i.updates || [])].sort((a, b) => (a.at < b.at ? 1 : -1))[0];
       const names = ownerNames?.get(i.id) ?? i.assigneeNames;
-      const held = i.meetingDate || i.fromMinutes?.meetingDate; // a date typed on the item wins
+      const held = meetingDateOf(i);
+      // "held" only for the minutes' own date: a typed one is not what the minutes say.
+      const label = !i.fromMinutes ? "" : held === i.fromMinutes.meetingDate ? "held " : "meeting date ";
       const fromMeeting = [
         i.fromMinutes && [i.fromMinutes.minutesTitle, i.fromMinutes.minutesPeriod && `(${i.fromMinutes.minutesPeriod})`].filter(Boolean).join(" "),
-        held && (i.fromMinutes ? `held ${formatMeetingDate(held)}` : formatMeetingDate(held)),
+        held && `${label}${formatMeetingDate(held)}`,
       ]
         .filter(Boolean)
         .join(", ");

@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ActionItem } from "./actionItems";
-import { summarise, isClosed, isOverdue, todayIso, addDays, daysBetween, daysUntilDue, withMeetingDates } from "./actionItems";
+import { summarise, isClosed, isOverdue, todayIso, addDays, daysBetween, daysUntilDue, withMeetingDates, meetingDateOf } from "./actionItems";
 import type { MinutesRecord } from "./minutesData";
 import { signingProgress, formatPeriod } from "./minutes";
 import type { SpendApplication } from "./spend";
@@ -250,7 +250,7 @@ export function buildWeeklyFacts(
       owners: a.assigneeNames.join(", ") || "Nobody assigned",
       due: a.dueDate,
       daysLate: -(daysUntilDue(a, now) ?? 0),
-      meetingDate: a.meetingDate || a.fromMinutes?.meetingDate,
+      meetingDate: meetingDateOf(a),
     }))
     .sort((a, b) => b.daysLate - a.daysLate);
 

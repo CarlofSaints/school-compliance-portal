@@ -60,7 +60,7 @@ export async function PATCH(
       notified = await notifyAssignees(saved, parsed.newlyAssigned);
     }
 
-    const [dated] = await withMinutesMeetingDates([saved]);
+    const [dated] = await withMinutesMeetingDates(session, [saved]);
     return NextResponse.json({ ...dated, notified });
   } catch (err) {
     console.error("[action-items] update failed:", err);

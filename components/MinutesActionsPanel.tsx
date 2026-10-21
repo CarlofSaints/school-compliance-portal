@@ -42,12 +42,11 @@ interface RaisedAction {
   sectionId?: string;
 }
 
-// ⚠️ No meetingDate is seeded onto the action, deliberately. Minutes carry a
-// PERIOD ("September 2026", "Q3 2026"), not a date, and the register's
-// meetingDate is a real ISO day. Deriving one would mean inventing a day the
-// meeting may not have been held on, and a wrong date on the record is worse
-// than an empty field somebody can fill in. The link back to the minutes
-// already says which meeting it was, with the period spelled out.
+// ⚠️ No meetingDate is copied onto the action, deliberately. Minutes have a
+// meetingDate since 19 Oct 2026 (older sets carry only a PERIOD), and the
+// register shows it on READ via withMeetingDates, from the minutes as they are
+// now. A copy stored here would go stale when the minutes' date is corrected;
+// the action's own meetingDate is for a date somebody types in.
 interface Props {
   id: string;
   sections: MinutesSection[];

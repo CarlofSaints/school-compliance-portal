@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
       notified = await notifyAssignees(item);
     }
 
-    const [dated] = await withMinutesMeetingDates([item]);
+    const [dated] = await withMinutesMeetingDates(session, [item]);
     return NextResponse.json({ ...dated, notified }, { status: 201 });
   } catch (err) {
     console.error("[action-items] create failed:", err);

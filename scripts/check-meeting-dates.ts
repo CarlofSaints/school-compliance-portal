@@ -45,7 +45,7 @@ const meeting = (ref: string) => rows.find((r) => r.ref === ref)?.fromMeeting;
 check("summary: title, month and the day held", meeting("A-001"), "SGB Oct (October 2026), held 15 October 2026");
 check("summary: a typed date alone", meeting("A-002"), "3 September 2026");
 check("summary: minutes without a date as before", meeting("A-003"), "SGB Oct (October 2026)");
-check("summary: a date typed on the item wins over the minutes'", meeting("A-004"), "SGB Oct (October 2026), held 14 October 2026");
+check("summary: a date typed on the item wins over the minutes'", meeting("A-004"), "SGB Oct (October 2026), meeting date 14 October 2026");
 
 const weekly = buildWeeklyFacts(items, [], minutes, [], now);
 const line = (ref: string) => weekly.actions.overdueList.find((l) => l.ref === ref)?.meetingDate;

@@ -52,7 +52,7 @@ export async function POST(
   const outcome = await chaseActionItem(item, new Date(), note);
   return NextResponse.json({
     ...outcome,
-    item: outcome.item && (await withMinutesMeetingDates([outcome.item]))[0],
+    item: outcome.item && (await withMinutesMeetingDates(session, [outcome.item]))[0],
     by: `${session.name} ${session.surname}`.trim(),
   });
 }

@@ -214,6 +214,12 @@ export function withMeetingDates<T extends { fromMinutes?: { minutesId: string; 
   });
 }
 
+/** The date the action's meeting was held: a date typed on the item wins,
+ *  else the minutes' date (filled by withMeetingDates). */
+export function meetingDateOf(i: { meetingDate?: string; fromMinutes?: { meetingDate?: string } }): string | undefined {
+  return i.meetingDate || i.fromMinutes?.meetingDate;
+}
+
 export interface ActionItem {
   id: string;
   // Human reference ("A-014") for the minutes. Never reused - see nextRef.
