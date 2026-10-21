@@ -5,6 +5,7 @@ import { getRecipientSettings } from "./minutesRecipients";
 import { getRoles, resolveRolePermissions } from "./rolesData";
 import { minutesByIdStrict, getMinutes, type MinutesRecord } from "./minutesData";
 import type { SessionPayload } from "./roles";
+import { withMeetingDates } from "./actionItems";
 import {
   canReadMinutes,
   effectiveAccess,
@@ -219,13 +220,32 @@ async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, Minu
   return out;
 }
 
-/** For a session reading the action register. */
-export async function visibleActionsFor<T extends ActionOrigin>(session: SessionPayload, items: T[]): Promise<T[]> {
+type Datable = ActionOrigin & { fromMinutes?: { meetingDate?: string } };
+
+/** The one body behind both functions below: the minutes' date on every
+ *  action this session may see. An action it may not see is dropped
+ *  (`hidden: "drop"`, the register) or handed back undated (`"keep"`, a
+ *  write's own response). */
+async function datedFor<T extends Datable>(session: SessionPayload, items: T[], hidden: "drop" | "keep"): Promise<T[]> {
   if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
   const [ctx, byId] = await Promise.all([
     loadMinutesAccessContext(),
     minutesFor(items.map((i) => i.fromMinutes?.minutesId)),
   ]);
   const reader = await readerForSession(session, ctx);
-  return items.filter((i) => actionVisible(i, reader, byId, ctx));
+  const dated = withMeetingDates(items, byId);
+  return items.flatMap((i, n) => (actionVisible(i, reader, byId, ctx) ? [dated[n]] : hidden === "keep" ? [i] : []));
+}
+
+/** Every response that hands back action items goes through this (or
+ *  visibleActionsFor), so the meeting date survives an edit on the client.
+ *  Same rule as GET: the date only on an action this session may see. */
+export function withMinutesMeetingDates<T extends Datable>(session: SessionPayload, items: T[]): Promise<T[]> {
+  return datedFor(session, items, "keep");
+}
+
+/** For a session reading the action register: the actions they may see,
+ *  each with its minutes' meeting date. */
+export function visibleActionsFor<T extends Datable>(session: SessionPayload, items: T[]): Promise<T[]> {
+  return datedFor(session, items, "drop");
 }

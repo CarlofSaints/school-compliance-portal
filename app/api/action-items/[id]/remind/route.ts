@@ -5,6 +5,7 @@ import { getActionItemById, updateActionItem } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { chaseActionItem } from "@/lib/actionItemNotify";
 import { isEmailConfigured } from "@/lib/email";
+import { withMinutesMeetingDates } from "@/lib/minutesAccess";
 
 export const maxDuration = 60;
 
@@ -64,6 +65,7 @@ export async function POST(
   }
   return NextResponse.json({
     ...outcome,
+    item: outcome.item && (await withMinutesMeetingDates(session, [outcome.item]))[0],
     by: `${session.name} ${session.surname}`.trim(),
   });
 }

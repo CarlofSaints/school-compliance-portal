@@ -8,6 +8,7 @@ import SchoolBrandingFields, {
 } from "@/components/SchoolBrandingFields";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
+import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES, cleanWordFooter, wordFooterLineCount } from "@/lib/branding";
 
 export default function BrandingPage() {
   const t = useT();
@@ -27,6 +28,7 @@ export default function BrandingPage() {
   const [fullName, setFullName] = useState(branding.fullName);
   const [shortName, setShortName] = useState(branding.shortName);
   const [replyTo, setReplyTo] = useState("");
+  const [wordFooter, setWordFooter] = useState("");
   const [hadLogo, setHadLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -48,6 +50,7 @@ export default function BrandingPage() {
       setFullName(stored.fullName || branding.fullName);
       setShortName(stored.shortName || branding.shortName);
       setReplyTo(stored.replyTo || "");
+      setWordFooter(stored.wordFooter || "");
       setValue({
         // The existing crest is shown by URL, not as a data URL. Only a NEWLY
         // chosen file produces a data URL, which is how the save route tells
@@ -84,6 +87,7 @@ export default function BrandingPage() {
           primary: value.primary,
           accent: value.accent,
           replyTo,
+          wordFooter,
           // Only send the image when it is a newly chosen file. Re-sending the
           // existing one on every save would rewrite the crest and bump its
           // version for nothing, busting every cached copy.
@@ -102,6 +106,8 @@ export default function BrandingPage() {
         type: "success",
       });
       setHadLogo(!!data.logo);
+      // Show what the server actually stored (cleaned, cut to the caps).
+      setWordFooter(data.wordFooter || "");
       if (data.logo) {
         setValue((v) => ({
           ...v,
@@ -116,6 +122,12 @@ export default function BrandingPage() {
   };
 
   if (loading || !session) return null;
+
+  // Counted on the cleaned text, as the server counts it. Never cut while
+  // typing: an over-limit footer turns red and Save waits.
+  const footerTooManyLines = wordFooterLineCount(wordFooter) > MAX_WORD_FOOTER_LINES;
+  const footerChars = Array.from(cleanWordFooter(wordFooter)).length;
+  const footerTooLong = footerChars > MAX_WORD_FOOTER;
 
   return (
     <div className="p-6 max-w-3xl">
@@ -212,10 +224,31 @@ export default function BrandingPage() {
               </div>
             </div>
 
+            <div className="pt-6 border-t border-gray-100">
+              <label htmlFor="word-footer" className="block text-sm font-medium text-gray-700 mb-1">
+                {t("Footer on Word minutes")}
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                {t("For example directors' names, address or registration number. Leave empty for no footer.")}{" "}
+                <span className={footerTooManyLines ? "text-red-600 font-medium" : ""}>
+                  {t("Up to {lines} lines.", { lines: MAX_WORD_FOOTER_LINES })}
+                </span>
+              </p>
+              <textarea
+                id="word-footer"
+                value={wordFooter}
+                onChange={(e) => setWordFooter(e.target.value)}
+                aria-invalid={footerTooManyLines || footerTooLong}
+                rows={3}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+              />
+              <p className={`text-xs mt-1 text-right ${footerTooLong ? "text-red-600 font-medium" : "text-gray-400"}`}>{footerChars}/{MAX_WORD_FOOTER}</p>
+            </div>
+
             <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
               <button
                 onClick={save}
-                disabled={saving || loadError}
+                disabled={saving || loadError || footerTooManyLines || footerTooLong}
                 className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {saving ? t("Saving...") : t("Save branding")}

@@ -6,6 +6,7 @@ import {
   saveLogo,
   removeLogo,
 } from "@/lib/brandingData";
+import { MAX_WORD_FOOTER, MAX_WORD_FOOTER_LINES, cleanWordFooter, wordFooterLineCount } from "@/lib/branding";
 import { checkColours, normaliseHex } from "@/lib/brandingColors";
 import { isPlausibleEmail } from "@/lib/emailIdentity";
 
@@ -38,9 +39,24 @@ export async function PUT(req: NextRequest) {
       primary,
       accent,
       replyTo,
+      wordFooter,
       logoDataUrl,
       removeExistingLogo,
     } = body ?? {};
+
+    // Text fields are text or absent. String() would save the words "null" or
+    // "[object Object]" as the school's name. (Reply-to and footer may also be
+    // null, which clears them.)
+    for (const [label, value] of [
+      ["The school name", fullName],
+      ["The short name", shortName],
+      ["The reply-to address", replyTo === null ? undefined : replyTo],
+      ["The Word minutes footer", wordFooter === null ? undefined : wordFooter],
+    ] as const) {
+      if (value !== undefined && typeof value !== "string") {
+        return NextResponse.json({ error: `${label} must be text.` }, { status: 400 });
+      }
+    }
 
     // Blank is fine and means "no Reply-To header". Anything non-blank has to
     // look like an address: a bad one can get the whole message rejected, and
@@ -49,6 +65,18 @@ export async function PUT(req: NextRequest) {
     if (replyTo && !isPlausibleEmail(replyTo)) {
       return NextResponse.json(
         { error: "The reply-to address does not look like an email address." },
+        { status: 400 }
+      );
+    }
+    if (typeof wordFooter === "string" && wordFooterLineCount(wordFooter) > MAX_WORD_FOOTER_LINES) {
+      return NextResponse.json(
+        { error: `The Word minutes footer can have at most ${MAX_WORD_FOOTER_LINES} lines.` },
+        { status: 400 }
+      );
+    }
+    if (typeof wordFooter === "string" && Array.from(cleanWordFooter(wordFooter)).length > MAX_WORD_FOOTER) {
+      return NextResponse.json(
+        { error: `The Word minutes footer can have at most ${MAX_WORD_FOOTER} characters.` },
         { status: 400 }
       );
     }
@@ -114,7 +142,15 @@ export async function PUT(req: NextRequest) {
       ...(shortName !== undefined ? { shortName: String(shortName).trim() } : {}),
       ...(primary ? { primary: normaliseHex(primary)! } : {}),
       ...(accent ? { accent: normaliseHex(accent)! } : {}),
-      ...(replyTo !== undefined ? { replyTo: String(replyTo).trim() } : {}),
+      // A string sets it, null clears it, anything else leaves it alone
+      // (String(null) used to save the word "null").
+      ...(typeof replyTo === "string" || replyTo === null
+        ? { replyTo: (replyTo ?? "").trim() }
+        : {}),
+      // Cleaned (the line and length caps were checked above).
+      ...(typeof wordFooter === "string" || wordFooter === null
+        ? { wordFooter: cleanWordFooter(wordFooter ?? "") }
+        : {}),
     }));
 
     // Hand back what was saved. A re-read moments after a write can still serve

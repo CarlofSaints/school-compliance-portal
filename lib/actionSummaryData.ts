@@ -1,3 +1,5 @@
+import { withMeetingDates } from "./actionItems";
+import type { MinutesRecord } from "./minutesData";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
@@ -120,8 +122,14 @@ export async function resolveSummaryRecipients(s: ActionSummarySettings): Promis
 
 /** The open register as it stands, with owners named as the register names
  *  them today (the same refresh the Action Items page does). */
-export async function gatherSummaryRows(dueSoonDays: number, now: Date = new Date()): Promise<SummaryRow[]> {
-  const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
+export async function gatherSummaryRows(
+  dueSoonDays: number,
+  now: Date = new Date(),
+  /** Opt-in: only callers that show the meeting date pay for reading every minutes set. */
+  minutes?: Promise<Map<string, MinutesRecord | null>>
+): Promise<SummaryRow[]> {
+  const [stored, people, users, minutesById] = await Promise.all([getActionItems(), getPeople(), getUsers(), minutes]);
+  const items = minutesById ? withMeetingDates(stored, minutesById) : stored;
   const owners = new Map(
     items.map((i) => [
       i.id,
@@ -136,8 +144,8 @@ export async function gatherSummaryRows(dueSoonDays: number, now: Date = new Dat
  * may not read is left out, unless they are carrying it. Built once per send,
  * then applied per recipient.
  */
-async function rowFilterFactory() {
-  const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutesIndex()]);
+async function rowFilterFactory(minutes: Promise<Map<string, MinutesRecord | null>>) {
+  const [ctx, byId] = await Promise.all([loadMinutesAccessContext(), minutes]);
   const resolver = await loadRecipientResolver(ctx);
   const forReader = (reader: Reader) => (rows: SummaryRow[]) =>
     rows.filter((r) =>
@@ -165,8 +173,9 @@ export async function buildSummaryFile(
 ): Promise<{ filename: string; content: Buffer }> {
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
-  if (forUserId) rows = (await rowFilterFactory()).forUserId(forUserId)(rows);
+  const minutes = minutesIndex(); // started now, awaited alongside the other reads
+  let rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
+  if (forUserId) rows = (await rowFilterFactory(minutes)).forUserId(forUserId)(rows);
   const content = await buildSummaryWorkbook({
     branding,
     rows,
@@ -203,14 +212,15 @@ export async function sendActionSummary(opts: {
   const now = opts.now ?? new Date();
   const [settings, branding] = await Promise.all([getActionSummarySettings(), resolveBranding()]);
   const asOf = schoolToday(now);
-  const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now));
+  const minutes = minutesIndex(); // started now, awaited alongside the other reads
+  const rows = await gatherSummaryRows(settings.dueSoonDays, schoolNow(now), minutes);
   const scheduleText = settings.enabled ? describeSchedule(settings, WEEKDAY_LABELS) : "";
   const filename = summaryFilename(branding.shortName, asOf);
 
   // 🔴 Per recipient: an action raised in minutes somebody may not read (a
   // FINCOM-only set) is left out of THEIR email and workbook. Usually every
   // copy is the same, so workbooks are built once per distinct set of rows.
-  const filters = await rowFilterFactory();
+  const filters = await rowFilterFactory(minutes);
   const workbooks = new Map<string, Buffer>();
   const copyFor = async (email: string) => {
     const mine = filters.forEmail(email)(rows);

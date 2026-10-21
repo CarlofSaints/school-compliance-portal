@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
+import { formatMeetingDate } from "@/lib/minutes";
 import {
   ALL_RECIPIENTS,
   DEFAULT_ACTION_CATEGORIES,
@@ -317,7 +318,12 @@ export default function ActionItemForm({
                 onChange={(e) => setMeetingDate(e.target.value)}
                 className={fieldClass}
               />
-              <p className="text-xs text-gray-400 mt-1">{t("Optional.")}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {/* Blank here means the minutes' date is used: say so, so nobody retypes it as an override. */}
+                {!meetingDate && existing?.fromMinutes?.meetingDate
+                  ? t("From the minutes: {date}", { date: formatMeetingDate(existing.fromMinutes.meetingDate, t) })
+                  : t("Optional.")}
+              </p>
             </div>
           </div>
 

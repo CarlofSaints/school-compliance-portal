@@ -9,6 +9,7 @@ import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { parseActionEdit } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
+import { withMinutesMeetingDates } from "@/lib/minutesAccess";
 
 export const maxDuration = 300;
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
       refs: saved.map((s) => s.ref),
       notified,
       missing,
-      items: saved,
+      items: await withMinutesMeetingDates(session, saved),
     });
   } catch (err) {
     console.error("[action-items] bulk update failed:", err);
