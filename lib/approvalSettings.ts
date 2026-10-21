@@ -201,13 +201,16 @@ export function quoteBandProblem(
   // The band frozen at submission (app.approvalTierId): what the approvers
   // actually signed off. Today's band for `basis` only when it is missing.
   approvedTierId?: string
-): string | null {
+): QuoteBandProblem | null {
   if (tiers.length === 0) return null;
-  if (typeof basis !== "number" || !Number.isFinite(basis)) {
-    return "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.";
-  }
+  if (typeof basis !== "number" || !Number.isFinite(basis)) return { code: "no_amount" };
   if (quote <= basis) return null;
+  const approvedBand = (approvedTierId && tiers.find((t) => t.id === approvedTierId)) || tierForAmount(tiers, basis);
   const band = tierForAmount(tiers, quote);
-  if (band && band.id === (approvedTierId ?? tierForAmount(tiers, basis)?.id)) return null;
-  return "This quote is above the approval band this application was approved in. Submit a new application for the higher amount.";
+  if (band && band.id === (approvedTierId ?? approvedBand?.id)) return null;
+  // The approved band's upper limit, for the message (null: none known).
+  return { code: "over_band", limit: approvedBand?.maxAmount ?? null };
 }
+
+/** Codes, so the page can say it in the reader's language (spend/[id]). */
+export type QuoteBandProblem = { code: "no_amount" } | { code: "over_band"; limit: number | null };

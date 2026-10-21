@@ -1751,5 +1751,8 @@
   "This email is about a fund application you do not have access to.": "Imeile ye e mabapi le kgopelo ya tšhelete ye o se nago tumelelo ya go e bona.",
   "Personal email, wording not kept": "Imeile ya motho ka noši, mantšu ga a bolokwa",
   "Show older ({n} more)": "Bontšha tša kgale ({n} tše dingwe)",
-  "No loaded emails match your search.": "Ga go na di-imeili tše di laotšwego tše di swanago le nyakišišo ya gago."
+  "No loaded emails match your search.": "Ga go na di-imeili tše di laotšwego tše di swanago le nyakišišo ya gago.",
+  "This quote ({quote}) is above the approval limit of the band this request was approved in ({limit}). It needs a new approval at the higher band.": "Theko ye ({quote}) e feta moedi wa tumelelo wa sehlopha seo kgopelo ye e dumeletšwego go sona ({limit}). E nyaka tumelelo ye mpsha sehlopheng se se phagamego.",
+  "This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.": "Theko ye ({quote}) e feta sehlopha sa tumelelo seo kgopelo ye e dumeletšwego go sona. E nyaka tumelelo ye mpsha sehlopheng se se phagamego.",
+  "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Kgopelo ye ga e na tšhelete ye e dumeletšwego goba ye e akanywago, ka gona theko e ka se lekolwe go sehlopha sa yona sa tumelelo. Fetola kgopelo o tsenye tšhelete pele."
 }

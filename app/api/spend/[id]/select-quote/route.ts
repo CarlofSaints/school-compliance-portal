@@ -3,6 +3,7 @@ import { requirePermission } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import { mayActOnApproved } from "@/lib/approvalEngine";
 import { getApprovalSettings, quoteBandProblem } from "@/lib/approvalSettings";
+import { formatRand } from "@/lib/spendReport";
 
 export async function POST(
   req: NextRequest,
@@ -61,7 +62,18 @@ export async function POST(
     // band whose approvers never saw it.
     const { tiers } = await getApprovalSettings();
     const problem = quoteBandProblem(tiers, approvedAmount, app.approvedAmount ?? app.estimatedAmount, app.approvalTierId);
-    if (problem) return NextResponse.json({ error: problem }, { status: 409 });
+    if (problem) {
+      // The English line for anything that does not read `code`; the spend
+      // page builds the same sentence in the reader's language from the code.
+      const quote = formatRand(approvedAmount);
+      const error =
+        problem.code === "no_amount"
+          ? "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first."
+          : problem.limit === null
+            ? `This quote (${quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.`
+            : `This quote (${quote}) is above the approval limit of the band this request was approved in (${formatRand(problem.limit)}). It needs a new approval at the higher band.`;
+      return NextResponse.json({ error, ...problem, quote: approvedAmount }, { status: 409 });
+    }
 
     await updateSpendApplication(id, {
       selectedQuoteIndex: quoteIndex,

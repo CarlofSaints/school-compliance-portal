@@ -148,11 +148,13 @@ async function main() {
   ];
   check("a quote above approval in the same band is allowed", quoteBandProblem(bands, 9000, 6000), null);
   check("a quote below approval is allowed", quoteBandProblem(bands, 4000, 6000), null);
-  check("a quote that lands in a higher band is refused", typeof quoteBandProblem(bands, 12000, 6000), "string");
+  check("a quote that lands in a higher band is refused, with the approved band's limit", quoteBandProblem(bands, 12000, 6000), { code: "over_band", limit: 10000 });
   check("no bands set up: allowed", quoteBandProblem([], 12000, 6000), null);
-  check("the FROZEN band decides: same band today, different band at approval, refused", typeof quoteBandProblem(bands, 9000, 6000, "low"), "string");
+  check("the FROZEN band decides: same band today, different band at approval, refused", quoteBandProblem(bands, 9000, 6000, "low"), { code: "over_band", limit: 5000 });
   check("the frozen band matches: allowed", quoteBandProblem(bands, 12000, 11000, "high"), null);
-  check("no approved or estimated amount: refused", typeof quoteBandProblem(bands, 100, undefined), "string");
+  check("no approved or estimated amount: refused", quoteBandProblem(bands, 100, undefined), { code: "no_amount" });
+  const spendPage = fs.readFileSync("app/(portal)/spend/[id]/page.tsx", "utf8");
+  check("the spend page says a refused band change in the reader's language", spendPage.includes('err.code === "over_band"') && spendPage.includes("{limit}"), true);
   const selectQuote = fs.readFileSync("app/api/spend/[id]/select-quote/route.ts", "utf8");
   check("quote index must be a whole number", selectQuote.includes("Number.isInteger(quoteIndex)"), true);
   const usersRoute = fs.readFileSync("app/api/users/[id]/route.ts", "utf8");
