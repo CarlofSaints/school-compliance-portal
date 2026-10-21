@@ -326,7 +326,7 @@ export function buildSummaryRows(
       const daysLeft = daysUntilDue(i, now);
       const latest = [...(i.updates || [])].sort((a, b) => (a.at < b.at ? 1 : -1))[0];
       const names = ownerNames?.get(i.id) ?? i.assigneeNames;
-      const held = i.fromMinutes?.meetingDate || i.meetingDate;
+      const held = i.meetingDate || i.fromMinutes?.meetingDate; // a date typed on the item wins
       const fromMeeting = [
         i.fromMinutes && [i.fromMinutes.minutesTitle, i.fromMinutes.minutesPeriod && `(${i.fromMinutes.minutesPeriod})`].filter(Boolean).join(" "),
         held && (i.fromMinutes ? `held ${formatMeetingDate(held)}` : formatMeetingDate(held)),

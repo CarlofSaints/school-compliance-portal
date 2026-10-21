@@ -11,6 +11,7 @@ import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
 import { parseActionEdit } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
+import { withMinutesMeetingDates } from "@/lib/minutesAccess";
 
 // Editing ONE action. An assignee updating their own progress goes to
 // /progress instead, which needs no permission - see that route.
@@ -59,7 +60,8 @@ export async function PATCH(
       notified = await notifyAssignees(saved, parsed.newlyAssigned);
     }
 
-    return NextResponse.json({ ...saved, notified });
+    const [dated] = await withMinutesMeetingDates([saved]);
+    return NextResponse.json({ ...dated, notified });
   } catch (err) {
     console.error("[action-items] update failed:", err);
     return NextResponse.json(

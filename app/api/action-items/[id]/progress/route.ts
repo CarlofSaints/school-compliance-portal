@@ -10,6 +10,7 @@ import {
   ACTION_ADMIN_PERMISSIONS,
   isAssignee,
 } from "@/lib/actionItemRecipients";
+import { withMinutesMeetingDates } from "@/lib/minutesAccess";
 import { v4 as uuidv4 } from "uuid";
 
 const VALID_STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
@@ -84,7 +85,7 @@ export async function POST(
       updates: [update, ...(current.updates || [])].slice(0, 100),
     }));
 
-    return NextResponse.json(saved);
+    return NextResponse.json(saved && (await withMinutesMeetingDates([saved]))[0]);
   } catch (err) {
     console.error("[action-items] progress update failed:", err);
     return NextResponse.json(

@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ActionItem } from "./actionItems";
-import { summarise, isClosed, isOverdue, todayIso, addDays, daysBetween, daysUntilDue } from "./actionItems";
+import { summarise, isClosed, isOverdue, todayIso, addDays, daysBetween, daysUntilDue, withMeetingDates } from "./actionItems";
 import type { MinutesRecord } from "./minutesData";
 import { signingProgress, formatPeriod } from "./minutes";
 import type { SpendApplication } from "./spend";
@@ -141,7 +141,7 @@ export interface WeeklyActionLine {
   owners: string;
   due: string;
   daysLate: number;
-  /** The meeting that agreed it (the minutes' date, else the action's own). */
+  /** The meeting that agreed it (the action's own date, else the minutes'). */
   meetingDate?: string;
 }
 
@@ -240,7 +240,7 @@ export function buildWeeklyFacts(
 ): WeeklyFacts {
   const s = summarise(actions, now);
   const minutesById = new Map(minutes.map((m) => [m.id, m]));
-  const overdueList = actions
+  const overdueList = withMeetingDates(actions, minutesById)
     .filter((a) => isOverdue(a, now))
     .map((a) => ({
       fromMinutes: a.fromMinutes ? { minutesId: a.fromMinutes.minutesId } : undefined,
@@ -250,7 +250,7 @@ export function buildWeeklyFacts(
       owners: a.assigneeNames.join(", ") || "Nobody assigned",
       due: a.dueDate,
       daysLate: -(daysUntilDue(a, now) ?? 0),
-      meetingDate: (a.fromMinutes && minutesById.get(a.fromMinutes.minutesId)?.meetingDate) || a.meetingDate,
+      meetingDate: a.meetingDate || a.fromMinutes?.meetingDate,
     }))
     .sort((a, b) => b.daysLate - a.daysLate);
 

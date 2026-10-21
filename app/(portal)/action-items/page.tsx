@@ -708,7 +708,7 @@ export default function ActionItemsPage() {
                       )}
                       {(item.meetingDate || item.fromMinutes?.meetingDate) && (
                         <p className="text-xs text-gray-400 mt-1">
-                          {t("Raised at the meeting of {date}", { date: item.fromMinutes?.meetingDate || item.meetingDate || "" })}
+                          {t("Raised at the meeting of {date}", { date: item.meetingDate || item.fromMinutes?.meetingDate || "" })}
                         </p>
                       )}
                       {/* Where it came from, linking back to the minute that

@@ -212,6 +212,15 @@ async function minutesFor(ids: (string | undefined)[]): Promise<Map<string, Minu
   return new Map(found.filter((m): m is MinutesRecord => !!m).map((m) => [m.id, m]));
 }
 
+/** Every response that hands back action items goes through this (or
+ *  visibleActionsFor), so the meeting date survives an edit on the client. */
+export async function withMinutesMeetingDates<T extends { fromMinutes?: { minutesId: string; meetingDate?: string } }>(
+  items: T[]
+): Promise<T[]> {
+  if (!items.some((i) => i.fromMinutes?.minutesId)) return items;
+  return withMeetingDates(items, await minutesFor(items.map((i) => i.fromMinutes?.minutesId)));
+}
+
 /** For a session reading the action register: the actions they may see,
  *  each with its minutes' meeting date (the minutes are read here anyway). */
 export async function visibleActionsFor<T extends ActionOrigin & { fromMinutes?: { meetingDate?: string } }>(

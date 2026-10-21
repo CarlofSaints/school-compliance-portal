@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { visibleActionsFor, sessionMayReadMinutes } from "@/lib/minutesAccess";
+import { visibleActionsFor, sessionMayReadMinutes, withMinutesMeetingDates } from "@/lib/minutesAccess";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -170,7 +170,8 @@ export async function POST(req: NextRequest) {
       notified = await notifyAssignees(item);
     }
 
-    return NextResponse.json({ ...item, notified }, { status: 201 });
+    const [dated] = await withMinutesMeetingDates([item]);
+    return NextResponse.json({ ...dated, notified }, { status: 201 });
   } catch (err) {
     console.error("[action-items] create failed:", err);
     return NextResponse.json(
