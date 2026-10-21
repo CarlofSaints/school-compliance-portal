@@ -102,14 +102,22 @@ export async function weeklyRecipients(): Promise<{
   return { recipients, noEmail };
 }
 
-export async function gatherWeeklyFacts(now: Date = new Date()): Promise<WeeklyFacts> {
-  const [actions, users, minutes, spend] = await Promise.all([
+/** `minutes`: the send's one strict read, when it already has it. */
+export async function gatherWeeklyFacts(
+  now: Date = new Date(),
+  minutes?: Map<string, MinutesRecord | null>
+): Promise<WeeklyFacts> {
+  const [actions, users, list, spend] = await Promise.all([
     getActionItems(),
     getUsers(),
-    listMinutes(),
+    minutes
+      ? [...minutes.values()]
+          .filter((m): m is MinutesRecord => !!m)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)) // listMinutes' order
+      : listMinutes(),
     getSpendApplications(),
   ]);
-  return buildWeeklyFacts(actions, users, minutes, spend, now);
+  return buildWeeklyFacts(actions, users, list, spend, now);
 }
 
 export interface WeeklySendResult {
@@ -178,12 +186,13 @@ export async function sendWeeklyUpdate(opts: {
   };
 }): Promise<WeeklySendResult> {
   const now = opts.now ?? new Date();
-  const [settings, branding, facts, minutesById, accessCtx] = await Promise.all([
+  // One strict read of the minutes feeds both the facts and the per-reader
+  // filter: an unreadable set hides its actions instead of reading as deleted.
+  const minutesById = await minutesIndex();
+  const [settings, branding, facts, accessCtx] = await Promise.all([
     getWeeklyUpdateSettings(),
     resolveBranding(),
-    gatherWeeklyFacts(now),
-    // Strict: an unreadable set hides its actions instead of reading as deleted.
-    minutesIndex(),
+    gatherWeeklyFacts(now, minutesById),
     loadMinutesAccessContext(),
   ]);
   const teamName = teamNameFor(settings, branding.fullName);

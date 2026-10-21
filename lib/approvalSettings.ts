@@ -197,7 +197,10 @@ export function validateTiers(tiers: ApprovalTier[]): string[] {
 export function quoteBandProblem(
   tiers: ApprovalTier[],
   quote: number,
-  basis: number | undefined | null
+  basis: number | undefined | null,
+  // The band frozen at submission (app.approvalTierId): what the approvers
+  // actually signed off. Today's band for `basis` only when it is missing.
+  approvedTierId?: string
 ): string | null {
   if (tiers.length === 0) return null;
   if (typeof basis !== "number" || !Number.isFinite(basis)) {
@@ -205,6 +208,6 @@ export function quoteBandProblem(
   }
   if (quote <= basis) return null;
   const band = tierForAmount(tiers, quote);
-  if (band && band.id === tierForAmount(tiers, basis)?.id) return null;
+  if (band && band.id === (approvedTierId ?? tierForAmount(tiers, basis)?.id)) return null;
   return "This quote is above the approval band this application was approved in. Submit a new application for the higher amount.";
 }

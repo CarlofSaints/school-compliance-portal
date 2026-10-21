@@ -122,19 +122,20 @@ export async function POST(req: NextRequest) {
     const accountHit = await hit(LIMITS.loginAccount, account);
     if (!accountHit.ok) return tooMany(LIMITS.loginAccount, accountHit);
 
-    // Index only, and the password is compared even with no account, so an
-    // unknown address answers in the same time as a wrong password.
-    const user = await getUserByEmail(email, false);
+    // Index first, and the password is compared even with no account, so a
+    // repeated unknown address answers in the same time as a wrong password.
+    let user = await getUserByEmail(email, false);
+    // Missing from the index (rare): the slow scan of every account's own
+    // copy runs INLINE, so a real user dropped from the index still signs in,
+    // and the index is put back after the reply. Once per address per window,
+    // so a truly unknown address does not pay for the scan on every attempt.
+    if (!user && (await hit(INDEX_REPAIR, account)).count === 1) {
+      user = await getUserByEmail(email);
+      if (user) await afterResponse(() => repairUserIndex());
+    }
     const valid = await verifyPassword(user, password);
     if (!user) {
       await afterResponse(async () => {
-        // An account missing from the index is found by the slow scan here,
-        // after the reply, and put back so the next attempt works. Once per
-        // ADDRESS per window, never tied to the connection's log marker, so
-        // other addresses typed from the same place cannot lock a user out.
-        if ((await hit(INDEX_REPAIR, account)).count === 1 && (await getUserByEmail(email))) {
-          await repairUserIndex();
-        }
         // Only the first unknown address from this connection in a window.
         const marker = await hit(UNKNOWN_ADDRESS_LOG, ip);
         if (marker.count !== 1) return;

@@ -102,7 +102,8 @@ export async function getUserByEmail(
   // version of the shared list came back — the difference between a password
   // change that takes effect now and one that takes effect in a minute.
   if (fromIndex) return (await getUserById(fromIndex.id)) ?? fromIndex;
-  if (!scanOwnCopies) return undefined;
+  // A dummy own-copy read, so a miss costs the same storage trip as a hit.
+  if (!scanOwnCopies) return void (await getUserRecord("no-such-user").catch(() => null));
 
   // Not in the index at all. That is recoverable, because every account also
   // keeps its own copy: scan those rather than telling somebody who really does

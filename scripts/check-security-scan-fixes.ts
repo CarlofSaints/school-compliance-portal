@@ -99,7 +99,12 @@ async function main() {
   const burst = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginAccount, "burst@school.co.za")));
   console.error = quiet;
   check("30 attempts at once: no more than 5 get through", burst.filter((r) => r.ok).length <= LIMITS.loginAccount.max, true);
-  check("sign-in and reset limits refuse on contention", [LIMITS.loginIp, LIMITS.loginAccount, LIMITS.resetRequestEmail, LIMITS.resetCompleteIp, LIMITS.confirmEmailIp].every((l) => l.failClosed), true);
+  check("per-account and code limits refuse on contention", [LIMITS.loginAccount, LIMITS.resetRequestEmail, LIMITS.resetCompleteIp, LIMITS.confirmEmailIp].every((l) => l.failClosed), true);
+  check("per-IP sign-in and reset limits fail OPEN (one school NAT)", ["failClosed" in LIMITS.loginIp, "failClosed" in LIMITS.resetRequestIp], [false, false]);
+  console.error = () => {};
+  const nat = await Promise.all(Array.from({ length: 30 }, () => hit(LIMITS.loginIp, "10.0.0.1")));
+  console.error = quiet;
+  check("the per-IP limit still counts under contention", nat.some((r) => !r.ok) && Math.max(...nat.map((r) => r.count ?? 0)) > LIMITS.loginIp.max, true);
   const auth = fs.readFileSync("app/api/auth/route.ts", "utf8");
   check("sign-in counts the account BEFORE checking the password", auth.indexOf("hit(LIMITS.loginAccount") < auth.indexOf("verifyPassword(user"), true);
   check("sign-in no longer peeks", /\bpeek\(/.test(auth), false);
@@ -122,15 +127,16 @@ async function main() {
   check("forgot-password looks up and sends after the reply", forgot.indexOf("afterResponse(") < forgot.indexOf("getUserByEmail("), true);
   check("forgot-password: per-user failures have one answer", /status: 502/.test(forgot), false);
   check("forgot-password: no email set up is a 503 for every address, before any lookup", forgot.indexOf("status: 503") > 0 && forgot.indexOf("status: 503") < forgot.indexOf("getUserByEmail("), true);
-  check("index repair is per address, not behind the per-connection log marker", auth.indexOf("hit(INDEX_REPAIR, account)") > 0 && auth.indexOf("hit(INDEX_REPAIR") < auth.indexOf("hit(UNKNOWN_ADDRESS_LOG"), true);
+  check("an index miss scans INLINE, before the password is checked", auth.indexOf("hit(INDEX_REPAIR, account)") > 0 && auth.indexOf("user = await getUserByEmail(email);") > 0 && auth.indexOf("user = await getUserByEmail(email);") < auth.indexOf("verifyPassword(user"), true);
 
   // --- spend: who may act on an approved application ---
   const { mayActOnApproved } = await import("../lib/approvalEngine");
   const approvedApp = { submittedBy: "sub", applicantUserId: "appl", requiredApprovers: [{ userId: "boss" }] } as never;
   check("the submitter may not", mayActOnApproved(approvedApp, { id: "sub", permissions: ["manage_spend_settings"] }), false);
   check("the applicant may not", mayActOnApproved(approvedApp, { id: "appl", permissions: ["manage_spend_settings"] }), false);
-  check("a required approver may", mayActOnApproved(approvedApp, { id: "boss", permissions: [] }), true);
-  check("a spend admin may", mayActOnApproved(approvedApp, { id: "adm", permissions: ["manage_spend_settings"] }), true);
+  check("a required approver may", mayActOnApproved(approvedApp, { id: "boss", permissions: ["approve_spend"] }), true);
+  check("a spend admin with approve_spend may", mayActOnApproved(approvedApp, { id: "adm", permissions: ["approve_spend", "manage_spend_settings"] }), true);
+  check("a spend admin without approve_spend may not (the route requires it)", mayActOnApproved(approvedApp, { id: "adm", permissions: ["manage_spend_settings"] }), false);
   check("approve_spend alone is not enough", mayActOnApproved(approvedApp, { id: "x", permissions: ["approve_spend"] }), false);
   const { quoteBandProblem } = await import("../lib/approvalSettings");
   const bands = [
@@ -142,6 +148,8 @@ async function main() {
   check("a quote below approval is allowed", quoteBandProblem(bands, 4000, 6000), null);
   check("a quote that lands in a higher band is refused", typeof quoteBandProblem(bands, 12000, 6000), "string");
   check("no bands set up: allowed", quoteBandProblem([], 12000, 6000), null);
+  check("the FROZEN band decides: same band today, different band at approval, refused", typeof quoteBandProblem(bands, 9000, 6000, "low"), "string");
+  check("the frozen band matches: allowed", quoteBandProblem(bands, 12000, 11000, "high"), null);
   check("no approved or estimated amount: refused", typeof quoteBandProblem(bands, 100, undefined), "string");
   const selectQuote = fs.readFileSync("app/api/spend/[id]/select-quote/route.ts", "utf8");
   check("quote index must be a whole number", selectQuote.includes("Number.isInteger(quoteIndex)"), true);
@@ -171,6 +179,18 @@ async function main() {
   const n = await pdfPages(crafted);
   check("a crafted PDF is counted quickly", Date.now() - t0pdf < 2000, true);
   check("and the real /Count is still found", n, 7);
+  const kids = (k: number) => Array.from({ length: k }, (_, i) => `${i + 10} 0 R`).join(" ");
+  const flat = `1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj 2 0 obj << /Type /Pages /Kids [${kids(100)}] /Count 100 >> endobj ` +
+    Array.from({ length: 100 }, (_, i) => `${i + 10} 0 obj << /Type /Page /Parent 2 0 R >> endobj`).join(" ");
+  check("a flat 100-page PDF", await pdfPages(Buffer.from(flat, "latin1")), 100);
+  const nested = `2 0 obj << /Type /Pages /Kids [${kids(5)}] /Count 500 >> endobj ` +
+    Array.from({ length: 5 }, (_, i) => `${i + 10} 0 obj << /Type /Pages /Parent 2 0 R /Kids [${kids(100)}] /Count 100 >> endobj`).join(" ");
+  check("a nested 500-page PDF", await pdfPages(Buffer.from(nested, "latin1")), 500);
+  const padded = `2 0 obj << /Type /Pages /Kids [${kids(500)}]${" ".repeat(5000)}/Count 500 >> endobj 9 0 obj << /Type /Pages /Count 1 >> endobj`;
+  check("padding and a decoy /Count 1 cannot make it pay less", await pdfPages(Buffer.from(padded, "latin1")), 500);
+  let askedApi = false;
+  await pdfPages(Buffer.from("2 0 obj << /Type /Pages /Count 1 >> endobj 3 0 obj << /Type /ObjStm /N 9 >> endobj", "latin1")).catch(() => (askedApi = true));
+  check("compressed object streams: the AI count is asked as well", askedApi, true);
 
   // --- tag membership and email change ---
   const tagsRoute = fs.readFileSync("app/api/tags/[id]/route.ts", "utf8");

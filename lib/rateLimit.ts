@@ -43,9 +43,11 @@ export interface Limit {
 }
 
 export const LIMITS = {
-  loginIp: { scope: "login-ip", failClosed: true, max: 20, windowSec: 15 * 60, message: "Too many sign-in attempts from this connection. Try again in {wait}." },
+  // Per-IP ones fail OPEN: a whole school shares one NAT address, and 30 staff
+  // signing in at 07:45 is contention, not an attack. Per-account ones stay closed.
+  loginIp: { scope: "login-ip", max: 20, windowSec: 15 * 60, message: "Too many sign-in attempts from this connection. Try again in {wait}." },
   loginAccount: { scope: "login-account", failClosed: true, max: 5, windowSec: 15 * 60, message: "Too many wrong passwords for this account. Try again in {wait}, or reset your password." },
-  resetRequestIp: { scope: "reset-request-ip", failClosed: true, max: 5, windowSec: 60 * 60, message: "Too many reset requests from this connection. Try again in {wait}." },
+  resetRequestIp: { scope: "reset-request-ip", max: 5, windowSec: 60 * 60, message: "Too many reset requests from this connection. Try again in {wait}." },
   resetRequestEmail: { scope: "reset-request-email", failClosed: true, max: 3, windowSec: 60 * 60, message: "Too many reset requests for this address. Check your inbox, or try again in {wait}." },
   resetCompleteIp: { scope: "reset-complete-ip", failClosed: true, max: 10, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailChangeUser: { scope: "email-change-user", max: 3, windowSec: 60 * 60, message: "Too many email change requests. Try again in {wait}." },
@@ -54,11 +56,11 @@ export const LIMITS = {
   signupCheckIp: { scope: "signup-check-ip", max: 60, windowSec: 60, message: "Too many checks. Try again in {wait}.", platform: true },
   aiUser: { scope: "ai-user", max: 20, windowSec: 60 * 60, message: "You have run a lot of compliance checks this hour. Try again in {wait}." },
   aiSchool: { scope: "ai-school", max: 200, windowSec: 24 * 60 * 60, message: "Your school has reached today's limit for compliance checks. Try again in {wait}, or contact support." },
-  translateUser: { scope: "translate-user", max: 10, windowSec: 60 * 60, message: "You have translated a lot of documents this hour. Try again in {wait}." },
-  // Pricing a document reads the whole file (and may ask the AI to count it).
-  translateQuoteUser: { scope: "translate-quote-user", max: 60, windowSec: 60 * 60, message: "You have priced a lot of translations this hour. Try again in {wait}." },
-  creditRequestUser: { scope: "credit-request-user", max: 5, windowSec: 60 * 60, message: "You have asked for credits several times this hour. Try again in {wait}." },
-  creditApproveIp: { scope: "credit-approve-ip", max: 20, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
+  translateUser: { scope: "translate-user", max: 10, windowSec: 60 * 60, message: "You have translated a lot of documents this hour. Try again in {wait}." },
+  // Pricing a document reads the whole file (and may ask the AI to count it).
+  translateQuoteUser: { scope: "translate-quote-user", max: 60, windowSec: 60 * 60, message: "You have priced a lot of translations this hour. Try again in {wait}." },
+  creditRequestUser: { scope: "credit-request-user", max: 5, windowSec: 60 * 60, message: "You have asked for credits several times this hour. Try again in {wait}." },
+  creditApproveIp: { scope: "credit-approve-ip", max: 20, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },
   bookingWriteUser: { scope: "booking-write-user", max: 120, windowSec: 60 * 60, message: "You have made a lot of room booking changes this hour. Try again in {wait}." },
   signCodeAttempt: { scope: "sign-code-attempt", failClosed: true, max: 10, windowSec: 60 * 60, message: "Too many signing attempts. Try again in {wait}, or ask the secretary to send a new code." },

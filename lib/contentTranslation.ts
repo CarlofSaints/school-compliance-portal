@@ -36,19 +36,29 @@ export const textPages = (text: string) => Math.max(1, Math.ceil(text.length / C
 /**
  * Pages in a PDF: the /Count on its page tree (the root holds the largest).
  * Not the page objects themselves, which re-saved PDFs keep stale copies of.
- * A PDF that hides its page tree inside compressed object streams has no
- * readable /Count, so that one falls back to the model's own token count
- * (free to ask) at about 2,000 tokens a page.
+ * A PDF with compressed object streams, or no readable root, also asks the
+ * model's own token count (free) at about 2,000 tokens a page, and pays the
+ * larger of the two.
  */
 export async function pdfPages(file: Buffer): Promise<number> {
   const raw = file.toString("latin1");
-  // Gaps bounded to 200 characters: an unbounded one rescans to the end of the
-  // file for every /Type/Pages with no /Count after it, quadratic on a crafted file.
+  // Object by object (split on endobj: linear, no gap to cap, so padding or a
+  // long /Kids array cannot hide a /Count). The MAX /Count of any page-tree
+  // node: a crafted file can only make itself cost more this way, never less.
   let counted = 0;
-  for (const m of raw.matchAll(/\/Type\s*\/Pages\b[^>]{0,200}?\/Count\s+(\d+)|\/Count\s+(\d+)[^>]{0,200}?\/Type\s*\/Pages\b/g)) {
-    counted = Math.max(counted, Number(m[1] || m[2]));
+  let rootSeen = false;
+  for (const obj of raw.split("endobj")) {
+    if (!/\/Type\s*\/Pages(?![A-Za-z])/.test(obj)) continue;
+    for (const m of obj.matchAll(/\/Count\s+(\d+)/g)) counted = Math.max(counted, Number(m[1]));
+    if (!/\/Parent\b/.test(obj)) rootSeen = true;
   }
-  if (counted > 0) return counted;
+  // Trusted only with a readable root and no compressed object streams, where
+  // the real tree (with a larger /Count) could sit unseen behind a decoy.
+  if (counted > 0 && rootSeen && !/\/ObjStm\b/.test(raw)) return counted;
+  return Math.max(counted, await apiPages(file));
+}
+
+async function apiPages(file: Buffer): Promise<number> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
   const { input_tokens } = await new Anthropic({ apiKey }).messages.countTokens({

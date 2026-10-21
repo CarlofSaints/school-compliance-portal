@@ -60,7 +60,7 @@ export async function POST(
     // A quote above what was approved may not carry the application into a
     // band whose approvers never saw it.
     const { tiers } = await getApprovalSettings();
-    const problem = quoteBandProblem(tiers, approvedAmount, app.approvedAmount ?? app.estimatedAmount);
+    const problem = quoteBandProblem(tiers, approvedAmount, app.approvedAmount ?? app.estimatedAmount, app.approvalTierId);
     if (problem) return NextResponse.json({ error: problem }, { status: 409 });
 
     await updateSpendApplication(id, {

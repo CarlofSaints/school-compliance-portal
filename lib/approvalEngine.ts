@@ -172,11 +172,14 @@ export function isRequiredApprover(
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
- *  one of its required approvers or a spend admin, never its own submitter. */
+ *  approve_spend AND (one of its required approvers or a spend admin), never
+ *  its own submitter. The whole rule the routes apply, so the page shows the
+ *  buttons to exactly these people. */
 export function mayActOnApproved(
   app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId">,
   user: { id: string; permissions: string[] }
 ): boolean {
+  if (!user.permissions.includes("approve_spend")) return false;
   if (app.submittedBy === user.id || app.applicantUserId === user.id) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }
