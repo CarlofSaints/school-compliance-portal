@@ -7,6 +7,7 @@ import {
 } from "@/lib/handbookData";
 import { buildDefaultGuide } from "@/lib/defaultGuide";
 import { resolveBranding } from "@/lib/brandingData";
+import { getLocale } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
     const branding = await resolveBranding();
     return NextResponse.json(
       {
-        html: buildDefaultGuide(branding),
+        html: buildDefaultGuide(branding, await getLocale()),
         // A null meta is what tells the page this is the standard guide and
         // not something the school published, so it can say so and offer to
         // replace it. Inventing an author and a date here would present our

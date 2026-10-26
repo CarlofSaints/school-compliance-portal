@@ -3,7 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, useRef } from "react";
 import Toast from "@/components/Toast";
-import { useT } from "@/components/I18nProvider";
+import { useLocale, useT } from "@/components/I18nProvider";
 
 interface HandbookMeta {
   uploadedAt: string;
@@ -14,6 +14,8 @@ interface HandbookMeta {
 
 export default function GuidePage() {
   const t = useT();
+  // The standard guide comes back in the reader's language, so a switch reloads it.
+  const locale = useLocale();
   // Login only. The guide explains the portal to the people using it.
   const { session, loading } = useAuth();
   const [meta, setMeta] = useState<HandbookMeta | null>(null);
@@ -49,13 +51,13 @@ export default function GuidePage() {
       setDocUrl(null);
       return;
     }
-    const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`;
+    const doc = `<!doctype html><html lang="${locale}" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`;
     const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
     setDocUrl(url);
     // Revoked when the guide is replaced or the page is left, or every publish
     // would leak a couple of megabytes for the life of the tab.
     return () => URL.revokeObjectURL(url);
-  }, [html]);
+  }, [html, locale]);
 
   const load = useCallback(async () => {
     setState("loading");
@@ -81,7 +83,7 @@ export default function GuidePage() {
 
   useEffect(() => {
     if (session) load();
-  }, [session, load]);
+  }, [session, load, locale]);
 
   const publish = async (file: File | undefined) => {
     if (!file) return;
