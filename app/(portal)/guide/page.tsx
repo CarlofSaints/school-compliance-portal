@@ -3,7 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback, useRef } from "react";
 import Toast from "@/components/Toast";
-import { useT } from "@/components/I18nProvider";
+import { useLocale, useT } from "@/components/I18nProvider";
 
 interface HandbookMeta {
   uploadedAt: string;
@@ -14,6 +14,8 @@ interface HandbookMeta {
 
 export default function GuidePage() {
   const t = useT();
+  // The standard guide comes back in the reader's language, so a switch reloads it.
+  const locale = useLocale();
   // Login only. The guide explains the portal to the people using it.
   const { session, loading } = useAuth();
   const [meta, setMeta] = useState<HandbookMeta | null>(null);
@@ -77,7 +79,8 @@ export default function GuidePage() {
     setMeta(data.meta);
     setStandard(!!data.standard);
     setState("ready");
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
 
   useEffect(() => {
     if (session) load();

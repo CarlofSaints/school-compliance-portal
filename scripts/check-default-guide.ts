@@ -99,5 +99,23 @@ console.log("\nA school name with markup in it cannot break the page");
   checkThat("quotes and ampersands survive", nasty.includes("&quot;Bothians&quot; &amp; Co"));
 }
 
+// Carl, 26 Oct: "nothing in the guide translates when i switch languages".
+console.log("\n🔴 Every language gets the WHOLE guide, in that language");
+{
+  const tags = (s: string) => (s.match(/<[a-z0-9]+[ >]/g) || []).sort().join();
+  const english = buildDefaultGuide(branding, "en");
+  for (const code of ["af", "zu", "xh", "nso", "tn", "st"] as const) {
+    const g = buildDefaultGuide(branding, code);
+    checkThat(`${code}: marked as ${code}`, g.includes(`<html lang="${code}">`));
+    checkThat(`${code}: not the English text`, !g.includes("Everyone who uses the portal has their own login"));
+    check(`${code}: same chapters and markup as English`, tags(g), tags(english));
+    checkThat(`${code}: no em dashes`, !g.includes("—"));
+    checkThat(`${code}: names the school`, g.includes("St Bothians"));
+    checkThat(`${code}: no image`, !/<img|data:image/.test(g));
+  }
+  checkThat("covers room bookings", english.includes("Booking a meeting room"));
+  checkThat("a private school reads Board, not SGB", buildDefaultGuide({ ...branding, schoolType: "private" } as SchoolBranding).includes("the Board register"));
+}
+
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
