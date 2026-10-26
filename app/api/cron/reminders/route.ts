@@ -23,6 +23,8 @@ import {
   sendActionSummary,
 } from "@/lib/actionSummaryData";
 import { runRequestLapses, runRoomBookingReminders, runSettleMoves } from "@/lib/roomBookingNotify";
+import { isMultiTenant, listTenants } from "@/lib/tenantRegistry";
+import { runAsTenant } from "@/lib/tenantContext";
 
 export const maxDuration = 300;
 
@@ -43,14 +45,17 @@ export async function GET(req: NextRequest) {
   // A missing secret is a misconfiguration, not a reason to run unprotected.
   if (!secret) {
     console.error("[cron/reminders] CRON_SECRET is not set - refusing to run");
-    await recordRun({
-      at: new Date().toISOString(),
-      due: 0,
-      sent: 0,
-      skipped: 0,
-      failed: 0,
-      detail: ["CRON_SECRET is not set on this deployment - nothing was sent"],
-    });
+    // On the shared deployment there is no one school to log this to.
+    if (!isMultiTenant()) {
+      await recordRun({
+        at: new Date().toISOString(),
+        due: 0,
+        sent: 0,
+        skipped: 0,
+        failed: 0,
+        detail: ["CRON_SECRET is not set on this deployment - nothing was sent"],
+      });
+    }
     return NextResponse.json(
       { error: "CRON_SECRET is not configured" },
       { status: 500 }
@@ -62,6 +67,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // A single-school deployment (HVPS, Jeppe) IS its school: one run, as before.
+  if (!isMultiTenant()) return NextResponse.json(await runForSchool());
+
+  // 🔴 The shared deployment hosts many schools and the cron arrives on an
+  // address that belongs to none of them. Until 26 Oct it ran nothing for any
+  // school that signed up itself: no action chases, no weekly update, no
+  // summary, no booking reminders. Each school now runs in its OWN store, and
+  // writes its own run log, one after another. One school failing must not
+  // cost the rest of them their morning.
+  // shortcut: one school after another inside maxDuration (300 s); fan out
+  // per school (a queue, or a cron per batch) once there are dozens.
+  const schools: Record<string, unknown> = {};
+  for (const tenant of await listTenants()) {
+    if (tenant.status !== "active") continue;
+    try {
+      schools[tenant.key] = await runAsTenant(tenant.key, runForSchool);
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      console.error(`[cron/reminders] ${tenant.key} failed:`, err);
+      schools[tenant.key] = { error: why };
+    }
+  }
+  return NextResponse.json({ schools });
+}
+
+/** Everything the morning run does for ONE school, in whichever store the
+ *  caller has pinned. */
+async function runForSchool() {
   const detail: string[] = [];
   let sent = 0;
   let skipped = 0;
@@ -275,6 +308,5 @@ export async function GET(req: NextRequest) {
   };
   await recordRun(run);
   console.log("[cron/reminders]", JSON.stringify(run));
-
-  return NextResponse.json(run);
+  return run;
 }
