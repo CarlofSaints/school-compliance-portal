@@ -2,8 +2,8 @@ import { formatMeetingDate } from "./minutes";
 import { Resend } from "resend";
 import { resolveBranding } from "@/lib/brandingData";
 import type { SchoolBranding } from "@/lib/branding";
-import { tenantScope } from "@/lib/tenantContext";
-import { getTenantByKey } from "@/lib/tenantRegistry";
+import { requestHostname, tenantScope } from "@/lib/tenantContext";
+import { getTenantByKey, resolveTenantForHost } from "@/lib/tenantRegistry";
 import { duePhrase } from "@/lib/actionItems";
 import { readableTextOn } from "@/lib/brandingColors";
 import { recordSentEmail, type EmailMeta } from "@/lib/sentEmails";
@@ -39,24 +39,21 @@ const SITE_URL = resolveSiteUrl();
 // 🔴 On the SHARED deployment SITE_URL is one address for every school, so a
 // link built from it lands on a host that is not the school's: the reset page
 // there could not find its API and said "We could not check that link" (Carl,
-// 26 Oct, on the demo school). Each email now links to the school it is FOR,
-// read from the registry: the request's school, or the one a cron forced with
-// runAsTenant. A single-school deployment (HVPS, Jeppe) keeps SITE_URL.
-const HOST_TTL = 5 * 60 * 1000;
-const hostCache = new Map<string, { url: string; ts: number }>();
-
+// 26 Oct, on the demo school). Each email now links to the school it is FOR.
+// A single-school deployment (HVPS, Jeppe) keeps SITE_URL.
 async function schoolSiteUrl(): Promise<string> {
   try {
     const scope = await tenantScope();
     if (!scope.fromRegistry) return SITE_URL;
-    const hit = hostCache.get(scope.key);
-    if (hit && Date.now() - hit.ts < HOST_TTL) return hit.url;
-    // hostnames[0] is the address the school was created on, so it always resolves
-    const host = (await getTenantByKey(scope.key))?.hostnames[0];
-    if (!host) return SITE_URL;
-    const url = `https://${host}`;
-    hostCache.set(scope.key, { url, ts: Date.now() });
-    return url;
+    // Sent during a request on the school's own address: link back to exactly
+    // that address, the one the reader has just proven works.
+    const host = await requestHostname().catch(() => "");
+    if (host && (await resolveTenantForHost(host))?.key === scope.key) return `https://${host}`;
+    // Otherwise a school forced with runAsTenant (platform admin, a future
+    // per-school cron): the address it was created on. Read fresh, not cached,
+    // so a released hostname never gets a reset token mailed to it.
+    const first = (await getTenantByKey(scope.key))?.hostnames[0];
+    return first ? `https://${first}` : SITE_URL;
   } catch (err) {
     console.error("[email] could not resolve the school's address, links use SITE_URL:", err);
     return SITE_URL;
@@ -1341,7 +1338,7 @@ export async function sendActionSummaryEmail(
   e: ActionSummaryEmail,
   attachment: EmailAttachment
 ): Promise<boolean> {
-  b = { ...b, siteUrl: await schoolSiteUrl() };
+  if (!b.siteUrl) b = { ...b, siteUrl: await schoolSiteUrl() };
   const { subject, html } = buildActionSummaryEmail(b, recipientName, e);
   const bare = buildActionSummaryEmail(b, recipientName, { ...e, noAttachment: true }).html;
   return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare, { kind: "action_summary", personal: true });

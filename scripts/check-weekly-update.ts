@@ -211,9 +211,10 @@ for (const b of [hvps, jeppe]) {
     notActivated: true,
     seesSpend: true,
   });
-  const links = [...html.matchAll(/href="(https?:\/\/[^"/]+)/g)].map((m) => m[1]).filter((h) => !h.includes("mailto"));
-  check("shared school: links present", links.length > 0, true);
-  check("shared school: every link on the school's own host", links.every((h) => h === site), true);
+  // every absolute link and image (the crest too) on the school's host
+  const urls = [...html.matchAll(/(?:href|src)="(https?:\/\/[^"/]+)/g)].map((m) => m[1]);
+  check("shared school: links present", urls.length > 0, true);
+  check("shared school: every link and image on the school's own host", urls.every((h) => h === site), true);
 }
 
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
