@@ -45,17 +45,8 @@ export async function GET(req: NextRequest) {
   // A missing secret is a misconfiguration, not a reason to run unprotected.
   if (!secret) {
     console.error("[cron/reminders] CRON_SECRET is not set - refusing to run");
-    // On the shared deployment there is no one school to log this to.
-    if (!isMultiTenant()) {
-      await recordRun({
-        at: new Date().toISOString(),
-        due: 0,
-        sent: 0,
-        skipped: 0,
-        failed: 0,
-        detail: ["CRON_SECRET is not set on this deployment - nothing was sent"],
-      });
-    }
+    // Into every school's own run log, so an admin can see why nothing came.
+    await logToEverySchool("CRON_SECRET is not set on this deployment - nothing was sent");
     return NextResponse.json(
       { error: "CRON_SECRET is not configured" },
       { status: 500 }
@@ -76,20 +67,43 @@ export async function GET(req: NextRequest) {
   // summary, no booking reminders. Each school now runs in its OWN store, and
   // writes its own run log, one after another. One school failing must not
   // cost the rest of them their morning.
-  // shortcut: one school after another inside maxDuration (300 s); fan out
-  // per school (a queue, or a cron per batch) once there are dozens.
+  // shortcut: one school after another inside maxDuration (300 s); the start
+  // rotates daily so a time-out never starves the same school twice running.
+  // Fan out per school (a queue) once there are dozens.
+  // ⚠️ When HVPS or Jeppe moves onto the shared deployment, turn its OLD
+  // project's cron off the same day: spend and booking reminders have no
+  // claim step and would send twice.
+  const active = (await listTenants()).filter((t) => t.status === "active");
+  const start = active.length ? Math.floor(Date.now() / 86_400_000) % active.length : 0;
   const schools: Record<string, unknown> = {};
-  for (const tenant of await listTenants()) {
-    if (tenant.status !== "active") continue;
+  let failedSchools = 0;
+  for (const tenant of [...active.slice(start), ...active.slice(0, start)]) {
     try {
       schools[tenant.key] = await runAsTenant(tenant.key, runForSchool);
     } catch (err) {
+      failedSchools++;
       const why = err instanceof Error ? err.message : String(err);
       console.error(`[cron/reminders] ${tenant.key} failed:`, err);
       schools[tenant.key] = { error: why };
+      // Its own run log still says so: a failed morning must not look like a
+      // cron that never fired.
+      await runAsTenant(tenant.key, () =>
+        recordRun({ at: new Date().toISOString(), due: 0, sent: 0, skipped: 0, failed: 1, detail: [`The morning run failed: ${why}`] })
+      ).catch((e) => console.error(`[cron/reminders] ${tenant.key}: could not log the failure:`, e));
     }
   }
-  return NextResponse.json({ schools });
+  // Every school failing is an outage, so Vercel shows the cron red.
+  const allFailed = active.length > 0 && failedSchools === active.length;
+  return NextResponse.json({ schools }, { status: allFailed ? 500 : 200 });
+}
+
+/** One line in every school's run log (or this deployment's, if it is one school). */
+async function logToEverySchool(line: string) {
+  const run = { at: new Date().toISOString(), due: 0, sent: 0, skipped: 0, failed: 0, detail: [line] };
+  if (!isMultiTenant()) return recordRun(run);
+  for (const tenant of await listTenants().catch(() => [])) {
+    await runAsTenant(tenant.key, () => recordRun(run)).catch((e) => console.error(`[cron/reminders] ${tenant.key}:`, e));
+  }
 }
 
 /** Everything the morning run does for ONE school, in whichever store the

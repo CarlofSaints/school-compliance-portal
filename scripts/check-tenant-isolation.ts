@@ -103,8 +103,10 @@ console.log("\n🔴 The morning cron runs EVERY school on the shared deployment"
   // Until 26 Oct it ran once, in no school's store, so no self-serve school
   // ever got a reminder, a weekly update or a summary.
   const cron = readFileSync(join(root, "app", "api", "cron", "reminders", "route.ts"), "utf8");
-  checkThat("loops every school", /for \(const tenant of await listTenants\(\)\)/.test(cron));
-  checkThat("skips a suspended school", /tenant\.status !== "active"\) continue/.test(cron));
+  checkThat("loops every school", /await listTenants\(\)/.test(cron) && /for \(const tenant of \[\.\.\.active/.test(cron));
+  checkThat("skips a suspended school", /t\.status === "active"/.test(cron));
+  checkThat("a failed school is written to its own run log", /failed: 1, detail: \[`The morning run failed/.test(cron));
+  checkThat("every school failing returns 500", /status: allFailed \? 500 : 200/.test(cron));
   checkThat("runs each one pinned to its own store", /runAsTenant\(tenant\.key, runForSchool\)/.test(cron));
   checkThat("one school failing does not stop the rest", /try \{\s*\n\s*schools\[tenant\.key\] = await runAsTenant/.test(cron));
   checkThat("a single-school deployment still runs once", /if \(!isMultiTenant\(\)\) return NextResponse\.json\(await runForSchool\(\)\)/.test(cron));
