@@ -47,44 +47,48 @@ export const VIDEOS: Record<string, string> = {
 
 const seenKey = (id: string) => `guide-video-seen:${id}`;
 
-// Storage can be blocked (private mode): then it counts as seen, so nothing
-// pops up uninvited, and the button still works.
-function readSeen(id: string): boolean {
+function markSeen(id: string) {
   try {
-    return localStorage.getItem(seenKey(id)) === "1";
+    localStorage.setItem(seenKey(id), "1");
+  } catch {}
+}
+
+// Opens by itself only on a first visit, on a screen wide enough not to cover
+// the page, and not for someone who asked for less motion. Blocked storage
+// counts as seen, so nothing pops up uninvited; the button always works.
+function shouldAutoOpen(id: string): boolean {
+  try {
+    if (localStorage.getItem(seenKey(id)) === "1") return false;
+    return matchMedia("(min-width: 768px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
   } catch {
-    return true;
+    return false;
   }
 }
-const subscribe = (cb: () => void) => {
-  window.addEventListener("storage", cb);
-  return () => window.removeEventListener("storage", cb);
-};
+// Read once per page; nothing outside this tab should open or close it.
+const subscribe = () => () => {};
 
 export default function GuideVideo() {
-  const t = useT();
   const id = VIDEOS[usePathname()];
-  // The server renders it closed (it has no storage), the browser then opens it
-  // on a first visit to this page.
-  const seen = useSyncExternalStore(subscribe, () => (id ? readSeen(id) : true), () => true);
-  // What the viewer chose on THIS page; a new page starts from its own seen flag.
-  const [choice, setChoice] = useState<{ id: string; open: boolean } | null>(null);
+  // Keyed on the page, so what the viewer chose on one page never carries to the next.
+  return id ? <PageVideo key={id} id={id} /> : null;
+}
 
-  if (!id) return null;
-  const open = choice?.id === id ? choice.open : !seen;
-
+function PageVideo({ id }: { id: string }) {
+  const t = useT();
+  // The server renders it closed (it has no storage); the browser decides.
+  const auto = useSyncExternalStore(subscribe, () => shouldAutoOpen(id), () => false);
+  const [choice, setChoice] = useState<boolean | null>(null);
+  const open = choice ?? auto;
   const close = () => {
-    setChoice({ id, open: false });
-    try {
-      localStorage.setItem(seenKey(id), "1");
-    } catch {}
+    setChoice(false);
+    markSeen(id);
   };
 
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setChoice({ id, open: true })}
+        onClick={() => setChoice(true)}
         className="fixed bottom-4 right-4 z-40 rounded-full bg-dark px-4 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90"
       >
         ▶ {t("Watch how")}
@@ -94,19 +98,23 @@ export default function GuideVideo() {
 
   return (
     <div
-      role="dialog"
+      role="complementary"
       aria-label={t("How this page works")}
+      onKeyDown={(e) => e.key === "Escape" && close()}
       className="fixed bottom-4 right-4 z-40 w-[min(400px,calc(100vw-2rem))] overflow-hidden rounded-xl bg-black shadow-2xl"
     >
       <video
-        key={id}
         src={`/tutorials/${id}.mp4`}
         className="block w-full"
         autoPlay
         muted
         playsInline
         controls
+        // Seen as soon as it plays: leaving the page mid-clip must not bring it back.
+        onPlay={() => markSeen(id)}
         onEnded={close}
+        // A clip that cannot load must not leave a black box in the corner.
+        onError={close}
       />
       <button
         type="button"

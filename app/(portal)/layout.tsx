@@ -21,7 +21,7 @@ export default function PortalLayout({
     <div className="flex min-h-screen">
       <Sidebar />
       <main className="flex-1 min-w-0 bg-gray-50 overflow-auto">
-        <div className={`px-6 pb-6 pt-14 mx-auto ${fullWidth ? "max-w-none" : "max-w-7xl"}`}>
+        <div className={`px-6 pb-20 pt-14 mx-auto ${fullWidth ? "max-w-none" : "max-w-7xl"}`}>
           {children}
         </div>
       </main>
