@@ -2,6 +2,8 @@ import { formatMeetingDate } from "./minutes";
 import { Resend } from "resend";
 import { resolveBranding } from "@/lib/brandingData";
 import type { SchoolBranding } from "@/lib/branding";
+import { requestHostname, tenantScope } from "@/lib/tenantContext";
+import { getTenantByKey, resolveTenantForHost } from "@/lib/tenantRegistry";
 import { duePhrase } from "@/lib/actionItems";
 import { readableTextOn } from "@/lib/brandingColors";
 import { recordSentEmail, type EmailMeta } from "@/lib/sentEmails";
@@ -33,19 +35,53 @@ function resolveSiteUrl(): string {
 }
 
 const SITE_URL = resolveSiteUrl();
+
+// 🔴 On the SHARED deployment SITE_URL is one address for every school, so a
+// link built from it lands on a host that is not the school's: the reset page
+// there could not find its API and said "We could not check that link" (Carl,
+// 26 Oct, on the demo school). Each email now links to the school it is FOR.
+// A single-school deployment (HVPS, Jeppe) keeps SITE_URL.
+async function schoolSiteUrl(): Promise<string> {
+  try {
+    const scope = await tenantScope();
+    if (!scope.fromRegistry) return SITE_URL;
+    // Sent during a request on the school's own address: link back to exactly
+    // that address, the one the reader has just proven works.
+    const host = await requestHostname().catch(() => "");
+    if (host && (await resolveTenantForHost(host))?.key === scope.key) return `https://${host}`;
+    // Otherwise a school forced with runAsTenant (platform admin, a future
+    // per-school cron): the address it was created on. Read fresh, not cached,
+    // so a released hostname never gets a reset token mailed to it.
+    const first = (await getTenantByKey(scope.key))?.hostnames[0];
+    return first ? `https://${first}` : SITE_URL;
+  } catch (err) {
+    console.error("[email] could not resolve the school's address, links use SITE_URL:", err);
+    return SITE_URL;
+  }
+}
+
+/** Branding plus the address its links point at. `siteUrl` is optional only so
+ *  the check scripts can render a builder with no store. */
+type MailBranding = SchoolBranding & { siteUrl?: string };
+const siteOf = (b: MailBranding) => b.siteUrl || SITE_URL;
+
+async function mailBranding(): Promise<MailBranding> {
+  const [b, siteUrl] = await Promise.all([resolveBranding(), schoolSiteUrl()]);
+  return { ...b, siteUrl };
+}
 // Derived per send. These used to be module constants, which meant every
 // email carried whichever school the deployment was BUILT for, no matter what
 // the school had since set in the portal - and on a shared deployment, no
 // matter which school the email was even for.
-function logoUrl(b: SchoolBranding): string {
+function logoUrl(b: MailBranding): string {
   // A school with no crest yet gets NO url, and the header block is left out
-  // rather than pointed at a default. `${SITE_URL}` with an empty logo would
+  // rather than pointed at a default. `${siteOf(b)}` with an empty logo would
   // otherwise resolve to the site root and render as a broken image.
   if (!b.logo) return "";
   // Absolute, because a mail client has no idea what a relative path means.
   // Files under /public and /api/branding/logo are both served without a
   // login, so this resolves for a recipient with no account.
-  return b.logo.startsWith("http") ? b.logo : `${SITE_URL}${b.logo}`;
+  return b.logo.startsWith("http") ? b.logo : `${siteOf(b)}${b.logo}`;
 }
 
 // The school crest, as an ABSOLUTE url - a mail client has no idea what
@@ -83,7 +119,7 @@ function boxOpen(bg: string, padding: string, margin: string, extra = ""): strin
 }
 const BOX_CLOSE = `</td></tr></table>`;
 
-function emailShell(b: SchoolBranding, title: string, body: string): string {
+function emailShell(b: MailBranding, title: string, body: string): string {
   const PRIMARY = b.colors.primary;
   // Black or white, whichever reads on the school's colour: HVPS's cyan with
   // white text was hard to read even where the colour did show.
@@ -140,7 +176,7 @@ export async function sendWelcomeEmail(
   name: string,
   password: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
@@ -151,7 +187,7 @@ export async function sendWelcomeEmail(
       <p style="margin:8px 0 0;color:#333;"><strong>Temporary Password:</strong> ${esc(password)}</p>
     ${BOX_CLOSE}
     <p style="color:#333;">Please log in and change your password immediately.</p>
-    ${button(`${SITE_URL}/login`, `Log In Now`, PRIMARY)}
+    ${button(`${siteOf(b)}/login`, `Log In Now`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body), b.replyTo, undefined, undefined, { kind: "account.welcome", secrets: [password] });
 }
@@ -165,10 +201,10 @@ export async function sendCredentialsSetupEmail(
   token: string,
   ttlMinutes: number
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const url = `${siteOf(b)}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">An account has been created for you on the ${esc(branding.shortName)} ${esc(branding.tagline)}. To get in, choose your own password using the button below.</p>
@@ -187,10 +223,10 @@ export async function sendPasswordResetLinkEmail(
   token: string,
   ttlMinutes: number
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const url = `${siteOf(b)}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">Someone asked to reset the password for your ${esc(branding.shortName)} ${esc(branding.tagline)} account. If that was you, choose a new password using the button below.</p>
@@ -212,9 +248,9 @@ export async function sendEmailChangeConfirmEmail(
   token: string,
   ttlHours: number
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/confirm-email?token=${encodeURIComponent(token)}`;
+  const url = `${siteOf(b)}/confirm-email?token=${encodeURIComponent(token)}`;
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">You asked to use this address for your ${esc(b.shortName)} ${esc(b.tagline)} account. Confirm it using the button below and it becomes the address you sign in with.</p>
@@ -234,7 +270,7 @@ export async function sendEmailChangeNoticeEmail(
   newEmail: string,
   stage: "requested" | "changed"
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const what =
     stage === "requested"
       ? `Someone signed in to your account asked to change its email address to <strong>${esc(newEmail)}</strong>. It changes only if that address confirms it.`
@@ -265,10 +301,10 @@ export async function sendMinutesForReviewEmail(
   draftNumber: number,
   fromName: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const url = `${siteOf(b)}/minutes/${minutesId}`;
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">${esc(fromName)} has sent you <strong>draft ${draftNumber}</strong> of the minutes below to check.</p>
@@ -299,10 +335,10 @@ export async function sendMinutesChangesRequestedEmail(
   reviewerName: string,
   comments: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const url = `${siteOf(b)}/minutes/${minutesId}`;
   const body = `
     <p style="color:#333;">Dear ${esc(secretaryName)},</p>
     <p style="color:#333;"><strong>${esc(reviewerName)}</strong> has asked for changes to <strong>${esc(minutesTitle)}</strong> before it goes out for signing.</p>
@@ -335,12 +371,12 @@ export async function sendMinutesSigningCodeEmail(
   periodLabel: string,
   code: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   // Straight to the document with the signature pad on it, not the summary
   // page: the link in a "please sign" email should open the thing to sign.
-  const url = `${SITE_URL}/minutes/${minutesId}/sign`;
+  const url = `${siteOf(b)}/minutes/${minutesId}/sign`;
   const body = `
     <p style="color:#333;">Dear ${esc(recipientName)},</p>
     <p style="color:#333;">The minutes below have been checked and are ready for your signature.</p>
@@ -392,9 +428,9 @@ export async function sendMinutesSignedEmail(
    *  in which case the email still goes, with its link. */
   attachment?: EmailAttachment | null
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/minutes/${minutesId}`;
+  const url = `${siteOf(b)}/minutes/${minutesId}`;
   const actionBlock = actions.length
     ? `
     <p style="color:#333;margin-top:20px;">Action items from the meeting that are yours to execute are:</p>
@@ -408,7 +444,7 @@ export async function sendMinutesSignedEmail(
     </ol>${
       canSignIn
         ? `
-    <p style="color:#333;">Remember to check the <a href="${SITE_URL}/action-items" style="color:${b.colors.dark};font-weight:bold;">Action Item List</a> in the portal and then mark as done the ones you have completed.</p>`
+    <p style="color:#333;">Remember to check the <a href="${siteOf(b)}/action-items" style="color:${b.colors.dark};font-weight:bold;">Action Item List</a> in the portal and then mark as done the ones you have completed.</p>`
         : ""
     }`
     : "";
@@ -446,7 +482,7 @@ export async function sendSpendNotificationEmail(
   amount: number,
   submittedBy: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
@@ -457,7 +493,7 @@ export async function sendSpendNotificationEmail(
       <p style="margin:8px 0 0;color:#333;"><strong>Amount:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Submitted by:</strong> ${esc(submittedBy)}</p>
     ${BOX_CLOSE}
-    ${button(`${SITE_URL}/spend`, `Review Application`, PRIMARY)}
+    ${button(`${siteOf(b)}/spend`, `Review Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, to, `Spend Application: ${projectName}`, emailShell(b, "New Spend Application", body), b.replyTo, undefined, undefined, { kind: "spend.new_application" });
 }
@@ -475,7 +511,7 @@ export async function sendApplicantConfirmationEmail(
   quoteCount: number,
   approverNames: string[]
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const intro = submitterName
@@ -497,7 +533,7 @@ export async function sendApplicantConfirmationEmail(
     <p style="color:#333;">${intro}</p>
     ${quotes}
     ${routing}
-    ${button(`${SITE_URL}/spend`, `View Application`, PRIMARY)}
+    ${button(`${siteOf(b)}/spend`, `View Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -635,7 +671,7 @@ export async function sendCreditOrderEmail(order: {
   requestedBy: { name: string; email: string };
   approveUrl: string;
 }): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const body = `
     <p style="color:#333;"><strong>${esc(b.fullName)}</strong> asked for <strong>${order.credits} translation credits</strong> (${rand(order.amountRand)}).</p>
     <p style="color:#333;">Requested by ${esc(order.requestedBy.name)} &lt;${esc(order.requestedBy.email)}&gt;.${
@@ -660,7 +696,7 @@ export async function sendCreditOrderConfirmationEmail(
   name: string,
   order: { credits: number; amountRand: number; reference: string }
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">Thank you. We have your request for <strong>${order.credits} translation credits</strong>, ${rand(order.amountRand)} to pay.${
@@ -679,7 +715,7 @@ export async function sendCreditsAddedEmail(
   credits: number,
   balance: number
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const body = `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">Your payment has been received and <strong>${credits} translation credits</strong> have been added. Your school now has <strong>${balance}</strong> credits.</p>
@@ -704,7 +740,7 @@ export async function sendSpendReminderEmail(
   note: string,
   role: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const noteBlock = note
@@ -719,7 +755,7 @@ export async function sendSpendReminderEmail(
       <p style="margin:8px 0 0;color:#333;"><strong>Status:</strong> ${esc(statusLabel)}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>You are receiving this as:</strong> ${esc(role)}</p>
     ${BOX_CLOSE}
-    ${button(`${SITE_URL}/spend`, `Open the Project`, PRIMARY)}
+    ${button(`${siteOf(b)}/spend`, `Open the Project`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -747,10 +783,10 @@ export async function sendApprovalRequestEmail(
   tierLabel: string,
   requiredBy?: string
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/spend/${spendId}`;
+  const url = `${siteOf(b)}/spend/${spendId}`;
   const deadline = requiredBy
     ? `<p style="margin:8px 0 0;color:#333;"><strong>Approval required by:</strong> ${esc(requiredBy)}</p>`
     : "";
@@ -798,7 +834,7 @@ export async function sendApprovalProgressEmail(
   approved: number,
   total: number
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const note = comments
@@ -813,7 +849,7 @@ export async function sendApprovalProgressEmail(
       ${note}
       <p style="margin:8px 0 0;color:#333;"><strong>Progress:</strong> ${approved} of ${total} approvals in</p>
     ${BOX_CLOSE}
-    ${button(`${SITE_URL}/spend/${spendId}`, `View the Application`, PRIMARY)}
+    ${button(`${siteOf(b)}/spend/${spendId}`, `View the Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -831,7 +867,7 @@ export async function sendFullyApprovedEmail(
   amount: number,
   approverNames: string[]
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
@@ -842,7 +878,7 @@ export async function sendFullyApprovedEmail(
       <p style="margin:8px 0 0;color:#333;"><strong>Approved amount:</strong> R${amount.toLocaleString()}</p>
       <p style="margin:8px 0 0;color:#333;"><strong>Approved by:</strong> ${esc(approverNames.join(", "))}</p>
     ${BOX_CLOSE}
-    ${button(`${SITE_URL}/spend/${spendId}`, `View the Application`, PRIMARY)}
+    ${button(`${siteOf(b)}/spend/${spendId}`, `View the Application`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -866,10 +902,10 @@ export async function sendApprovalReminderEmail(
   chasedBy: string,
   stillWaitingOn: string[]
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
-  const url = `${SITE_URL}/spend/${spendId}`;
+  const url = `${siteOf(b)}/spend/${spendId}`;
   const others = stillWaitingOn.filter((n) => n !== approverName);
   const alsoWaiting =
     others.length > 0
@@ -972,7 +1008,7 @@ export async function sendActionAssignedEmail(
   raisedByName: string,
   facts: ActionEmailFacts
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const body = `
@@ -980,7 +1016,7 @@ export async function sendActionAssignedEmail(
     <p style="color:#333;">${esc(raisedByName)} has assigned you an action item.</p>
     ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#333;">Please update your progress in the portal as the work moves along. You will get a reminder before it is due.</p>
-    ${button(`${SITE_URL}/action-items`, `Open the action`, PRIMARY)}
+    ${button(`${siteOf(b)}/action-items`, `Open the action`, PRIMARY)}
   `;
   return sendEmail(b.fromEmail, 
     to,
@@ -999,7 +1035,7 @@ export async function sendActionReminderEmail(
   facts: ActionEmailFacts,
   note = ""
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const branding = b;
   const PRIMARY = b.colors.primary;
   const overdue = facts.daysLeft !== null && facts.daysLeft < 0;
@@ -1009,7 +1045,7 @@ export async function sendActionReminderEmail(
     ${note ? `<p style="color:#333;">${esc(note)}</p>` : ""}
     ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#666;font-size:13px;">You are receiving this as: ${esc(role)}</p>
-    ${button(`${SITE_URL}/action-items`, `Update the progress`, overdue ? "#dc2626" : PRIMARY)}
+    ${button(`${siteOf(b)}/action-items`, `Update the progress`, overdue ? "#dc2626" : PRIMARY)}
   `;
   const subject = overdue
     ? `Overdue: ${facts.ref} ${facts.title}`
@@ -1077,7 +1113,7 @@ export interface WeeklyUpdateEmail {
 /** Pure: builds the subject and HTML, so a script can render it with no
  *  store and no mail provider. */
 export function buildWeeklyUpdateEmail(
-  b: SchoolBranding,
+  b: MailBranding,
   to: string,
   recipientName: string,
   e: WeeklyUpdateEmail
@@ -1170,7 +1206,7 @@ export function buildWeeklyUpdateEmail(
   const activateBlock = e.notActivated
     ? `<div style="border:1px solid ${PRIMARY};border-radius:8px;padding:14px 16px;margin:20px 0 0;">
         <p style="margin:0;color:#333;font-size:14px;"><strong>You have not signed in yet.</strong> Your account is ready. If you no longer have your temporary password, set a new one here:</p>
-        <a href="${SITE_URL}/forgot-password" style="display:inline-block;margin-top:10px;color:${PRIMARY};font-weight:600;">Set my password</a>
+        <a href="${siteOf(b)}/forgot-password" style="display:inline-block;margin-top:10px;color:${PRIMARY};font-weight:600;">Set my password</a>
       </div>`
     : "";
 
@@ -1183,8 +1219,8 @@ export function buildWeeklyUpdateEmail(
     ${spendBlock}
     ${activateBlock}
     <div style="text-align:center;margin:28px 0 8px;">
-      ${button(`${SITE_URL}`, `Open the ${esc(b.shortName)} portal`, PRIMARY, "center")}
-      <p style="margin:10px 0 0;font-size:12px;color:#777;">${esc(SITE_URL.replace(/^https?:\/\//, ""))}</p>
+      ${button(`${siteOf(b)}`, `Open the ${esc(b.shortName)} portal`, PRIMARY, "center")}
+      <p style="margin:10px 0 0;font-size:12px;color:#777;">${esc(siteOf(b).replace(/^https?:\/\//, ""))}</p>
     </div>
     <p style="color:#999;font-size:12px;margin:24px 0 0;">You receive this because you have an account on the ${esc(b.fullName)} ${esc(b.tagline)}. Sent to ${esc(recipientName || to)}.</p>
   `;
@@ -1204,7 +1240,7 @@ export async function sendWeeklyUpdateEmail(
   recipientName: string,
   e: WeeklyUpdateEmail
 ): Promise<boolean> {
-  const b = await resolveBranding();
+  const b = await mailBranding();
   const { subject, html } = buildWeeklyUpdateEmail(b, to, recipientName, e);
   return sendEmail(b.fromEmail, to, subject, html, b.replyTo, undefined, undefined, { kind: "weekly_update", personal: true });
 }
@@ -1232,7 +1268,7 @@ export interface ActionSummaryEmail {
 /** Pure: builds the subject and HTML, so a script can render it with no
  *  store and no mail provider. */
 export function buildActionSummaryEmail(
-  b: SchoolBranding,
+  b: MailBranding,
   recipientName: string,
   e: ActionSummaryEmail
 ): { subject: string; html: string } {
@@ -1285,7 +1321,7 @@ export function buildActionSummaryEmail(
     ${urgentBlock}
     ${attachmentNote}
     <div style="text-align:center;margin:28px 0 8px;">
-      ${button(`${SITE_URL}/action-items`, `Open the action items`, PRIMARY, "center")}
+      ${button(`${siteOf(b)}/action-items`, `Open the action items`, PRIMARY, "center")}
     </div>
     <p style="color:#999;font-size:12px;margin:24px 0 0;">${e.scheduleText ? `This summary goes out ${esc(e.scheduleText.charAt(0).toLowerCase() + e.scheduleText.slice(1))}. ` : ""}You are on the list for it in the ${esc(b.fullName)} portal.</p>
   `;
@@ -1296,12 +1332,13 @@ export function buildActionSummaryEmail(
 }
 
 export async function sendActionSummaryEmail(
-  b: SchoolBranding,
+  b: MailBranding,
   to: string,
   recipientName: string,
   e: ActionSummaryEmail,
   attachment: EmailAttachment
 ): Promise<boolean> {
+  if (!b.siteUrl) b = { ...b, siteUrl: await schoolSiteUrl() };
   const { subject, html } = buildActionSummaryEmail(b, recipientName, e);
   const bare = buildActionSummaryEmail(b, recipientName, { ...e, noAttachment: true }).html;
   return sendEmail(b.fromEmail, to, subject, html, b.replyTo, [attachment], bare, { kind: "action_summary", personal: true });
@@ -1346,45 +1383,45 @@ function bookingButton(PRIMARY: string, href: string, label: string): string {
   return `${button(`${href}`, `${label}`, PRIMARY)}`;
 }
 
-async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string) => string, meta: EmailMeta = { kind: "booking" }): Promise<boolean> {
-  const b = await resolveBranding();
-  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary)), b.replyTo, undefined, undefined, meta);
+async function sendBookingMail(to: string, subject: string, heading: string, body: (PRIMARY: string, site: string) => string, meta: EmailMeta = { kind: "booking" }): Promise<boolean> {
+  const b = await mailBranding();
+  return sendEmail(b.fromEmail, to, subject, emailShell(b, heading, body(b.colors.primary, siteOf(b))), b.replyTo, undefined, undefined, meta);
 }
 
-const CALENDAR_LINK = () => `${SITE_URL}/bookings`;
+const CALENDAR_LINK = (site: string) => `${site}/bookings`;
 
 export function sendBookingConfirmedEmail(to: string, name: string, f: RoomBookingEmailFacts): Promise<boolean> {
-  return sendBookingMail(to, `Room booked: ${f.roomName}, ${f.dateLabel}`, "Booking confirmed", (P) => `
+  return sendBookingMail(to, `Room booked: ${f.roomName}, ${f.dateLabel}`, "Booking confirmed", (P, site) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">Your meeting room is booked. Here are the details:</p>
     ${bookingFactsBlock(f)}
     <p style="color:#666;font-size:13px;">If someone else needs the room they can ask you for it from the calendar. You will get an email, and nothing changes unless you agree.</p>
-    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+    ${bookingButton(P, CALENDAR_LINK(site), "View the room calendar")}
   `);
 }
 
 /** One email listing what changed on a booking someone else edited. */
 export function sendBookingChangedEmail(to: string, name: string, editorName: string, changes: string[], f: RoomBookingEmailFacts): Promise<boolean> {
-  return sendBookingMail(to, `Booking changed: ${f.roomName}, ${f.dateLabel}`, "Booking changed", (P) => `
+  return sendBookingMail(to, `Booking changed: ${f.roomName}, ${f.dateLabel}`, "Booking changed", (P, site) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">${esc(editorName)} changed this booking:</p>
     <ul style="background:#f4f4f5;padding:16px 16px 16px 32px;border-radius:6px;margin:16px 0;color:#333;">
       ${changes.map((c) => `<li style="margin:4px 0;">${esc(c)}</li>`).join("")}
     </ul>
     ${bookingFactsBlock(f)}
-    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+    ${bookingButton(P, CALENDAR_LINK(site), "View the room calendar")}
   `);
 }
 
 /** `when` comes from the meeting's actual date: a reminder sent on the day says today. */
 export function sendBookingReminderEmail(to: string, name: string, f: RoomBookingEmailFacts, when: "today" | "tomorrow" = "tomorrow"): Promise<boolean> {
   const word = when === "today" ? "Today" : "Tomorrow";
-  return sendBookingMail(to, `${word}: ${f.roomName}, ${f.title}`, `Room booking ${when}`, (P) => `
+  return sendBookingMail(to, `${word}: ${f.roomName}, ${f.title}`, `Room booking ${when}`, (P, site) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">A reminder that you have a meeting room booked ${when}.</p>
     ${bookingFactsBlock(f)}
     <p style="color:#666;font-size:13px;">If you no longer need it, please cancel it so someone else can use the room.</p>
-    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+    ${bookingButton(P, CALENDAR_LINK(site), "View the room calendar")}
   `);
 }
 
@@ -1396,12 +1433,12 @@ export function sendBookingHandedOverEmail(
   changedByName: string,
   f: RoomBookingEmailFacts
 ): Promise<boolean> {
-  return sendBookingMail(to, `${f.roomName} is now booked for you, ${f.dateLabel}`, "Booking changed hands", (P) => `
+  return sendBookingMail(to, `${f.roomName} is now booked for you, ${f.dateLabel}`, "Booking changed hands", (P, site) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">${esc(changedByName)} has changed who this meeting room is for. It was for <strong>${esc(previousHolderName)}</strong>. It is now for you.</p>
     ${bookingFactsBlock(f)}
     <p style="color:#666;font-size:13px;">You will get the reminder before the meeting, and any request for the room comes to you. If this is not right, speak to whoever made the change, or cancel it from the calendar.</p>
-    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+    ${bookingButton(P, CALENDAR_LINK(site), "View the room calendar")}
   `);
 }
 
@@ -1418,12 +1455,12 @@ export function sendBookingTakenOverEmail(
   const standing = stillHolderAsBooker
     ? `You booked this room, so you are still on it: you will get the reminder before the meeting, and any request for the room still comes to you as well as to ${esc(newHolderName)}. It is simply no longer held in your name.`
     : `The booking still stands, as shown above. It is just no longer in your name: you will not get the reminder for it, and requests for the room will go to ${esc(newHolderName)} instead. If you still need the room, you can ask for it back from the calendar.`;
-  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} is no longer booked for you`, "Booking changed hands", (P) => `
+  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} is no longer booked for you`, "Booking changed hands", (P, site) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">${esc(changedByName)} has changed who this meeting room is for. It was for you. It is now for <strong>${esc(newHolderName)}</strong>.</p>
     ${bookingFactsBlock(f)}
     <p style="color:#666;font-size:13px;">${standing}</p>
-    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+    ${bookingButton(P, CALENDAR_LINK(site), "View the room calendar")}
   `);
 }
 
@@ -1439,8 +1476,9 @@ export function sendRoomRequestEmail(
   token: string,
   f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
 ): Promise<boolean> {
-  const link = `${SITE_URL}/bookings/request/${encodeURIComponent(token)}`;
-  return sendBookingMail(to, `${requesterName} is asking for ${f.roomName}, ${f.dateLabel}`, "Can they have the room?", (P) => `
+  return sendBookingMail(to, `${requesterName} is asking for ${f.roomName}, ${f.dateLabel}`, "Can they have the room?", (P, site) => {
+    const link = `${site}/bookings/request/${encodeURIComponent(token)}`;
+    return `
     <p style="color:#333;">Dear ${esc(holderName)},</p>
     <p style="color:#333;">${esc(requesterName)} is asking for the room you have booked. Nothing changes unless you say yes.</p>
     ${boxOpen("#f4f4f5", "16px", "16px 0")}
@@ -1454,7 +1492,8 @@ export function sendRoomRequestEmail(
     ${bookingButton(P, `${link}?action=approve`, "Let them have it")}
     <p style="margin:16px 0 0;"><a href="${link}?action=decline" style="color:${P};">Or decline, and say why</a></p>
     <p style="color:#666;font-size:13px;">You will need to be signed in to the portal to answer.</p>
-  `,
+  `;
+  },
     // The reason was typed for the holder alone: not kept in the sent box.
     { kind: "booking.request", personal: true }
   );
@@ -1486,14 +1525,14 @@ export function sendBookingsCancelledEmail(
     why === "room_retired"
       ? `Cancelled: ${roomName} is no longer available`
       : `Cancelled by ${managerName}: ${lines.length === 1 ? "your booking" : `${lines.length} bookings`} in ${roomName}`;
-  return sendBookingMail(to, subject, why === "room_retired" ? "Room no longer available" : "Booking cancelled", (P) => `
+  return sendBookingMail(to, subject, why === "room_retired" ? "Room no longer available" : "Booking cancelled", (P, site) => `
     <p style="color:#333;">Dear ${esc(name)},</p>
     <p style="color:#333;">${intro}</p>
     <ul style="background:#f4f4f5;padding:16px 16px 16px 32px;border-radius:6px;margin:16px 0;color:#333;">
       ${shown.map((l) => `<li style="margin:4px 0;">${esc(l)}</li>`).join("")}
       ${more > 0 ? `<li style="margin:4px 0;list-style:none;">and ${more} more</li>` : ""}
     </ul>
-    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+    ${bookingButton(P, CALENDAR_LINK(site), "Find another slot")}
   `);
 }
 
@@ -1504,10 +1543,10 @@ export function sendRoomRequestWithdrawnEmail(
   why: string,
   f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
 ): Promise<boolean> {
-  return sendBookingMail(to, `Your request for ${f.roomName}, ${f.dateLabel}, has lapsed`, "Request no longer needed", (P) => `
+  return sendBookingMail(to, `Your request for ${f.roomName}, ${f.dateLabel}, has lapsed`, "Request no longer needed", (P, site) => `
     <p style="color:#333;">Dear ${esc(requesterName)},</p>
     <p style="color:#333;">Your request for ${esc(f.roomName)} on ${esc(f.dateLabel)} at ${esc(f.timeLabel)} can no longer be answered: ${esc(why)}.</p>
-    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+    ${bookingButton(P, CALENDAR_LINK(site), "Find another slot")}
   `);
 }
 
@@ -1519,11 +1558,11 @@ export function sendBookingGivenAwayEmail(
   requesterName: string,
   f: RoomBookingEmailFacts
 ): Promise<boolean> {
-  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} was given to ${requesterName}`, "Booking handed over", (P) => `
+  return sendBookingMail(to, `${f.roomName} on ${f.dateLabel} was given to ${requesterName}`, "Booking handed over", (P, site) => `
     <p style="color:#333;">Dear ${esc(holderName)},</p>
     <p style="color:#333;">${esc(requesterName)} asked for the room you had booked, and ${esc(managerName)} agreed to hand it over. The slot is now theirs.</p>
     ${bookingFactsBlock(f)}
-    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+    ${bookingButton(P, CALENDAR_LINK(site), "Find another slot")}
   `);
 }
 
@@ -1533,7 +1572,7 @@ export function sendRoomRequestApprovedEmail(
   holderName: string,
   f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel" | "title">
 ): Promise<boolean> {
-  return sendBookingMail(to, `You have ${f.roomName}, ${f.dateLabel}`, "Request approved", (P) => `
+  return sendBookingMail(to, `You have ${f.roomName}, ${f.dateLabel}`, "Request approved", (P, site) => `
     <p style="color:#333;">Dear ${esc(requesterName)},</p>
     <p style="color:#333;">${esc(holderName)} has given you the room. It is booked in your name, so there is nothing further to do.</p>
     ${boxOpen("#f4f4f5", "16px", "16px 0")}
@@ -1541,7 +1580,7 @@ export function sendRoomRequestApprovedEmail(
       ${bookingRow("Meeting", f.title)}
       ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
     ${BOX_CLOSE}
-    ${bookingButton(P, CALENDAR_LINK(), "View the room calendar")}
+    ${bookingButton(P, CALENDAR_LINK(site), "View the room calendar")}
   `);
 }
 
@@ -1552,12 +1591,12 @@ export function sendRoomRequestDeclinedEmail(
   reason: string,
   f: Pick<RoomBookingEmailFacts, "roomName" | "dateLabel" | "timeLabel">
 ): Promise<boolean> {
-  return sendBookingMail(to, `${holderName} declined your request for ${f.roomName}, ${f.dateLabel}`, "Request declined", (P) => `
+  return sendBookingMail(to, `${holderName} declined your request for ${f.roomName}, ${f.dateLabel}`, "Request declined", (P, site) => `
     <p style="color:#333;">Dear ${esc(requesterName)},</p>
     <p style="color:#333;">${esc(holderName)} declined your request for ${esc(f.roomName)} on ${esc(f.dateLabel)} at ${esc(f.timeLabel)}. The booking stays as it is.</p>
     <p style="color:#333;">Their reason:</p>
     <blockquote style="margin:0 0 16px;padding:8px 12px;border-left:4px solid ${P};background:#fafafa;color:#333;">${esc(reason)}</blockquote>
-    ${bookingButton(P, CALENDAR_LINK(), "Find another slot")}
+    ${bookingButton(P, CALENDAR_LINK(site), "Find another slot")}
   `,
     // The holder's reason was typed for the requester alone: not kept.
     { kind: "booking.declined", personal: true }

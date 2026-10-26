@@ -37,7 +37,7 @@ export interface TenantScope {
 
 /** The hostname this request arrived on. x-forwarded-host wins because behind
  *  Vercel's proxy `host` can be the internal one. */
-async function requestHostname(): Promise<string> {
+export async function requestHostname(): Promise<string> {
   const h = await headers();
   return normaliseHostname(h.get("x-forwarded-host") || h.get("host"));
 }

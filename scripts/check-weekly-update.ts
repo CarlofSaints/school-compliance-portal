@@ -200,5 +200,22 @@ for (const b of [hvps, jeppe]) {
   }
 }
 
+// A school on the shared deployment: every link must go to ITS address, not the
+// deployment's one (Carl's demo reset link landed on the wrong host, 26 Oct).
+{
+  const site = "https://demo.schoolcompliance.co.za";
+  const { html } = buildWeeklyUpdateEmail({ ...hvps, siteUrl: site } as never, "someone@example.com", "Test Person", {
+    teamName: "Demo",
+    weekOf: "2026-09-21",
+    facts,
+    notActivated: true,
+    seesSpend: true,
+  });
+  // every absolute link and image (the crest too) on the school's host
+  const urls = [...html.matchAll(/(?:href|src)="(https?:\/\/[^"/]+)/g)].map((m) => m[1]);
+  check("shared school: links present", urls.length > 0, true);
+  check("shared school: every link and image on the school's own host", urls.every((h) => h === site), true);
+}
+
 console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
 process.exit(failures ? 1 : 0);
