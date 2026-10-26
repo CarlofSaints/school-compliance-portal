@@ -18,7 +18,7 @@ export const nso: GuideText = {
 <p class="lede">Mang le mang yo a šomišago phothale o na le go tsena ga gagwe. Ga go na lentšu la sephiri leo le abelanwago.</p>
 <ol class="steps">
   <li>Eya atereseng ya phothale ya sekolo sa gago gomme o tsene ka aterese ya gago ya imeile.</li>
-  <li>Ke la mathomo o le mo, goba o le lebetše? Šomiša <span class="ui">O lebetše lentšu la sephiri</span> letlakaleng la go tsena. Kgokagano e tla ka imeile gomme e šoma nako ya go ka ba iri.</li>
+  <li>Ke la mathomo o le mo, goba o le lebetše? Šomiša <span class="ui">O lebetše lentšu la gago la sephiri?</span> letlakaleng la go tsena. Kgokagano e tla ka imeile gomme e šoma nako ya go ka ba iri.</li>
   <li>Kgokagano e šoma gatee fela. Ge o beile lentšu la sephiri e tlogela go šoma, ka fao kgopela ye mpsha go e na le go šomiša imeile ya kgale gape.</li>
 </ol>
 <div class="note">
@@ -311,7 +311,7 @@ export const nso: GuideText = {
   <thead><tr><th>Imeile</th><th>E ya go</th><th>Neng</th></tr></thead>
   <tbody>
     <tr><td>O amogelwa</td><td>Mošomiši yo moswa</td><td>Akhaonto ya gagwe e hlolwa</td></tr>
-    <tr><td>Bea lentšu la gago la sephiri</td><td>Mošomiši</td><td>O šomiša O lebetše lentšu la sephiri, goba molaodi o romela kgokagano</td></tr>
+    <tr><td>Bea lentšu la gago la sephiri</td><td>Mošomiši</td><td>O šomiša O lebetše lentšu la gago la sephiri?, goba molaodi o romela kgokagano</td></tr>
     <tr><td>Tumelelo e a nyakega</td><td>Modumelledi yo mongwe le yo mongwe yo a nyakegago</td><td>Kgopelo ya tšhelete e romelwa</td></tr>
     <tr><td>Sephetho se ngwadilwe</td><td>Mokgopedi</td><td>Modumelledi yo mongwe le yo mongwe o tšea sephetho</td></tr>
     <tr><td>Metsotso ya go hlahlobja</td><td>Mang le mang yo a lego lenaneong la dikakanyo</td><td>Kakanyo e romelwa gore e hlahlobjwe</td></tr>

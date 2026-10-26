@@ -39,8 +39,9 @@ function esc(s: string): string {
  */
 export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en"): string {
   const school = branding.fullName;
-  // From the school's own type, not the deployment's: the shared deployment
-  // hosts public and private schools side by side.
+  // shortcut: schoolType comes from the deployment's code branding, so a
+  // private school on the SHARED deployment still reads "SGB" until a school
+  // can store its own type.
   const body = branding.schoolType === "private" ? "Board" : "SGB";
   const primary = branding.colors.primary;
   const dark = branding.colors.dark;
@@ -124,7 +125,7 @@ export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en
     <p class="standfirst">${esc(text.standfirst)}</p>
     <div class="stamp">
       <span><b>${esc(text.edition)}</b> ${esc(text.standard)}</span>
-      <span>${esc(text.covers(list.length))}</span>
+      <span><b>${esc(text.covers(list.length))}</b></span>
     </div>
   </div>
 </header>

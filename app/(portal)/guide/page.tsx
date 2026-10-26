@@ -51,13 +51,13 @@ export default function GuidePage() {
       setDocUrl(null);
       return;
     }
-    const doc = `<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`;
+    const doc = `<!doctype html><html lang="${locale}" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}</body></html>`;
     const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
     setDocUrl(url);
     // Revoked when the guide is replaced or the page is left, or every publish
     // would leak a couple of megabytes for the life of the tab.
     return () => URL.revokeObjectURL(url);
-  }, [html]);
+  }, [html, locale]);
 
   const load = useCallback(async () => {
     setState("loading");
@@ -79,12 +79,11 @@ export default function GuidePage() {
     setMeta(data.meta);
     setStandard(!!data.standard);
     setState("ready");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locale]);
+  }, []);
 
   useEffect(() => {
     if (session) load();
-  }, [session, load]);
+  }, [session, load, locale]);
 
   const publish = async (file: File | undefined) => {
     if (!file) return;
