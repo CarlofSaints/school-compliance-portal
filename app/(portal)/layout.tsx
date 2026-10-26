@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
+import GuideVideo from "@/components/GuideVideo";
 
 // Pages built around a wide grid use the whole screen instead of the reading
 // width every other page is capped at, so the grid is not forced to scroll
@@ -24,6 +25,7 @@ export default function PortalLayout({
           {children}
         </div>
       </main>
+      <GuideVideo />
     </div>
   );
 }
