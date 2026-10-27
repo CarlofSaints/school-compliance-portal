@@ -1762,5 +1762,9 @@
   "Watch how": "Buka ukuthi kanjani",
   "How this page works": "Ukuthi leli khasi lisebenza kanjani",
   "How to mark an action as done": "Indlela yokumaka isenzo njengesiqediwe",
+  "The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.": "Idokhumenti ithunyelwa ku-AI ka-Anthropic e-United States ukuze ifundwe. Khipha kuqala amagama abafundi nanoma yimiphi imininingwane yezempilo noma yomuntu siqu.",
+  "The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.": "Idokhumenti, kanye nanoma yimaphi amagama akuyo, ithunyelwa ku-AI ka-Anthropic e-United States ukuze ihunyushwe.",
+  "Privacy": "Ubumfihlo",
+  "Terms": "Imigomo",
   "Credits are only for documents your school adds, like policies and minutes. Everything already in the portal changes language for free when you pick one.": "Amakhredithi awamadokhumenti esikole sakho esiwengezayo kuphela, njengezinqubomgomo nemizuzu yemihlangano. Konke okuvele kusephothalini kushintsha ulimi mahhala uma ukhetha olunye."
 }

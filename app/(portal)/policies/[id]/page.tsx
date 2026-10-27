@@ -231,6 +231,7 @@ export default function PolicyDetailPage() {
             <button
               onClick={runCheck}
               disabled={checking}
+              title={t("The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.")}
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {checking ? t("Checking...") : t("Run Compliance Check")}

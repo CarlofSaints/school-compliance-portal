@@ -1762,5 +1762,9 @@
   "Watch how": "Kyk hoe",
   "How this page works": "Hoe hierdie bladsy werk",
   "How to mark an action as done": "Hoe om 'n aksie as klaar te merk",
+  "The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.": "Die dokument word na Anthropic se KI in die Verenigde State gestuur om gelees te word. Haal eers leerders se name en enige gesondheids- of persoonlike besonderhede uit.",
+  "The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.": "Die dokument, met enige name daarin, word na Anthropic se KI in die Verenigde State gestuur om vertaal te word.",
+  "Privacy": "Privaatheid",
+  "Terms": "Bepalings",
   "Credits are only for documents your school adds, like policies and minutes. Everything already in the portal changes language for free when you pick one.": "Krediete is net vir dokumente wat jou skool byvoeg, soos beleide en notules. Alles wat reeds in die portaal is, verander gratis van taal wanneer jy een kies."
 }
