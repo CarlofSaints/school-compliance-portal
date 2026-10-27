@@ -1760,5 +1760,6 @@
   "This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.": "Hierdie kwotasie ({quote}) is bo die goedkeuringsband waarin hierdie versoek goedgekeur is. Dit het 'n nuwe goedkeuring in die hoër band nodig.",
   "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Hierdie aansoek het geen goedgekeurde of beraamde bedrag nie, so 'n kwotasie kan nie teen sy goedkeuringsband nagegaan word nie. Wysig eers die aansoek om die bedrag by te voeg.",
   "Watch how": "Kyk hoe",
-  "How this page works": "Hoe hierdie bladsy werk"
+  "How this page works": "Hoe hierdie bladsy werk",
+  "How to mark an action as done": "Hoe om 'n aksie as klaar te merk"
 }

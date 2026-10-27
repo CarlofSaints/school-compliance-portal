@@ -5,11 +5,12 @@
 //   npx tsx scripts/check-guide-videos.ts
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { VIDEOS } from "../components/GuideVideo";
+import { VIDEOS, EXTRA_VIDEOS } from "../components/GuideVideo";
 
 let fail = 0;
 const root = join(__dirname, "..");
-for (const [path, id] of Object.entries(VIDEOS)) {
+const all: [string, string][] = [...Object.entries(VIDEOS), ...Object.entries(EXTRA_VIDEOS).map(([p, e]) => [p, e.id] as [string, string])];
+for (const [path, id] of all) {
   const page = join(root, "app", "(portal)", ...path.split("/").filter(Boolean), "page.tsx");
   const clip = join(root, "public", "tutorials", `${id}.mp4`);
   for (const [what, file] of [["page", page], ["clip", clip]] as const) {
@@ -19,5 +20,5 @@ for (const [path, id] of Object.entries(VIDEOS)) {
     }
   }
 }
-console.log(fail ? `\n${fail} FAILED` : `\nAll ${Object.keys(VIDEOS).length} pages have a page and a clip`);
+console.log(fail ? `\n${fail} FAILED` : `\nAll ${all.length} page clips have a page and a clip`);
 process.exit(fail ? 1 : 0);

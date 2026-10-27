@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { useT } from "@/components/I18nProvider";
+import { tk } from "@/lib/i18n/translate";
 
 // A 20-30 second "how this page works" clip, bottom right, like Resend's DNS
 // video. Plays MUTED on the first visit to each page (the captions carry it;
@@ -47,6 +48,12 @@ export const VIDEOS: Record<string, string> = {
   "/admin/backup": "backup",
 };
 
+// A second clip on a page, bottom LEFT of the content, button only (two clips
+// playing at once is noise). The label says what it shows.
+export const EXTRA_VIDEOS: Record<string, { id: string; label: string }> = {
+  "/action-items": { id: "action-done", label: tk("How to mark an action as done") },
+};
+
 const seenKey = (id: string) => `guide-video-seen:${id}`;
 
 function markSeen(id: string) {
@@ -77,14 +84,23 @@ export default function GuideVideo() {
   return id ? <PageVideo key={pathname} id={id} /> : null;
 }
 
-function PageVideo({ id }: { id: string }) {
+// Rendered INSIDE the page content: a fixed box with no `left` keeps its static
+// left edge, so it sits beside the sidebar whatever width the sidebar is.
+export function ExtraVideo() {
+  const pathname = usePathname();
+  const extra = EXTRA_VIDEOS[pathname];
+  return extra ? <PageVideo key={pathname} id={extra.id} label={extra.label} left /> : null;
+}
+
+function PageVideo({ id, label = "Watch how", left = false }: { id: string; label?: string; left?: boolean }) {
   const t = useT();
+  const corner = left ? "bottom-4" : "bottom-4 right-4";
   // The server renders it closed (it has no storage); the browser decides.
   // Decided ONCE per page visit: onPlay marks it seen, so re-reading on a later
   // render (a language switch) would swap the playing clip for the button.
   const [decide] = useState(() => {
     let v: boolean | undefined;
-    return () => (v ??= shouldAutoOpen(id));
+    return () => (v ??= !left && shouldAutoOpen(id));
   });
   const auto = useSyncExternalStore(subscribe, decide, () => false);
   const [choice, setChoice] = useState<boolean | null>(null);
@@ -106,9 +122,9 @@ function PageVideo({ id }: { id: string }) {
       <button
         type="button"
         onClick={() => setChoice(true)}
-        className="fixed bottom-4 right-4 z-40 rounded-full bg-dark px-4 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90"
+        className={`fixed ${corner} z-40 rounded-full bg-dark px-4 py-2 text-sm font-semibold text-white shadow-lg hover:opacity-90`}
       >
-        ▶ {t("Watch how")}
+        ▶ {t(label)}
       </button>
     );
   }
@@ -117,7 +133,7 @@ function PageVideo({ id }: { id: string }) {
     <div
       role="complementary"
       aria-label={t("How this page works")}
-      className="fixed bottom-4 right-4 z-40 w-[min(400px,calc(100vw-2rem))] overflow-hidden rounded-xl bg-black shadow-2xl"
+      className={`fixed ${corner} z-40 w-[min(400px,calc(100vw-2rem))] overflow-hidden rounded-xl bg-black shadow-2xl`}
     >
       <video
         src={`/tutorials/${id}.mp4`}
