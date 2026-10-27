@@ -28,6 +28,8 @@ export interface Tenant {
    *  none of this and still work, just looking generic. */
   branding?: Partial<SchoolBranding>;
   status: "active" | "suspended";
+  /** When it was last suspended: the 90-day deletion clock (lib/schoolRetention.ts). */
+  suspendedAt?: string;
   createdAt: string;
 }
 

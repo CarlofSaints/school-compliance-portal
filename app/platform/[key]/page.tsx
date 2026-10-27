@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PlatformSignedOut from "@/components/PlatformSignedOut";
 import PlatformTranslationAddon from "@/components/PlatformTranslationAddon";
+import PlatformSchoolStatus from "@/components/PlatformSchoolStatus";
+import { deletionDueOn } from "@/lib/schoolRetention";
 import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
 import { getTenantByKey } from "@/lib/tenantRegistry";
@@ -76,6 +78,12 @@ export default async function PlatformSchoolPage({
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
+        <PlatformSchoolStatus
+          schoolKey={key}
+          status={tenant.status}
+          suspendedAt={tenant.suspendedAt}
+          dueOn={deletionDueOn(tenant)?.toISOString()}
+        />
         <PlatformTranslationAddon schoolKey={key} />
         <div className="mb-4 flex gap-2 text-xs">
           <Link

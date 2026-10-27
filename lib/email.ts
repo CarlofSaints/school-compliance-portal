@@ -708,6 +708,36 @@ export async function sendCreditOrderConfirmationEmail(
   return sendEmail(b.fromEmail, to, `Your translation credits request (${rand(order.amountRand)})`, emailShell(b, "Translation credits requested", body), b.replyTo, undefined, undefined, { kind: "credits.order_confirmation" });
 }
 
+/** To School Compliance: suspended 90 days, the Terms say delete (lib/schoolRetention.ts). */
+export async function sendSchoolsDueForDeletionEmail(
+  schools: { key: string; name: string; suspendedAt?: string }[],
+  origin: string
+): Promise<boolean> {
+  const b = await mailBranding();
+  const rows = schools
+    .map(
+      (s) =>
+        `<li style="color:#333;margin-bottom:6px;"><a href="${esc(`${origin}/platform/${s.key}`)}">${esc(s.name)}</a> (${esc(s.key)}), suspended ${esc((s.suspendedAt || "").slice(0, 10))}</li>`
+    )
+    .join("");
+  const body = `
+    <p style="color:#333;">These schools have been suspended for 90 days. Our Terms and refund policy promise to delete their data now.</p>
+    <ul>${rows}</ul>
+    <p style="color:#333;">Open each one, check nobody asked for a copy or is coming back, then delete it there. If they are coming back, reactivate them instead.</p>
+    <p style="color:#666;font-size:13px;">Nothing has been deleted. You get this again each week until each school is deleted or reactivated.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    creditOrdersTo(),
+    `${schools.length} school${schools.length === 1 ? "" : "s"} due for deletion`,
+    emailShell(b, "Schools due for deletion", body),
+    b.replyTo,
+    undefined,
+    undefined,
+    { kind: "platform.deletion_due" }
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Bug reports and feature requests (lib/feedback.ts).
 // ---------------------------------------------------------------------------

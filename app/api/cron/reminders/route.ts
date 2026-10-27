@@ -11,7 +11,7 @@ import { resolveRecipients } from "@/lib/reminderRecipients";
 import { getActionItems, claimActionChase, updateActionItem, todayIso } from "@/lib/actionItemData";
 import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
 import { loadActionRecipientContext } from "@/lib/actionItemRecipients";
-import { sendSpendReminderEmail, isEmailConfigured } from "@/lib/email";
+import { sendSpendReminderEmail, isEmailConfigured, sendSchoolsDueForDeletionEmail } from "@/lib/email";
 import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
 import {
   getWeeklyUpdateSettings,
@@ -24,6 +24,7 @@ import {
 } from "@/lib/actionSummaryData";
 import { runRequestLapses, runRoomBookingReminders, runSettleMoves } from "@/lib/roomBookingNotify";
 import { isMultiTenant, listTenants } from "@/lib/tenantRegistry";
+import { remindToday } from "@/lib/schoolRetention";
 import { runAsTenant } from "@/lib/tenantContext";
 
 export const maxDuration = 300;
@@ -91,6 +92,13 @@ export async function GET(req: NextRequest) {
         recordRun({ at: new Date().toISOString(), due: 0, sent: 0, skipped: 0, failed: 1, detail: [`The morning run failed: ${why}`] })
       ).catch((e) => console.error(`[cron/reminders] ${tenant.key}: could not log the failure:`, e));
     }
+  }
+  // Schools suspended 90 days ago: the Terms promise deletion, a person does it.
+  const dueForDeletion = (await listTenants().catch(() => [])).filter((t) => remindToday(t));
+  if (dueForDeletion.length) {
+    await sendSchoolsDueForDeletionEmail(dueForDeletion, req.nextUrl.origin).catch((e) =>
+      console.error("[cron/reminders] deletion reminder failed:", e)
+    );
   }
   // Every school failing is an outage, so Vercel shows the cron red.
   const allFailed = active.length > 0 && failedSchools === active.length;
