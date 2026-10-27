@@ -1278,6 +1278,13 @@ export function buildWeeklyUpdateEmail(
       </div>`
     : "";
 
+  // Carl, 27 Oct: name them, so the chair knows whom to chase.
+  const notSignedInBlock = accounts.notActivatedNames.length
+    ? `${heading("Never signed in")}
+      <p style="color:#333;font-size:14px;margin:0;">${accounts.notActivatedNames.map(esc).join(", ")}</p>
+      <p style="color:#777;font-size:13px;margin:6px 0 0;">They can set a password from the sign-in page with "Forgot password".</p>`
+    : "";
+
   const body = `
     ${e.preview ? `<p style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;font-size:13px;margin:0 0 16px;">Preview. Only you received this copy.</p>` : ""}
     <p style="color:#333;margin:0;">Here's your weekly SGB update for the week of ${esc(formatZaDate(e.weekOf))}.</p>
@@ -1285,6 +1292,7 @@ export function buildWeeklyUpdateEmail(
     ${overdueBlock}
     ${minutesBlock}
     ${spendBlock}
+    ${notSignedInBlock}
     ${activateBlock}
     <div style="text-align:center;margin:28px 0 8px;">
       ${button(`${siteOf(b)}`, `Open the ${esc(b.shortName)} portal`, PRIMARY, "center")}

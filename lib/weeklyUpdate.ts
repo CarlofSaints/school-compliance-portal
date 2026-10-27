@@ -191,6 +191,8 @@ export interface WeeklyFacts {
   accounts: {
     total: number;
     notActivated: number;
+    /** Their names, A to Z, listed at the foot of the email. */
+    notActivatedNames: string[];
   };
   minutes: WeeklyMinutesLine[];
   spend: WeeklySpend;
@@ -229,6 +231,8 @@ export function buildWeeklySpend(apps: SpendApplication[]): WeeklySpend {
 
 export interface AccountLike {
   forcePasswordChange: boolean;
+  name?: string;
+  surname?: string;
 }
 
 export function buildWeeklyFacts(
@@ -280,6 +284,10 @@ export function buildWeeklyFacts(
       // temporary password they were issued has never finished signing in,
       // which is the thing this card is asking about.
       notActivated: users.filter((u) => u.forcePasswordChange).length,
+      notActivatedNames: users
+        .filter((u) => u.forcePasswordChange)
+        .map((u) => `${u.name ?? ""} ${u.surname ?? ""}`.trim() || "(no name)")
+        .sort((a, b) => a.localeCompare(b)),
     },
     minutes: unsigned,
     spend: buildWeeklySpend(spend),
