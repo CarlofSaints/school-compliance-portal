@@ -7,7 +7,7 @@ import { tk } from "./i18n/translate";
 export type MeetingBody = "sgb" | "fincom" | "other";
 
 export const MEETING_BODY_LABELS: Record<MeetingBody, string> = {
-  sgb: tk("SGB"),
+  sgb: tk("SGB / Board"),
   fincom: tk("FINCOM"),
   other: tk("Other"),
 };
@@ -461,16 +461,16 @@ export const AUDIENCE_LABELS: Record<MinutesAudience, string> = {
   draft: "Draft, out for checking",
   signing: "Ready to sign",
   signed: "Signed and final",
-  sgb: "All SGB minutes",
+  sgb: "All SGB / Board minutes",
   fincom: "All FINCOM minutes",
 };
 
 export const AUDIENCE_HELP: Record<MinutesAudience, string> = {
   draft:
-    "Who checks a draft. Usually the Principal and the SGB Chair, with the deputy copied in.",
+    "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.",
   signing: "Who is asked to sign once the draft has been approved.",
   signed: "Who is told when a set of minutes has been fully signed.",
-  sgb: "Everyone who should receive signed SGB minutes.",
+  sgb: "Everyone who should receive signed SGB / Board minutes.",
   fincom: "Everyone who should receive signed FINCOM minutes.",
 };
 
@@ -532,7 +532,7 @@ export interface MinutesDistributionNote {
 export type SignatoryRole = "sgb_chair" | "principal" | "deputy_chair" | "other";
 
 export const SIGNATORY_ROLE_LABELS: Record<SignatoryRole, string> = {
-  sgb_chair: tk("SGB Chair"),
+  sgb_chair: tk("Chairperson"),
   principal: "Principal",
   deputy_chair: tk("Deputy Chair"),
   other: tk("Other"),

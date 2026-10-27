@@ -97,7 +97,7 @@ export default function MinutesPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark">{t("Meeting minutes")}</h1>
           <p className="text-gray-500 mt-1">
-            {t("Every set of SGB and FINCOM minutes in one place. Upload what you already have, or write them here.")}
+            {t("Every set of SGB / Board and FINCOM minutes in one place. Upload what you already have, or write them here.")}
           </p>
         </div>
         {canManage && (
@@ -330,7 +330,7 @@ function AddMinutes({
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder={t("e.g. SGB meeting, 7 May 2026")}
+            placeholder={t("e.g. SGB / Board meeting, 7 May 2026")}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
           />
         </div>

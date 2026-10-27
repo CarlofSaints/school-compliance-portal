@@ -19,7 +19,7 @@ const AUDIENCES = [
   {
     key: "draft",
     label: tk("Draft, out for checking"),
-    help: tk("Who checks a draft. Usually the Principal and the SGB Chair, with the deputy copied in."),
+    help: tk("Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in."),
   },
   {
     key: "signing",
@@ -31,7 +31,7 @@ const AUDIENCES = [
     label: tk("Signed and final"),
     help: tk("Who is told when a set of minutes has been fully signed."),
   },
-  { key: "sgb", label: tk("All SGB minutes"), help: tk("Everyone who should receive signed SGB minutes.") },
+  { key: "sgb", label: tk("All SGB / Board minutes"), help: tk("Everyone who should receive signed SGB / Board minutes.") },
   {
     key: "fincom",
     label: tk("All FINCOM minutes"),

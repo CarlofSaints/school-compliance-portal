@@ -39,7 +39,7 @@ export const MINUTES_MANAGE_PERMISSIONS = ["manage_minutes", "manage_users"];
 export const ACCESS_BODIES: MeetingBody[] = ["sgb", "fincom", "other"];
 
 export const ACCESS_BODY_LABELS: Record<MeetingBody, string> = {
-  sgb: "SGB minutes",
+  sgb: "SGB / Board minutes",
   fincom: "FINCOM minutes",
   other: "Other minutes",
 };

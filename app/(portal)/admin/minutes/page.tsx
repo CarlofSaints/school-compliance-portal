@@ -268,13 +268,13 @@ export default function MinutesAdminPage() {
             // template it can edit instead of wondering where sections came from.
             <div className="mt-4 rounded-xl border border-gray-200 bg-white p-5">
               <p className="text-sm font-medium text-dark">
-                {t("Start from a typical SGB agenda?")}
+                {t("Start from a typical SGB / Board agenda?")}
               </p>
               <p className="text-sm text-gray-500 mt-1 mb-4">
                 {t("Creates a template with {count} sections, including attendance and previous minutes sign off already filled in. Change anything you like before saving.", { count: STARTER_TEMPLATE.length })}
               </p>
               <button
-                onClick={() => setEditing({ ...blank(STARTER_TEMPLATE), name: "SGB meeting" })}
+                onClick={() => setEditing({ ...blank(STARTER_TEMPLATE), name: "SGB / Board meeting" })}
                 className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 {t("Use it as a starting point")}
