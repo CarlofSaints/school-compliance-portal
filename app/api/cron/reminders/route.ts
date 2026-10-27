@@ -1,3 +1,4 @@
+import { pruneSentEmails, SENT_KEEP_MONTHS } from "@/lib/sentEmails";
 import { NextRequest, NextResponse } from "next/server";
 import { getSpendById, STATUS_DISPLAY } from "@/lib/spendData";
 import {
@@ -310,6 +311,15 @@ async function runForSchool() {
   } catch (err) {
     failed++;
     detail.push(`Room request lapses failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // The sent box keeps two years of mail, as the privacy policy says.
+  try {
+    const pruned = await pruneSentEmails(now);
+    if (pruned) detail.push(`Sent box: removed ${pruned} files older than ${SENT_KEEP_MONTHS} months`);
+  } catch (err) {
+    failed++;
+    detail.push(`Sent box clean-up failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const run = {
