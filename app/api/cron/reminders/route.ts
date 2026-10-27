@@ -256,7 +256,7 @@ async function runForSchool() {
     detail.push(`Action ${label}: ${outcome.result}`);
   }
 
-  // --- Weekly SGB update ------------------------------------------------------
+  // --- Weekly governance update ------------------------------------------------------
   //
   // Rides this cron too (05:00 UTC = 07:00 in South Africa). Due is derived
   // from the chosen weekday and the last send, like the action chases, so a
@@ -268,7 +268,7 @@ async function runForSchool() {
     const result = await sendWeeklyUpdate({ now, scheduled: true });
     sent += result.sent;
     failed += result.failed;
-    detail.push(`Weekly SGB update: ${result.summary}`);
+    detail.push(`Weekly governance update: ${result.summary}`);
   }
 
   // --- Action items summary --------------------------------------------------

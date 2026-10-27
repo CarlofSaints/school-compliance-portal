@@ -1125,7 +1125,7 @@ export async function sendActionReminderEmail(
   , b.replyTo, undefined, undefined, { kind: "action.reminder", ...(facts.minutesId ? { minutesId: facts.minutesId } : { personal: true }) });
 }
 
-// --- Weekly SGB update --------------------------------------------------------
+// --- Weekly governance update --------------------------------------------------------
 //
 // Built from tables, not flex or grid: Outlook draws email with Word's layout
 // engine, and anything else collapses the three cards into one column of
@@ -1287,7 +1287,7 @@ export function buildWeeklyUpdateEmail(
 
   const body = `
     ${e.preview ? `<p style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:6px;font-size:13px;margin:0 0 16px;">Preview. Only you received this copy.</p>` : ""}
-    <p style="color:#333;margin:0;">Here's your weekly SGB update for the week of ${esc(formatZaDate(e.weekOf))}.</p>
+    <p style="color:#333;margin:0;">Here's your weekly governance update for the week of ${esc(formatZaDate(e.weekOf))}.</p>
     ${cards}
     ${overdueBlock}
     ${minutesBlock}
@@ -1306,7 +1306,7 @@ export function buildWeeklyUpdateEmail(
     ...(minutes.length ? [`${minutes.length} set${minutes.length === 1 ? "" : "s"} of minutes to sign`] : []),
     ...(e.seesSpend && spend.awaiting ? [`${spend.awaiting} project${spend.awaiting === 1 ? "" : "s"} awaiting approval`] : []),
   ];
-  const subject = `${e.preview ? "[Preview] " : ""}${b.shortName} weekly SGB update: ${subjectBits.join(", ")}`;
+  const subject = `${e.preview ? "[Preview] " : ""}${b.shortName} weekly governance update: ${subjectBits.join(", ")}`;
 
   return { subject, html: emailShell(b, `Good day, ${esc(e.teamName)} team.`, body) };
 }

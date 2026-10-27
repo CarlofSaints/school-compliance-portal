@@ -2,7 +2,7 @@
 // The action items summary: a scheduled email carrying the whole open register
 // as a colour-coded Excel workbook.
 //
-// The weekly SGB update says "12 open, 3 overdue". This is the one somebody
+// The weekly governance update says "12 open, 3 overdue". This is the one somebody
 // can work from: every open action with its owner, ETA, progress and latest
 // note, to filter, print or take into a meeting.
 //

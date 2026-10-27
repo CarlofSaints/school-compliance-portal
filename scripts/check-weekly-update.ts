@@ -1,4 +1,4 @@
-// Checks the weekly SGB update: when it is due, the greeting, the numbers,
+// Checks the weekly governance update: when it is due, the greeting, the numbers,
 // and renders the email for each school so it can be looked at. No server,
 // no blob, no email sent.
 //

@@ -459,7 +459,6 @@
   "Send welcome email with credentials": "Thumela i-imeyile yokwamkela eneenkcukacha zokungena",
   "Could not load the weekly update.": "Ayikwazanga ukulayisha uhlaziyo lweveki.",
   "Weekly update {summary}": "Uhlaziyo lweveki {summary}",
-  "Weekly SGB Update": "Uhlaziyo lweVeki lwe-SGB",
   "One email a week to every portal user, with open action items, spend awaiting approval, who has not signed in yet, and minutes still waiting for signatures. Sent in the school's own colours and crest.": "I-imeyile enye ngeveki kumsebenzisi ngamnye wepotali, enemisebenzi evulekileyo, inkcitho elinde ukuvunywa, abangekangeni, nemizuzu esalinde imisayino. Ithunyelwa ngemibala nophawu lwesikolo.",
   "Schedule": "Ishedyuli",
   "Send the weekly update automatically": "Thumela uhlaziyo lweveki ngokuzenzekelayo",
@@ -1787,5 +1786,6 @@
   "What would you like it to do, and what would it save you?": "Ungathanda yenze ntoni, kwaye ingakusindisa ntoni?",
   "What did you do, what did you expect, and what happened instead?": "Wenze ntoni, ubulindele ntoni, kwaye kwenzeke ntoni endaweni yoko?",
   "Please leave out learners' names and other personal details.": "Nceda ungafaki amagama abafundi nezinye iinkcukacha zobuqu.",
-  "Submit": "Ngenisa"
+  "Submit": "Ngenisa",
+  "Weekly Governance Update": "Uhlaziyo lweVeki loLawulo"
 }

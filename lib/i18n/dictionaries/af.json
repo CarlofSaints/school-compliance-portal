@@ -459,7 +459,6 @@
   "Send welcome email with credentials": "Stuur welkom-e-pos met aanmeldbesonderhede",
   "Could not load the weekly update.": "Kon nie die weeklikse bywerking laai nie.",
   "Weekly update {summary}": "Weeklikse bywerking {summary}",
-  "Weekly SGB Update": "Weeklikse SBL-bywerking",
   "One email a week to every portal user, with open action items, spend awaiting approval, who has not signed in yet, and minutes still waiting for signatures. Sent in the school's own colours and crest.": "Een e-pos per week aan elke portaalgebruiker, met oop aksiepunte, besteding wat op goedkeuring wag, wie nog nie aangemeld het nie, en notules wat nog op handtekeninge wag. Gestuur in die skool se eie kleure en wapen.",
   "Schedule": "Skedule",
   "Send the weekly update automatically": "Stuur die weeklikse bywerking outomaties",
@@ -1787,5 +1786,6 @@
   "What would you like it to do, and what would it save you?": "Wat wil jy hê moet dit doen, en wat sou dit jou spaar?",
   "What did you do, what did you expect, and what happened instead?": "Wat het jy gedoen, wat het jy verwag, en wat het eerder gebeur?",
   "Please leave out learners' names and other personal details.": "Laat asseblief leerders se name en ander persoonlike besonderhede uit.",
-  "Submit": "Dien in"
+  "Submit": "Dien in",
+  "Weekly Governance Update": "Weeklikse bestuursbywerking"
 }

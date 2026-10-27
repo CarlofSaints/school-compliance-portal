@@ -128,7 +128,7 @@ export default function WeeklyUpdatePage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t("Weekly SGB Update")}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("Weekly Governance Update")}</h1>
         <p className="text-gray-500 mt-1">
           {t("One email a week to every portal user, with open action items, spend awaiting approval, who has not signed in yet, and minutes still waiting for signatures. Sent in the school's own colours and crest.")}
         </p>
