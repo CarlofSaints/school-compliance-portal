@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     const branding = await resolveBranding();
     return NextResponse.json(
       {
-        html: buildDefaultGuide(branding, await getLocale()),
+        html: buildDefaultGuide(branding, await getLocale(), req.nextUrl.origin),
         // A null meta is what tells the page this is the standard guide and
         // not something the school published, so it can say so and offer to
         // replace it. Inventing an author and a date here would present our

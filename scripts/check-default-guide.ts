@@ -7,6 +7,8 @@
 // If this document ever gains an <img>, one school's records are being served
 // to every other school on the platform.
 
+import { existsSync } from "fs";
+import { join } from "path";
 import { buildDefaultGuide } from "../lib/defaultGuide";
 import type { SchoolBranding } from "../lib/branding";
 
@@ -115,6 +117,19 @@ console.log("\n🔴 Every language gets the WHOLE guide, in that language");
   }
   checkThat("covers room bookings", english.includes("Booking a meeting room"));
   checkThat("a private school reads Board, not SGB", buildDefaultGuide({ ...branding, schoolType: "private" } as SchoolBranding).includes("the Board register"));
+}
+
+console.log("\nVideo links in the guide");
+{
+  const g = buildDefaultGuide(branding, "af", "https://demo.example");
+  const ids = [...g.matchAll(/href="https:\/\/demo\.example\/tutorials\/([a-z-]+)\.mp4"/g)].map((m) => m[1]);
+  checkThat("links every clip but the Guide's own", ids.length === 30);
+  check("each link has its clip", ids.filter((id) => !existsSync(join(__dirname, "..", "public", "tutorials", `${id}.mp4`))), []);
+  checkThat("labels are translated", g.includes("Kyk hoe"));
+  checkThat(
+    "signing sits under Signing the minutes",
+    /Signing the minutes[\s\S]{0,400}tutorials\/signing\.mp4/.test(buildDefaultGuide(branding, "en"))
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
