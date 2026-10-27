@@ -1,4 +1,4 @@
-import { writeFile, readFile, listFilesStrict, readJson } from "./controlData";
+import { writeFile, readFile, listFilesStrict, readJson, deleteFileStrict } from "./controlData";
 import { activityMonths } from "./activityLog";
 import { esc } from "./escapeHtml";
 
@@ -141,6 +141,30 @@ async function writeSentEmail(
 export async function sentEmailMonths(): Promise<string[]> {
   // Strict: an outage must not read as "no mail in any month".
   return activityMonths(["sent-emails"], true);
+}
+
+/** How long the sent box keeps mail, as the privacy policy says (POPIA s14). */
+export const SENT_KEEP_MONTHS = 24;
+
+/** The oldest month still kept, as YYYY-MM. */
+export function sentKeepFrom(now: Date): string {
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (SENT_KEEP_MONTHS - 1), 1));
+  return d.toISOString().slice(0, 7);
+}
+
+/** Deletes whole months older than SENT_KEEP_MONTHS, summaries and bodies. Run by the morning cron. */
+export async function pruneSentEmails(now = new Date()): Promise<number> {
+  const keepFrom = sentKeepFrom(now);
+  let removed = 0;
+  for (const month of (await sentEmailMonths()).filter((m) => m < keepFrom)) {
+    for (const dir of [`sent-emails/${month}`, `sent-email-bodies/${month}`]) {
+      for (const name of await listFilesStrict(dir)) {
+        await deleteFileStrict(`${dir}/${name}`);
+        removed++;
+      }
+    }
+  }
+  return removed;
 }
 
 export const SENT_PAGE_SIZE = 200;
