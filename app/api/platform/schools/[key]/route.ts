@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { list, del } from "@vercel/blob";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
-import { getTenantByKey, deleteTenant } from "@/lib/tenantRegistry";
+import { getTenantByKey, deleteTenant, updateTenant } from "@/lib/tenantRegistry";
+import { runAsTenant } from "@/lib/tenantContext";
+import { recordActivity } from "@/lib/activityLog";
 import { deleteBlobStore } from "@/lib/vercelApi";
 import { open } from "@/lib/secretBox";
 
@@ -14,11 +16,46 @@ import { open } from "@/lib/secretBox";
 // name, costing a Blob store against the account ceiling, and cluttering the
 // only page that is supposed to tell Carl what is really out there.
 //
-// ⚠️ NOT for a school that has left. A real school's data is the school's, and
-// SASA requires them to keep governance records; a departing school is
-// SUSPENDED through its status, which stops access without destroying
-// anything. This is for schools that should never have existed.
+// ⚠️ A school that leaves is SUSPENDED first (PATCH below), which stops access
+// without destroying anything. Only once it has been suspended 90 days, as the
+// Terms promise, is it deleted here (lib/schoolRetention.ts). SASA puts the
+// duty to keep governance records on the school: offer it the export first.
 // ---------------------------------------------------------------------------
+
+/** { status: "active" | "suspended" } — suspend a school that left, or bring it back. */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ key: string }> }
+) {
+  const admin = await requirePlatformAdmin();
+  if (admin instanceof NextResponse) return admin;
+  const { key } = await params;
+  const body = await req.json().catch(() => ({}));
+  const status = body?.status;
+  if (status !== "active" && status !== "suspended") {
+    return NextResponse.json({ error: 'Send status "active" or "suspended".' }, { status: 400 });
+  }
+  const tenant = await getTenantByKey(key);
+  if (!tenant) return NextResponse.json({ error: "No school with that address" }, { status: 404 });
+  if (tenant.status === status) return NextResponse.json(tenant);
+
+  const updated = {
+    ...tenant,
+    status,
+    suspendedAt: status === "suspended" ? new Date().toISOString() : undefined,
+  } as const;
+  await updateTenant(updated);
+  await runAsTenant(key, () =>
+    recordActivity({
+      actorName: `${admin.email} (School Compliance support)`,
+      actorEmail: admin.email,
+      action: status === "suspended" ? "school.suspended" : "school.reactivated",
+      entity: "system",
+      summary: status === "suspended" ? "School Compliance suspended this school's access" : "School Compliance reactivated this school",
+    })
+  ).catch((e) => console.error(`[platform] ${key}: could not log the status change`, e));
+  return NextResponse.json(updated);
+}
 
 export async function DELETE(
   req: NextRequest,
