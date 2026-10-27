@@ -708,6 +708,43 @@ export async function sendCreditOrderConfirmationEmail(
   return sendEmail(b.fromEmail, to, `Your translation credits request (${rand(order.amountRand)})`, emailShell(b, "Translation credits requested", body), b.replyTo, undefined, undefined, { kind: "credits.order_confirmation" });
 }
 
+// ---------------------------------------------------------------------------
+// Bug reports and feature requests (lib/feedback.ts).
+// ---------------------------------------------------------------------------
+
+/** To School Compliance: the whole report. Reply goes straight to the person. */
+export async function sendFeedbackEmail(fb: import("@/lib/feedback").Feedback, pageUrl: string): Promise<boolean> {
+  const { KIND_LABELS } = await import("@/lib/feedback");
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;"><strong>${esc(KIND_LABELS[fb.kind])}</strong> ${fb.ticket} from <strong>${esc(b.fullName)}</strong>.</p>
+    <p style="color:#333;">From ${esc(fb.from.name)} &lt;${esc(fb.from.email)}&gt;${pageUrl ? `, on <a href="${esc(pageUrl)}">${esc(fb.page)}</a>` : ""}.</p>
+    <p style="color:#333;font-size:16px;"><strong>${esc(fb.summary)}</strong></p>
+    <p style="color:#333;white-space:pre-wrap;">${esc(fb.detail)}</p>
+    <p style="color:#666;font-size:13px;">Reply to this email to answer ${esc(fb.from.name)} directly.</p>
+  `;
+  return sendEmail(
+    b.fromEmail,
+    creditOrdersTo(),
+    `${KIND_LABELS[fb.kind]} ${fb.ticket}: ${b.shortName}: ${fb.summary}`,
+    emailShell(b, KIND_LABELS[fb.kind], body),
+    fb.from.email
+  , undefined, undefined, { kind: `feedback.${fb.kind}` });
+}
+
+/** To the person who sent it: the ticket number to quote. */
+export async function sendFeedbackConfirmationEmail(fb: import("@/lib/feedback").Feedback): Promise<boolean> {
+  const b = await mailBranding();
+  const what = fb.kind === "bug" ? "bug report" : "feature request";
+  const body = `
+    <p style="color:#333;">Dear ${esc(fb.from.name)},</p>
+    <p style="color:#333;">Thank you. We have your ${what}, ticket number <strong>${fb.ticket}</strong>:</p>
+    <p style="color:#333;"><strong>${esc(fb.summary)}</strong></p>
+    <p style="color:#333;">We read every one. If we need more detail we will reply to this address. Quote ${fb.ticket} if you write to us about it.</p>
+  `;
+  return sendEmail(b.fromEmail, fb.from.email, `Your ${what}: ticket ${fb.ticket}`, emailShell(b, `Ticket ${fb.ticket}`, body), b.replyTo, undefined, undefined, { kind: "feedback.confirmation" });
+}
+
 /** To the person who asked, once the credits are on. */
 export async function sendCreditsAddedEmail(
   to: string,

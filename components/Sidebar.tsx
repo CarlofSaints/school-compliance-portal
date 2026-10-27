@@ -374,6 +374,15 @@ export default function Sidebar() {
               </button>
             </div>
           </div>
+          <button
+            onClick={() => router.push(`/feedback?from=${encodeURIComponent(pathname)}`)}
+            className="mt-3 flex w-full items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:text-white hover:border-gray-500"
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+            {t("Report a bug or request a feature")}
+          </button>
           <div className="mt-3 flex gap-3 text-xs text-gray-500">
             <a href="https://schoolcompliance.co.za/privacy" target="_blank" rel="noopener" className="hover:text-white">{t("Privacy")}</a>
             <a href="https://schoolcompliance.co.za/terms" target="_blank" rel="noopener" className="hover:text-white">{t("Terms")}</a>
