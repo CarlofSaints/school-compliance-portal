@@ -1046,6 +1046,7 @@ export async function sendActionReminderEmail(
     ${actionFactsBlock(facts, PRIMARY)}
     <p style="color:#666;font-size:13px;">You are receiving this as: ${esc(role)}</p>
     ${button(`${siteOf(b)}/action-items`, `Update the progress`, overdue ? "#dc2626" : PRIMARY)}
+    <p style="color:#666;font-size:13px;">Done already? Mark it done and these reminders stop. <a href="${siteOf(b)}/tutorials/action-done.mp4" style="color:${PRIMARY};">Watch how (23 seconds)</a></p>
   `;
   const subject = overdue
     ? `Overdue: ${facts.ref} ${facts.title}`
