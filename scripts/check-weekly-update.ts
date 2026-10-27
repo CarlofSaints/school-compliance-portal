@@ -101,10 +101,10 @@ const actions = [
   act("A-014", { status: "cancelled" }),
 ];
 const users = [
-  { forcePasswordChange: false },
-  { forcePasswordChange: true },
-  { forcePasswordChange: true },
-  { forcePasswordChange: false },
+  { forcePasswordChange: false, name: "Ann", surname: "Active" },
+  { forcePasswordChange: true, name: "Zola", surname: "Mokoena" },
+  { forcePasswordChange: true, name: "Ben", surname: "Dlamini" },
+  { forcePasswordChange: false, name: "Cara", surname: "Active" },
 ];
 const minutes = [
   {
@@ -151,7 +151,7 @@ check("overdue", facts.actions.overdue, 2);
 check("due this week", facts.actions.dueThisWeek, 1);
 check("overdue list most late first", facts.actions.overdueList.map((a) => a.ref), ["A-004", "A-008"]);
 check("days late", facts.actions.overdueList[0].daysLate, 21);
-check("not activated", facts.accounts, { total: 4, notActivated: 2 });
+check("not activated", facts.accounts, { total: 4, notActivated: 2, notActivatedNames: ["Ben Dlamini", "Zola Mokoena"] });
 check("only awaiting-signature minutes", facts.minutes.map((m) => m.title), ["SGB Meeting"]);
 check("waiting on", facts.minutes[0].waitingOn, ["Chair Smith"]);
 
