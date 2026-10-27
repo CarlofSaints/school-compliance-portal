@@ -173,7 +173,8 @@ function AccountContent() {
       // Re-read session to clear forcePasswordChange state
       const s = getSession();
       if (s) setSession(s);
-      if (next) router.push(next);
+      // A forced change is a gate: once through, go on (Mark, 27 Oct: left on the form, a missed toast reads as nothing happened).
+      if (forceChange) router.push(next ?? "/dashboard");
     } else {
       const data = await res.json();
       setToast({ message: data.error || t("Failed"), type: "error" });
