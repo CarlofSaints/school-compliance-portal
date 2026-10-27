@@ -341,6 +341,7 @@ export default function Sidebar() {
       {/* User footer */}
       <div className="border-t border-gray-700 p-4">
         {!collapsed ? (
+          <>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-sm font-bold">
               {session.name?.[0]}
@@ -373,6 +374,11 @@ export default function Sidebar() {
               </button>
             </div>
           </div>
+          <div className="mt-3 flex gap-3 text-xs text-gray-500">
+            <a href="https://schoolcompliance.co.za/privacy" target="_blank" rel="noopener" className="hover:text-white">{t("Privacy")}</a>
+            <a href="https://schoolcompliance.co.za/terms" target="_blank" rel="noopener" className="hover:text-white">{t("Terms")}</a>
+          </div>
+          </>
         ) : (
           <button
             onClick={handleLogout}

@@ -1761,5 +1761,9 @@
   "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Hierdie aansoek het geen goedgekeurde of beraamde bedrag nie, so 'n kwotasie kan nie teen sy goedkeuringsband nagegaan word nie. Wysig eers die aansoek om die bedrag by te voeg.",
   "Watch how": "Kyk hoe",
   "How this page works": "Hoe hierdie bladsy werk",
-  "How to mark an action as done": "Hoe om 'n aksie as klaar te merk"
+  "How to mark an action as done": "Hoe om 'n aksie as klaar te merk",
+  "The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.": "Die dokument word na Anthropic se KI in die Verenigde State gestuur om gelees te word. Haal eers leerders se name en enige gesondheids- of persoonlike besonderhede uit.",
+  "The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.": "Die dokument, met enige name daarin, word na Anthropic se KI in die Verenigde State gestuur om vertaal te word.",
+  "Privacy": "Privaatheid",
+  "Terms": "Bepalings"
 }
