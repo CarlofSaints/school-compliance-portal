@@ -1760,5 +1760,6 @@
   "This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.": "Tlhwatlhwa e ({quote}) e feta setlhopha sa tetla se kopo e e letleletsweng mo go sone. E tlhoka tetla e ntšha mo setlhopheng se se kwa godimo.",
   "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Kopo e ga e na madi a a letleletsweng kgotsa a a fopholetsweng, ka jalo tlhwatlhwa e ka se tlhatlhobiwe kgatlhanong le setlhopha sa yone sa tetla. Fetola kopo o tsenye madi pele.",
   "Watch how": "Bona gore jang",
-  "How this page works": "Ka fa tsebe eno e dirang ka teng"
+  "How this page works": "Ka fa tsebe eno e dirang ka teng",
+  "How to mark an action as done": "Ka fa o ka tshwayang tiro jaaka e e weditsweng"
 }
