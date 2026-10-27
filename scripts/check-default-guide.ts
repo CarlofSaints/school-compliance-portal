@@ -127,7 +127,7 @@ console.log("\nVideo links in the guide");
 {
   const g = build(branding, "af");
   const ids = [...g.matchAll(/href="https:\/\/demo\.example\/tutorials\/([a-z-]+)\.mp4"/g)].map((m) => m[1]);
-  checkThat("links every clip but the Guide's own", ids.length === 30);
+  checkThat("links every clip but the Guide's own", ids.length === 31);
   check("each link has its clip", ids.filter((id) => !existsSync(join(__dirname, "..", "public", "tutorials", `${id}.mp4`))), []);
   checkThat("labels are translated", g.includes("Kyk hoe"));
   // the links are placed by position, so the English titles must line up
