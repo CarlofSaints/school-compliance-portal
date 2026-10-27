@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// The weekly SGB update: one email to every user of the portal, with the
+// The weekly governance update: one email to every user of the portal, with the
 // headline numbers a governor would otherwise have to log in to find.
 //
 // Pure. No storage, no email. The settings file, the facts and the "is it due

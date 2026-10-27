@@ -82,8 +82,8 @@ export async function PUT(req: NextRequest) {
       action: next.enabled ? "weekly_update.enabled" : "weekly_update.disabled",
       entity: "system",
       summary: next.enabled
-        ? "Switched the weekly SGB update email on"
-        : "Switched the weekly SGB update email off",
+        ? "Switched the weekly governance update email on"
+        : "Switched the weekly governance update email off",
       detail: { weekday: next.weekday },
     });
   }
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       ...actorFrom(req, session),
       action: "weekly_update.sent",
       entity: "system",
-      summary: `Sent the weekly SGB update by hand: ${result.summary}`,
+      summary: `Sent the weekly governance update by hand: ${result.summary}`,
     });
     return NextResponse.json(result, noStore);
   }

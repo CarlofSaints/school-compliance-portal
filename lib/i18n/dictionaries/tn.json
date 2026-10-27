@@ -459,7 +459,6 @@
   "Send welcome email with credentials": "Romela imeile ya kamogelo e e nang le dintlha tsa go tsena",
   "Could not load the weekly update.": "Ga go a kgonega go bula tlhabololo ya beke le beke.",
   "Weekly update {summary}": "Tlhabololo ya beke le beke {summary}",
-  "Weekly SGB Update": "Tlhabololo ya SGB ya Beke le Beke",
   "One email a week to every portal user, with open action items, spend awaiting approval, who has not signed in yet, and minutes still waiting for signatures. Sent in the school's own colours and crest.": "Imeile e le nngwe ka beke kwa modirising mongwe le mongwe wa portale, e e nang le dintlha tsa tiro tse di butsweng, tiriso ya madi e e emetseng tumelelo, ba ba iseng ba tsene, le metsotso e e santseng e emetse mesaeno. E romelwa ka mebala le letshwao la sekolo ka bosone.",
   "Schedule": "Thulaganyo ya nako",
   "Send the weekly update automatically": "Romela tlhabololo ya beke le beke ka tsosi",
@@ -1787,5 +1786,6 @@
   "What would you like it to do, and what would it save you?": "O ka rata gore e dire eng, mme e ka go bolokela eng?",
   "What did you do, what did you expect, and what happened instead?": "O dirile eng, o ne o solofetse eng, mme go diragetse eng boemong jwa moo?",
   "Please leave out learners' names and other personal details.": "Tsweetswee o se tsenye maina a baithuti le dintlha tse dingwe tsa sebele.",
-  "Submit": "Romela"
+  "Submit": "Romela",
+  "Weekly Governance Update": "Tlhabololo ya Taolo ya Beke le Beke"
 }

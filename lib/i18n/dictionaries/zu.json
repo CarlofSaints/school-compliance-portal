@@ -459,7 +459,6 @@
   "Send welcome email with credentials": "Thumela i-imeyili yokwamukela enemininingwane yokungena",
   "Could not load the weekly update.": "Akukwazanga ukulayisha isibuyekezo samasonto onke.",
   "Weekly update {summary}": "Isibuyekezo samasonto onke {summary}",
-  "Weekly SGB Update": "Isibuyekezo Samasonto Onke se-SGB",
   "One email a week to every portal user, with open action items, spend awaiting approval, who has not signed in yet, and minutes still waiting for signatures. Sent in the school's own colours and crest.": "I-imeyili eyodwa ngesonto kuwo wonke umsebenzisi wephothali, enezinto zokwenziwa ezivulekile, ukusetshenziswa kwemali okulindele ukugunyazwa, abangakangeni ngemvume, kanye namaminithi asalinde amasignesha. Ithunyelwa ngemibala nophawu lwesikole uqobo.",
   "Schedule": "Uhlelo lwesikhathi",
   "Send the weekly update automatically": "Thumela isibuyekezo samasonto onke ngokuzenzakalelayo",
@@ -1787,5 +1786,6 @@
   "What would you like it to do, and what would it save you?": "Ungathanda yenzeni, futhi ingakusindisa kuphi?",
   "What did you do, what did you expect, and what happened instead?": "Wenzeni, ubulindeleni, futhi kwenzekeni esikhundleni salokho?",
   "Please leave out learners' names and other personal details.": "Sicela ungafaki amagama abafundi neminye imininingwane yomuntu siqu.",
-  "Submit": "Thumela"
+  "Submit": "Thumela",
+  "Weekly Governance Update": "Isibuyekezo Samasonto Onke Sokuphatha"
 }
