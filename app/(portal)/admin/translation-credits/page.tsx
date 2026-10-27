@@ -91,6 +91,7 @@ export default function TranslationCreditsPage() {
         <div>
           <h2 className="text-base font-semibold text-gray-800 mb-2">{t("How credits work")}</h2>
           <ul className="list-disc list-inside space-y-1">
+            <li>{t("Credits are only for documents your school adds, like policies and minutes. Everything already in the portal changes language for free when you pick one.")}</li>
             <li>{t("R100 for 10 credits. Credits never expire.")}</li>
             <li>{t("1 credit translates up to 10 pages of one document into one language.")}</li>
             <li>{t("Once a document is translated, anyone at your school can read it in that language for free.")}</li>
