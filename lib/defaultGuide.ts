@@ -49,7 +49,7 @@ export const CHAPTER_VIDEOS: [chapter: string, clips: [id: string, label: string
   ["Writing the minutes", [["minutes", "Meeting Minutes"], ["minutes-admin", "Minutes Admin"]]],
   ["Sending a draft out for checking", []],
   ["Signing the minutes", [["signing", "Read and sign"]]],
-  ["Action items", [["action-items", "Action Items"], ["action-categories", "Action Categories"]]],
+  ["Action items", [["action-items", "Action Items"], ["action-done", "Update progress"], ["action-categories", "Action Categories"]]],
   ["Booking a meeting room", [["bookings", "Bookings"], ["rooms", "Meeting Rooms"]]],
   ["Keeping everyone informed", [["weekly-update", "Weekly Update"], ["action-summary", "Action Summary Email"]]],
   ["People, users and tags", [["users", "Users"], ["roles", "Roles"], ["tags", "Tags"]]],
