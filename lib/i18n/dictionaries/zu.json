@@ -1761,5 +1761,9 @@
   "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Lesi sicelo asinamali egunyaziwe noma elinganisiwe, ngakho isilinganiso sentengo asikwazi ukuhlolwa ngokuqhathaniswa nebhendi yaso yokugunyazwa. Hlela isicelo ufake inani kuqala.",
   "Watch how": "Buka ukuthi kanjani",
   "How this page works": "Ukuthi leli khasi lisebenza kanjani",
-  "How to mark an action as done": "Indlela yokumaka isenzo njengesiqediwe"
+  "How to mark an action as done": "Indlela yokumaka isenzo njengesiqediwe",
+  "The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.": "Idokhumenti ithunyelwa ku-AI ka-Anthropic e-United States ukuze ifundwe. Khipha kuqala amagama abafundi nanoma yimiphi imininingwane yezempilo noma yomuntu siqu.",
+  "The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.": "Idokhumenti, kanye nanoma yimaphi amagama akuyo, ithunyelwa ku-AI ka-Anthropic e-United States ukuze ihunyushwe.",
+  "Privacy": "Ubumfihlo",
+  "Terms": "Imigomo"
 }

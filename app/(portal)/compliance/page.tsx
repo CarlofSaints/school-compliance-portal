@@ -428,6 +428,7 @@ export default function CompliancePage() {
           >
             {checking ? t("Analyzing...") : t("Run Compliance Check")}
           </button>
+          <p className="mt-2 text-xs text-gray-500">{t("The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.")}</p>
 
           {checking && (
             <div className="mt-4 text-center">

@@ -1761,5 +1761,9 @@
   "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Kgopelo ye ga e na tšhelete ye e dumeletšwego goba ye e akanywago, ka gona theko e ka se lekolwe go sehlopha sa yona sa tumelelo. Fetola kgopelo o tsenye tšhelete pele.",
   "Watch how": "Bona ka moo",
   "How this page works": "Ka moo letlakala le le šomago ka gona",
-  "How to mark an action as done": "Ka moo o ka swayago tiro bjalo ka ye e feditšwego"
+  "How to mark an action as done": "Ka moo o ka swayago tiro bjalo ka ye e feditšwego",
+  "The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.": "Tokomane e romelwa go AI ya Anthropic kua United States gore e balwe. Ntšha pele maina a baithuti le dintlha dife goba dife tša maphelo goba tša motho.",
+  "The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.": "Tokomane, gammogo le maina afe goba afe ao a lego go yona, e romelwa go AI ya Anthropic kua United States gore e fetolelwe.",
+  "Privacy": "Sephiri",
+  "Terms": "Mabaka"
 }

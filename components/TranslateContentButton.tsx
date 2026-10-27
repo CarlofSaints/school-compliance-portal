@@ -179,6 +179,7 @@ export default function TranslateContentButton({ kind, id }: { kind: "policy" | 
                   <p className="text-xs text-gray-500">
                     {t("Once translated, anyone at your school can read it in {language} for free.", { language })}
                   </p>
+                  <p className="text-xs text-gray-500">{t("The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.")}</p>
                 </div>
               )}
               {error && <p className="text-red-600">{error}</p>}

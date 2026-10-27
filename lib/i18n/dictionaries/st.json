@@ -1761,5 +1761,9 @@
   "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Kopo ena ha e na chelete e dumelletsweng kapa e hakantsweng, kahoo kotateshene e ke ke ya hlahlojwa kgahlanong le sehlopha sa yona sa tumello. Fetola kopo o kenye chelete pele.",
   "Watch how": "Shebella hore joang",
   "How this page works": "Kamoo leqephe lena le sebetsang kateng",
-  "How to mark an action as done": "Kamoo o ka tshwayang ketso e le e phethilweng"
+  "How to mark an action as done": "Kamoo o ka tshwayang ketso e le e phethilweng",
+  "The document is sent to Anthropic's AI in the United States to be read. Take out learners' names and any health or personal details first.": "Tokomane e romelwa ho AI ya Anthropic United States hore e balwe. Ntsha pele mabitso a baithuti le dintlha dife kapa dife tsa bophelo kapa tsa botho.",
+  "The document, with any names in it, is sent to Anthropic's AI in the United States to be translated.": "Tokomane, hammoho le mabitso afe kapa afe a ho yona, e romelwa ho AI ya Anthropic United States hore e fetolelwe.",
+  "Privacy": "Lekunutu",
+  "Terms": "Dipehelo"
 }
