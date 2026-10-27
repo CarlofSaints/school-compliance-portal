@@ -1,5 +1,6 @@
 import { put, del, list, get, BlobPreconditionFailedError } from "@vercel/blob";
 import { tenantScope } from "@/lib/tenantContext";
+import { isUnsafeBlobPath } from "@/lib/blobPath";
 
 // 🔴 EVERY blob call in this file is scoped PER REQUEST, and this is the only
 // module (besides the backup route) allowed to touch @vercel/blob directly.
@@ -19,21 +20,10 @@ async function scope() {
   return tenantScope();
 }
 
-// 🔴 The SDK turns a key into a URL, and a URL resolves "." and ".." segments
-// (also written %2e, also between backslashes, which it reads as slashes, and
-// after deleting any tab or newline inside them). Ids come straight from
-// request paths (policies/[id], checks/[id]), so one route that forgot to
-// validate its id could otherwise reach any other file in the school's store.
-// Checked here, once, for every caller: a read of such a path is a miss (the
-// route answers 404), a write throws. A plain backslash in a file name is fine.
+// Unsafe paths ("..", "%2e" and friends) are refused here, once, for every
+// caller: a read of such a path is a miss (the route answers 404), a write
+// throws. The check itself lives in lib/blobPath.ts so a script can test it.
 export class UnsafeBlobPathError extends Error {}
-function isUnsafeBlobPath(blobPath: string): boolean {
-  // Tab and newline are deleted by the URL parser, so a segment is judged
-  // without them; anywhere else they are just part of a file name.
-  return blobPath
-    .split(/[\\/]/)
-    .some((seg) => /^(\.|%2e){1,2}$/i.test(seg.replace(/[\t\n\r]/g, "")));
-}
 function blobKey(prefix: string, blobPath: string): string {
   if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
   return prefix + blobPath;

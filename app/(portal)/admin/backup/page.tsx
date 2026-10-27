@@ -12,11 +12,16 @@ export default function BackupPage() {
   const branding = useBranding();
   const { session, loading } = useAuth("manage_roles");
   const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
+  // The server only lists the files; each one is fetched here and the zip is
+  // built in the browser, because a function response cannot exceed ~4.5MB.
+  // shortcut: the whole zip is held in browser memory, fine to a few hundred
+  // MB; stream to disk (showSaveFilePicker) if a school ever outgrows that.
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -26,25 +31,83 @@ export default function BackupPage() {
         setToast({ message: body.error || t("Backup failed"), type: "error" });
         return;
       }
+      const manifest: {
+        prefix: string;
+        filename: string;
+        chunkBytes: number;
+        files: { pathname: string; size: number }[];
+      } = await res.json();
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const { default: JSZip } = await import("jszip");
+      const zip = new JSZip();
+      const skipped: string[] = [];
+
+      // One retry on a server error: one blip must not cost a file.
+      const fetchOnce = async (url: string) => {
+        let r = await authFetch(url);
+        if (r.status >= 500) r = await authFetch(url);
+        // Signed out: every later file would fail the same way.
+        if (r.status === 401) throw new Error("signed-out");
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      };
+
+      for (const [i, file] of manifest.files.entries()) {
+        setProgress({ done: i + 1, total: manifest.files.length });
+        const base = `/api/admin/backup/file?path=${encodeURIComponent(file.pathname)}`;
+        try {
+          let data: Blob;
+          if (file.size > manifest.chunkBytes) {
+            const parts: Blob[] = [];
+            for (let p = 0; p * manifest.chunkBytes < file.size; p++) {
+              parts.push(await fetchOnce(`${base}&part=${p}`));
+            }
+            data = new Blob(parts);
+            // Parts of a file that changed mid-download would not fit together.
+            if (data.size !== file.size) throw new Error(`got ${data.size} of ${file.size} bytes`);
+          } else {
+            data = await fetchOnce(base);
+          }
+          // Strip the prefix so zip paths are clean ("roles.json", not "hvps/roles.json").
+          zip.file(file.pathname.slice(manifest.prefix.length), data);
+        } catch (err) {
+          if (err instanceof Error && err.message === "signed-out") throw err;
+          skipped.push(`${file.pathname} (${err instanceof Error ? err.message : "failed"})`);
+        }
+      }
+
+      // A backup that quietly leaves files out is worse than none: list them.
+      if (skipped.length) {
+        zip.file(
+          "SKIPPED-FILES.txt",
+          `These ${skipped.length} file(s) could not be read and are NOT in this backup:\n\n${skipped.join("\n")}\n`
+        );
+      }
+
+      setProgress(null);
+      const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+      const url = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
-      // Extract filename from Content-Disposition or use default
-      const disposition = res.headers.get("Content-Disposition");
-      const match = disposition?.match(/filename="(.+)"/);
-      a.download = match?.[1] || `${branding.key}-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.download = manifest.filename || `${branding.key}-backup-${new Date().toISOString().slice(0, 10)}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setToast({ message: t("Backup downloaded successfully"), type: "success" });
+      setToast(
+        skipped.length
+          ? {
+              message: t("Backup downloaded, but {count} file(s) could not be read. They are listed in SKIPPED-FILES.txt inside the zip.", { count: skipped.length }),
+              type: "error",
+            }
+          : { message: t("Backup downloaded successfully"), type: "success" }
+      );
     } catch {
       setToast({ message: t("Failed to download backup"), type: "error" });
     } finally {
       setDownloading(false);
+      setProgress(null);
     }
   };
 
@@ -91,6 +154,9 @@ export default function BackupPage() {
         <p className="text-xs text-gray-400 mb-6">
           {t("The backup is a ZIP file containing all data stored in Vercel Blob storage. JSON files are included as text; images are included as binary files.")}
         </p>
+        <p className="text-xs text-gray-400 mb-6">
+          {t("A large school can take a few minutes. Keep this page open until the download starts.")}
+        </p>
 
         <button
           onClick={handleDownload}
@@ -122,7 +188,9 @@ export default function BackupPage() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                 />
               </svg>
-              {t("Preparing backup...")}
+              {progress
+                ? t("Downloading file {done} of {total}...", progress)
+                : t("Preparing backup...")}
             </span>
           ) : (
             t("Download Backup")
