@@ -17,6 +17,8 @@ export const VIDEOS: Record<string, string> = {
   "/people": "people",
   "/action-items": "action-items",
   "/minutes": "minutes",
+  "/minutes/[id]": "signing",
+  "/minutes/[id]/sign": "signing",
   "/guide": "guide",
   "/policies": "policies",
   "/compliance": "compliance",
@@ -68,7 +70,8 @@ function shouldAutoOpen(id: string): boolean {
 const subscribe = () => () => {};
 
 export default function GuideVideo() {
-  const id = VIDEOS[usePathname()];
+  // one set of minutes is a route pattern, so its id is swapped for the [id] the list uses
+  const id = VIDEOS[usePathname().replace(/^\/minutes\/[^/]+/, "/minutes/[id]")];
   // Keyed on the page, so what the viewer chose on one page never carries to the next.
   return id ? <PageVideo key={id} id={id} /> : null;
 }
