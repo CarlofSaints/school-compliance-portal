@@ -105,7 +105,7 @@ export const config = {
     // Clerk expects. The negative lookahead keeps the crest, the favicon and
     // the JS bundles off this path entirely - they need no session, and making
     // every asset wake the auth layer costs latency on every page.
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/((?!_next|tutorials/|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
     "/(api|trpc)(.*)",
   ],
 };

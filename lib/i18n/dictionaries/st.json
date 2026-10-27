@@ -1758,5 +1758,7 @@
   "No loaded emails match your search.": "Ha ho na di-imeile tse kentsweng tse tsamaisanang le patlo ya hao.",
   "This quote ({quote}) is above the approval limit of the band this request was approved in ({limit}). It needs a new approval at the higher band.": "Kotateshene ena ({quote}) e feta moedi wa tumello wa sehlopha seo kopo ena e dumelletsweng ho sona ({limit}). E hloka tumello e ntjha sehlopheng se phahameng.",
   "This quote ({quote}) is above the approval band this request was approved in. It needs a new approval at the higher band.": "Kotateshene ena ({quote}) e feta sehlopha sa tumello seo kopo ena e dumelletsweng ho sona. E hloka tumello e ntjha sehlopheng se phahameng.",
-  "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Kopo ena ha e na chelete e dumelletsweng kapa e hakantsweng, kahoo kotateshene e ke ke ya hlahlojwa kgahlanong le sehlopha sa yona sa tumello. Fetola kopo o kenye chelete pele."
+  "This application has no approved or estimated amount, so a quote cannot be checked against its approval band. Edit the application to add the amount first.": "Kopo ena ha e na chelete e dumelletsweng kapa e hakantsweng, kahoo kotateshene e ke ke ya hlahlojwa kgahlanong le sehlopha sa yona sa tumello. Fetola kopo o kenye chelete pele.",
+  "Watch how": "Shebella hore joang",
+  "How this page works": "Kamoo leqephe lena le sebetsang kateng"
 }

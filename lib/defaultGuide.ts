@@ -1,6 +1,8 @@
 import type { SchoolBranding } from "./branding";
 import type { Locale } from "./i18n/locales";
 import { GUIDE_TEXT } from "./guideText";
+import { dictFor } from "./i18n/server";
+import { makeT } from "./i18n/translate";
 
 // ---------------------------------------------------------------------------
 // The guide every school starts with.
@@ -30,6 +32,32 @@ function esc(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// The how-to clips (components/GuideVideo, public/tutorials) for each chapter,
+// IN CHAPTER ORDER, with the English title so scripts/check-default-guide.ts
+// catches a chapter added or moved: [clip id, the menu label it is named by].
+// The labels are the sidebar's, so every language already has them.
+export const CHAPTER_VIDEOS: [chapter: string, clips: [id: string, label: string][]][] = [
+  ["Getting in", []],
+  ["Finding your way around", [["dashboard", "Dashboard"]]],
+  ["Reading the portal in your language", [["translation-credits", "Translation Credits"]]],
+  ["Our People", [["people", "People"], ["people-positions", "People & Positions"], ["people-types", "People Types"]]],
+  ["Policies", [["policies", "Policies"], ["policy-categories", "Policy Categories"], ["documents", "Documents"]]],
+  ["Running a compliance check", [["compliance", "Run Check"], ["guidelines", "Guidelines"]]],
+  ["Applying for funds", [["spend", "Spend"]]],
+  ["Approving spend", [["approval-settings", "Approval Settings"], ["spend-settings", "Spend Settings"]]],
+  ["The budget and spend reports", [["spend-reports", "Reports"]]],
+  ["Writing the minutes", [["minutes", "Meeting Minutes"], ["minutes-admin", "Minutes Admin"]]],
+  ["Sending a draft out for checking", []],
+  ["Signing the minutes", [["signing", "Read and sign"]]],
+  ["Action items", [["action-items", "Action Items"], ["action-categories", "Action Categories"]]],
+  ["Booking a meeting room", [["bookings", "Bookings"], ["rooms", "Meeting Rooms"]]],
+  ["Keeping everyone informed", [["weekly-update", "Weekly Update"], ["action-summary", "Action Summary Email"]]],
+  ["People, users and tags", [["users", "Users"], ["roles", "Roles"], ["tags", "Tags"]]],
+  ["Making it look like your school", [["branding", "School Branding"]]],
+  ["Keeping a record", [["activity", "Activity Log"], ["sent-emails", "Sent Emails"], ["backup", "Backup Data"]]],
+  ["Emails the portal sends", []],
+];
+
 /**
  * The standard guide, built for one school.
  *
@@ -37,7 +65,7 @@ function esc(s: string): string {
  * renders: it is handed to a sandboxed iframe, so it has to bring its own
  * stylesheet rather than inherit the portal's.
  */
-export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en"): string {
+export function buildDefaultGuide(branding: SchoolBranding, locale: Locale, origin: string): string {
   const school = branding.fullName;
   // shortcut: schoolType comes from the deployment's code branding, so a
   // private school on the SHARED deployment still reads "SGB" until a school
@@ -48,6 +76,16 @@ export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en
   // Carl, 26 Oct: "nothing in the guide translates when i switch languages".
   const text = GUIDE_TEXT[locale] ?? GUIDE_TEXT.en;
   const list = text.chapters(esc(school), body);
+  const t = makeT(dictFor(locale));
+  // Absolute: the guide is shown from a blob: URL, where "/tutorials/..." resolves to nothing.
+  const watch = (i: number) => {
+    const clips = CHAPTER_VIDEOS[i]?.[1] ?? [];
+    if (!clips.length) return "";
+    const links = clips.map(
+      ([id, label]) => `<a href="${esc(origin)}/tutorials/${id}.mp4" target="_blank" rel="noopener">&#9654; ${esc(t(label))}</a>`
+    );
+    return `<p class="watch">${esc(t("Watch how"))}: ${links.join(" &middot; ")}</p>`;
+  };
 
   const contents = list
     .map(
@@ -66,6 +104,7 @@ export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en
     <span class="num">${esc(text.chapter)} ${String(i + 1).padStart(2, "0")}</span>
     <h2>${esc(c.title)}</h2>
   </div>
+  ${watch(i)}
   ${c.html}
 </section>`
     )
@@ -100,6 +139,7 @@ export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en
   .chead .num { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--primary); }
   .chead h2 { margin: 6px 0 16px; font-size: 26px; }
   .lede { font-size: 18px; color: #333; }
+  .watch { font-size: 14px; color: var(--soft); } .watch a { color: var(--primary); white-space: nowrap; }
   h3 { margin: 28px 0 8px; font-size: 17px; }
   .ui { background: #f2f2f2; border: 1px solid var(--rule); border-radius: 4px; padding: 1px 6px; font-size: 14px; white-space: nowrap; }
   .steps { padding-left: 20px; } .steps li { margin: 8px 0; }

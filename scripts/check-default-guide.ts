@@ -7,8 +7,14 @@
 // If this document ever gains an <img>, one school's records are being served
 // to every other school on the platform.
 
-import { buildDefaultGuide } from "../lib/defaultGuide";
+import { existsSync } from "fs";
+import { join } from "path";
+import { buildDefaultGuide, CHAPTER_VIDEOS } from "../lib/defaultGuide";
+import { GUIDE_TEXT } from "../lib/guideText";
+import type { Locale } from "../lib/i18n/locales";
 import type { SchoolBranding } from "../lib/branding";
+
+const build = (b: SchoolBranding, locale: Locale = "en") => buildDefaultGuide(b, locale, "https://demo.example");
 
 let pass = 0;
 let fail = 0;
@@ -28,7 +34,7 @@ const branding = {
   colors: { primary: "#0891b2", dark: "#0f172a" },
 } as unknown as SchoolBranding;
 
-const html = buildDefaultGuide(branding);
+const html = build(branding);
 
 console.log("\n🔴 It carries no school's data but the reader's own");
 {
@@ -90,7 +96,7 @@ console.log("\nCustomer-facing copy rules");
 
 console.log("\nA school name with markup in it cannot break the page");
 {
-  const nasty = buildDefaultGuide({
+  const nasty = build({
     fullName: 'St <script>alert(1)</script> "Bothians" & Co',
     colors: { primary: "#000000", dark: "#111111" },
   } as unknown as SchoolBranding);
@@ -103,9 +109,9 @@ console.log("\nA school name with markup in it cannot break the page");
 console.log("\n🔴 Every language gets the WHOLE guide, in that language");
 {
   const tags = (s: string) => (s.match(/<[a-z0-9]+[ >]/g) || []).sort().join();
-  const english = buildDefaultGuide(branding, "en");
+  const english = build(branding, "en");
   for (const code of ["af", "zu", "xh", "nso", "tn", "st"] as const) {
-    const g = buildDefaultGuide(branding, code);
+    const g = build(branding, code);
     checkThat(`${code}: marked as ${code}`, g.includes(`<html lang="${code}">`));
     checkThat(`${code}: not the English text`, !g.includes("Everyone who uses the portal has their own login"));
     check(`${code}: same chapters and markup as English`, tags(g), tags(english));
@@ -114,7 +120,25 @@ console.log("\n🔴 Every language gets the WHOLE guide, in that language");
     checkThat(`${code}: no image`, !/<img|data:image/.test(g));
   }
   checkThat("covers room bookings", english.includes("Booking a meeting room"));
-  checkThat("a private school reads Board, not SGB", buildDefaultGuide({ ...branding, schoolType: "private" } as SchoolBranding).includes("the Board register"));
+  checkThat("a private school reads Board, not SGB", build({ ...branding, schoolType: "private" } as SchoolBranding).includes("the Board register"));
+}
+
+console.log("\nVideo links in the guide");
+{
+  const g = build(branding, "af");
+  const ids = [...g.matchAll(/href="https:\/\/demo\.example\/tutorials\/([a-z-]+)\.mp4"/g)].map((m) => m[1]);
+  checkThat("links every clip but the Guide's own", ids.length === 30);
+  check("each link has its clip", ids.filter((id) => !existsSync(join(__dirname, "..", "public", "tutorials", `${id}.mp4`))), []);
+  checkThat("labels are translated", g.includes("Kyk hoe"));
+  // the links are placed by position, so the English titles must line up
+  check("clips line up with the chapters", GUIDE_TEXT.en.chapters("X", "SGB").map((c) => c.title), CHAPTER_VIDEOS.map(([title]) => title));
+  for (const [code, text] of Object.entries(GUIDE_TEXT)) {
+    check(`${code}: same number of chapters`, text.chapters("X", "SGB").length, CHAPTER_VIDEOS.length);
+  }
+  checkThat(
+    "signing sits under Signing the minutes",
+    /Signing the minutes[\s\S]{0,400}tutorials\/signing\.mp4/.test(build(branding, "en"))
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
