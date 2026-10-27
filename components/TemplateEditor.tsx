@@ -119,7 +119,7 @@ export default function TemplateEditor({
             <input
               value={template.name}
               onChange={(e) => onChange({ ...template, name: e.target.value })}
-              placeholder={t("e.g. SGB monthly meeting")}
+              placeholder={t("e.g. SGB / Board monthly meeting")}
               className={inputClass}
             />
           </div>

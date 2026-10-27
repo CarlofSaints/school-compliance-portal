@@ -619,7 +619,7 @@ export async function buildMinutesDocx(
   } else {
     // No signatories set yet, so give the two the DoE requires by default.
     body.push(
-      ...signatureBlock("________________________", "SGB Chair"),
+      ...signatureBlock("________________________", "Chairperson"),
       ...signatureBlock("________________________", "Principal")
     );
   }
