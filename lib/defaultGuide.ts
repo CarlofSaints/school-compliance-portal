@@ -33,28 +33,29 @@ function esc(s: string): string {
 }
 
 // The how-to clips (components/GuideVideo, public/tutorials) for each chapter,
-// IN CHAPTER ORDER: [clip id, the menu label it is named by]. The labels are
-// the sidebar's, so every language already has them.
-const CHAPTER_VIDEOS: [string, string][][] = [
-  [], // Getting in
-  [["dashboard", "Dashboard"]],
-  [["translation-credits", "Translation Credits"]],
-  [["people", "People"], ["people-positions", "People & Positions"], ["people-types", "People Types"]],
-  [["policies", "Policies"], ["policy-categories", "Policy Categories"], ["documents", "Documents"]],
-  [["compliance", "Run Check"], ["guidelines", "Guidelines"]],
-  [["spend", "Spend"]],
-  [["approval-settings", "Approval Settings"], ["spend-settings", "Spend Settings"]],
-  [["spend-reports", "Reports"]],
-  [["minutes", "Meeting Minutes"], ["minutes-admin", "Minutes Admin"]],
-  [], // Sending a draft out for checking
-  [["signing", "Read and sign"]],
-  [["action-items", "Action Items"], ["action-categories", "Action Categories"]],
-  [["bookings", "Bookings"], ["rooms", "Meeting Rooms"]],
-  [["weekly-update", "Weekly Update"], ["action-summary", "Action Summary Email"]],
-  [["users", "Users"], ["roles", "Roles"], ["tags", "Tags"]],
-  [["branding", "School Branding"]],
-  [["activity", "Activity Log"], ["sent-emails", "Sent Emails"], ["backup", "Backup Data"]],
-  [], // Emails the portal sends
+// IN CHAPTER ORDER, with the English title so scripts/check-default-guide.ts
+// catches a chapter added or moved: [clip id, the menu label it is named by].
+// The labels are the sidebar's, so every language already has them.
+export const CHAPTER_VIDEOS: [chapter: string, clips: [id: string, label: string][]][] = [
+  ["Getting in", []],
+  ["Finding your way around", [["dashboard", "Dashboard"]]],
+  ["Reading the portal in your language", [["translation-credits", "Translation Credits"]]],
+  ["Our People", [["people", "People"], ["people-positions", "People & Positions"], ["people-types", "People Types"]]],
+  ["Policies", [["policies", "Policies"], ["policy-categories", "Policy Categories"], ["documents", "Documents"]]],
+  ["Running a compliance check", [["compliance", "Run Check"], ["guidelines", "Guidelines"]]],
+  ["Applying for funds", [["spend", "Spend"]]],
+  ["Approving spend", [["approval-settings", "Approval Settings"], ["spend-settings", "Spend Settings"]]],
+  ["The budget and spend reports", [["spend-reports", "Reports"]]],
+  ["Writing the minutes", [["minutes", "Meeting Minutes"], ["minutes-admin", "Minutes Admin"]]],
+  ["Sending a draft out for checking", []],
+  ["Signing the minutes", [["signing", "Read and sign"]]],
+  ["Action items", [["action-items", "Action Items"], ["action-categories", "Action Categories"]]],
+  ["Booking a meeting room", [["bookings", "Bookings"], ["rooms", "Meeting Rooms"]]],
+  ["Keeping everyone informed", [["weekly-update", "Weekly Update"], ["action-summary", "Action Summary Email"]]],
+  ["People, users and tags", [["users", "Users"], ["roles", "Roles"], ["tags", "Tags"]]],
+  ["Making it look like your school", [["branding", "School Branding"]]],
+  ["Keeping a record", [["activity", "Activity Log"], ["sent-emails", "Sent Emails"], ["backup", "Backup Data"]]],
+  ["Emails the portal sends", []],
 ];
 
 /**
@@ -64,7 +65,7 @@ const CHAPTER_VIDEOS: [string, string][][] = [
  * renders: it is handed to a sandboxed iframe, so it has to bring its own
  * stylesheet rather than inherit the portal's.
  */
-export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en", origin = ""): string {
+export function buildDefaultGuide(branding: SchoolBranding, locale: Locale, origin: string): string {
   const school = branding.fullName;
   // shortcut: schoolType comes from the deployment's code branding, so a
   // private school on the SHARED deployment still reads "SGB" until a school
@@ -78,7 +79,7 @@ export function buildDefaultGuide(branding: SchoolBranding, locale: Locale = "en
   const t = makeT(dictFor(locale));
   // Absolute: the guide is shown from a blob: URL, where "/tutorials/..." resolves to nothing.
   const watch = (i: number) => {
-    const clips = CHAPTER_VIDEOS[i] ?? [];
+    const clips = CHAPTER_VIDEOS[i]?.[1] ?? [];
     if (!clips.length) return "";
     const links = clips.map(
       ([id, label]) => `<a href="${esc(origin)}/tutorials/${id}.mp4" target="_blank" rel="noopener">&#9654; ${esc(t(label))}</a>`

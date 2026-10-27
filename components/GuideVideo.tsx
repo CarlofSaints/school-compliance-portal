@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { useT } from "@/components/I18nProvider";
 
@@ -70,22 +70,36 @@ function shouldAutoOpen(id: string): boolean {
 const subscribe = () => () => {};
 
 export default function GuideVideo() {
+  const pathname = usePathname();
   // one set of minutes is a route pattern, so its id is swapped for the [id] the list uses
-  const id = VIDEOS[usePathname().replace(/^\/minutes\/[^/]+/, "/minutes/[id]")];
+  const id = VIDEOS[pathname.replace(/^\/minutes\/[^/]+/, "/minutes/[id]")];
   // Keyed on the page, so what the viewer chose on one page never carries to the next.
-  return id ? <PageVideo key={id} id={id} /> : null;
+  return id ? <PageVideo key={pathname} id={id} /> : null;
 }
 
 function PageVideo({ id }: { id: string }) {
   const t = useT();
   // The server renders it closed (it has no storage); the browser decides.
-  const auto = useSyncExternalStore(subscribe, () => shouldAutoOpen(id), () => false);
+  // Decided ONCE per page visit: onPlay marks it seen, so re-reading on a later
+  // render (a language switch) would swap the playing clip for the button.
+  const [decide] = useState(() => {
+    let v: boolean | undefined;
+    return () => (v ??= shouldAutoOpen(id));
+  });
+  const auto = useSyncExternalStore(subscribe, decide, () => false);
   const [choice, setChoice] = useState<boolean | null>(null);
   const open = choice ?? auto;
   const close = () => {
     setChoice(false);
     markSeen(id);
   };
+  // On the window: the auto-opened popup never has focus, so a key handler on it never fires.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   if (!open) {
     return (
@@ -103,7 +117,6 @@ function PageVideo({ id }: { id: string }) {
     <div
       role="complementary"
       aria-label={t("How this page works")}
-      onKeyDown={(e) => e.key === "Escape" && close()}
       className="fixed bottom-4 right-4 z-40 w-[min(400px,calc(100vw-2rem))] overflow-hidden rounded-xl bg-black shadow-2xl"
     >
       <video
@@ -116,8 +129,9 @@ function PageVideo({ id }: { id: string }) {
         // Seen as soon as it plays: leaving the page mid-clip must not bring it back.
         onPlay={() => markSeen(id)}
         onEnded={close}
-        // A clip that cannot load must not leave a black box in the corner.
-        onError={close}
+        // A clip that cannot load must not leave a black box in the corner. Not
+        // marked seen: a network blip must not stop it ever opening by itself.
+        onError={() => setChoice(false)}
       />
       <button
         type="button"
