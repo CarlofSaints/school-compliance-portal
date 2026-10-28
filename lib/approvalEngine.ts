@@ -171,9 +171,23 @@ export function isRequiredApprover(
   return (app.requiredApprovers || []).some((a) => a.userId === userId);
 }
 
+/** Whether this is the person's OWN spending: they are the applicant, or they
+ *  submitted it. Only an IMPORTED row lets the submitter off: it names the
+ *  admin who brought the school's register in, not the person spending.
+ *  🔴 Never the "on behalf" tick or the applicant picked on the form: both are
+ *  the submitter's own say-so (the applicant id is not checked), and would let
+ *  anyone approve their own spending. */
+export function isOwnApplication(
+  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string },
+  userId: string
+): boolean {
+  if (app.applicantUserId === userId) return true;
+  return app.submittedBy === userId && !app.importBatchId;
+}
+
 /** Who may pick the quote, or close the project, on an APPROVED application:
  *  approve_spend AND (one of its required approvers or a spend admin), never
- *  its own submitter (an imported row, or one with no approvers: any
+ *  on their own application (an imported row, or one with no approvers: any
  *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
@@ -187,7 +201,7 @@ export function mayActOnApproved(
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
   if (app.importBatchId || !app.requiredApprovers?.length) return true;
-  if (app.submittedBy === user.id) return false;
+  if (isOwnApplication(app, user.id)) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }
 

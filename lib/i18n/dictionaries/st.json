@@ -1804,5 +1804,8 @@
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Kenya khoutu ya dinomoro tse 6 ho tswa ho app ya hao ya netefatso, kapa e nngwe ya dikhoutu tsa hao tsa polokelo",
   "Continue": "Tswela pele",
   "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Beha botjha ho kena ka mehato e mmedi ha {name}? Sena se boetse se ba ntsha hohle. Ebe ba sebedisa Na o lebetse phasewete ya hao? leqepheng la ho kena mme ba hlophisa fono ya bona hape.",
-  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Bakeng sa fono e lahlehileng: e ba ntsha hohle, ebe ba beha botjha phasewete ya bona mme ba hlophisa hape ho kena ka mehato e mmedi"
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Bakeng sa fono e lahlehileng: e ba ntsha hohle, ebe ba beha botjha phasewete ya bona mme ba hlophisa hape ho kena ka mehato e mmedi",
+  "You are not the owner of this action item!": "Ha o mong wa ntlha ena ya ketso!",
+  "Why are you changing the status?": "Hobaneng o fetola boemo?",
+  "Not assigned, changed because: {reason}": "Ha a abelwa, e fetotswe hobane: {reason}"
 }

@@ -7,8 +7,8 @@ import {
   updateActionItem,
   deleteActionItem,
 } from "@/lib/actionItemData";
-import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
-import { parseActionEdit } from "@/lib/actionItemFields";
+import { ACTION_ADMIN_PERMISSIONS, myPersonIdsIn } from "@/lib/actionItemRecipients";
+import { parseActionEdit, isNotOwnerStatusChange, withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 import { withMinutesMeetingDates } from "@/lib/minutesAccess";
@@ -48,7 +48,16 @@ export async function PATCH(
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    const saved = await updateActionItem(id, parsed.updates);
+    // Not assigned to it: moving its status needs a reason, admins included.
+    const reason = notOwnerReasonOf(body);
+    const notOwner = isNotOwnerStatusChange(existing, parsed.updates, myPersonIdsIn(people, session));
+    if (notOwner && !reason) return NextResponse.json(NEEDS_REASON, { status: 400 });
+
+    const by = { id: session.id, name: `${session.name} ${session.surname}`.trim() };
+    const saved = await updateActionItem(
+      id,
+      notOwner ? withHistoryLine(parsed.updates, by, "", reason) : parsed.updates
+    );
     if (!saved) {
       return NextResponse.json({ error: "Action not found" }, { status: 404 });
     }

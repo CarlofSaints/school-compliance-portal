@@ -66,6 +66,7 @@ interface SpendRecord {
   approvalLogOnly?: boolean;
   approvalWarning?: string;
   submittedBy?: string;
+  importBatchId?: string;
   manualReminders?: { at: string; byName: string; sentTo: string[] }[];
   approvals: {
     userId: string;
@@ -777,7 +778,20 @@ export default function SpendPage() {
                           }`}
                         >
                           {STATUS_ORDER.map((s) => (
-                            <option key={s} value={s}>
+                            <option
+                              key={s}
+                              value={s}
+                              // Same rule as PATCH /status: approving from the
+                              // grid skips the vote, so spend admins (or any
+                              // approver on an imported row) only.
+                              disabled={
+                                (s === "approved" || s === "completed") &&
+                                app.status !== "approved" &&
+                                app.status !== "completed" &&
+                                !isSpendAdmin &&
+                                !app.importBatchId
+                              }
+                            >
                               {t(STATUS_DISPLAY[s])}
                             </option>
                           ))}

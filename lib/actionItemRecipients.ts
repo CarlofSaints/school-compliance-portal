@@ -156,22 +156,25 @@ export function displayNameFor(
   return linked ? `${linked.name} ${linked.surname}`.trim() : person.name || fallback;
 }
 
-// The register entries a login belongs to.
-//
-// A person can hold more than one position (Treasurer and Co-opted, say), which
-// is a separate register entry each time, so this is a list. An action assigned
-// to any of them is that user's action.
-export async function personIdsForUser(userId: string): Promise<string[]> {
-  const people = await getPeople();
-  return people.filter((p) => p.userId === userId).map((p) => p.id);
+// The register entries that are this signed-in person: linked to their login,
+// or carrying their login's email. The same rule the action-items page uses,
+// so the page and the server never disagree on who owns an action.
+export function myPersonIdsIn(
+  people: { id: string; userId?: string | null; email?: string }[],
+  me: { id: string; email?: string }
+): string[] {
+  const email = (me.email || "").trim().toLowerCase();
+  return people
+    .filter((p) => p.userId === me.id || (!!email && (p.email || "").trim().toLowerCase() === email))
+    .map((p) => p.id);
 }
 
-// Whether this session may update the progress on an action without holding
-// manage_action_items: they have to be one of the people carrying it.
+// Whether this session is one of the people carrying the action. Anybody else
+// (an administrator included) must give a reason to move its status.
 export async function isAssignee(
   item: ActionItem,
-  userId: string
+  me: { id: string; email?: string }
 ): Promise<boolean> {
-  const mine = await personIdsForUser(userId);
+  const mine = myPersonIdsIn(await getPeople(), me);
   return item.assigneeIds.some((id) => mine.includes(id));
 }

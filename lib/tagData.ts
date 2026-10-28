@@ -72,6 +72,13 @@ export interface TagMember {
   source: "user" | "person";
 }
 
+// The one rule for who a register entry IS, shared by the member list and the
+// counts so the two can never disagree again: a person linked to a user that
+// exists is that user; otherwise they are themselves.
+function memberKeyOfPerson(p: { id: string; userId?: string | null }, userIds: { has(id: string): boolean }): string {
+  return p.userId && userIds.has(p.userId) ? p.userId : `person:${p.id}`;
+}
+
 // Everyone carrying a tag, from both sides. A person linked to a user resolves
 // to that user, so somebody tagged on both sides is only ever counted once and
 // the approval they give as a logged-in user satisfies the requirement.
@@ -99,28 +106,28 @@ export async function getTagMembers(
     }
   }
 
+  const usersById = new Map(users.map((u) => [u.id, u]));
   for (const p of people) {
     if (!p.tagIds?.includes(tagId)) continue;
+    const key = memberKeyOfPerson(p, usersById);
+    if (byKey.has(key)) continue;
     // A person wired to a user is that user for approval purposes.
-    if (p.userId) {
-      if (byKey.has(p.userId)) continue;
-      const u = users.find((x) => x.id === p.userId);
-      if (u) {
-        byKey.set(u.id, {
-          key: u.id,
-          userId: u.id,
-          personId: p.id,
-          name: `${u.name} ${u.surname}`.trim(),
-          email: u.email,
-          source: "person",
-        });
-        continue;
-      }
+    const u = usersById.get(key);
+    if (u) {
+      byKey.set(key, {
+        key,
+        userId: u.id,
+        personId: p.id,
+        name: `${u.name} ${u.surname}`.trim(),
+        email: u.email,
+        source: "person",
+      });
+      continue;
     }
     // No login: they can still be emailed and recorded, they just cannot
     // click Approve themselves.
-    byKey.set(`person:${p.id}`, {
-      key: `person:${p.id}`,
+    byKey.set(key, {
+      key,
       personId: p.id,
       name: p.name || p.position,
       email: p.email,
@@ -131,18 +138,18 @@ export async function getTagMembers(
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Counts per tag, for the tags admin page.
+// Counts per tag, for the tags admin page. Keyed by memberKeyOfPerson like
+// getTagMembers, so the count always matches the list it expands to: a tag on
+// the register entry of someone with a login used to be skipped whenever their
+// login did not carry that tag too.
 export async function getTagCounts(): Promise<Record<string, number>> {
   const [users, people] = await Promise.all([getUsers(), getPeople()]);
-  const counts: Record<string, number> = {};
-  const bump = (id: string) => {
-    counts[id] = (counts[id] || 0) + 1;
-  };
-  for (const u of users) for (const id of u.tagIds || []) bump(id);
+  const userIds = new Set(users.map((u) => u.id));
+  const keys: Record<string, Set<string>> = {};
+  const add = (tagId: string, key: string) => (keys[tagId] ??= new Set()).add(key);
+  for (const u of users) for (const id of u.tagIds || []) add(id, u.id);
   for (const p of people) {
-    // Skip a person already counted through their linked user.
-    if (p.userId && users.some((u) => u.id === p.userId)) continue;
-    for (const id of p.tagIds || []) bump(id);
+    for (const id of p.tagIds || []) add(id, memberKeyOfPerson(p, userIds));
   }
-  return counts;
+  return Object.fromEntries(Object.entries(keys).map(([id, set]) => [id, set.size]));
 }

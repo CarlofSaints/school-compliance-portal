@@ -10,6 +10,9 @@ const STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
 
 interface Props {
   item: ActionItem;
+  // Whether the signed-in person is one of the people carrying it. Anybody
+  // else may still update it, but has to say why.
+  isOwner: boolean;
   onClose: () => void;
   onSaved: (message: string, saved: ActionItem) => void;
   onError: (message: string) => void;
@@ -17,12 +20,14 @@ interface Props {
 
 // Reporting where an action has got to.
 //
-// Open to the people carrying it as well as to administrators: the person doing
-// the work is the one who knows, and most governing-body members will never
-// hold an admin permission. Every save writes a line in the log with a name on
-// it, so a figure that moved can always be accounted for.
+// Open to everyone who can see the action: the person doing the work is the
+// one who knows, and most governing-body members will never hold an admin
+// permission. Anybody not assigned to it is warned and has to give a reason.
+// Every save writes a line in the log with a name on it, so a figure that
+// moved can always be accounted for.
 export default function ActionProgressModal({
   item,
+  isOwner,
   onClose,
   onSaved,
   onError,
@@ -31,6 +36,13 @@ export default function ActionProgressModal({
   const [progress, setProgress] = useState(item.progress);
   const [status, setStatus] = useState<ActionStatus>(item.status);
   const [note, setNote] = useState("");
+  // The server has the last word on who is assigned; a 400 saying a reason is
+  // needed shows the box even if this page thought they were. Only asked when
+  // the status or progress moves: a note on its own needs no reason.
+  const [serverAsksReason, setServerAsksReason] = useState(false);
+  const [reason, setReason] = useState("");
+  const moved = status !== item.status || progress !== item.progress;
+  const askReason = moved && (!isOwner || serverAsksReason);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -48,11 +60,15 @@ export default function ActionProgressModal({
     const res = await authFetch(`/api/action-items/${item.id}/progress`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ progress, status, note }),
+      body: JSON.stringify({ progress, status, note, notOwnerReason: askReason ? reason : undefined }),
     });
     setSaving(false);
 
     if (!res.ok) {
+      if (res.status === 400) {
+        const data = await res.clone().json().catch(() => ({}));
+        if (data.needsReason) setServerAsksReason(true);
+      }
       const message = await apiErrorMessage(res, t("Could not save that update"));
       setError(message);
       onError(message);
@@ -80,6 +96,25 @@ export default function ActionProgressModal({
         </div>
 
         <div className="p-6 space-y-5">
+          {askReason && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-800">
+                {t("You are not the owner of this action item!")}
+              </p>
+              <label className="block text-sm font-medium text-amber-900" htmlFor="not-owner-reason">
+                {t("Why are you changing the status?")}
+              </label>
+              <textarea
+                id="not-owner-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                maxLength={2000}
+                className="w-full px-3 py-2 border border-amber-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               {t("How far along is it? {progress}%", { progress })}
@@ -152,6 +187,11 @@ export default function ActionProgressModal({
                       {u.progress}% · {t(STATUS_LABELS[u.status])}
                     </span>
                     {u.note && <span className="block mt-1">{u.note}</span>}
+                    {u.notOwnerReason && (
+                      <span className="block mt-1 text-amber-800">
+                        {t("Not assigned, changed because: {reason}", { reason: u.notOwnerReason })}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -170,7 +210,7 @@ export default function ActionProgressModal({
           </button>
           <button
             onClick={save}
-            disabled={saving}
+            disabled={saving || (askReason && !reason.trim())}
             className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm font-medium"
           >
             {saving ? t("Saving...") : t("Save update")}
