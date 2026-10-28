@@ -1804,5 +1804,8 @@
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Faka ikhodi enezinombolo ezi-6 evela ohlelweni lwakho lokuqinisekisa, noma eyodwa yamakhodi akho okwenza isipele",
   "Continue": "Qhubeka",
   "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Setha kabusha ukungena ngezinyathelo ezimbili kuka-{name}? Lokhu kubakhipha nakuyo yonke indawo. Bese besebenzisa okuthi Ukhohlwe iphasiwedi yakho? ekhasini lokungena bese besetha futhi ifoni yabo.",
-  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Ngefoni elahlekile: kubakhipha kuyo yonke indawo, bese besetha kabusha iphasiwedi yabo futhi basethe ukungena ngezinyathelo ezimbili"
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Ngefoni elahlekile: kubakhipha kuyo yonke indawo, bese besetha kabusha iphasiwedi yabo futhi basethe ukungena ngezinyathelo ezimbili",
+  "You are not the owner of this action item!": "Awuyena umnikazi walesi senzo!",
+  "Why are you changing the status?": "Kungani ushintsha isimo?",
+  "Not assigned, changed because: {reason}": "Akabelwanga, kushintshwe ngoba: {reason}"
 }

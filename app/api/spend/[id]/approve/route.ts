@@ -8,6 +8,7 @@ import {
   evaluateProgress,
   deriveStatus,
   isRequiredApprover,
+  isOwnApplication,
 } from "@/lib/approvalEngine";
 import {
   sendApprovalProgressEmail,
@@ -48,8 +49,7 @@ export async function POST(
     // Kept deliberately awkward: an override skips the people who were meant to
     // decide, so it always costs a written reason and is stamped as an override
     // in the history rather than passing for a normal approval.
-    const ownApplication =
-      app.submittedBy === session.id || app.applicantUserId === session.id;
+    const ownApplication = isOwnApplication(app, session.id);
 
     // Who may act on this application at all, checked BEFORE anything about
     // its state. The state checks below answered first, so a member with no

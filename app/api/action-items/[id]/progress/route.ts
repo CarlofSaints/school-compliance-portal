@@ -6,11 +6,8 @@ import {
   STATUS_LABELS,
 } from "@/lib/actionItemData";
 import type { ActionStatus, ActionUpdate } from "@/lib/actionItemData";
-import {
-  ACTION_ADMIN_PERMISSIONS,
-  isAssignee,
-} from "@/lib/actionItemRecipients";
-import { withMinutesMeetingDates } from "@/lib/minutesAccess";
+import { isAssignee } from "@/lib/actionItemRecipients";
+import { withMinutesMeetingDates, visibleActionsFor } from "@/lib/minutesAccess";
 import { v4 as uuidv4 } from "uuid";
 
 const VALID_STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
@@ -19,9 +16,10 @@ const VALID_STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
 //
 // Deliberately NOT behind manage_action_items: the person doing the work is the
 // one who knows how far along it is, and most SGB members will never hold an
-// admin permission. Anybody assigned may update their own action; an
-// administrator may update anybody's. Everything else about an action - who
-// carries it, when it is due - stays on PATCH behind the manage permission.
+// admin permission. Anybody who can see the action may update it, but someone
+// not assigned to it (an administrator included) must say why, and the reason
+// is kept on the update. Everything else about an action - who carries it,
+// when it is due - stays on PATCH behind the manage permission.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -35,18 +33,22 @@ export async function POST(
     return NextResponse.json({ error: "Action not found" }, { status: 404 });
   }
 
-  const isAdmin = session.permissions.some((p) =>
-    ACTION_ADMIN_PERMISSIONS.includes(p)
-  );
-  if (!isAdmin && !(await isAssignee(item, session.id))) {
-    return NextResponse.json(
-      { error: "Only the people assigned to this action can update it" },
-      { status: 403 }
-    );
+  // An action from restricted minutes stays invisible to whoever cannot see it.
+  if ((await visibleActionsFor(session, [item])).length === 0) {
+    return NextResponse.json({ error: "Action not found" }, { status: 404 });
   }
+  const owner = await isAssignee(item, session.id);
 
   try {
     const body = await req.json();
+
+    const notOwnerReason = owner ? "" : String(body?.notOwnerReason ?? "").trim().slice(0, 2000);
+    if (!owner && !notOwnerReason) {
+      return NextResponse.json(
+        { error: "You are not assigned to this action. Say why you are changing it.", needsReason: true },
+        { status: 400 }
+      );
+    }
 
     const progress =
       body?.progress === undefined ? item.progress : Number(body.progress);
@@ -73,6 +75,7 @@ export async function POST(
       note,
       progress: Math.max(0, Math.min(100, Math.round(progress))),
       status,
+      ...(notOwnerReason ? { notOwnerReason } : {}),
     };
 
     // A function of the action AS IT IS NOW: two people posting an update at

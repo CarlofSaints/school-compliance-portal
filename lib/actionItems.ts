@@ -172,6 +172,9 @@ export interface ActionUpdate {
   // history rather than a set of disconnected notes.
   progress: number;
   status: ActionStatus;
+  // Set when somebody NOT assigned to the action made the update: why they
+  // did it instead of the person carrying it.
+  notOwnerReason?: string;
 }
 
 /**

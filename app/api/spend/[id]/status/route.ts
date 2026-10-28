@@ -4,6 +4,7 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import type { SpendApplication } from "@/lib/spendData";
+import { isOwnApplication, isRequiredApprover } from "@/lib/approvalEngine";
 
 const VALID: SpendApplication["status"][] = [
   "pending",
@@ -57,32 +58,32 @@ export async function PATCH(
 
   const next = status as SpendApplication["status"];
 
-  // Approving from the grid skips the approvers the band asked for, so only a
-  // spend admin may do it (approve_spend holders decide on the application
-  // itself, where their vote is recorded). Moving an approved project on to
-  // completed is bookkeeping and stays open to both.
+  // Approving from the grid skips the vote on the application, so it is open
+  // to a spend admin, to one of the approvers THIS application asked for, and
+  // on an imported row or one with no approvers (nobody's vote to skip) to any
+  // approve_spend holder. Moving an approved project on to completed is
+  // bookkeeping and stays open to all of them.
   const alreadyApproved = app.status === "approved" || app.status === "completed";
+  const approving = (next === "approved" || next === "completed") && !alreadyApproved;
   if (
-    (next === "approved" || next === "completed") &&
-    !alreadyApproved &&
-    !session.permissions.includes("manage_spend_settings")
+    approving &&
+    !session.permissions.includes("manage_spend_settings") &&
+    !isRequiredApprover(app, session.id) &&
+    !(app.importBatchId || !app.requiredApprovers?.length)
   ) {
     return NextResponse.json(
       {
         error:
-          "Only a spend admin can set a project to approved or completed from the grid. Approvers decide on the application itself.",
+          "Only a spend admin or one of this project's approvers can set it to approved or completed.",
       },
       { status: 403 }
     );
   }
 
   // The same rule as the approve route: nobody approves their own spending,
-  // and the grid must not be the way round it.
-  if (
-    (next === "approved" || next === "completed") &&
-    !alreadyApproved &&
-    (app.submittedBy === session.id || app.applicantUserId === session.id)
-  ) {
+  // and the grid must not be the way round it. Capturing it for somebody else
+  // does not make it yours.
+  if (approving && isOwnApplication(app, session.id)) {
     return NextResponse.json(
       { error: "You cannot approve your own application. Another admin has to." },
       { status: 403 }

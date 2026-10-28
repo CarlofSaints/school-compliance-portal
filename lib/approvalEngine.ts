@@ -171,23 +171,37 @@ export function isRequiredApprover(
   return (app.requiredApprovers || []).some((a) => a.userId === userId);
 }
 
+/** Whether this is the person's OWN spending: they are the applicant. The
+ *  submitter only counts when they did not capture it for somebody else (a
+ *  secretary filing for a teacher, or an admin importing the register). */
+export function isOwnApplication(
+  // Loose on purpose: older records carry no submittedOnBehalf at all.
+  app: { submittedBy: string; applicantUserId?: string; submittedOnBehalf?: boolean; importBatchId?: string },
+  userId: string
+): boolean {
+  // An imported row names the importing admin as submitter, never as spender.
+  return (
+    app.applicantUserId === userId ||
+    (!app.submittedOnBehalf && !app.importBatchId && app.submittedBy === userId)
+  );
+}
+
 /** Who may pick the quote, or close the project, on an APPROVED application:
  *  approve_spend AND (one of its required approvers or a spend admin), never
- *  its own submitter (an imported row, or one with no approvers: any
+ *  on their own application (an imported row, or one with no approvers: any
  *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
-  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId">,
+  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId"> & { submittedOnBehalf?: boolean },
   user: { id: string; permissions: string[] }
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;
-  if (app.applicantUserId === user.id) return false;
+  if (isOwnApplication(app, user.id)) return false;
   // An imported row (spend/import) names the importing admin as submitter, and
   // a log-only or untagged band has no approvers at all: any approve_spend
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
   if (app.importBatchId || !app.requiredApprovers?.length) return true;
-  if (app.submittedBy === user.id) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }
 

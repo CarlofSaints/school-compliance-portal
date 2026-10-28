@@ -351,8 +351,9 @@ export default function ActionItemsPage() {
       ? t("{message}. It is now {status}, so Open hides it. Click {status} to see it", { message, status: t(STATUS_LABELS[saved.status]) })
       : message;
 
-  const canUpdate = (item: ActionItem) =>
-    canManage || item.assigneeIds.some((id) => myPersonIds.includes(id));
+  // Anybody may update an action; someone not on it is asked why.
+  const isOwner = (item: ActionItem) =>
+    item.assigneeIds.some((id) => myPersonIds.includes(id));
 
   const handleDelete = async (item: ActionItem) => {
     if (
@@ -621,6 +622,7 @@ export default function ActionItemsPage() {
       {progressFor && (
         <ActionProgressModal
           item={progressFor}
+          isOwner={isOwner(progressFor)}
           onClose={() => setProgressFor(null)}
           onSaved={(message, saved) => {
             setProgressFor(null);
@@ -666,12 +668,10 @@ export default function ActionItemsPage() {
                 const lastUpdate = item.updates[0];
 
                 const actions = [];
-                if (canUpdate(item)) {
-                  actions.push({
-                    label: t("Update progress"),
-                    onClick: () => setProgressFor(item),
-                  });
-                }
+                actions.push({
+                  label: t("Update progress"),
+                  onClick: () => setProgressFor(item),
+                });
                 if (canManage) {
                   actions.push({
                     label: t("Edit"),

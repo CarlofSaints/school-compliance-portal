@@ -131,18 +131,19 @@ export async function getTagMembers(
   return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Counts per tag, for the tags admin page.
+// Counts per tag, for the tags admin page. Keyed exactly as getTagMembers
+// keys them, so the count always matches the list it expands to: a tag put on
+// the register entry of someone who also has a login used to be skipped
+// whenever their login did not carry that tag too.
 export async function getTagCounts(): Promise<Record<string, number>> {
   const [users, people] = await Promise.all([getUsers(), getPeople()]);
-  const counts: Record<string, number> = {};
-  const bump = (id: string) => {
-    counts[id] = (counts[id] || 0) + 1;
-  };
-  for (const u of users) for (const id of u.tagIds || []) bump(id);
+  const userIds = new Set(users.map((u) => u.id));
+  const keys: Record<string, Set<string>> = {};
+  const add = (tagId: string, key: string) => (keys[tagId] ??= new Set()).add(key);
+  for (const u of users) for (const id of u.tagIds || []) add(id, u.id);
   for (const p of people) {
-    // Skip a person already counted through their linked user.
-    if (p.userId && users.some((u) => u.id === p.userId)) continue;
-    for (const id of p.tagIds || []) bump(id);
+    const key = p.userId && userIds.has(p.userId) ? p.userId : `person:${p.id}`;
+    for (const id of p.tagIds || []) add(id, key);
   }
-  return counts;
+  return Object.fromEntries(Object.entries(keys).map(([id, set]) => [id, set.size]));
 }

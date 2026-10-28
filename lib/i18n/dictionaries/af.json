@@ -1804,5 +1804,8 @@
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Voer die 6-syfer-kode van u verifikasietoep in, of een van u rugsteunkodes",
   "Continue": "Gaan voort",
   "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Stel tweestap-aanmelding vir {name} terug? Dit meld hulle ook oral af. Hulle gebruik dan Wagwoord vergeet? op die aanmeldbladsy en stel hul foon weer op.",
-  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Vir 'n verlore foon: meld hulle oral af, dan stel hulle hul wagwoord terug en stel tweestap-aanmelding weer op"
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Vir 'n verlore foon: meld hulle oral af, dan stel hulle hul wagwoord terug en stel tweestap-aanmelding weer op",
+  "You are not the owner of this action item!": "Jy is nie die eienaar van hierdie aksiepunt nie!",
+  "Why are you changing the status?": "Hoekom verander jy die status?",
+  "Not assigned, changed because: {reason}": "Nie toegewys nie, verander omdat: {reason}"
 }
