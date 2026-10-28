@@ -1806,6 +1806,6 @@
   "You are not the owner of this action item!": "Jy is nie die eienaar van hierdie aksiepunt nie!",
   "Why are you changing the status?": "Hoekom verander jy die status?",
   "Not assigned, changed because: {reason}": "Nie toegewys nie, verander omdat: {reason}",
-  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ongedaan maak verwyder slegs die projekte wat hierdie invoer geskep het en wat niemand sedertdien gewysig het nie (tot {n}). Enigiets wat met die hand vasgelê is, of ná die invoer gewysig is, bly behou.",
-  "Import undone. Nothing was removed: every project from it had been edited since, so they were kept.": "Invoer ongedaan gemaak. Niks is verwyder nie: elke projek daaruit is sedertdien gewysig, so hulle is behou."
+  "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Ongedaan maak verwyder slegs die projekte wat hierdie invoer geskep het en wat niemand sedertdien verander het nie (tot {n}). Enigiets wat met die hand vasgelê is, of ná die invoer verander is (gewysig, goedgekeur, voltooi of met 'n nota), bly behou.",
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Invoer ongedaan gemaak. Niks is verwyder nie: elke projek daaruit is sedertdien verander, so hulle is behou."
 }

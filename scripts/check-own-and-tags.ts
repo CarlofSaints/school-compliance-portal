@@ -97,9 +97,14 @@ async function main() {
   await S.createSpendApplications([
     row("untouched", { importBatchId: "b9" }),
     row("voted-legacy", { importBatchId: "b9", requiredApprovers: [{ userId: "boss" }] }),
+    row("completed-from-grid", { importBatchId: "b9" }),
     row("by-hand", {}),
   ]);
-  check("Undo import removes only untouched rows of the batch", await S.deleteSpendImportBatch("b9"), 1);
+  // Any later write stamps a rev: here the legacy edit and a grid completion.
+  await S.updateSpendApplication("voted-legacy", { requiredApprovers: [{ userId: "boss" }] } as never);
+  await S.updateSpendApplication("completed-from-grid", { status: "completed" } as never);
+  check("Undo import removes only rows nobody has changed since", await S.deleteSpendImportBatch("b9"), 1);
+  check("...a row completed from the grid is kept", !!(await S.getSpendById("completed-from-grid")), true);
   check("...a row already put to a vote is kept", !!(await S.getSpendById("voted-legacy")), true);
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);

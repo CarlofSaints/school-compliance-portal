@@ -99,6 +99,7 @@ export default function SpendImportPage() {
   const headers = useMemo(() => rows[headerRow] || [], [rows, headerRow]);
 
   const handleFile = async (file: File) => {
+    setUndone(null);
     setParseError("");
     setResult(null);
     setError("");
@@ -651,7 +652,7 @@ export default function SpendImportPage() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-3">
-            {t("Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.", { n: result.created })}
+            {t("Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.", { n: result.created })}
           </p>
         </div>
       )}
@@ -659,7 +660,7 @@ export default function SpendImportPage() {
       {undone !== null && !result && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-sm text-gray-600">
           {undone === 0
-            ? t("Import undone. Nothing was removed: every project from it had been edited since, so they were kept.")
+            ? t("Import undone. Nothing was removed: every project from it had been changed since, so they were kept.")
             : undone === 1
               ? t("Import undone. Removed {n} project.", { n: undone })
               : t("Import undone. Removed {n} projects.", { n: undone })}

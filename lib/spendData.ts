@@ -63,14 +63,16 @@ export async function createSpendApplications(
 
 // Removes every application created by one import batch. Returns how many were
 // removed. Only ever called with a batch id, so it cannot touch an application
-// somebody captured by hand. An edit takes a row out of its batch; a row put
-// to a vote by an edit made before that rule (approvers set) is kept too.
+// somebody captured by hand. Only rows NOBODY HAS CHANGED since the import are
+// removed: an import is created with no rev, and every later write through
+// updateSpendApplication (edit, approve, grid status, notes, complete,
+// reminder...) stamps one. So a row with work on it always survives Undo.
 export async function deleteSpendImportBatch(
   batchId: string
 ): Promise<number> {
   let doomed: SpendApplication[] = [];
   await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
-    doomed = apps.filter((a) => a.importBatchId === batchId && !a.requiredApprovers?.length);
+    doomed = apps.filter((a) => a.importBatchId === batchId && !a.rev);
     const ids = new Set(doomed.map((a) => a.id));
     return doomed.length ? apps.filter((a) => !ids.has(a.id)) : NO_CHANGE;
   });

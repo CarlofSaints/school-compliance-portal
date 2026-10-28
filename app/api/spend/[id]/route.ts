@@ -222,7 +222,10 @@ export async function PUT(
     // worked out and told. Rows already put to a vote keep their approvers
     // (frozen at submission). shortcut: read before the save, so two edits in
     // the same second can both band and email; fine at school scale.
-    const firstImportEdit = isRegisterImport(app);
+    // Only a still-PENDING one: a rejected or historical row is not re-banded
+    // (a log-only band would otherwise approve a rejected row over a typo).
+    const firstImportEdit =
+      isRegisterImport(app) && (app.status === "pending" || app.status === "pending_decision");
     let reband: Partial<SpendApplication> = {};
     if (hadVotes && !amountChanged) {
       newStatus = "pending";

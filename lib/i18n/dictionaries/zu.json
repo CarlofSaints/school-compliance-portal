@@ -1806,6 +1806,6 @@
   "You are not the owner of this action item!": "Awuyena umnikazi walesi senzo!",
   "Why are you changing the status?": "Kungani ushintsha isimo?",
   "Not assigned, changed because: {reason}": "Akabelwanga, kushintshwe ngoba: {reason}",
-  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ukuhlehlisa kususa kuphela amaphrojekthi adalwe yilokhu kungenisa angakaze ahlelwe ngubani kusukela lapho (kufika ku-{n}). Noma yini efakwe ngesandla, noma ehlelwe ngemva kokungenisa, iyagcinwa.",
-  "Import undone. Nothing was removed: every project from it had been edited since, so they were kept.": "Ukungenisa kuhlehlisiwe. Akukho okususiwe: yonke iphrojekthi evela kukho ihleliwe kusukela lapho, ngakho igciniwe."
+  "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Ukuhlehlisa kususa kuphela amaphrojekthi adalwe yilokhu kungenisa angakaze ashintshwe ngubani kusukela lapho (kufika ku-{n}). Noma yini efakwe ngesandla, noma eshintshwe ngemva kokungenisa (ehleliwe, egunyaziwe, eqediwe noma enenothi), iyagcinwa.",
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Ukungenisa kuhlehlisiwe. Akukho okususiwe: yonke iphrojekthi evela kukho ishintshiwe kusukela lapho, ngakho igciniwe."
 }

@@ -1806,6 +1806,6 @@
   "You are not the owner of this action item!": "Ga o mong wa ntlha ye ya tiro!",
   "Why are you changing the status?": "Ke ka lebaka la eng o fetola maemo?",
   "Not assigned, changed because: {reason}": "Ga a abelwa, e fetotšwe ka gobane: {reason}",
-  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Go phumola go tloša feela diprotšeke tšeo di hlotšwego ke go tsenya mo tšeo go se nago yo a di fetotšego go tloga ka nako yeo (go fihla go {n}). Se sengwe le se sengwe se se tsentšwego ka seatla, goba se fetotšwe ka morago ga go tsenya, se a bolokwa.",
-  "Import undone. Nothing was removed: every project from it had been edited since, so they were kept.": "Go tsenya go phumotšwe. Ga go se se tlošitšwego: protšeke ye nngwe le ye nngwe go tšwa go yona e fetotšwe go tloga ka nako yeo, ka gona di bolokilwe."
+  "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Go phumola go tloša feela diprotšeke tšeo di hlotšwego ke go tsenya mo tšeo go se nago yo a di fetotšego go tloga ka nako yeo (go fihla go {n}). Se sengwe le se sengwe se se tsentšwego ka seatla, goba se fetotšwe ka morago ga go tsenya (se lokišitšwe, se dumeletšwe, se phethilwe goba se na le ntlha), se a bolokwa.",
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Go tsenya go phumotšwe. Ga go se se tlošitšwego: protšeke ye nngwe le ye nngwe go tšwa go yona e fetotšwe go tloga ka nako yeo, ka gona di bolokilwe."
 }

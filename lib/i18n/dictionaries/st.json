@@ -1806,6 +1806,6 @@
   "You are not the owner of this action item!": "Ha o mong wa ntlha ena ya ketso!",
   "Why are you changing the status?": "Hobaneng o fetola boemo?",
   "Not assigned, changed because: {reason}": "Ha a abelwa, e fetotswe hobane: {reason}",
-  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ho hlakola ho tlosa feela diprojeke tse entsweng ke ho kenya hona tseo ho seng motho ya di fetotseng ho tloha ka nako eo (ho fihla ho {n}). Ntho efe kapa efe e kentsweng ka letsoho, kapa e fetotsweng kamora ho kenya, e a bolokwa.",
-  "Import undone. Nothing was removed: every project from it had been edited since, so they were kept.": "Ho kenya ho hlakotswe. Ha ho letho le tlositsweng: projeke e nngwe le e nngwe ho tswa ho yona e fetotswe ho tloha ka nako eo, kahoo di bolokilwe."
+  "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Ho hlakola ho tlosa feela diprojeke tse entsweng ke ho kenya hona tseo ho seng motho ya di fetotseng ho tloha ka nako eo (ho fihla ho {n}). Ntho efe kapa efe e kentsweng ka letsoho, kapa e fetotsweng kamora ho kenya (e lokisitswe, e amohetswe, e phethilwe kapa e na le ntlha), e a bolokwa.",
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Ho kenya ho hlakotswe. Ha ho letho le tlositsweng: projeke e nngwe le e nngwe ho tswa ho yona e fetotswe ho tloha ka nako eo, kahoo di bolokilwe."
 }
