@@ -6,7 +6,7 @@ import {
   STATUS_LABELS,
 } from "@/lib/actionItemData";
 import type { ActionStatus } from "@/lib/actionItemData";
-import { normalise } from "@/lib/actionItems";
+import { normalise, movesStatus } from "@/lib/actionItems";
 import { withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { isAssignee } from "@/lib/actionItemRecipients";
 import { LIMITS, enforce } from "@/lib/rateLimit";
@@ -43,13 +43,6 @@ export async function POST(
   if (visible.length === 0) {
     return NextResponse.json({ error: "Action not found" }, { status: 404 });
   }
-  // History keeps the last 100 lines, so someone not on the action must not be
-  // able to push the real record out with a burst of updates.
-  if (!owner) {
-    const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
-    if (limited) return limited;
-  }
-
   try {
     const body = await req.json();
 
@@ -70,7 +63,7 @@ export async function POST(
     // Compared as it would be SAVED (done forces 100%, progress lifts not
     // started), so a figure the server would change anyway is not a "move".
     const after = normalise({ ...item, progress: raw, status });
-    const moved = after.status !== item.status || after.progress !== item.progress;
+    const moved = movesStatus(item, { progress: raw, status });
     if (!moved && !note) {
       return NextResponse.json(
         { error: "Nothing to save: change the status or progress, or write a note." },
@@ -82,6 +75,13 @@ export async function POST(
     const notOwnerReason = owner || !moved ? "" : notOwnerReasonOf(body);
     if (!owner && moved && !notOwnerReason) {
       return NextResponse.json(NEEDS_REASON, { status: 400 });
+    }
+    // History keeps the last 100 lines, so someone not on the action must not
+    // be able to push the real record out with a burst of status changes.
+    // Charged only for a real, valid move, so a refused try costs nothing.
+    if (notOwnerReason) {
+      const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
+      if (limited) return limited;
     }
 
     // Every change writes a line in the log, note or no note. A progress figure

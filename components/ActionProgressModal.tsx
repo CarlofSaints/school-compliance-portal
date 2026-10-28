@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
-import { STATUS_LABELS } from "@/lib/actionItems";
+import { STATUS_LABELS, movesStatus } from "@/lib/actionItems";
+import NotOwnerReason from "@/components/NotOwnerReason";
 import type { ActionItem, ActionStatus } from "@/lib/actionItems";
 
 const STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
@@ -41,7 +42,7 @@ export default function ActionProgressModal({
   // the status or progress moves: a note on its own needs no reason.
   const [serverAsksReason, setServerAsksReason] = useState(false);
   const [reason, setReason] = useState("");
-  const moved = status !== item.status || progress !== item.progress;
+  const moved = movesStatus(item, { status, progress });
   const askReason = moved && (!isOwner || serverAsksReason);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -96,24 +97,7 @@ export default function ActionProgressModal({
         </div>
 
         <div className="p-6 space-y-5">
-          {askReason && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
-              <p className="text-sm font-semibold text-amber-800">
-                {t("You are not the owner of this action item!")}
-              </p>
-              <label className="block text-sm font-medium text-amber-900" htmlFor="not-owner-reason">
-                {t("Why are you changing the status?")}
-              </label>
-              <textarea
-                id="not-owner-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                rows={2}
-                maxLength={2000}
-                className="w-full px-3 py-2 border border-amber-200 bg-white rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-              />
-            </div>
-          )}
+          {askReason && <NotOwnerReason value={reason} onChange={setReason} />}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

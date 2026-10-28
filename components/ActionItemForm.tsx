@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { movesStatus } from "@/lib/actionItems";
+import NotOwnerReason from "@/components/NotOwnerReason";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 import { formatMeetingDate } from "@/lib/minutes";
@@ -110,8 +112,7 @@ export default function ActionItemForm({
   const [progress, setProgress] = useState(existing?.progress ?? 0);
   const [serverAsksReason, setServerAsksReason] = useState(false);
   const [notOwnerReason, setNotOwnerReason] = useState("");
-  const statusMoved =
-    !!existing && (status !== existing.status || Number(progress) !== existing.progress);
+  const statusMoved = !!existing && movesStatus(existing, { status, progress: Number(progress) });
   const askReason = statusMoved && (!isOwner || serverAsksReason);
 
   const reminder = existing?.reminder || DEFAULT_REMINDER;
@@ -498,21 +499,8 @@ export default function ActionItemForm({
       </div>
 
       {askReason && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-2 mt-4">
-          <p className="text-sm font-semibold text-amber-800">
-            {t("You are not the owner of this action item!")}
-          </p>
-          <label className="block text-sm font-medium text-amber-900" htmlFor="edit-not-owner-reason">
-            {t("Why are you changing the status?")}
-          </label>
-          <textarea
-            id="edit-not-owner-reason"
-            value={notOwnerReason}
-            onChange={(e) => setNotOwnerReason(e.target.value)}
-            rows={2}
-            maxLength={2000}
-            className={fieldClass + " bg-white"}
-          />
+        <div className="mt-4">
+          <NotOwnerReason value={notOwnerReason} onChange={setNotOwnerReason} />
         </div>
       )}
 

@@ -8,7 +8,7 @@ import RowActions from "@/components/RowActions";
 import ReminderModal from "@/components/ReminderModal";
 import Toast from "@/components/Toast";
 import { useTableSort, useColumnWidths } from "@/lib/useTable";
-import { evaluateProgress } from "@/lib/approvalEngine";
+import { evaluateProgress, isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 import type { RequiredApprover } from "@/lib/approvalEngine";
 import { useT } from "@/components/I18nProvider";
 import { tk } from "@/lib/i18n/translate";
@@ -783,13 +783,14 @@ export default function SpendPage() {
                               value={s}
                               // Same rule as PATCH /status: approving from the
                               // grid skips the vote, so spend admins (or any
-                              // approver on an imported row) only.
+                              // approver on an imported row) only, and never
+                              // on your own application.
                               disabled={
                                 (s === "approved" || s === "completed") &&
                                 app.status !== "approved" &&
                                 app.status !== "completed" &&
-                                !isSpendAdmin &&
-                                !app.importBatchId
+                                ((!isSpendAdmin && !isRegisterImport(app)) ||
+                                  isOwnApplication({ ...app, submittedBy: app.submittedBy || "" }, session?.id || ""))
                               }
                             >
                               {t(STATUS_DISPLAY[s])}

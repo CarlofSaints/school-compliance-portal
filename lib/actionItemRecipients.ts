@@ -157,15 +157,18 @@ export function displayNameFor(
 }
 
 // The register entries that are this signed-in person: linked to their login,
-// or carrying their login's email. The same rule the action-items page uses,
-// so the page and the server never disagree on who owns an action.
+// or (not linked to anybody) carrying their login's email. The page matches
+// the directory, where a linked entry shows its user's address, so this is
+// the same rule and the two never disagree on who owns an action.
 export function myPersonIdsIn(
   people: { id: string; userId?: string | null; email?: string }[],
   me: { id: string; email?: string }
 ): string[] {
   const email = (me.email || "").trim().toLowerCase();
   return people
-    .filter((p) => p.userId === me.id || (!!email && (p.email || "").trim().toLowerCase() === email))
+    .filter((p) =>
+      p.userId ? p.userId === me.id : !!email && (p.email || "").trim().toLowerCase() === email
+    )
     .map((p) => p.id);
 }
 
