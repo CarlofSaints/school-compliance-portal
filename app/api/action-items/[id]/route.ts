@@ -7,8 +7,8 @@ import {
   updateActionItem,
   deleteActionItem,
 } from "@/lib/actionItemData";
-import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
-import { parseActionEdit, isNotOwnerStatusChange, withNotOwnerReason } from "@/lib/actionItemFields";
+import { ACTION_ADMIN_PERMISSIONS, myPersonIdsIn } from "@/lib/actionItemRecipients";
+import { parseActionEdit, isNotOwnerStatusChange, withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 import { withMinutesMeetingDates } from "@/lib/minutesAccess";
@@ -49,20 +49,14 @@ export async function PATCH(
     }
 
     // Not assigned to it: moving its status needs a reason, admins included.
-    const mine = people.filter((p) => p.userId === session.id).map((p) => p.id);
-    const reason = String(body.notOwnerReason ?? "").trim().slice(0, 2000);
-    const notOwner = isNotOwnerStatusChange(existing, parsed.updates, mine);
-    if (notOwner && !reason) {
-      return NextResponse.json(
-        { error: "You are not assigned to this action. Say why you are changing its status.", needsReason: true },
-        { status: 400 }
-      );
-    }
+    const reason = notOwnerReasonOf(body);
+    const notOwner = isNotOwnerStatusChange(existing, parsed.updates, myPersonIdsIn(people, session));
+    if (notOwner && !reason) return NextResponse.json(NEEDS_REASON, { status: 400 });
 
     const by = { id: session.id, name: `${session.name} ${session.surname}`.trim() };
     const saved = await updateActionItem(
       id,
-      notOwner ? withNotOwnerReason(parsed.updates, by, reason) : parsed.updates
+      notOwner ? withHistoryLine(parsed.updates, by, "", reason) : parsed.updates
     );
     if (!saved) {
       return NextResponse.json({ error: "Action not found" }, { status: 404 });

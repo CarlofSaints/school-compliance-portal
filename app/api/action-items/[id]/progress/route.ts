@@ -5,11 +5,12 @@ import {
   updateActionItem,
   STATUS_LABELS,
 } from "@/lib/actionItemData";
-import type { ActionStatus, ActionUpdate } from "@/lib/actionItemData";
+import type { ActionStatus } from "@/lib/actionItemData";
+import { normalise } from "@/lib/actionItems";
+import { withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { isAssignee } from "@/lib/actionItemRecipients";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { withMinutesMeetingDates, visibleActionsFor } from "@/lib/minutesAccess";
-import { v4 as uuidv4 } from "uuid";
 
 const VALID_STATUSES = Object.keys(STATUS_LABELS) as ActionStatus[];
 
@@ -36,7 +37,7 @@ export async function POST(
 
   const [visible, owner] = await Promise.all([
     visibleActionsFor(session, [item]),
-    isAssignee(item, session.id),
+    isAssignee(item, session),
   ]);
   // An action from restricted minutes stays invisible to whoever cannot see it.
   if (visible.length === 0) {
@@ -65,42 +66,37 @@ export async function POST(
       ? body.status
       : item.status;
     const note = String(body?.note ?? "").trim().slice(0, 2000);
-    const progress = Math.max(0, Math.min(100, Math.round(raw)));
 
-    // Not assigned to it (an administrator included): moving the status or
-    // progress needs a reason. A note on its own does not.
-    const moved = status !== item.status || progress !== item.progress;
-    const notOwnerReason = owner || !moved ? "" : String(body?.notOwnerReason ?? "").trim().slice(0, 2000);
-    if (!owner && moved && !notOwnerReason) {
+    // Compared as it would be SAVED (done forces 100%, progress lifts not
+    // started), so a figure the server would change anyway is not a "move".
+    const after = normalise({ ...item, progress: raw, status });
+    const moved = after.status !== item.status || after.progress !== item.progress;
+    if (!moved && !note) {
       return NextResponse.json(
-        { error: "You are not assigned to this action. Say why you are changing its status.", needsReason: true },
+        { error: "Nothing to save: change the status or progress, or write a note." },
         { status: 400 }
       );
+    }
+    // Not assigned to it (an administrator included): moving the status or
+    // progress needs a reason. A note on its own does not.
+    const notOwnerReason = owner || !moved ? "" : notOwnerReasonOf(body);
+    if (!owner && moved && !notOwnerReason) {
+      return NextResponse.json(NEEDS_REASON, { status: 400 });
     }
 
     // Every change writes a line in the log, note or no note. A progress figure
     // that moved with nobody's name on it is the thing an SGB meeting cannot
-    // resolve six weeks later.
-    const update: ActionUpdate = {
-      id: uuidv4(),
-      at: new Date().toISOString(),
-      byId: session.id,
-      byName: `${session.name} ${session.surname}`.trim(),
-      note,
-      progress,
-      status,
-      ...(notOwnerReason ? { notOwnerReason } : {}),
-    };
-
-    // A function of the action AS IT IS NOW: two people posting an update at
-    // the same moment must both land, so the list is never built from the
-    // copy read at the top of this request.
-    const saved = await updateActionItem(id, (current) => ({
-      progress,
-      status,
-      // Newest first, so the grid's "last update" column is updates[0].
-      updates: [update, ...(current.updates || [])].slice(0, 100),
-    }));
+    // resolve six weeks later. A note-only update leaves status and progress
+    // alone, so it cannot put back a value someone changed a moment ago.
+    const saved = await updateActionItem(
+      id,
+      withHistoryLine(
+        moved ? { progress: after.progress, status: after.status } : {},
+        { id: session.id, name: `${session.name} ${session.surname}`.trim() },
+        note,
+        notOwnerReason
+      )
+    );
 
     return NextResponse.json(saved && (await withMinutesMeetingDates(session, [saved]))[0]);
   } catch (err) {

@@ -172,18 +172,17 @@ export function isRequiredApprover(
 }
 
 /** Whether this is the person's OWN spending: they are the applicant, or they
- *  submitted it. The submitter is let off only when another PORTAL USER is the
- *  applicant (a secretary filing for a teacher) or the row was imported.
- *  🔴 Not on the "on behalf" tick or a typed-in name: those are the
- *  submitter's own say-so, and would let anyone approve their own spending. */
+ *  submitted it. Only an IMPORTED row lets the submitter off: it names the
+ *  admin who brought the school's register in, not the person spending.
+ *  🔴 Never the "on behalf" tick or the applicant picked on the form: both are
+ *  the submitter's own say-so (the applicant id is not checked), and would let
+ *  anyone approve their own spending. */
 export function isOwnApplication(
   app: { submittedBy: string; applicantUserId?: string; importBatchId?: string },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
-  if (app.submittedBy !== userId) return false;
-  const someoneElseApplies = !!app.applicantUserId && app.applicantUserId !== userId;
-  return !someoneElseApplies && !app.importBatchId;
+  return app.submittedBy === userId && !app.importBatchId;
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
@@ -196,12 +195,13 @@ export function mayActOnApproved(
   user: { id: string; permissions: string[] }
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;
-  if (isOwnApplication(app, user.id)) return false;
+  if (app.applicantUserId === user.id) return false;
   // An imported row (spend/import) names the importing admin as submitter, and
   // a log-only or untagged band has no approvers at all: any approve_spend
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
   if (app.importBatchId || !app.requiredApprovers?.length) return true;
+  if (isOwnApplication(app, user.id)) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }
 

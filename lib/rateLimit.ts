@@ -72,7 +72,7 @@ export const LIMITS = {
   feedbackUser: { scope: "feedback-user", max: 10, windowSec: 60 * 60, message: "You have sent a lot of reports this hour. Try again in {wait}." },
   creditApproveIp: { scope: "credit-approve-ip", max: 20, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },
-  actionUpdateUser: { scope: "action-update-user", max: 60, windowSec: 60 * 60, message: "You have updated a lot of actions that are not yours this hour. Try again in {wait}." },
+  actionUpdateUser: { scope: "action-update-user", max: 20, windowSec: 60 * 60, message: "You have updated a lot of actions that are not yours this hour. Try again in {wait}." },
   bookingWriteUser: { scope: "booking-write-user", max: 120, windowSec: 60 * 60, message: "You have made a lot of room booking changes this hour. Try again in {wait}." },
   signCodeAttempt: { scope: "sign-code-attempt", failClosed: true, max: 10, windowSec: 60 * 60, message: "Too many signing attempts. Try again in {wait}, or ask the secretary to send a new code." },
 } satisfies Record<string, Limit>;

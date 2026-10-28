@@ -5,8 +5,8 @@ import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
 import { getActionItems, updateActionItems } from "@/lib/actionItemData";
 import type { ActionChange } from "@/lib/actionItemData";
-import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
-import { parseActionEdit, isNotOwnerStatusChange, withNotOwnerReason } from "@/lib/actionItemFields";
+import { ACTION_ADMIN_PERMISSIONS, myPersonIdsIn } from "@/lib/actionItemRecipients";
+import { parseActionEdit, isNotOwnerStatusChange, withHistoryLine, notOwnerReasonOf } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 import { withMinutesMeetingDates } from "@/lib/minutesAccess";
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
       getActionCategories(),
     ]);
     const byId = new Map(items.map((i) => [i.id, i]));
-    const mine = people.filter((p) => p.userId === session.id).map((p) => p.id);
+    const mine = myPersonIdsIn(people, session);
     const by = { id: session.id, name: `${session.name} ${session.surname}`.trim() };
 
     const edits: {
@@ -76,13 +76,13 @@ export async function POST(req: NextRequest) {
         continue;
       }
       // Not assigned to it: moving its status needs a reason, admins included.
-      const reason = String(row.notOwnerReason ?? "").trim().slice(0, 2000);
+      const reason = notOwnerReasonOf(row);
       const notOwner = isNotOwnerStatusChange(existing, parsed.updates, mine);
       if (notOwner && !reason) {
         problems.push(`${existing.ref}: you are not assigned to it, so say why you are changing its status (notOwnerReason)`);
         continue;
       }
-      edits.push({ id, updates: notOwner ? withNotOwnerReason(parsed.updates, by, reason) : parsed.updates });
+      edits.push({ id, updates: notOwner ? withHistoryLine(parsed.updates, by, "", reason) : parsed.updates });
       if (parsed.newlyAssigned.length > 0) {
         newlyAssignedBy.set(id, parsed.newlyAssigned);
       }

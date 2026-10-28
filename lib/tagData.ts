@@ -75,7 +75,7 @@ export interface TagMember {
 // The one rule for who a register entry IS, shared by the member list and the
 // counts so the two can never disagree again: a person linked to a user that
 // exists is that user; otherwise they are themselves.
-function memberKeyOfPerson(p: { id: string; userId?: string | null }, userIds: Set<string>): string {
+function memberKeyOfPerson(p: { id: string; userId?: string | null }, userIds: { has(id: string): boolean }): string {
   return p.userId && userIds.has(p.userId) ? p.userId : `person:${p.id}`;
 }
 
@@ -106,13 +106,13 @@ export async function getTagMembers(
     }
   }
 
-  const userIds = new Set(users.map((u) => u.id));
+  const usersById = new Map(users.map((u) => [u.id, u]));
   for (const p of people) {
     if (!p.tagIds?.includes(tagId)) continue;
-    const key = memberKeyOfPerson(p, userIds);
+    const key = memberKeyOfPerson(p, usersById);
     if (byKey.has(key)) continue;
     // A person wired to a user is that user for approval purposes.
-    const u = key !== `person:${p.id}` ? users.find((x) => x.id === key) : undefined;
+    const u = usersById.get(key);
     if (u) {
       byKey.set(key, {
         key,

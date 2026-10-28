@@ -27,13 +27,14 @@ async function main() {
   const old = { submittedBy: "carl" };
   const imported = { submittedBy: "carl", importBatchId: "b1" };
   check("own application is own", isOwnApplication(own, "carl"), true);
-  check("captured for another portal user is NOT the submitter's", isOwnApplication(forDee, "carl"), false);
+  check("picking another user as applicant does not let the submitter off (unchecked say-so)", isOwnApplication(forDee, "carl"), true);
   check("...but is the applicant's", isOwnApplication(forDee, "dee"), true);
   check("'on behalf' with a typed-in name is still the submitter's", isOwnApplication(typedName, "carl"), true);
   check("older record with no applicant id: submitter is the applicant", isOwnApplication(old, "carl"), true);
   check("imported row is not the importer's", isOwnApplication(imported, "carl"), false);
   const approver = { id: "carl", permissions: ["approve_spend"] };
-  check("submitter for another user who is an approver may act", mayActOnApproved({ ...forDee, requiredApprovers: [{ userId: "carl" }] } as never, approver), true);
+  check("submitter who is an approver may not act on it", mayActOnApproved({ ...forDee, requiredApprovers: [{ userId: "carl" }] } as never, approver), false);
+  check("submitter may still close an imported / no-approver row", mayActOnApproved({ ...typedName, requiredApprovers: [] } as never, approver), true);
   check("own submitter who is an approver may not", mayActOnApproved({ ...own, requiredApprovers: [{ userId: "carl" }] } as never, approver), false);
 
   const F = await import("../lib/actionItemFields");
@@ -41,8 +42,8 @@ async function main() {
   check("non-owner moving status needs a reason", F.isNotOwnerStatusChange(action, { status: "done" }, ["p-other"]), true);
   check("owner moving status does not", F.isNotOwnerStatusChange(action, { status: "done" }, ["p-owner"]), false);
   check("non-owner saving the same status does not", F.isNotOwnerStatusChange(action, { status: "in_progress", progress: 40 }, []), false);
-  const withLine = F.withNotOwnerReason({ status: "done" }, { id: "u", name: "Admin" }, "owner left")({ ...(action as object), updates: [] } as never);
-  check("reason lands on a history line", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status], ["owner left", "done"]);
+  const withLine = F.withHistoryLine({ status: "done" }, { id: "u", name: "Admin" }, "", "owner left")({ ...(action as object), updates: [] } as never);
+  check("reason lands on a history line, as saved (done = 100%)", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status, withLine.updates?.[0].progress], ["owner left", "done", 100]);
 
   const { writeJson } = await import("../lib/controlData");
   const { getTagCounts, getTagMembers } = await import("../lib/tagData");

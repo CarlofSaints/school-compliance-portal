@@ -1,6 +1,7 @@
 import {
   STATUS_LABELS,
   matchActionCategory,
+  normalise,
   parseReminder,
 } from "./actionItems";
 import type {
@@ -39,24 +40,39 @@ export function isNotOwnerStatusChange(
   return moved && !existing.assigneeIds.some((id) => myPersonIds.includes(id));
 }
 
-// The edit with a line added to the action's history saying who moved it and
-// why, built from the action AS IT IS NOW so a concurrent update is kept.
-export function withNotOwnerReason(
+// The reason a non-owner sent, tidied. Empty when none was given.
+export function notOwnerReasonOf(body: unknown): string {
+  return String((body as { notOwnerReason?: unknown })?.notOwnerReason ?? "").trim().slice(0, 2000);
+}
+
+export const NEEDS_REASON = {
+  error: "You are not assigned to this action. Say why you are changing its status.",
+  needsReason: true,
+};
+
+// The ONE way a line is added to an action's history (Update progress, Edit,
+// bulk): the edit plus a line saying who did it, built from the action AS IT IS
+// NOW so a concurrent update is kept. The line records the status and progress
+// as SAVED (after normalise: done forces 100%, progress lifts not started).
+export function withHistoryLine(
   updates: Partial<ActionItem>,
   by: { id: string; name: string },
-  reason: string
+  note: string,
+  notOwnerReason = ""
 ): (current: ActionItem) => Partial<ActionItem> {
   return (current) => {
+    const after = normalise({ ...current, ...updates });
     const line: ActionUpdate = {
       id: crypto.randomUUID(),
       at: new Date().toISOString(),
       byId: by.id,
       byName: by.name,
-      note: "",
-      progress: Math.max(0, Math.min(100, Math.round(updates.progress ?? current.progress))),
-      status: updates.status ?? current.status,
-      notOwnerReason: reason,
+      note,
+      progress: after.progress,
+      status: after.status,
+      ...(notOwnerReason ? { notOwnerReason } : {}),
     };
+    // Newest first, so the grid's "last update" column is updates[0].
     return { ...updates, updates: [line, ...(current.updates || [])].slice(0, 100) };
   };
 }
