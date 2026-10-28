@@ -34,7 +34,11 @@ export function isNotOwnerStatusChange(
   updates: Partial<ActionItem>,
   myPersonIds: string[]
 ): boolean {
-  return movesStatus(existing, updates) && !existing.assigneeIds.some((id) => myPersonIds.includes(id));
+  // An owner both before AND after the edit: adding yourself in the same save
+  // must not skip the reason, and neither must taking yourself off.
+  const mine = (ids: string[]) => ids.some((id) => myPersonIds.includes(id));
+  const owner = mine(existing.assigneeIds) && mine(updates.assigneeIds ?? existing.assigneeIds);
+  return movesStatus(existing, updates) && !owner;
 }
 
 // The reason a non-owner sent, tidied. Empty when none was given.

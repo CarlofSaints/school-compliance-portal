@@ -42,6 +42,8 @@ async function main() {
   check("non-owner moving status needs a reason", F.isNotOwnerStatusChange(action, { status: "done" }, ["p-other"]), true);
   check("owner moving status does not", F.isNotOwnerStatusChange(action, { status: "done" }, ["p-owner"]), false);
   check("non-owner saving the same status does not", F.isNotOwnerStatusChange(action, { status: "in_progress", progress: 40 }, []), false);
+  check("adding yourself in the same save still needs a reason", F.isNotOwnerStatusChange(action, { status: "done", assigneeIds: ["p-owner", "p-other"] }, ["p-other"]), true);
+  check("taking yourself off in the same save needs a reason", F.isNotOwnerStatusChange(action, { status: "done", assigneeIds: [] }, ["p-owner"]), true);
   const withLine = F.withHistoryLine({ status: "done" }, { id: "u", name: "Admin" }, "", "owner left")({ ...(action as object), updates: [] } as never);
   check("reason lands on a history line, as saved (done = 100%)", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status, withLine.updates?.[0].progress], ["owner left", "done", 100]);
 
