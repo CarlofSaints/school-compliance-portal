@@ -7,7 +7,7 @@ import Toast from "@/components/Toast";
 import FundingSplit, { type Allocation } from "@/components/FundingSplit";
 import { DEFAULT_SUPPLIER_CONNECTIONS } from "@/lib/positions";
 import { useT } from "@/components/I18nProvider";
-import { SPEND_EDIT_FIELDS } from "@/lib/spend";
+import { pickSpendEditFields } from "@/lib/spend";
 
 interface SpendSettings {
   sourcesOfFunds: string[];
@@ -205,11 +205,7 @@ export default function EditSpendPage() {
     const formData = new FormData();
     // The editable fields as this page loaded them: the server writes only
     // the ones changed here, and refuses if someone else changed the same one.
-    const loaded = data as unknown as Record<string, unknown>;
-    formData.append(
-      "base",
-      JSON.stringify(Object.fromEntries(SPEND_EDIT_FIELDS.map((k) => [k, loaded[k]])))
-    );
+    formData.append("base", JSON.stringify(pickSpendEditFields(data)));
     formData.append("projectName", projectName);
     formData.append("description", description);
     formData.append("estimatedAmount", estimatedAmount);

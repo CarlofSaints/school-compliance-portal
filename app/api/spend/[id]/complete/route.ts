@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { actorFrom } from "@/lib/activityActor";
 import { requirePermission } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import { mayActOnApproved } from "@/lib/approvalEngine";
@@ -53,7 +54,7 @@ export async function POST(
       budgetOverrunExplanation: finishedWithinBudget
         ? ""
         : budgetOverrunExplanation || "",
-    });
+    }, { byName: actorFrom(req, session).actorName });
 
     return NextResponse.json({ success: true });
   } catch {

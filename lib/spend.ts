@@ -205,3 +205,9 @@ export const SPEND_EDIT_FIELDS = [
   "applicantUserId", "applicantName", "applicantSurname", "applicantEmail",
   "submittedOnBehalf",
 ] as const;
+
+/** Just the SPEND_EDIT_FIELDS of a record or payload. */
+export function pickSpendEditFields(v: unknown): Partial<SpendApplication> {
+  const src = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  return Object.fromEntries(SPEND_EDIT_FIELDS.map((k) => [k, src[k]])) as Partial<SpendApplication>;
+}

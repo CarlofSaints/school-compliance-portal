@@ -1,26 +1,23 @@
 import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
-import { spendRefusalResponse } from "@/lib/spendConflict";
+import { spendRefusalResponse, spendConflictResponse } from "@/lib/spendConflict";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getSpendById,
   updateSpendApplication,
+  SpendChangeRefused,
   SpendEditConflict,
   mergeSpendEdit,
+  changedSince,
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
 import type { QuoteDetail, FundingAllocation, SpendApplication } from "@/lib/spendData";
-import { SPEND_EDIT_FIELDS } from "@/lib/spend";
+import { pickSpendEditFields } from "@/lib/spend";
 import { resolveApprovers } from "@/lib/approvalResolver";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { sendApprovalRequestEmail } from "@/lib/email";
-
-function pickEditFields(v: unknown): Partial<SpendApplication> {
-  const src = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  return Object.fromEntries(SPEND_EDIT_FIELDS.map((k) => [k, src[k]])) as Partial<SpendApplication>;
-}
 
 export async function GET(
   req: NextRequest,
@@ -94,7 +91,7 @@ export async function PUT(
     let base: Partial<SpendApplication> | undefined;
     try {
       const raw = formData.get("base");
-      if (typeof raw === "string" && raw) base = pickEditFields(JSON.parse(raw));
+      if (typeof raw === "string" && raw) base = pickSpendEditFields(JSON.parse(raw));
     } catch {
       return NextResponse.json({ error: "Invalid body" }, { status: 400 });
     }
@@ -139,26 +136,42 @@ export async function PUT(
 
     // On-behalf-of fields
     const onBehalfStr = formData.get("onBehalf") as string;
+    const wasOnBehalf = !!app.submittedOnBehalf;
     const isOnBehalf =
       onBehalfStr !== null ? onBehalfStr === "yes" : app.submittedOnBehalf;
     const applicantName = isOnBehalf
       ? (formData.get("applicantName") as string) || app.applicantName
-      : session.name;
+      : wasOnBehalf ? session.name : app.applicantName;
     const applicantSurname = isOnBehalf
       ? (formData.get("applicantSurname") as string) || app.applicantSurname
-      : session.surname;
+      : wasOnBehalf ? session.surname : app.applicantSurname;
     const applicantEmail = isOnBehalf
       ? (formData.get("applicantEmail") as string) || app.applicantEmail
-      : session.email;
+      : wasOnBehalf ? session.email : app.applicantEmail;
+    // Not on behalf, and it never was: the applicant stays who it is (an admin
+    // fixing a typo must not become it). Switched off "on behalf": the person
+    // saving is the applicant, as on a new application.
     // The applicant is a portal user where one was picked. An empty string is
     // a real choice ("someone not on the portal"), so only fall back to the
     // saved value when the form did not send the field at all.
     const applicantUserIdRaw = formData.get("applicantUserId");
     const applicantUserId = !isOnBehalf
-      ? undefined
+      ? wasOnBehalf ? session.id : app.applicantUserId
       : applicantUserIdRaw === null
         ? app.applicantUserId
         : (applicantUserIdRaw as string) || undefined;
+
+    // A new quote file goes to a fixed path, so refuse BEFORE uploading if
+    // someone else changed the quotes since this page loaded them: otherwise
+    // the refused save would already have replaced their file.
+    const uploading = [1, 2, 3, 4].some((i) => {
+      const f = formData.get(`quote${i}`) as File | null;
+      return !!f && f.size > 0;
+    });
+    if (base && uploading) {
+      const moved = changedSince(app, { quotes: base.quotes, quoteDetails: base.quoteDetails });
+      if (moved.length > 0) return spendConflictResponse(app, moved);
+    }
 
     // Handle quote files - check for new uploads
     const quotePaths = [...app.quotes];
@@ -224,12 +237,34 @@ export async function PUT(
     // otherwise it is worked out from the record at save time, below.
     let newStatus: SpendApplication["status"] | undefined;
 
+    const mine = {
+      projectName,
+      description,
+      estimatedAmount,
+      supplierConnection,
+      budgeted,
+      sourceOfFunds,
+      fundingAllocations,
+      quotes: quotePaths,
+      quoteDetails,
+      applicantUserId,
+      applicantName,
+      applicantSurname,
+      applicantEmail,
+      submittedOnBehalf: isOnBehalf,
+    };
+    // 🔴 Merged BEFORE anything is worked out from it: only the fields this
+    // person changed are theirs, the rest stay as stored. The band, votes and
+    // emails below all follow what will actually be SAVED - banding on the
+    // page's stale amount once re-banded a R250 000 project as R9 000.
+    const merged = base ? mergeSpendEdit(mine, base, app) : mine;
+
     // 🔴 A new amount is a new application as far as approval goes. The band,
     // and so WHO must approve, was frozen at submission; keeping it after the
     // amount changed let R9 000 approved by the Principal become R250 000 with
     // no FINCOM sign-off. So the approvers are worked out again and every
     // decision so far is cleared.
-    const amountChanged = Math.abs(estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
+    const amountChanged = Math.abs(merged.estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
     // Any edit after votes have been cast restarts them, not just a new
     // amount: a swapped quote, supplier or description is a different
     // application from the one the earlier approvers said yes to.
@@ -251,7 +286,7 @@ export async function PUT(
       reband = { approvals: [], preferredQuotes: [] };
     }
     if (amountChanged || firstImportEdit) {
-      const approval = await resolveApprovers(estimatedAmount);
+      const approval = await resolveApprovers(merged.estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
       reband = {
         approvalTierId: approval.tierId,
@@ -261,7 +296,7 @@ export async function PUT(
         approvalWarning: approval.warning,
         approvals: [],
         preferredQuotes: [],
-        approvedAmount: approval.logOnly ? estimatedAmount : undefined,
+        approvedAmount: approval.logOnly ? merged.estimatedAmount : undefined,
       };
     }
 
@@ -269,28 +304,19 @@ export async function PUT(
     // AT SAVE TIME: an approval that landed while this edit was being made
     // was cast on the old wording, so it is cleared too.
     let restartedNow = false;
-    const mine = {
-      projectName,
-      description,
-      estimatedAmount,
-      supplierConnection,
-      budgeted,
-      sourceOfFunds,
-      fundingAllocations,
-      quotes: quotePaths,
-      quoteDetails,
-      applicantUserId,
-      applicantName,
-      applicantSurname,
-      applicantEmail,
-      submittedOnBehalf: isOnBehalf,
-    };
     const saved = await updateSpendApplication(id, (current) => {
-      // Approved or completed while this page was open: no longer editable.
+      // Approved or completed while this page was open: no longer editable,
+      // and saving again will not change that.
       if (current.status === "approved" || current.status === "completed") {
-        throw new SpendEditConflict(current, ["status"]);
+        throw new SpendChangeRefused("Cannot edit approved or completed applications", 400);
       }
-      const fields = base ? mergeSpendEdit(mine, base, current) : mine;
+      // The merge and band above were worked out from the record read at the
+      // start. If an edited field moved in the moment since, refuse with no
+      // fields named: the page keeps its base, and Save merges afresh.
+      if (base && changedSince(current, pickSpendEditFields(app)).length > 0) {
+        throw new SpendEditConflict(current, []);
+      }
+      const fields = merged;
       const votesNow =
         (current.approvals?.length ?? 0) > 0 &&
         (current.status === "pending" || current.status === "pending_decision");
@@ -336,10 +362,10 @@ export async function PUT(
               approver.email,
               approver.name,
               app.id,
-              projectName,
-              sourceOfFunds,
-              quoteDetails.length,
-              estimatedAmount,
+              saved.projectName,
+              saved.sourceOfFunds,
+              saved.quoteDetails.length,
+              saved.estimatedAmount,
               app.submittedByName,
               (reband.approvalTierLabel ?? app.approvalTierLabel) || "Approval required"
             );
@@ -378,8 +404,8 @@ export async function PUT(
         action: "spend.amount.changed",
         entity: "spend",
         entityId: app.id,
-        summary: `Changed "${app.projectName}" from R${Number(app.estimatedAmount || 0).toLocaleString()} to R${estimatedAmount.toLocaleString()}; approvals restarted`,
-        detail: { from: app.estimatedAmount, to: estimatedAmount, previousApprovals: app.approvals?.length ?? 0 },
+        summary: `Changed "${app.projectName}" from R${Number(app.estimatedAmount || 0).toLocaleString()} to R${saved.estimatedAmount.toLocaleString()}; approvals restarted`,
+        detail: { from: app.estimatedAmount, to: saved.estimatedAmount, previousApprovals: app.approvals?.length ?? 0 },
       });
     }
 

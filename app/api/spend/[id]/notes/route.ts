@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { actorFrom } from "@/lib/activityActor";
 import { requireLogin } from "@/lib/rolesData";
 import {
   getSpendById,
@@ -111,7 +112,7 @@ export async function POST(
   // Added to the notes AS THEY ARE NOW, so two notes posted together both stay.
   const updated = await updateSpendApplication(id, (current) => ({
     notes: [...(current.notes || []), note],
-  }));
+  }), { byName: actorFrom(req, session).actorName });
 
   return NextResponse.json(
     { note, count: updated?.notes?.length ?? 0 },

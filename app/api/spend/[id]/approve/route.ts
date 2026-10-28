@@ -119,7 +119,7 @@ export async function POST(
           approvals: [...current.approvals, ...override],
           approvedAmount: current.approvedAmount ?? current.estimatedAmount,
         };
-      });
+      }, { byName: actorFrom(req, session).actorName });
 
       await recordActivity({
         ...actorFrom(req, session),
@@ -257,7 +257,7 @@ export async function POST(
         updates.approvedAmount = current.estimatedAmount;
       }
       return updates;
-    });
+    }, { byName: actorFrom(req, session).actorName });
     if (!saved) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }

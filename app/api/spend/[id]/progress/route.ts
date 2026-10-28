@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { actorFrom } from "@/lib/activityActor";
 import { requireLogin } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 
@@ -48,6 +49,6 @@ export async function PATCH(
 
   const updated = await updateSpendApplication(id, {
     projectProgress: progress as (typeof VALID)[number],
-  });
+  }, { byName: actorFrom(req, session).actorName });
   return NextResponse.json({ success: true, projectProgress: updated?.projectProgress });
 }
