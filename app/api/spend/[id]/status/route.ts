@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
+import { getSpendById, updateSpendApplication, SpendChangeRefused, SpendEditConflict } from "@/lib/spendData";
+import { spendConflictResponse } from "@/lib/spendConflict";
 import type { SpendApplication } from "@/lib/spendData";
 import { isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 
@@ -43,11 +44,13 @@ export async function PATCH(
   }
 
   let status: string | undefined;
-  let expectedRev: string | undefined;
+  // The status the grid showed when it was changed: refused if someone else
+  // changed it since (a note or a vote meanwhile refuses nothing).
+  let expectedStatus: string | undefined;
   try {
     const body = await req.json();
     status = body?.status;
-    expectedRev = typeof body?.expectedRev === "string" ? body.expectedRev : undefined;
+    expectedStatus = typeof body?.expectedStatus === "string" ? body.expectedStatus : undefined;
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
@@ -111,10 +114,11 @@ export async function PATCH(
   let updated;
   try {
     updated = await updateSpendApplication(id, updates, {
-      expectedRev,
-      byName: `${session.name} ${session.surname}`.trim(),
+      base: expectedStatus !== undefined ? { status: expectedStatus as SpendApplication["status"] } : undefined,
+      byName: actorFrom(req, session).actorName,
     });
   } catch (err) {
+    if (err instanceof SpendEditConflict) return spendConflictResponse(err.current);
     if (err instanceof SpendChangeRefused) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
@@ -138,6 +142,5 @@ export async function PATCH(
     success: true,
     status: updated?.status,
     approvedAmount: updated?.approvedAmount,
-    rev: updated?.rev,
   });
 }

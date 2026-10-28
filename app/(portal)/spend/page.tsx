@@ -67,7 +67,6 @@ interface SpendRecord {
   approvalWarning?: string;
   submittedBy?: string;
   importBatchId?: string;
-  rev?: string;
   manualReminders?: { at: string; byName: string; sentTo: string[] }[];
   approvals: {
     userId: string;
@@ -263,17 +262,16 @@ export default function SpendPage() {
     const res = await authFetch(url, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      // The version this grid loaded: refused if someone saved the row since,
-      // so a change made elsewhere is never silently overwritten.
-      body: JSON.stringify({ ...body, expectedRev: previous.rev ?? "" }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
-      setApps((prev) => prev.map((a) => (a.id === id ? previous : a)));
       const data = await res.json().catch(() => ({}));
+      // Changed by someone else meanwhile: show their version of the row
+      // (the server sends it), so picking again is a choice made knowingly.
+      const current = res.status === 409 && data.current ? (data.current as SpendRecord) : previous;
+      setApps((prev) => prev.map((a) => (a.id === id ? current : a)));
       setToast({ message: data.error || failureMessage, type: "error" });
-      // Saved by someone else meanwhile: show their version.
-      if (res.status === 409) fetchData();
       return;
     }
     // Take the server's version of the row back, so what the grid shows is
@@ -285,9 +283,6 @@ export default function SpendPage() {
           a.id === id
             ? {
                 ...a,
-                // The new version, so this person's next change is not
-                // refused as if someone else had saved.
-                ...(saved.rev !== undefined ? { rev: saved.rev } : {}),
                 ...(saved.status !== undefined
                   ? { status: saved.status }
                   : {}),
@@ -326,7 +321,8 @@ export default function SpendPage() {
       id,
       optimistic,
       `/api/spend/${id}/status`,
-      { status },
+      // What this grid showed: refused if someone else changed it since.
+      { status, expectedStatus: app?.status },
       t("Could not change the status")
     );
   };
@@ -340,7 +336,7 @@ export default function SpendPage() {
         custodianName: user ? `${user.name} ${user.surname}` : undefined,
       },
       `/api/spend/${id}/custodian`,
-      { custodianUserId: userId },
+      { custodianUserId: userId, expectedCustodianUserId: apps.find((a) => a.id === id)?.custodianUserId ?? "" },
       t("Could not change the custodian")
     );
   };

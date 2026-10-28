@@ -1,11 +1,13 @@
 import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
+import { spendConflictResponse } from "@/lib/spendConflict";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getSpendById,
   updateSpendApplication,
   SpendChangeRefused,
-  spendSavedMeanwhileMessage as savedMeanwhile,
+  SpendEditConflict,
+  changedSince,
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
@@ -14,6 +16,19 @@ import { resolveApprovers } from "@/lib/approvalResolver";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { sendApprovalRequestEmail } from "@/lib/email";
+
+// What the edit page can change, so its "as I loaded it" copy is compared on
+// exactly these and nothing it does not show (status, votes, notes).
+const EDIT_FIELDS = [
+  "projectName", "description", "estimatedAmount", "supplierConnection",
+  "budgeted", "sourceOfFunds", "fundingAllocations", "quoteDetails", "quotes",
+  "applicantUserId", "applicantName", "applicantSurname", "applicantEmail",
+  "submittedOnBehalf",
+] as const;
+function pickEditFields(v: unknown): Partial<SpendApplication> {
+  const src = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  return Object.fromEntries(EDIT_FIELDS.map((k) => [k, src[k]])) as Partial<SpendApplication>;
+}
 
 export async function GET(
   req: NextRequest,
@@ -79,12 +94,20 @@ export async function PUT(
 
   try {
     const formData = await req.formData();
-    // The rev the edit page loaded. Checked now, before any quote is uploaded,
-    // and again inside the save against the record as it is then.
-    const expectedRevRaw = formData.get("expectedRev");
-    const expectedRev = typeof expectedRevRaw === "string" ? expectedRevRaw : undefined;
-    if (expectedRev !== undefined && (app.rev ?? "") !== expectedRev) {
-      return NextResponse.json({ error: savedMeanwhile(app) }, { status: 409 });
+    // The editable fields as the edit page loaded them. Checked now, before
+    // any quote is uploaded, and again inside the save against the record as
+    // it is then. Only these fields count, so a note or a vote meanwhile does
+    // not refuse the save. shortcut: two saves in the same second can still
+    // both upload a quote to its fixed path; fine at school scale.
+    let base: Partial<SpendApplication> | undefined;
+    try {
+      const raw = formData.get("base");
+      if (typeof raw === "string" && raw) base = pickEditFields(JSON.parse(raw));
+    } catch {
+      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
+    if (base && changedSince(app, base).length > 0) {
+      return spendConflictResponse(app);
     }
     const projectName =
       (formData.get("projectName") as string) || app.projectName;
@@ -291,7 +314,7 @@ export async function PUT(
       importBatchId: undefined,
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
-    }, { expectedRev, byName: `${session.name} ${session.surname}`.trim() });
+    }, { base, byName: actorFrom(req, session).actorName });
 
     // Removed meanwhile (Undo import, a delete): nothing was saved.
     if (!saved) {
@@ -361,6 +384,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof SpendEditConflict) return spendConflictResponse(err.current);
     if (err instanceof SpendChangeRefused) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }

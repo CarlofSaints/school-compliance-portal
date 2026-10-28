@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
+import { getSpendById, updateSpendApplication, SpendChangeRefused, SpendEditConflict } from "@/lib/spendData";
+import { spendConflictResponse } from "@/lib/spendConflict";
+import { actorFrom } from "@/lib/activityActor";
 import { getUsers } from "@/lib/userData";
 
 // Set the project's custodian from the grid. Sending an empty custodianUserId
@@ -29,20 +31,22 @@ export async function PATCH(
   }
 
   let custodianUserId: string | undefined;
-  let expectedRev: string | undefined;
+  // The custodian the grid showed: refused if someone else changed it since.
+  let expected: { custodianUserId?: string } | undefined;
   try {
     const body = await req.json();
     custodianUserId = body?.custodianUserId;
-    expectedRev = typeof body?.expectedRev === "string" ? body.expectedRev : undefined;
+    if (body && "expectedCustodianUserId" in body) {
+      expected = { custodianUserId: body.expectedCustodianUserId || undefined };
+    }
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  // Refused, not written, if someone else saved the row since the grid loaded it.
   const save = (fields: { custodianUserId?: string; custodianName?: string }) =>
     updateSpendApplication(id, fields, {
-      expectedRev,
-      byName: `${session.name} ${session.surname}`.trim(),
+      base: expected,
+      byName: actorFrom(req, session).actorName,
     });
 
   try {
@@ -55,7 +59,6 @@ export async function PATCH(
         success: true,
         custodianUserId: updated?.custodianUserId,
         custodianName: updated?.custodianName,
-        rev: updated?.rev,
       });
     }
 
@@ -75,9 +78,9 @@ export async function PATCH(
       success: true,
       custodianUserId: updated?.custodianUserId,
       custodianName: updated?.custodianName,
-      rev: updated?.rev,
     });
   } catch (err) {
+    if (err instanceof SpendEditConflict) return spendConflictResponse(err.current);
     if (err instanceof SpendChangeRefused) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }

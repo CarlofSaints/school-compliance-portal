@@ -130,22 +130,32 @@ export type SpendChange =
   | Partial<Omit<SpendApplication, "id">>
   | ((current: SpendApplication) => Partial<Omit<SpendApplication, "id">>);
 
-// The refusal when somebody else saved the application after this person
-// opened it. Nothing is written, so nobody's change is lost.
-export function spendSavedMeanwhileMessage(current: SpendApplication): string {
-  const who = current.changedByName || "Someone else";
-  const at = current.changedAt
-    ? ` at ${new Date(current.changedAt).toLocaleTimeString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit" })}`
-    : "";
-  return `${who} changed this project${at} while you had it open, so your change was not saved. Reload to see what they changed, then make yours again.`;
+/** Thrown when a field this person is saving was changed by somebody else
+ *  after their page loaded it. Nothing is written; `current` goes back to the
+ *  page so it can show what changed and let them save over it on purpose. */
+export class SpendEditConflict extends SpendChangeRefused {
+  constructor(readonly current: SpendApplication) {
+    super("Changed by someone else", 409);
+  }
+}
+
+// The fields of `base` (as the person's page loaded them) that are no longer
+// what is stored. Only these count: a note, a reminder or a vote landing
+// meanwhile touches other fields and refuses nobody.
+export function changedSince(current: SpendApplication, base: Partial<SpendApplication>): string[] {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  return (Object.keys(base) as (keyof SpendApplication)[]).filter(
+    (k) => !same(current[k], base[k])
+  );
 }
 
 export async function updateSpendApplication(
   id: string,
   change: SpendChange,
-  // expectedRev: the rev the person's page loaded ("" for a never-saved
-  // import). Refused if the record has moved on since. byName: who is saving.
-  opts: { expectedRev?: string; byName?: string } = {}
+  // base: the fields this save changes, AS THE PERSON'S PAGE LOADED THEM.
+  // Refused (SpendEditConflict) if any of them has changed since.
+  // byName: who is saving, for the next person's refusal message.
+  opts: { base?: Partial<SpendApplication>; byName?: string } = {}
 ): Promise<SpendApplication | null> {
   let updated: SpendApplication | null = null;
   await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
@@ -154,8 +164,8 @@ export async function updateSpendApplication(
       updated = null;
       return NO_CHANGE;
     }
-    if (opts.expectedRev !== undefined && (apps[idx].rev ?? "") !== opts.expectedRev) {
-      throw new SpendChangeRefused(spendSavedMeanwhileMessage(apps[idx]), 409);
+    if (opts.base && changedSince(apps[idx], opts.base).length > 0) {
+      throw new SpendEditConflict(apps[idx]);
     }
     const updates = typeof change === "function" ? change(apps[idx]) : change;
     // rev: two identical decisions at once (a double click) must not both

@@ -39,7 +39,6 @@ interface SpendData {
   applicantSurname?: string;
   applicantEmail?: string;
   submittedOnBehalf?: boolean;
-  rev?: string;
 }
 
 interface DirectoryUser {
@@ -203,9 +202,9 @@ export default function EditSpendPage() {
     setSubmitting(true);
 
     const formData = new FormData();
-    // The version this page loaded: the save is refused if someone else saved
-    // the project since, and what was typed here stays on screen.
-    formData.append("expectedRev", data?.rev ?? "");
+    // The project as this page loaded it: the save is refused if someone else
+    // changed any of these fields since. What was typed stays on screen.
+    formData.append("base", JSON.stringify(data));
     formData.append("projectName", projectName);
     formData.append("description", description);
     formData.append("estimatedAmount", estimatedAmount);
@@ -244,7 +243,11 @@ export default function EditSpendPage() {
     if (res.ok) {
       router.push(`/spend/${spendId}`);
     } else {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
+      // Changed by someone else meanwhile. Their version becomes the base, so
+      // a second Save is the person choosing to replace it with what they
+      // typed (the form keeps it).
+      if (res.status === 409 && err.current) setData(err.current);
       setToast({ message: err.error || t("Failed to save"), type: "error" });
     }
     setSubmitting(false);
