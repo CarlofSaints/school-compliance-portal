@@ -1,21 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LIMITS, hit, clear, tooMany, ipOf, type Limit, type LimitResult } from "@/lib/rateLimit";
 import { getUserByEmail, getUserById, verifyPassword, repairUserIndex, type User } from "@/lib/userData";
-import { getRoleById, resolveRolePermissions, requireLogin } from "@/lib/rolesData";
+import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { afterResponse, actorFromUser } from "@/lib/activityActor";
 import { UNKNOWN_ADDRESS, UNKNOWN_CONNECTION } from "@/lib/activityLabels";
 import { countSignIn, deviceOf, maskTypedEmail, sastIso } from "@/lib/signinLog";
-import { SessionPayload } from "@/lib/roles";
 import {
   SESSION_COOKIE,
-  createSessionToken,
   readSessionClaims,
   verifySessionToken,
   sessionCookieOptions,
   isHttps,
   isSameOriginWrite,
 } from "@/lib/session";
+import { finishSignIn } from "@/lib/signIn";
+import { mfaRequired, getMfa, newSecret, otpauthUri, sealSecret, createPendingToken } from "@/lib/mfa";
+import { resolveBranding } from "@/lib/brandingData";
+import QRCode from "qrcode";
 
 // Sign-in and sign-out are the two writes that run with no session, so they
 // get the cross-site check here rather than from getSessionFromRequest.
@@ -228,46 +230,27 @@ export async function POST(req: NextRequest) {
     // The right password wipes the wrong-password count.
     await clear(LIMITS.loginAccount, account);
 
-    const role = await getRoleById(user.role);
-    const session: SessionPayload = {
-      id: user.id,
-      name: user.name,
-      surname: user.surname,
-      email: user.email,
-      role: user.role,
-      roleName: role?.name || user.role,
-      permissions: resolveRolePermissions(user.role, role),
-    };
+    // Super Admin: no cookie yet. The password earns a short-lived token that
+    // only /api/auth/mfa accepts, with a code from their authenticator app.
+    if (mfaRequired(user)) {
+      const { key: tenantKey } = await tenantScope();
+      if (await getMfa(user.id)) {
+        return NextResponse.json({ mfa: "code", mfaToken: createPendingToken(user, tenantKey) });
+      }
+      // Not set up yet: the new secret rides in the token, sealed, and is
+      // only saved once a code from it proves the app works.
+      const secret = newSecret();
+      const uri = otpauthUri(secret, user.email, (await resolveBranding()).fullName);
+      return NextResponse.json({
+        mfa: "setup",
+        mfaToken: createPendingToken(user, tenantKey, sealSecret(secret)),
+        secret,
+        qrSvg: await QRCode.toString(uri, { type: "svg", margin: 1 }),
+      });
+    }
 
-    // The cookie IS the sign-in now. `session` in the body is only what the
-    // pages draw (name, menu); the server never believes it.
-    const { key: tenantKey } = await tenantScope();
-    const res = NextResponse.json({
-      session,
-      forcePasswordChange: user.forcePasswordChange,
-    });
-    res.cookies.set(
-      SESSION_COOKIE,
-      createSessionToken(user, tenantKey),
-      sessionCookieOptions(isHttps(req))
-    );
-    // Queued only now the reply with the cookie exists: a sign-in that failed
-    // to build one must not be logged as signed in.
-    await afterResponse(() =>
-      Promise.all([
-        recordActivity({
-          at,
-          ...actorOf(user),
-          action: "auth.sign_in",
-          entity: "auth",
-          entityId: user.id,
-          summary: "Signed in",
-          detail: { device },
-        }),
-        countSignIn(user, "ok", ip, device, at),
-      ])
-    );
-    return res;
+    // Awaited so a failure to build the cookie lands in the catch below.
+    return await finishSignIn(req, user, at);
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },

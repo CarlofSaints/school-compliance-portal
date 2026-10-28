@@ -23,6 +23,12 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Super Admin second step: "code" (app set up) or "setup" (first time).
+  const [mfa, setMfa] = useState<null | { step: "code" | "setup"; token: string; secret?: string; qrSvg?: string }>(null);
+  const [code, setCode] = useState("");
+  // Shown once after set-up, before going in.
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null);
+  const [afterCodes, setAfterCodes] = useState<(() => void) | null>(null);
 
   useEffect(() => {
     const s = getSession();
@@ -45,13 +51,55 @@ export default function LoginPage() {
         setError(data.error || t("Login failed"));
         return;
       }
-      setSession(data.session);
-      if (data.forcePasswordChange) {
-        // The emailed link (?next=) survives the forced password change.
-        router.push(passwordChangeUrl(new URLSearchParams(window.location.search).get("next")));
-      } else {
-        router.push(nextOrDashboard());
+      if (data.mfa) {
+        setMfa({ step: data.mfa, token: data.mfaToken, secret: data.secret, qrSvg: data.qrSvg });
+        setCode("");
+        return;
       }
+      signedIn(data);
+    } catch {
+      setError(t("Network error. Please try again."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signedIn = (data: { session: Parameters<typeof setSession>[0]; forcePasswordChange?: boolean }) => {
+    setSession(data.session);
+    if (data.forcePasswordChange) {
+      // The emailed link (?next=) survives the forced password change.
+      router.push(passwordChangeUrl(new URLSearchParams(window.location.search).get("next")));
+    } else {
+      router.push(nextOrDashboard());
+    }
+  };
+
+  const handleCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfa) return;
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mfaToken: mfa.token, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || t("Login failed"));
+        if (data.restart) setMfa(null);
+        return;
+      }
+      if (data.backupCodes) {
+        setBackupCodes(data.backupCodes);
+        setAfterCodes(() => () => signedIn(data));
+        return;
+      }
+      if (typeof data.backupLeft === "number" && data.backupLeft <= 3) {
+        alert(t("You have {n} backup codes left. Ask another Super Admin to reset your two-step sign-in so you get new ones.", { n: data.backupLeft }));
+      }
+      signedIn(data);
     } catch {
       setError(t("Network error. Please try again."));
     } finally {
@@ -71,7 +119,9 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-          <h2 className="text-xl font-semibold text-dark mb-6">{t("Sign In")}</h2>
+          <h2 className="text-xl font-semibold text-dark mb-6">
+            {backupCodes ? t("Save your backup codes") : mfa?.step === "setup" ? t("Set up two-step sign-in") : mfa ? t("Two-step sign-in") : t("Sign In")}
+          </h2>
 
           {error && (
             <div className="bg-red-50 text-risk-high px-4 py-3 rounded-lg mb-4 text-sm">
@@ -79,6 +129,74 @@ export default function LoginPage() {
             </div>
           )}
 
+          {backupCodes ? (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                {t("If you lose your phone, each of these codes signs you in once instead of the app. Print them or write them down and keep them somewhere safe. They will not be shown again.")}
+              </p>
+              <ul className="grid grid-cols-2 gap-2 font-mono text-sm bg-gray-50 rounded-lg p-4">
+                {backupCodes.map((c) => <li key={c}>{c}</li>)}
+              </ul>
+              <button
+                type="button"
+                onClick={() => afterCodes?.()}
+                className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors"
+              >
+                {t("I have saved them, continue")}
+              </button>
+            </div>
+          ) : mfa ? (
+            <form onSubmit={handleCode} className="space-y-4">
+              {mfa.step === "setup" ? (
+                <>
+                  <p className="text-sm text-gray-600">
+                    {t("As a Super Admin you need a code from your phone to sign in. Install an authenticator app (Google Authenticator or Microsoft Authenticator), tap Add, and scan this code.")}
+                  </p>
+                  {mfa.qrSvg && (
+                    // Built on our own server from the otpauth link, not user content.
+                    <div className="w-48 h-48 mx-auto" dangerouslySetInnerHTML={{ __html: mfa.qrSvg }} />
+                  )}
+                  <p className="text-xs text-gray-500 text-center">
+                    {t("Cannot scan? Type this key into the app instead:")}
+                    <br />
+                    <span className="font-mono text-sm text-dark break-all select-all">{mfa.secret?.match(/.{1,4}/g)?.join(" ")}</span>
+                  </p>
+                  <label htmlFor="mfa-code" className="block text-sm font-medium text-gray-700 mb-1">
+                    {t("Then enter the 6-digit code the app shows")}
+                  </label>
+                </>
+              ) : (
+                <label htmlFor="mfa-code" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t("Enter the 6-digit code from your authenticator app, or one of your backup codes")}
+                </label>
+              )}
+              <input
+                id="mfa-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+                autoFocus
+                autoComplete="one-time-code"
+                inputMode={mfa.step === "setup" ? "numeric" : "text"}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition font-mono tracking-widest text-center"
+                placeholder="123456"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-primary hover:bg-primary-dark text-white py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? t("Signing in...") : t("Continue")}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMfa(null); setError(""); setPassword(""); }}
+                className="w-full text-sm text-gray-500 hover:underline"
+              >
+                {t("Back")}
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -134,6 +252,7 @@ export default function LoginPage() {
               {loading ? t("Signing in...") : t("Sign In")}
             </button>
           </form>
+          )}
 
           <p className="text-center text-sm text-gray-500 mt-5">
             <Link href="/forgot-password" className="text-primary hover:underline">

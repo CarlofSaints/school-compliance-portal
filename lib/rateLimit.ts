@@ -49,6 +49,8 @@ export const LIMITS = {
   // (five wrong passwords still lock it). The rest stay closed.
   loginIp: { scope: "login-ip", max: 20, windowSec: 15 * 60, message: "Too many sign-in attempts from this connection. Try again in {wait}." },
   loginAccount: { scope: "login-account", max: 5, windowSec: 15 * 60, message: "Too many wrong passwords for this account. Try again in {wait}, or reset your password." },
+  // Closed: this is the guessing limit on a 6-digit code.
+  mfaAccount: { scope: "mfa-account", failClosed: true, max: 5, windowSec: 15 * 60, message: "Too many wrong codes. Try again in {wait}." },
   resetRequestIp: { scope: "reset-request-ip", max: 5, windowSec: 60 * 60, message: "Too many reset requests from this connection. Try again in {wait}." },
   resetRequestEmail: { scope: "reset-request-email", failClosed: true, max: 3, windowSec: 60 * 60, message: "Too many reset requests for this address. Check your inbox, or try again in {wait}." },
   resetCompleteIp: { scope: "reset-complete-ip", max: 10, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
