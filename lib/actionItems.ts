@@ -425,3 +425,11 @@ export function summarise(
     blocked: items.filter((i) => i.status === "blocked").length,
   };
 }
+
+// Whether an edit moves the status or progress, compared as it would be SAVED
+// (normalise: done forces 100%, progress lifts not started). The one test the
+// routes, the Update progress box and the Edit form all use.
+export function movesStatus(existing: ActionItem, updates: Partial<ActionItem>): boolean {
+  const after = normalise({ ...existing, ...updates });
+  return after.status !== existing.status || after.progress !== existing.progress;
+}

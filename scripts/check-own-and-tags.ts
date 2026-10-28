@@ -45,6 +45,19 @@ async function main() {
   const withLine = F.withHistoryLine({ status: "done" }, { id: "u", name: "Admin" }, "", "owner left")({ ...(action as object), updates: [] } as never);
   check("reason lands on a history line, as saved (done = 100%)", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status, withLine.updates?.[0].progress], ["owner left", "done", 100]);
 
+  check("edited imported row put to a vote is the importer's own again", isOwnApplication({ ...imported, requiredApprovers: [{ userId: "boss" }] }, "carl"), true);
+  const A = await import("../lib/actionItems");
+  const act = { status: "in_progress", progress: 40, assigneeIds: [] } as never;
+  check("not started at 40% is no move (saved as in progress)", A.movesStatus(act, { status: "not_started" }), false);
+  check("done is a move", A.movesStatus(act, { status: "done" }), true);
+  const R = await import("../lib/actionItemRecipients");
+  const reg = [
+    { id: "p-linked-other", userId: "dee", email: "bob@x.co" },
+    { id: "p-unlinked", email: "Bob@x.co " },
+    { id: "p-mine", userId: "bob" },
+  ];
+  check("owner: own link or unlinked entry with my email, never someone else's linked entry", R.myPersonIdsIn(reg, { id: "bob", email: "bob@x.co" }), ["p-unlinked", "p-mine"]);
+
   const { writeJson } = await import("../lib/controlData");
   const { getTagCounts, getTagMembers } = await import("../lib/tagData");
   const { getUsers } = await import("../lib/userData");

@@ -4,7 +4,7 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import type { SpendApplication } from "@/lib/spendData";
-import { isOwnApplication } from "@/lib/approvalEngine";
+import { isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 
 const VALID: SpendApplication["status"][] = [
   "pending",
@@ -59,8 +59,8 @@ export async function PATCH(
   const next = status as SpendApplication["status"];
 
   // Approving from the grid skips the vote on the application, so only a spend
-  // admin may do it - except on an imported row, which is the school's existing
-  // register being brought in, not a decision anyone has to vote on. An
+  // admin may do it - except on an imported row nobody has to vote on (the
+  // school's existing register being brought in; see isRegisterImport). An
   // approver on a live application decides on the application itself, where
   // their vote is recorded and every other approver still has their say.
   // Moving an approved project on to completed is bookkeeping and stays open.
@@ -69,7 +69,7 @@ export async function PATCH(
   if (
     approving &&
     !session.permissions.includes("manage_spend_settings") &&
-    !app.importBatchId
+    !isRegisterImport(app)
   ) {
     return NextResponse.json(
       {

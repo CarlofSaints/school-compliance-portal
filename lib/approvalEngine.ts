@@ -178,11 +178,18 @@ export function isRequiredApprover(
  *  the submitter's own say-so (the applicant id is not checked), and would let
  *  anyone approve their own spending. */
 export function isOwnApplication(
-  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string },
+  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string; requiredApprovers?: { userId?: string }[] },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
-  return app.submittedBy === userId && !app.importBatchId;
+  return app.submittedBy === userId && !isRegisterImport(app);
+}
+
+/** A row brought in from the school's register that nobody has to vote on.
+ *  🔴 Ends the moment an edit re-bands it (requiredApprovers set): from then
+ *  on it is a live application and gets every rule a live one gets. */
+export function isRegisterImport(app: { importBatchId?: string; requiredApprovers?: unknown[] }): boolean {
+  return !!app.importBatchId && !app.requiredApprovers?.length;
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:

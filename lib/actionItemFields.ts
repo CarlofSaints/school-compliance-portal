@@ -1,6 +1,7 @@
 import {
   STATUS_LABELS,
   matchActionCategory,
+  movesStatus,
   normalise,
   parseReminder,
 } from "./actionItems";
@@ -26,18 +27,14 @@ export interface ParsedEdit {
   error?: string;
 }
 
-// Whether an edit moves the status or progress of an action the editor is not
-// assigned to (an administrator included). Those must carry a reason, the same
-// as the Update progress box asks for.
+// A move (movesStatus, lib/actionItems) by someone not assigned (an administrator included) must carry
+// a reason, the same as the Update progress box asks for.
 export function isNotOwnerStatusChange(
   existing: ActionItem,
   updates: Partial<ActionItem>,
   myPersonIds: string[]
 ): boolean {
-  const moved =
-    (updates.status !== undefined && updates.status !== existing.status) ||
-    (updates.progress !== undefined && updates.progress !== existing.progress);
-  return moved && !existing.assigneeIds.some((id) => myPersonIds.includes(id));
+  return movesStatus(existing, updates) && !existing.assigneeIds.some((id) => myPersonIds.includes(id));
 }
 
 // The reason a non-owner sent, tidied. Empty when none was given.
@@ -126,7 +123,11 @@ export function parseActionEdit(
     updates.status = body.status as ActionStatus;
   }
   if (body.progress !== undefined) {
-    updates.progress = Number(body.progress);
+    const progress = Number(body.progress);
+    if (!Number.isFinite(progress)) {
+      return { updates: {}, newlyAssigned: [], error: "Progress must be a number between 0 and 100" };
+    }
+    updates.progress = progress;
   }
   if (typeof body.dueDate === "string") {
     if (body.dueDate && !ISO_DATE.test(body.dueDate)) {
