@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission } from "@/lib/rolesData";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
 import {
@@ -52,6 +53,11 @@ export async function PATCH(
     const reason = notOwnerReasonOf(body);
     const notOwner = isNotOwnerStatusChange(existing, parsed.updates, myPersonIdsIn(people, session));
     if (notOwner && !reason) return NextResponse.json(NEEDS_REASON, { status: 400 });
+    // The same limit as Update progress: each of these writes a history line.
+    if (notOwner) {
+      const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
+      if (limited) return limited;
+    }
 
     const by = { id: session.id, name: `${session.name} ${session.surname}`.trim() };
     const saved = await updateActionItem(

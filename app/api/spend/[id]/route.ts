@@ -266,7 +266,9 @@ export async function PUT(
         ? { approvals: [], preferredQuotes: [] }
         : {}),
       ...reband,
-      ...(current.importBatchId ? { editedAfterImport: true } : {}),
+      ...(current.importBatchId
+        ? { importEditors: [...new Set([...(current.importEditors || []), session.id])] }
+        : {}),
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
     });

@@ -47,12 +47,13 @@ async function main() {
   const withLine = F.withHistoryLine({ status: "done" }, { id: "u", name: "Admin" }, "", "owner left")({ ...(action as object), updates: [] } as never);
   check("reason lands on a history line, as saved (done = 100%)", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status, withLine.updates?.[0].progress], ["owner left", "done", 100]);
 
-  check("edited imported row put to a vote is the importer's own again", isOwnApplication({ ...imported, requiredApprovers: [{ userId: "boss" }] }, "carl"), true);
   const { isRegisterImport } = await import("../lib/approvalEngine");
   check("untouched import is a register row", isRegisterImport(imported), true);
-  check("edited import into a band with NO approvers is not", isRegisterImport({ ...imported, editedAfterImport: true }), false);
-  check("edited import is the importer's own", isOwnApplication({ ...imported, editedAfterImport: true }, "carl"), true);
-  check("approved edited import into FINCOM: importer may not pick the quote / close it", mayActOnApproved({ ...imported, editedAfterImport: true, requiredApprovers: [{ userId: "boss" }] } as never, approver), false);
+  const editedByB = { ...imported, importEditors: ["bob"] };
+  check("edited import into a band with NO approvers is not a register row", isRegisterImport(editedByB), false);
+  check("edited import: the EDITOR may not approve it", isOwnApplication(editedByB, "bob"), true);
+  check("edited import: the importer is not blocked for the editor's change", isOwnApplication(editedByB, "carl"), false);
+  check("approved edited import into FINCOM: the editor may not pick the quote / close it", mayActOnApproved({ ...editedByB, requiredApprovers: [{ userId: "boss" }] } as never, { id: "bob", permissions: ["approve_spend"] }), false);
   const A = await import("../lib/actionItems");
   const act = { status: "in_progress", progress: 40, assigneeIds: [] } as never;
   check("not started at 40% is no move (saved as in progress)", A.movesStatus(act, { status: "not_started" }), false);

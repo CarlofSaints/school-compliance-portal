@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LIMITS, enforce } from "@/lib/rateLimit";
+import { LIMITS, enforce, hit, tooMany } from "@/lib/rateLimit";
 import { requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     }[] = [];
     const newlyAssignedBy = new Map<string, string[]>();
     const problems: string[] = [];
+    let notOwnerRows = 0;
 
     for (const row of rows) {
       const id = String(row?.id ?? "");
@@ -82,9 +83,19 @@ export async function POST(req: NextRequest) {
         problems.push(`${existing.ref}: you are not assigned to it, so say why you are changing its status (notOwnerReason)`);
         continue;
       }
+      if (notOwner) notOwnerRows++;
       edits.push({ id, updates: notOwner ? withHistoryLine(parsed.updates, by, "", reason) : parsed.updates });
       if (parsed.newlyAssigned.length > 0) {
         newlyAssignedBy.set(id, parsed.newlyAssigned);
+      }
+    }
+
+    // One charge per history line a non-owner is about to write, the same
+    // limit as Update progress and Edit, so a bulk call is no way round it.
+    if (problems.length === 0) {
+      for (let i = 0; i < notOwnerRows; i++) {
+        const r = await hit(LIMITS.actionUpdateUser, session.id);
+        if (!r.ok) return tooMany(LIMITS.actionUpdateUser, r);
       }
     }
 

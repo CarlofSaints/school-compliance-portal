@@ -96,9 +96,10 @@ export interface SpendApplication {
   // what makes an import undoable - there is no other delete path for a spend
   // application, so a mis-mapped import would otherwise be permanent.
   importBatchId?: string;
-  // Set by the first edit of an imported row: from then on it is a live
-  // application and gets every rule a live one gets (isRegisterImport).
-  editedAfterImport?: boolean;
+  // Everyone who has edited an imported row. The first edit makes it a live
+  // application (isRegisterImport), and its editors - not the admin who ran
+  // the import - are the ones who may not approve it (isOwnApplication).
+  importEditors?: string[];
   importedFrom?: string;
   // Completion fields
   completedAt?: string;

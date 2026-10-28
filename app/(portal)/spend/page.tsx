@@ -67,7 +67,7 @@ interface SpendRecord {
   approvalWarning?: string;
   submittedBy?: string;
   importBatchId?: string;
-  editedAfterImport?: boolean;
+  importEditors?: string[];
   manualReminders?: { at: string; byName: string; sentTo: string[] }[];
   approvals: {
     userId: string;
@@ -791,7 +791,7 @@ export default function SpendPage() {
                                 app.status !== "approved" &&
                                 app.status !== "completed" &&
                                 ((!isSpendAdmin && !isRegisterImport(app)) ||
-                                  isOwnApplication({ ...app, submittedBy: app.submittedBy || "" }, session?.id || ""))
+                                  isOwnApplication(app, session?.id || ""))
                               }
                             >
                               {t(STATUS_DISPLAY[s])}

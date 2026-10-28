@@ -178,19 +178,22 @@ export function isRequiredApprover(
  *  the submitter's own say-so (the applicant id is not checked), and would let
  *  anyone approve their own spending. */
 export function isOwnApplication(
-  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string; editedAfterImport?: boolean; requiredApprovers?: unknown[] },
+  app: { submittedBy?: string; applicantUserId?: string; importBatchId?: string; importEditors?: string[] },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
-  return app.submittedBy === userId && !isRegisterImport(app);
+  // An imported row: the importer only brought the register in. Whoever has
+  // since edited it (changed the amount, the supplier...) is behind it now.
+  if (app.importBatchId) return !!app.importEditors?.includes(userId);
+  return app.submittedBy === userId;
 }
 
 /** A row brought in from the school's register, untouched since.
- *  🔴 Ends with the first edit (editedAfterImport), whatever band it lands in
+ *  🔴 Ends with the first edit (importEditors), whatever band it lands in
  *  - even one with no approvers - and with any approvers being set (rows
- *  edited before the flag existed). From then on it is a live application. */
-export function isRegisterImport(app: { importBatchId?: string; editedAfterImport?: boolean; requiredApprovers?: unknown[] }): boolean {
-  return !!app.importBatchId && !app.editedAfterImport && !app.requiredApprovers?.length;
+ *  edited before importEditors existed). From then on it is a live application. */
+export function isRegisterImport(app: { importBatchId?: string; importEditors?: string[]; requiredApprovers?: unknown[] }): boolean {
+  return !!app.importBatchId && !app.importEditors?.length && !app.requiredApprovers?.length;
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
@@ -199,7 +202,7 @@ export function isRegisterImport(app: { importBatchId?: string; editedAfterImpor
  *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
-  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId" | "editedAfterImport">,
+  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId" | "importEditors">,
   user: { id: string; permissions: string[] }
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;
