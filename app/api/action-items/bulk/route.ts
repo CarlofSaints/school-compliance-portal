@@ -64,8 +64,16 @@ export async function POST(req: NextRequest) {
     const problems: string[] = [];
     let notOwnerRows = 0;
 
+    const seen = new Set<string>();
     for (const row of rows) {
       const id = String(row?.id ?? "");
+      // One row per action: repeats would each add a history line (and one
+      // call could then flood an action's history for a single limit charge).
+      if (seen.has(id)) {
+        problems.push(`${id} appears more than once`);
+        continue;
+      }
+      seen.add(id);
       const existing = byId.get(id);
       if (!existing) {
         problems.push(`${id || "(no id)"} is not an action on the register`);

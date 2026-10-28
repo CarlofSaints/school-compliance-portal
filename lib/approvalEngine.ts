@@ -178,28 +178,21 @@ export function isRequiredApprover(
  *  the submitter's own say-so (the applicant id is not checked), and would let
  *  anyone approve their own spending. */
 export function isOwnApplication(
-  app: { submittedBy?: string; applicantUserId?: string; importBatchId?: string; importEditors?: string[]; requiredApprovers?: unknown[] },
+  app: { submittedBy?: string; applicantUserId?: string; importBatchId?: string; importConvertedAt?: string; requiredApprovers?: unknown[] },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
-  if (app.importBatchId) {
-    // An imported row: the importer only brought the register in. Whoever has
-    // since edited it (changed the amount, the supplier...) is behind it now.
-    if (app.importEditors?.length) return app.importEditors.includes(userId);
-    // Edited and put to a vote before importEditors existed: nobody recorded
-    // who, so the submitter (the importer) stays blocked, as it always was.
-    if (app.requiredApprovers?.length) return app.submittedBy === userId;
-    return false;
-  }
-  return app.submittedBy === userId;
+  // An untouched import: the importer only brought the register in. Once
+  // edited it is an ordinary application and its submitter is the editor.
+  return app.submittedBy === userId && !isRegisterImport(app);
 }
 
 /** A row brought in from the school's register, untouched since.
- *  🔴 Ends with the first edit (importEditors), whatever band it lands in
- *  - even one with no approvers - and with any approvers being set (rows
- *  edited before importEditors existed). From then on it is a live application. */
-export function isRegisterImport(app: { importBatchId?: string; importEditors?: string[]; requiredApprovers?: unknown[] }): boolean {
-  return !!app.importBatchId && !app.importEditors?.length && !app.requiredApprovers?.length;
+ *  🔴 Ends with the first edit (importConvertedAt), whatever band it lands in,
+ *  and for rows put to a vote by an edit before that flag existed (approvers
+ *  set). From then on it is an ordinary application in every rule. */
+export function isRegisterImport(app: { importBatchId?: string; importConvertedAt?: string; requiredApprovers?: unknown[] }): boolean {
+  return !!app.importBatchId && !app.importConvertedAt && !app.requiredApprovers?.length;
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
@@ -208,7 +201,7 @@ export function isRegisterImport(app: { importBatchId?: string; importEditors?: 
  *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
-  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId" | "importEditors">,
+  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId" | "importConvertedAt">,
   user: { id: string; permissions: string[] }
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;
@@ -217,10 +210,7 @@ export function mayActOnApproved(
   // a log-only or untagged band has no approvers at all: any approve_spend
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
-  if (isRegisterImport(app)) return true;
-  // An edited import is its editors' own, even in a band with no approvers.
-  if (app.importBatchId && isOwnApplication(app, user.id)) return false;
-  if (!app.requiredApprovers?.length) return true;
+  if (isRegisterImport(app) || !app.requiredApprovers?.length) return true;
   if (isOwnApplication(app, user.id)) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }

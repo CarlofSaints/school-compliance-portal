@@ -67,7 +67,7 @@ interface SpendRecord {
   approvalWarning?: string;
   submittedBy?: string;
   importBatchId?: string;
-  importEditors?: string[];
+  importConvertedAt?: string;
   manualReminders?: { at: string; byName: string; sentTo: string[] }[];
   approvals: {
     userId: string;

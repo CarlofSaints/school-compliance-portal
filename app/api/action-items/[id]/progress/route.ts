@@ -6,7 +6,7 @@ import {
   STATUS_LABELS,
 } from "@/lib/actionItemData";
 import type { ActionStatus } from "@/lib/actionItemData";
-import { normalise, movesStatus } from "@/lib/actionItems";
+import { normalise, movesStatus, parseProgressInput } from "@/lib/actionItems";
 import { withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { isAssignee } from "@/lib/actionItemRecipients";
 import { LIMITS, enforce } from "@/lib/rateLimit";
@@ -46,15 +46,7 @@ export async function POST(
   try {
     const body = await req.json();
 
-    // A number, or a numeric string. Missing / null / "" mean "no change", never
-    // 0; anything else (true, [], "abc") is refused.
-    const p = body?.progress;
-    const raw =
-      p === undefined || p === null || (typeof p === "string" && p.trim() === "")
-        ? item.progress
-        : typeof p === "number" || typeof p === "string"
-          ? Number(p)
-          : NaN;
+    const raw = parseProgressInput(body?.progress) ?? item.progress;
     if (!Number.isFinite(raw)) {
       return NextResponse.json(
         { error: "Progress must be a number between 0 and 100" },

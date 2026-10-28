@@ -49,14 +49,14 @@ async function main() {
 
   const { isRegisterImport } = await import("../lib/approvalEngine");
   check("untouched import is a register row", isRegisterImport(imported), true);
-  const editedByB = { ...imported, importEditors: ["bob"] };
-  check("edited import into a band with NO approvers is not a register row", isRegisterImport(editedByB), false);
-  check("edited import: the EDITOR may not approve it", isOwnApplication(editedByB, "bob"), true);
-  check("edited import: the importer is not blocked for the editor's change", isOwnApplication(editedByB, "carl"), false);
-  check("approved edited import into FINCOM: the editor may not pick the quote / close it", mayActOnApproved({ ...editedByB, requiredApprovers: [{ userId: "boss" }] } as never, { id: "bob", permissions: ["approve_spend"] }), false);
+  const converted = { ...imported, submittedBy: "bob", importConvertedAt: "2026-10-28" };
+  check("converted import in a band with NO approvers is not a register row", isRegisterImport(converted), false);
+  check("converted import: the editor (now submitter) may not approve it", isOwnApplication(converted, "bob"), true);
+  check("converted import: the importer is not blocked for the editor's change", isOwnApplication(converted, "carl"), false);
+  check("converted import to FINCOM: the editor may not pick the quote / close it", mayActOnApproved({ ...converted, requiredApprovers: [{ userId: "boss" }] } as never, { id: "bob", permissions: ["approve_spend"] }), false);
   const legacy = { ...imported, requiredApprovers: [{ userId: "boss" }] };
-  check("import edited to a vote BEFORE importEditors: the importer stays blocked", isOwnApplication(legacy, "carl"), true);
-  check("edited import in a band with no approvers: the editor may not close it", mayActOnApproved({ ...editedByB, requiredApprovers: [] } as never, { id: "bob", permissions: ["approve_spend"] }), false);
+  check("import put to a vote before the flag existed: the importer stays blocked", isOwnApplication(legacy, "carl"), true);
+
   const A = await import("../lib/actionItems");
   const act = { status: "in_progress", progress: 40, assigneeIds: [] } as never;
   check("not started at 40% is no move (saved as in progress)", A.movesStatus(act, { status: "not_started" }), false);

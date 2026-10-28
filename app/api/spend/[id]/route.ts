@@ -217,9 +217,10 @@ export async function PUT(
     const hadVotes =
       (app.approvals?.length ?? 0) > 0 &&
       (app.status === "pending" || app.status === "pending_decision");
-    // The first edit of an imported row makes it a live application
-    // (isRegisterImport), so it needs approvers like any other - without them
-    // it would sit pending with nobody allowed to approve it.
+    // The first edit of an imported row turns it into an ordinary application,
+    // as if the editor had just submitted it: they become its submitter (so
+    // they cannot approve their own change), its approvers are worked out and
+    // told, and the activity log says so.
     const firstImportEdit = isRegisterImport(app);
     let reband: Partial<SpendApplication> = {};
     if (hadVotes && !amountChanged) {
@@ -271,8 +272,12 @@ export async function PUT(
         ? { approvals: [], preferredQuotes: [] }
         : {}),
       ...reband,
-      ...(current.importBatchId
-        ? { importEditors: [...new Set([...(current.importEditors || []), session.id])] }
+      ...(firstImportEdit
+        ? {
+            importConvertedAt: new Date().toISOString(),
+            submittedBy: session.id,
+            submittedByName: `${session.name} ${session.surname}`.trim(),
+          }
         : {}),
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
@@ -281,7 +286,7 @@ export async function PUT(
     // Whoever has to decide now must be TOLD, as on a new application. A
     // re-banded application otherwise sat waiting on people who never heard
     // of it.
-    if (amountChanged || hadVotes || restartedNow) {
+    if (amountChanged || hadVotes || restartedNow || firstImportEdit) {
       const approvers = (reband.requiredApprovers ?? app.requiredApprovers ?? []) as { name: string; email: string }[];
       const needsApproval = !(reband.approvalLogOnly ?? app.approvalLogOnly);
       if (needsApproval) {
@@ -296,7 +301,7 @@ export async function PUT(
               sourceOfFunds,
               quoteDetails.length,
               estimatedAmount,
-              app.submittedByName,
+              firstImportEdit ? `${session.name} ${session.surname}`.trim() : app.submittedByName,
               (reband.approvalTierLabel ?? app.approvalTierLabel) || "Approval required"
             );
           } catch (err) {
@@ -314,6 +319,17 @@ export async function PUT(
         entityId: app.id,
         summary: `Edited "${app.projectName}" after ${app.approvals.length} decision(s); approvals restarted`,
         detail: { previousApprovals: app.approvals.length },
+      });
+    }
+
+    if (firstImportEdit) {
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "spend.import.converted",
+        entity: "spend",
+        entityId: app.id,
+        summary: `Edited imported "${app.projectName}"; it is now an ordinary application submitted by ${session.name} ${session.surname}, sent to its approvers`.trim(),
+        detail: { importedBy: app.submittedBy, band: reband.approvalTierLabel },
       });
     }
 
