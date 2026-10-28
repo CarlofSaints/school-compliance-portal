@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { LIMITS, enforce, hit, tooMany } from "@/lib/rateLimit";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
@@ -90,15 +90,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // One charge per history line a non-owner is about to write, the same
-    // limit as Update progress and Edit, so a bulk call is no way round it.
-    if (problems.length === 0) {
-      for (let i = 0; i < notOwnerRows; i++) {
-        const r = await hit(LIMITS.actionUpdateUser, session.id);
-        if (!r.ok) return tooMany(LIMITS.actionUpdateUser, r);
-      }
-    }
-
     // All or nothing. A half-applied bulk change is the worst outcome: the
     // caller cannot tell which half, and re-running it is not safe either.
     if (problems.length > 0) {
@@ -106,6 +97,15 @@ export async function POST(req: NextRequest) {
         { error: "Nothing was changed", problems },
         { status: 400 }
       );
+    }
+
+    // One charge per call that writes non-owner history lines, the same limit
+    // as Update progress and Edit. A call writes at most one line per action,
+    // so flooding one action's history still takes a call per line; charging
+    // per row would make closing 40 actions after a meeting impossible.
+    if (notOwnerRows > 0) {
+      const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
+      if (limited) return limited;
     }
 
     const { saved, missing } = await updateActionItems(edits);

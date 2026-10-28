@@ -178,13 +178,19 @@ export function isRequiredApprover(
  *  the submitter's own say-so (the applicant id is not checked), and would let
  *  anyone approve their own spending. */
 export function isOwnApplication(
-  app: { submittedBy?: string; applicantUserId?: string; importBatchId?: string; importEditors?: string[] },
+  app: { submittedBy?: string; applicantUserId?: string; importBatchId?: string; importEditors?: string[]; requiredApprovers?: unknown[] },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
-  // An imported row: the importer only brought the register in. Whoever has
-  // since edited it (changed the amount, the supplier...) is behind it now.
-  if (app.importBatchId) return !!app.importEditors?.includes(userId);
+  if (app.importBatchId) {
+    // An imported row: the importer only brought the register in. Whoever has
+    // since edited it (changed the amount, the supplier...) is behind it now.
+    if (app.importEditors?.length) return app.importEditors.includes(userId);
+    // Edited and put to a vote before importEditors existed: nobody recorded
+    // who, so the submitter (the importer) stays blocked, as it always was.
+    if (app.requiredApprovers?.length) return app.submittedBy === userId;
+    return false;
+  }
   return app.submittedBy === userId;
 }
 
@@ -211,7 +217,10 @@ export function mayActOnApproved(
   // a log-only or untagged band has no approvers at all: any approve_spend
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
-  if (isRegisterImport(app) || !app.requiredApprovers?.length) return true;
+  if (isRegisterImport(app)) return true;
+  // An edited import is its editors' own, even in a band with no approvers.
+  if (app.importBatchId && isOwnApplication(app, user.id)) return false;
+  if (!app.requiredApprovers?.length) return true;
   if (isOwnApplication(app, user.id)) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }

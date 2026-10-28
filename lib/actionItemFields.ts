@@ -128,7 +128,11 @@ export function parseActionEdit(
   }
   // Missing / null / "" leave progress alone; only a number or numeric string
   // sets it (Number(null) would quietly be 0).
-  if (body.progress !== undefined && body.progress !== null && body.progress !== "") {
+  if (
+    body.progress !== undefined &&
+    body.progress !== null &&
+    !(typeof body.progress === "string" && body.progress.trim() === "")
+  ) {
     const progress =
       typeof body.progress === "number" || typeof body.progress === "string"
         ? Number(body.progress)

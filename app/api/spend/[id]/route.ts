@@ -1,3 +1,4 @@
+import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
@@ -216,12 +217,16 @@ export async function PUT(
     const hadVotes =
       (app.approvals?.length ?? 0) > 0 &&
       (app.status === "pending" || app.status === "pending_decision");
+    // The first edit of an imported row makes it a live application
+    // (isRegisterImport), so it needs approvers like any other - without them
+    // it would sit pending with nobody allowed to approve it.
+    const firstImportEdit = isRegisterImport(app);
     let reband: Partial<SpendApplication> = {};
     if (hadVotes && !amountChanged) {
       newStatus = "pending";
       reband = { approvals: [], preferredQuotes: [] };
     }
-    if (amountChanged) {
+    if (amountChanged || firstImportEdit) {
       const approval = await resolveApprovers(estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
       reband = {

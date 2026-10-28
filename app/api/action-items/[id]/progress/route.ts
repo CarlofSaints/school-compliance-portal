@@ -50,7 +50,7 @@ export async function POST(
     // 0; anything else (true, [], "abc") is refused.
     const p = body?.progress;
     const raw =
-      p === undefined || p === null || p === ""
+      p === undefined || p === null || (typeof p === "string" && p.trim() === "")
         ? item.progress
         : typeof p === "number" || typeof p === "string"
           ? Number(p)
