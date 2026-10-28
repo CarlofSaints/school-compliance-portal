@@ -1,5 +1,8 @@
 import { GOVERNANCE_LABEL, GOVERNANCE_MEMBER_LABEL } from "./positions";
 
+/** The built-in Super Admin role id. Here, not rolesData, so pages can use it. */
+export const SUPER_ADMIN_ROLE_ID = "super-admin";
+
 export interface Permission {
   key: string;
   name: string;

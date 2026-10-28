@@ -43,6 +43,8 @@ async function main() {
   const { readSignInStats, buildSignInRows, deviceOf, sastDay, countSignIn, trackingSince, maskTypedEmail, forgetTrackingCache } = await import("../lib/signinLog");
   const { LIMITS } = await import("../lib/rateLimit");
   const auth = await import("../app/api/auth/route");
+  const mfaRoute = await import("../app/api/auth/mfa/route");
+  const { totpAt } = await import("../lib/mfa");
   const changePw = await import("../app/api/auth/change-password/route");
   const signins = await import("../app/api/activity/signins/route");
   const usersRoute = await import("../app/api/users/route");
@@ -192,7 +194,14 @@ async function main() {
   console.log("\nSeveral sign-ins");
   ipSeq = 3;
   for (let i = 0; i < 2; i++) await signIn(member.email, "pw-member-SECRET");
-  await signIn(admin.email, "pw-admin-SECRET");
+  // A Super Admin's password alone is not a sign-in: it asks for an app code.
+  const step1 = await (await signIn(admin.email, "pw-admin-SECRET")).json();
+  check(step1.mfa === "setup" && !step1.session && total((await readSignInStats()).admin?.days) === 0, "Super Admin password alone: MFA set-up asked, nothing tallied");
+  const code = totpAt(step1.secret, Math.floor(Date.now() / 30000));
+  const step2 = await mfaRoute.POST(req("POST", "/api/auth/mfa", { json: { mfaToken: step1.mfaToken, code } }));
+  await flushAfterResponse();
+  const step2Body = await step2.json();
+  check(step2.status === 200 && step2Body.backupCodes?.length === 10 && !!step2.cookies.get(SESSION_COOKIE)?.value, `the app code completes it: cookie + backup codes (HTTP ${step2.status})`);
   st = await readSignInStats();
   check(total(st.member?.days) === 4 && total(st.admin?.days) === 1, `member 4, admin 1 (got ${total(st.member?.days)}, ${total(st.admin?.days)})`);
   const late = await mk("late", "viewer", true);
@@ -264,7 +273,7 @@ async function main() {
   const keysNow = [...store.keys()];
   check(keysNow.some((k) => /\/activity-auth\/\d{4}-\d{2}\//.test(k)) && !keysNow.some((k) => /\/activity\/\d{4}-\d{2}\//.test(k) && k.includes("auth")), "auth entries stored under activity-auth/<month>/, not activity/");
   const def = await readActivity({ limit: 10000 });
-  const partitioned = ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"];
+  const partitioned = ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out", "auth.mfa_failed", "auth.mfa_enabled", "auth.mfa_backup_used"];
   check(def.entries.some((e) => e.entity === "spend") && def.entries.every((e) => !partitioned.includes(e.action)), `the default view has no sign-in/out entries (${def.entries.length})`);
   const pwc = def.entries.find((e) => e.action === "auth.password_changed");
   check(!!pwc, "password changes stay in the main log");
@@ -332,7 +341,7 @@ async function main() {
   check(store.has(metaKey), "a user's first ever tally writes meta.json if it is missing");
 
   console.log("\nThe Sign in filter reads only the page it shows");
-  const fullAuth = (await exportActivity(currentMonth())).filter((e) => ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"].includes(e.action));
+  const fullAuth = (await exportActivity(currentMonth())).filter((e) => ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out", "auth.mfa_failed", "auth.mfa_enabled", "auth.mfa_backup_used"].includes(e.action));
   const reads0 = getCalls();
   const pageOne = await readActivity({ entity: "auth", limit: 2, offset: 1 });
   const reads = getCalls() - reads0;

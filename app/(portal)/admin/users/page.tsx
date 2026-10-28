@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
+import { SUPER_ADMIN_ROLE_ID as SUPER_ADMIN } from "@/lib/roles";
 
 
 // Sentinel for the Person picker meaning "this user is not on the register
@@ -345,6 +346,22 @@ export default function UsersPage() {
     }
   };
 
+  // For a Super Admin who lost their phone and backup codes. Only a Super
+  // Admin may do it (the server checks too).
+  const resetMfa = async (user: UserRecord) => {
+    if (!confirm(t("Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.", { name: `${user.name} ${user.surname}`.trim() }))) return;
+    const res = await authFetch(`/api/users/${user.id}/mfa`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setToast({ message: data.error || t("Could not reset two-step sign-in."), type: "error" });
+      return;
+    }
+    setToast({
+      message: data.wasSetUp ? t("Two-step sign-in reset.") : t("They had not set up two-step sign-in yet."),
+      type: "success",
+    });
+  };
+
   // Puts back any account that is in storage but has fallen out of the list.
   // Only ever adds, so it is safe to press at any time.
   const rebuildFromStorage = async () => {
@@ -518,6 +535,15 @@ export default function UsersPage() {
                             className="text-primary hover:text-primary-dark mr-3 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {sendingTo === user.id ? t("Sending...") : t("Resend login email")}
+                          </button>
+                        )}
+                        {session?.role === SUPER_ADMIN && user.role === SUPER_ADMIN && (
+                          <button
+                            onClick={() => resetMfa(user)}
+                            title={t("For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again")}
+                            className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
+                          >
+                            {t("Reset MFA")}
                           </button>
                         )}
                         <button

@@ -363,11 +363,14 @@ export async function deleteFile(blobPath: string): Promise<void> {
 export async function deleteFileStrict(blobPath: string): Promise<void> {
   // "Deleted" must be true, so an unsafe path is an error here, not a miss.
   if (isUnsafeBlobPath(blobPath)) throw new UnsafeBlobPathError(`Refused unsafe storage path: ${blobPath}`);
-  const { token } = await scope();
+  const { prefix, token } = await scope();
   const blob = await findBlob(blobPath);
   if (blob) {
     await del(blob.url, { token });
   }
+  // Or a read in the next 10 seconds, finding no blob, hands back the copy
+  // this instance wrote before the delete.
+  recentWrites.delete(cacheKey(prefix, blobPath));
 }
 
 /**

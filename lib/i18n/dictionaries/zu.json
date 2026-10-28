@@ -1787,5 +1787,22 @@
   "e.g. SGB / Board monthly meeting": "isib. Umhlangano wanyanga zonke we-SGB / Ibhodi",
   "SGB / Board": "SGB / Ibhodi",
   "Chairperson": "Usihlalo",
-  "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.": "Ngubani ohlola okusalungiswa. Ngokuvamile nguThishanhloko noSihlalo, nephini lithunyelwa ikhophi."
+  "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.": "Ngubani ohlola okusalungiswa. Ngokuvamile nguThishanhloko noSihlalo, nephini lithunyelwa ikhophi.",
+  "Could not reset two-step sign-in.": "Akukwazanga ukusetha kabusha ukungena ngezinyathelo ezimbili.",
+  "Two-step sign-in reset.": "Ukungena ngezinyathelo ezimbili kusethwe kabusha.",
+  "They had not set up two-step sign-in yet.": "Bebengakakusethi ukungena ngezinyathelo ezimbili.",
+  "Reset MFA": "Setha kabusha i-MFA",
+  "You have {n} backup codes left. Ask another Super Admin to reset your two-step sign-in so you get new ones.": "Usele namakhodi okwenza isipele angu-{n}. Cela omunye u-Super Admin ukuthi asethe kabusha ukungena kwakho ngezinyathelo ezimbili ukuze uthole amasha.",
+  "Save your backup codes": "Londoloza amakhodi akho okwenza isipele",
+  "Set up two-step sign-in": "Setha ukungena ngezinyathelo ezimbili",
+  "Two-step sign-in": "Ukungena ngezinyathelo ezimbili",
+  "If you lose your phone, each of these codes signs you in once instead of the app. Print them or write them down and keep them somewhere safe. They will not be shown again.": "Uma ulahlekelwa yifoni yakho, ngalinye lala makhodi likungenisa kanye esikhundleni sohlelo lokusebenza. Waphrinte noma uwabhale phansi futhi uwagcine endaweni ephephile. Ngeke aphinde aboniswe.",
+  "I have saved them, continue": "Sengiwalondolozile, qhubeka",
+  "As a Super Admin you need a code from your phone to sign in. Install an authenticator app (Google Authenticator or Microsoft Authenticator), tap Add, and scan this code.": "Njengo-Super Admin udinga ikhodi evela efonini yakho ukuze ungene ngemvume. Faka uhlelo lokuqinisekisa (Google Authenticator noma Microsoft Authenticator), thepha u-Add, bese uskena le khodi.",
+  "Cannot scan? Type this key into the app instead:": "Awukwazi ukuskena? Thayipha lo khiye kuhlelo lokusebenza esikhundleni salokho:",
+  "Then enter the 6-digit code the app shows": "Bese ufaka ikhodi enezinombolo ezi-6 ekhonjiswa uhlelo lokusebenza",
+  "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Faka ikhodi enezinombolo ezi-6 evela ohlelweni lwakho lokuqinisekisa, noma eyodwa yamakhodi akho okwenza isipele",
+  "Continue": "Qhubeka",
+  "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Setha kabusha ukungena ngezinyathelo ezimbili kuka-{name}? Lokhu kubakhipha nakuyo yonke indawo. Bese besebenzisa okuthi Ukhohlwe iphasiwedi yakho? ekhasini lokungena bese besetha futhi ifoni yabo.",
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Ngefoni elahlekile: kubakhipha kuyo yonke indawo, bese besetha kabusha iphasiwedi yabo futhi basethe ukungena ngezinyathelo ezimbili"
 }
