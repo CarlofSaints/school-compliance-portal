@@ -849,7 +849,6 @@
   "Undoing...": "E a busetsa...",
   "Undo this import": "Busetsa go tsenya mo",
   "Undo removes only the {n} project this import created. Anything captured by hand is untouched.": "Go busetsa go ntsha fela porojeke e le {n} e go tsenya mo go e dirileng. Sengwe le sengwe se se kwadilweng ka seatla ga se amiwe.",
-  "Undo removes only the {n} projects this import created. Anything captured by hand is untouched.": "Go busetsa go ntsha fela diporojeke di le {n} tse go tsenya mo go di dirileng. Sengwe le sengwe se se kwadilweng ka seatla ga se amiwe.",
   "Import undone. Removed {n} project.": "Go tsenya go busitswe. Porojeke e le {n} e ntshitswe.",
   "Import undone. Removed {n} projects.": "Go tsenya go busitswe. Diporojeke di le {n} di ntshitswe.",
   "Select at least one source of funds.": "Tlhopha bonnye motswedi o le mongwe wa matlole.",
@@ -1807,5 +1806,6 @@
   "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Ka founu e e latlhegileng: e ba ntsha gongwe le gongwe, morago ba baya sešwa phasewete ya bona mme ba baakanya gape go tsena ka dikgato tse pedi",
   "You are not the owner of this action item!": "Ga o mong wa ntlha eno ya tiro!",
   "Why are you changing the status?": "Ke ka ntlha yang o fetola maemo?",
-  "Not assigned, changed because: {reason}": "Ga a abelwa, e fetotswe ka gonne: {reason}"
+  "Not assigned, changed because: {reason}": "Ga a abelwa, e fetotswe ka gonne: {reason}",
+  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Go phimola go tlosa fela diporojeke tse di dirilweng ke go tsenya mo tse go seng ope yo o di fetotseng go tloga foo (go fitlha go {n}). Sengwe le sengwe se se tsentsweng ka seatla, kgotsa se fetotswe morago ga go tsenya, se a bolokwa."
 }

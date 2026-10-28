@@ -652,7 +652,7 @@ export default function SpendImportPage() {
           <p className="text-xs text-gray-400 mt-3">
             {result.created === 1
               ? t("Undo removes only the {n} project this import created. Anything captured by hand is untouched.", { n: result.created })
-              : t("Undo removes only the {n} projects this import created. Anything captured by hand is untouched.", { n: result.created })}
+              : t("Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.", { n: result.created })}
           </p>
         </div>
       )}

@@ -849,7 +849,6 @@
   "Undoing...": "Kuyahlehliswa...",
   "Undo this import": "Hlehlisa lokhu kungenisa",
   "Undo removes only the {n} project this import created. Anything captured by hand is untouched.": "Ukuhlehlisa kususa kuphela iphrojekthi engu-{n} edalwe yilokhu kungenisa. Noma yini efakwe ngesandla ayithintwa.",
-  "Undo removes only the {n} projects this import created. Anything captured by hand is untouched.": "Ukuhlehlisa kususa kuphela amaphrojekthi angu-{n} adalwe yilokhu kungenisa. Noma yini efakwe ngesandla ayithintwa.",
   "Import undone. Removed {n} project.": "Ukungenisa kuhlehlisiwe. Kususwe iphrojekthi engu-{n}.",
   "Import undone. Removed {n} projects.": "Ukungenisa kuhlehlisiwe. Kususwe amaphrojekthi angu-{n}.",
   "Select at least one source of funds.": "Khetha okungenani umthombo owodwa wemali.",
@@ -1807,5 +1806,6 @@
   "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Ngefoni elahlekile: kubakhipha kuyo yonke indawo, bese besetha kabusha iphasiwedi yabo futhi basethe ukungena ngezinyathelo ezimbili",
   "You are not the owner of this action item!": "Awuyena umnikazi walesi senzo!",
   "Why are you changing the status?": "Kungani ushintsha isimo?",
-  "Not assigned, changed because: {reason}": "Akabelwanga, kushintshwe ngoba: {reason}"
+  "Not assigned, changed because: {reason}": "Akabelwanga, kushintshwe ngoba: {reason}",
+  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ukuhlehlisa kususa kuphela amaphrojekthi adalwe yilokhu kungenisa angakaze ahlelwe ngubani kusukela lapho (kufika ku-{n}). Noma yini efakwe ngesandla, noma ehlelwe ngemva kokungenisa, iyagcinwa."
 }

@@ -77,7 +77,8 @@ export async function POST(
     }
     // History keeps the last 100 lines, so someone not on the action must not
     // be able to push the real record out with a burst of updates, notes
-    // included. Charged only once the update is valid and about to be saved.
+    // included. Charged once the update is valid, just before the save (a save
+    // that then fails still costs the slot).
     if (!owner) {
       const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
       if (limited) return limited;

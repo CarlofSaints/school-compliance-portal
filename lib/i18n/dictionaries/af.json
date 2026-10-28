@@ -849,7 +849,6 @@
   "Undoing...": "Ontdoen tans...",
   "Undo this import": "Ontdoen hierdie invoer",
   "Undo removes only the {n} project this import created. Anything captured by hand is untouched.": "Ontdoen verwyder slegs die {n} projek wat hierdie invoer geskep het. Enigiets wat met die hand vasgelê is, word nie geraak nie.",
-  "Undo removes only the {n} projects this import created. Anything captured by hand is untouched.": "Ontdoen verwyder slegs die {n} projekte wat hierdie invoer geskep het. Enigiets wat met die hand vasgelê is, word nie geraak nie.",
   "Import undone. Removed {n} project.": "Invoer ontdoen. {n} projek verwyder.",
   "Import undone. Removed {n} projects.": "Invoer ontdoen. {n} projekte verwyder.",
   "Select at least one source of funds.": "Kies ten minste een bron van fondse.",
@@ -1807,5 +1806,6 @@
   "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Vir 'n verlore foon: meld hulle oral af, dan stel hulle hul wagwoord terug en stel tweestap-aanmelding weer op",
   "You are not the owner of this action item!": "Jy is nie die eienaar van hierdie aksiepunt nie!",
   "Why are you changing the status?": "Hoekom verander jy die status?",
-  "Not assigned, changed because: {reason}": "Nie toegewys nie, verander omdat: {reason}"
+  "Not assigned, changed because: {reason}": "Nie toegewys nie, verander omdat: {reason}",
+  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ongedaan maak verwyder slegs die projekte wat hierdie invoer geskep het en wat niemand sedertdien gewysig het nie (tot {n}). Enigiets wat met die hand vasgelê is, of ná die invoer gewysig is, bly behou."
 }
