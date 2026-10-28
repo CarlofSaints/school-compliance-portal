@@ -49,11 +49,9 @@ async function main() {
 
   const { isRegisterImport } = await import("../lib/approvalEngine");
   check("untouched import is a register row", isRegisterImport(imported), true);
-  const converted = { ...imported, submittedBy: "bob", importConvertedAt: "2026-10-28" };
-  check("converted import in a band with NO approvers is not a register row", isRegisterImport(converted), false);
-  check("converted import: the editor (now submitter) may not approve it", isOwnApplication(converted, "bob"), true);
-  check("converted import: the importer is not blocked for the editor's change", isOwnApplication(converted, "carl"), false);
-  check("converted import to FINCOM: the editor may not pick the quote / close it", mayActOnApproved({ ...converted, requiredApprovers: [{ userId: "boss" }] } as never, { id: "bob", permissions: ["approve_spend"] }), false);
+  const edited: { submittedBy: string; importBatchId?: string } = { submittedBy: "carl" }; // the first edit clears importBatchId
+  check("edited import is an ordinary application: the importer is its submitter", isOwnApplication(edited, "carl"), true);
+  check("edited import in a band with NO approvers is not a register row", isRegisterImport(edited), false);
   const legacy = { ...imported, requiredApprovers: [{ userId: "boss" }] };
   check("import put to a vote before the flag existed: the importer stays blocked", isOwnApplication(legacy, "carl"), true);
 

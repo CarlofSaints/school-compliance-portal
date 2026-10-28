@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       // One row per action: repeats would each add a history line (and one
       // call could then flood an action's history for a single limit charge).
       if (seen.has(id)) {
-        problems.push(`${id} appears more than once`);
+        problems.push(`${id || "(no id)"} appears more than once`);
         continue;
       }
       seen.add(id);

@@ -1,4 +1,3 @@
-import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
@@ -217,17 +216,12 @@ export async function PUT(
     const hadVotes =
       (app.approvals?.length ?? 0) > 0 &&
       (app.status === "pending" || app.status === "pending_decision");
-    // The first edit of an imported row turns it into an ordinary application,
-    // as if the editor had just submitted it: they become its submitter (so
-    // they cannot approve their own change), its approvers are worked out and
-    // told, and the activity log says so.
-    const firstImportEdit = isRegisterImport(app);
     let reband: Partial<SpendApplication> = {};
     if (hadVotes && !amountChanged) {
       newStatus = "pending";
       reband = { approvals: [], preferredQuotes: [] };
     }
-    if (amountChanged || firstImportEdit) {
+    if (amountChanged) {
       const approval = await resolveApprovers(estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
       reband = {
@@ -272,13 +266,10 @@ export async function PUT(
         ? { approvals: [], preferredQuotes: [] }
         : {}),
       ...reband,
-      ...(firstImportEdit
-        ? {
-            importConvertedAt: new Date().toISOString(),
-            submittedBy: session.id,
-            submittedByName: `${session.name} ${session.surname}`.trim(),
-          }
-        : {}),
+      // The first edit takes an imported row out of its batch (see
+      // importBatchId): an ordinary application from now on, which Undo
+      // import no longer deletes. Read from the record AS IT IS NOW.
+      ...(current.importBatchId ? { importBatchId: undefined } : {}),
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
     });
@@ -286,7 +277,7 @@ export async function PUT(
     // Whoever has to decide now must be TOLD, as on a new application. A
     // re-banded application otherwise sat waiting on people who never heard
     // of it.
-    if (amountChanged || hadVotes || restartedNow || firstImportEdit) {
+    if (amountChanged || hadVotes || restartedNow) {
       const approvers = (reband.requiredApprovers ?? app.requiredApprovers ?? []) as { name: string; email: string }[];
       const needsApproval = !(reband.approvalLogOnly ?? app.approvalLogOnly);
       if (needsApproval) {
@@ -301,7 +292,7 @@ export async function PUT(
               sourceOfFunds,
               quoteDetails.length,
               estimatedAmount,
-              firstImportEdit ? `${session.name} ${session.surname}`.trim() : app.submittedByName,
+              app.submittedByName,
               (reband.approvalTierLabel ?? app.approvalTierLabel) || "Approval required"
             );
           } catch (err) {
@@ -322,14 +313,14 @@ export async function PUT(
       });
     }
 
-    if (firstImportEdit) {
+    if (app.importBatchId) {
       await recordActivity({
         ...actorFrom(req, session),
         action: "spend.import.converted",
         entity: "spend",
         entityId: app.id,
-        summary: `Edited imported "${app.projectName}"; it is now an ordinary application submitted by ${session.name} ${session.surname}, sent to its approvers`.trim(),
-        detail: { importedBy: app.submittedBy, band: reband.approvalTierLabel },
+        summary: `Edited imported "${app.projectName}"; it is now an ordinary application and Undo import will not remove it`,
+        detail: { importBatchId: app.importBatchId },
       });
     }
 
