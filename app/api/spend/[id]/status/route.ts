@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
 import type { SpendApplication } from "@/lib/spendData";
 import { isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 
@@ -43,8 +43,11 @@ export async function PATCH(
   }
 
   let status: string | undefined;
+  let expectedRev: string | undefined;
   try {
-    ({ status } = await req.json());
+    const body = await req.json();
+    status = body?.status;
+    expectedRev = typeof body?.expectedRev === "string" ? body.expectedRev : undefined;
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
@@ -105,7 +108,18 @@ export async function PATCH(
     updates.approvedAmount = app.estimatedAmount;
   }
 
-  const updated = await updateSpendApplication(id, updates);
+  let updated;
+  try {
+    updated = await updateSpendApplication(id, updates, {
+      expectedRev,
+      byName: `${session.name} ${session.surname}`.trim(),
+    });
+  } catch (err) {
+    if (err instanceof SpendChangeRefused) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    throw err;
+  }
 
   // A status set by hand, outside the approval flow, always leaves a trace.
   if (next !== app.status) {
@@ -124,5 +138,6 @@ export async function PATCH(
     success: true,
     status: updated?.status,
     approvedAmount: updated?.approvedAmount,
+    rev: updated?.rev,
   });
 }

@@ -31,8 +31,13 @@ export interface FundingAllocation {
 
 export interface SpendApplication {
   id: string;
-  /** Random per write (updateSpendApplication): see the updateJson note. */
+  /** Random per write (updateSpendApplication): see the updateJson note.
+   *  Also the "has anyone saved since you opened it" check (expectedRev). */
   rev?: string;
+  /** When and by whom it was last saved, for the "someone else changed this"
+   *  message. The name is only known where the route passes it. */
+  changedAt?: string;
+  changedByName?: string;
   projectName: string;
   description: string;
   estimatedAmount: number;

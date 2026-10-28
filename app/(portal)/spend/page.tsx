@@ -67,6 +67,7 @@ interface SpendRecord {
   approvalWarning?: string;
   submittedBy?: string;
   importBatchId?: string;
+  rev?: string;
   manualReminders?: { at: string; byName: string; sentTo: string[] }[];
   approvals: {
     userId: string;
@@ -262,13 +263,17 @@ export default function SpendPage() {
     const res = await authFetch(url, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      // The version this grid loaded: refused if someone saved the row since,
+      // so a change made elsewhere is never silently overwritten.
+      body: JSON.stringify({ ...body, expectedRev: previous.rev ?? "" }),
     });
 
     if (!res.ok) {
       setApps((prev) => prev.map((a) => (a.id === id ? previous : a)));
       const data = await res.json().catch(() => ({}));
       setToast({ message: data.error || failureMessage, type: "error" });
+      // Saved by someone else meanwhile: show their version.
+      if (res.status === 409) fetchData();
       return;
     }
     // Take the server's version of the row back, so what the grid shows is
@@ -280,6 +285,9 @@ export default function SpendPage() {
           a.id === id
             ? {
                 ...a,
+                // The new version, so this person's next change is not
+                // refused as if someone else had saved.
+                ...(saved.rev !== undefined ? { rev: saved.rev } : {}),
                 ...(saved.status !== undefined
                   ? { status: saved.status }
                   : {}),

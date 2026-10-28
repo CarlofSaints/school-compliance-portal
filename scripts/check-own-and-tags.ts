@@ -106,6 +106,19 @@ async function main() {
   check("Undo import removes only rows nobody has changed since", await S.deleteSpendImportBatch("b9"), 1);
   check("...a row completed from the grid is kept", !!(await S.getSpendById("completed-from-grid")), true);
   check("...a row already put to a vote is kept", !!(await S.getSpendById("voted-legacy")), true);
+  // Saved by someone else since you opened it: refused, nothing written.
+  await S.createSpendApplications([row("busy", {})]);
+  const opened = await S.getSpendById("busy"); // never saved: rev ""
+  check("first save with the rev you opened works", !!(await S.updateSpendApplication("busy", { projectName: "Dee's" } as never, { expectedRev: opened?.rev ?? "", byName: "Dee" })), true);
+  let refused = "";
+  try {
+    await S.updateSpendApplication("busy", { projectName: "Carl's" } as never, { expectedRev: opened?.rev ?? "", byName: "Carl" });
+  } catch (e) {
+    refused = e instanceof S.SpendChangeRefused ? e.message : "other error";
+  }
+  check("a second save on the old version is refused, naming who saved", refused.startsWith("Dee changed this project"), true);
+  check("...and nothing was overwritten", (await S.getSpendById("busy"))?.projectName, "Dee's");
+  check("no expectedRev (reminders, approvals) still saves", !!(await S.updateSpendApplication("busy", { notes: [] } as never)), true);
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
 }

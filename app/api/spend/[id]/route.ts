@@ -4,6 +4,8 @@ import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getSpendById,
   updateSpendApplication,
+  SpendChangeRefused,
+  spendSavedMeanwhileMessage as savedMeanwhile,
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
@@ -77,6 +79,13 @@ export async function PUT(
 
   try {
     const formData = await req.formData();
+    // The rev the edit page loaded. Checked now, before any quote is uploaded,
+    // and again inside the save against the record as it is then.
+    const expectedRevRaw = formData.get("expectedRev");
+    const expectedRev = typeof expectedRevRaw === "string" ? expectedRevRaw : undefined;
+    if (expectedRev !== undefined && (app.rev ?? "") !== expectedRev) {
+      return NextResponse.json({ error: savedMeanwhile(app) }, { status: 409 });
+    }
     const projectName =
       (formData.get("projectName") as string) || app.projectName;
     const description =
@@ -282,7 +291,7 @@ export async function PUT(
       importBatchId: undefined,
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
-    });
+    }, { expectedRev, byName: `${session.name} ${session.surname}`.trim() });
 
     // Removed meanwhile (Undo import, a delete): nothing was saved.
     if (!saved) {
@@ -351,7 +360,10 @@ export async function PUT(
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    if (err instanceof SpendChangeRefused) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

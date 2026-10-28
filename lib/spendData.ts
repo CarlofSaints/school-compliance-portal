@@ -130,9 +130,22 @@ export type SpendChange =
   | Partial<Omit<SpendApplication, "id">>
   | ((current: SpendApplication) => Partial<Omit<SpendApplication, "id">>);
 
+// The refusal when somebody else saved the application after this person
+// opened it. Nothing is written, so nobody's change is lost.
+export function spendSavedMeanwhileMessage(current: SpendApplication): string {
+  const who = current.changedByName || "Someone else";
+  const at = current.changedAt
+    ? ` at ${new Date(current.changedAt).toLocaleTimeString("en-ZA", { timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit" })}`
+    : "";
+  return `${who} changed this project${at} while you had it open, so your change was not saved. Reload to see what they changed, then make yours again.`;
+}
+
 export async function updateSpendApplication(
   id: string,
-  change: SpendChange
+  change: SpendChange,
+  // expectedRev: the rev the person's page loaded ("" for a never-saved
+  // import). Refused if the record has moved on since. byName: who is saving.
+  opts: { expectedRev?: string; byName?: string } = {}
 ): Promise<SpendApplication | null> {
   let updated: SpendApplication | null = null;
   await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
@@ -141,10 +154,19 @@ export async function updateSpendApplication(
       updated = null;
       return NO_CHANGE;
     }
+    if (opts.expectedRev !== undefined && (apps[idx].rev ?? "") !== opts.expectedRev) {
+      throw new SpendChangeRefused(spendSavedMeanwhileMessage(apps[idx]), 409);
+    }
     const updates = typeof change === "function" ? change(apps[idx]) : change;
     // rev: two identical decisions at once (a double click) must not both
     // win and both send their emails. See the updateJson note.
-    apps[idx] = { ...apps[idx], ...updates, rev: crypto.randomUUID() };
+    apps[idx] = {
+      ...apps[idx],
+      ...updates,
+      rev: crypto.randomUUID(),
+      changedAt: new Date().toISOString(),
+      changedByName: opts.byName,
+    };
     updated = apps[idx];
     return apps;
   });

@@ -39,6 +39,7 @@ interface SpendData {
   applicantSurname?: string;
   applicantEmail?: string;
   submittedOnBehalf?: boolean;
+  rev?: string;
 }
 
 interface DirectoryUser {
@@ -202,6 +203,9 @@ export default function EditSpendPage() {
     setSubmitting(true);
 
     const formData = new FormData();
+    // The version this page loaded: the save is refused if someone else saved
+    // the project since, and what was typed here stays on screen.
+    formData.append("expectedRev", data?.rev ?? "");
     formData.append("projectName", projectName);
     formData.append("description", description);
     formData.append("estimatedAmount", estimatedAmount);
