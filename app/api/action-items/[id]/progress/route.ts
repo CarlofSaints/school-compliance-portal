@@ -46,8 +46,15 @@ export async function POST(
   try {
     const body = await req.json();
 
+    // A number, or a numeric string. Missing / null / "" mean "no change", never
+    // 0; anything else (true, [], "abc") is refused.
+    const p = body?.progress;
     const raw =
-      body?.progress === undefined ? item.progress : Number(body.progress);
+      p === undefined || p === null || p === ""
+        ? item.progress
+        : typeof p === "number" || typeof p === "string"
+          ? Number(p)
+          : NaN;
     if (!Number.isFinite(raw)) {
       return NextResponse.json(
         { error: "Progress must be a number between 0 and 100" },
@@ -63,7 +70,7 @@ export async function POST(
     // Compared as it would be SAVED (done forces 100%, progress lifts not
     // started), so a figure the server would change anyway is not a "move".
     const after = normalise({ ...item, progress: raw, status });
-    const moved = movesStatus(item, { progress: raw, status });
+    const moved = movesStatus(item, after);
     if (!moved && !note) {
       return NextResponse.json(
         { error: "Nothing to save: change the status or progress, or write a note." },
@@ -77,9 +84,9 @@ export async function POST(
       return NextResponse.json(NEEDS_REASON, { status: 400 });
     }
     // History keeps the last 100 lines, so someone not on the action must not
-    // be able to push the real record out with a burst of status changes.
-    // Charged only for a real, valid move, so a refused try costs nothing.
-    if (notOwnerReason) {
+    // be able to push the real record out with a burst of updates, notes
+    // included. Charged only once the update is valid and about to be saved.
+    if (!owner) {
       const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
       if (limited) return limited;
     }

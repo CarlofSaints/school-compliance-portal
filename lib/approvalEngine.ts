@@ -178,18 +178,19 @@ export function isRequiredApprover(
  *  the submitter's own say-so (the applicant id is not checked), and would let
  *  anyone approve their own spending. */
 export function isOwnApplication(
-  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string; requiredApprovers?: { userId?: string }[] },
+  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string; editedAfterImport?: boolean; requiredApprovers?: unknown[] },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
   return app.submittedBy === userId && !isRegisterImport(app);
 }
 
-/** A row brought in from the school's register that nobody has to vote on.
- *  🔴 Ends the moment an edit re-bands it (requiredApprovers set): from then
- *  on it is a live application and gets every rule a live one gets. */
-export function isRegisterImport(app: { importBatchId?: string; requiredApprovers?: unknown[] }): boolean {
-  return !!app.importBatchId && !app.requiredApprovers?.length;
+/** A row brought in from the school's register, untouched since.
+ *  🔴 Ends with the first edit (editedAfterImport), whatever band it lands in
+ *  - even one with no approvers - and with any approvers being set (rows
+ *  edited before the flag existed). From then on it is a live application. */
+export function isRegisterImport(app: { importBatchId?: string; editedAfterImport?: boolean; requiredApprovers?: unknown[] }): boolean {
+  return !!app.importBatchId && !app.editedAfterImport && !app.requiredApprovers?.length;
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
@@ -198,7 +199,7 @@ export function isRegisterImport(app: { importBatchId?: string; requiredApprover
  *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
-  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId">,
+  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId" | "editedAfterImport">,
   user: { id: string; permissions: string[] }
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;
@@ -207,7 +208,7 @@ export function mayActOnApproved(
   // a log-only or untagged band has no approvers at all: any approve_spend
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
-  if (app.importBatchId || !app.requiredApprovers?.length) return true;
+  if (isRegisterImport(app) || !app.requiredApprovers?.length) return true;
   if (isOwnApplication(app, user.id)) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }
