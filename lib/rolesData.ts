@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readJson, writeJson } from "./controlData";
-import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS, DEFAULT_PERMISSIONS } from "./roles";
+import { Role, Permission, SessionPayload, ALL_PERMISSION_KEYS, DEFAULT_PERMISSIONS, SUPER_ADMIN_ROLE_ID } from "./roles";
 import { getUserById } from "./userData";
 import {
   SESSION_COOKIE,
@@ -12,7 +12,7 @@ import {
 } from "./session";
 import { tenantScope } from "./tenantContext";
 
-export const SUPER_ADMIN_ROLE_ID = "super-admin";
+export { SUPER_ADMIN_ROLE_ID };
 
 // Super Admin is defined in code as "every permission" (DEFAULT_ROLES), but a
 // role record is only ever written at seed time and the seed skips a role that

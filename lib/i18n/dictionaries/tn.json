@@ -1788,11 +1788,9 @@
   "SGB / Board": "SGB / Boto",
   "Chairperson": "Modulasetulo",
   "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.": "Ke mang yo o tlhatlhobang thulaganyo. Gantsi ke Mogokgo le Modulasetulo, motlatsa a kopolotswe.",
-  "Reset two-step sign-in for {name}? They will set it up again with their phone at their next sign-in.": "Baya sešwa go tsena ka dikgato tse pedi ga {name}? Ba tla go baakanya gape ka founu ya bona fa ba tsena gape.",
   "Could not reset two-step sign-in.": "Ga go a kgonega go baya sešwa go tsena ka dikgato tse pedi.",
   "Two-step sign-in reset.": "Go tsena ka dikgato tse pedi go beilwe sešwa.",
   "They had not set up two-step sign-in yet.": "Ba ne ba ise ba baakanye go tsena ka dikgato tse pedi.",
-  "For a lost phone: they set up two-step sign-in again at their next sign-in": "Ka founu e e latlhegileng: ba baakanya gape go tsena ka dikgato tse pedi fa ba tsena gape",
   "Reset MFA": "Baya MFA sešwa",
   "You have {n} backup codes left. Ask another Super Admin to reset your two-step sign-in so you get new ones.": "O setse le dikhoutu tsa poloko di le {n}. Kopa Super Admin yo mongwe go baya sešwa go tsena ga gago ka dikgato tse pedi gore o bone tse dintšhwa.",
   "Save your backup codes": "Boloka dikhoutu tsa gago tsa poloko",
@@ -1804,5 +1802,7 @@
   "Cannot scan? Type this key into the app instead:": "Ga o kgone go sekena? Kwala senotlolo se mo app go na le moo:",
   "Then enter the 6-digit code the app shows": "Morago tsenya khoutu ya dipalo di le 6 e app e e bontshang",
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Tsenya khoutu ya dipalo di le 6 go tswa mo app ya gago ya netefatso, kgotsa nngwe ya dikhoutu tsa gago tsa poloko",
-  "Continue": "Tswelela"
+  "Continue": "Tswelela",
+  "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Baya sešwa go tsena ka dikgato tse pedi ga {name}? Se se ba ntsha gape gongwe le gongwe. Morago ba dirisa O lebetse phasewete ya gago? mo tsebeng ya go tsena mme ba baakanya founu ya bona gape.",
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Ka founu e e latlhegileng: e ba ntsha gongwe le gongwe, morago ba baya sešwa phasewete ya bona mme ba baakanya gape go tsena ka dikgato tse pedi"
 }

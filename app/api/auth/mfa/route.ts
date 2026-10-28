@@ -3,7 +3,7 @@ import { LIMITS, hit, clear, tooMany, ipOf } from "@/lib/rateLimit";
 import { getUserById } from "@/lib/userData";
 import { recordActivity } from "@/lib/activityLog";
 import { afterResponse, actorFromUser } from "@/lib/activityActor";
-import { deviceOf } from "@/lib/signinLog";
+import { countSignIn, deviceOf } from "@/lib/signinLog";
 import { isSameOriginWrite } from "@/lib/session";
 import { tenantScope } from "@/lib/tenantContext";
 import { finishSignIn } from "@/lib/signIn";
@@ -18,6 +18,10 @@ export async function POST(req: NextRequest) {
   }
   try {
     const at = new Date().toISOString();
+    // Counted before any lookup, shared with password attempts, so made-up
+    // tokens cannot make one connection cost unlimited storage reads.
+    const ipHit = await hit(LIMITS.loginIp, ipOf(req));
+    if (!ipHit.ok) return tooMany(LIMITS.loginIp, ipHit);
     const { mfaToken, code } = await req.json();
     const claims = readPendingClaims(mfaToken);
     const user = claims ? await getUserById(claims.u) : undefined;
@@ -30,8 +34,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Enter the code from your app." }, { status: 400 });
     }
 
-    const limited = await hit(LIMITS.mfaAccount, user.id);
-    if (!limited.ok) return tooMany(LIMITS.mfaAccount, limited);
+    for (const limit of [LIMITS.mfaAccountDay, LIMITS.mfaAccount]) {
+      const limited = await hit(limit, user.id);
+      if (!limited.ok) return tooMany(limit, limited);
+    }
 
     const actor = { ...actorFromUser(req, user), ip: ipOf(req) };
     const device = deviceOf(req.headers.get("user-agent"));
@@ -39,11 +45,24 @@ export async function POST(req: NextRequest) {
       afterResponse(() =>
         recordActivity({ at, ...actor, action, entity: "auth", entityId: user.id, summary, detail: { ...detail, device } })
       );
+    // A wrong code is a failed sign-in, in the log and in the sign-in tally.
+    const failed = (summary: string) =>
+      afterResponse(() =>
+        Promise.all([
+          recordActivity({ at, ...actor, action: "auth.mfa_failed", entity: "auth", entityId: user.id, summary, detail: { reason: "wrong_code", device } }),
+          countSignIn(user, "failed", actor.ip, device, at),
+        ])
+      );
 
     if (pending.s) {
       const backupCodes = await enrol(user.id, pending.s, code);
+      if (backupCodes === "exists") {
+        // Set up already (another tab, or a lost reply): not a wrong code.
+        await clear(LIMITS.mfaAccount, user.id);
+        return NextResponse.json({ error: "Two-step sign-in is already set up. Please sign in again and enter the code from your app.", restart: true }, { status: 400 });
+      }
       if (!backupCodes) {
-        await log("auth.mfa_failed", "Wrong code while setting up two-step sign-in");
+        await failed("Wrong code while setting up two-step sign-in");
         return NextResponse.json({ error: "That code is not right. Check the time on your phone and try the newest code." }, { status: 400 });
       }
       await clear(LIMITS.mfaAccount, user.id);
@@ -53,7 +72,7 @@ export async function POST(req: NextRequest) {
 
     const { result, backupLeft } = await checkCode(user.id, code);
     if (result === "wrong") {
-      await log("auth.mfa_failed", "Failed sign-in: wrong two-step code");
+      await failed("Failed sign-in: wrong two-step code");
       return NextResponse.json({ error: "That code is not right. Try the newest code, or a backup code." }, { status: 400 });
     }
     await clear(LIMITS.mfaAccount, user.id);

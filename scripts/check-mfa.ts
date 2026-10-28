@@ -61,13 +61,14 @@ async function main() {
   const forged = Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(p, "base64url").toString()), u: "u2" })).toString("base64url");
   check("edited claims refused", M.verifyPendingToken(`${forged}.${sig}`, { ...user, id: "u2" }, "hvps", now), null);
 
+  check("no ':' from the school name in the app label", M.otpauthUri("ABC", "a@b.co", "Jeppe: High").startsWith("otpauth://totp/Jeppe%20%20High%3Aa%40b.co?"), true);
   check("only Super Admin needs it", [M.mfaRequired({ role: "super-admin" }), M.mfaRequired({ role: "sgb-admin" })], [true, false]);
 
   // Set-up and sign-in against the fake store.
   check("wrong set-up code", await M.enrol("u1", sealed, "000000", now), null);
   const codes = await M.enrol("u1", sealed, M.totpAt(secret, step), now);
   check("set-up gives backup codes", codes?.length, M.BACKUP_CODE_COUNT);
-  check("second set-up refused", await M.enrol("u1", M.sealSecret(M.newSecret()), M.totpAt(secret, step + 1), now + 30000), null);
+  check("second set-up refused as 'exists', not a wrong code", await M.enrol("u1", M.sealSecret(M.newSecret()), M.totpAt(secret, step + 1), now + 30000), "exists");
   check("set-up code not reusable", (await M.checkCode("u1", M.totpAt(secret, step), now)).result, "wrong");
   check("next code works", (await M.checkCode("u1", M.totpAt(secret, step + 1), now + 30000)).result, "ok");
   check("same code twice refused", (await M.checkCode("u1", M.totpAt(secret, step + 1), now + 30000)).result, "wrong");

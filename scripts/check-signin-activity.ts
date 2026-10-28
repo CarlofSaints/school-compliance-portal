@@ -273,7 +273,7 @@ async function main() {
   const keysNow = [...store.keys()];
   check(keysNow.some((k) => /\/activity-auth\/\d{4}-\d{2}\//.test(k)) && !keysNow.some((k) => /\/activity\/\d{4}-\d{2}\//.test(k) && k.includes("auth")), "auth entries stored under activity-auth/<month>/, not activity/");
   const def = await readActivity({ limit: 10000 });
-  const partitioned = ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"];
+  const partitioned = ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out", "auth.mfa_failed", "auth.mfa_enabled", "auth.mfa_backup_used"];
   check(def.entries.some((e) => e.entity === "spend") && def.entries.every((e) => !partitioned.includes(e.action)), `the default view has no sign-in/out entries (${def.entries.length})`);
   const pwc = def.entries.find((e) => e.action === "auth.password_changed");
   check(!!pwc, "password changes stay in the main log");
@@ -341,7 +341,7 @@ async function main() {
   check(store.has(metaKey), "a user's first ever tally writes meta.json if it is missing");
 
   console.log("\nThe Sign in filter reads only the page it shows");
-  const fullAuth = (await exportActivity(currentMonth())).filter((e) => ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"].includes(e.action));
+  const fullAuth = (await exportActivity(currentMonth())).filter((e) => ["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out", "auth.mfa_failed", "auth.mfa_enabled", "auth.mfa_backup_used"].includes(e.action));
   const reads0 = getCalls();
   const pageOne = await readActivity({ entity: "auth", limit: 2, offset: 1 });
   const reads = getCalls() - reads0;

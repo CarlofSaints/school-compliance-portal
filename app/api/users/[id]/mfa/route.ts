@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission, SUPER_ADMIN_ROLE_ID } from "@/lib/rolesData";
-import { getUserById } from "@/lib/userData";
+import crypto from "crypto";
+import { getUserById, updateUser } from "@/lib/userData";
 import { getMfa, deleteMfa } from "@/lib/mfa";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom, afterResponse } from "@/lib/activityActor";
 import { ipOf } from "@/lib/rateLimit";
 
 // Reset MFA: for a Super Admin who lost their phone and their backup codes.
-// They set it up again at their next sign-in. 🔴 Super Admin only, not
-// manage_users: someone who could reset it and also knew the password could
-// put their own phone on the account.
+// 🔴 Super Admin only, not manage_users: someone who could reset it and also
+// knew the password could put their own phone on the account.
+//
+// It also replaces their password with a random one nobody knows. Sessions
+// are signed against the password hash, so that signs out every device,
+// including a stolen phone that was signed in. They come back through
+// Forgot your password? (their own email) and set the app up again.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -26,6 +31,7 @@ export async function DELETE(
   const wasSetUp = !!(await getMfa(id));
   if (wasSetUp) {
     await deleteMfa(id);
+    await updateUser(id, { password: crypto.randomBytes(32).toString("base64url") });
     const at = new Date().toISOString();
     await afterResponse(() =>
       recordActivity({
@@ -35,7 +41,7 @@ export async function DELETE(
         action: "auth.mfa_reset",
         entity: "user",
         entityId: id,
-        summary: `Reset two-step sign-in for ${user.name} ${user.surname}`.trim(),
+        summary: `Reset two-step sign-in for ${user.name} ${user.surname} and signed them out everywhere`.trim(),
       })
     );
   }

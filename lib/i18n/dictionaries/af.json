@@ -1788,11 +1788,9 @@
   "SGB / Board": "SBL / Raad",
   "Chairperson": "Voorsitter",
   "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.": "Wie ’n konsep nagaan. Gewoonlik die Skoolhoof en die voorsitter, met ’n afskrif aan die ondervoorsitter.",
-  "Reset two-step sign-in for {name}? They will set it up again with their phone at their next sign-in.": "Stel tweestap-aanmelding vir {name} terug? Hulle stel dit weer met hul foon op wanneer hulle volgende keer aanmeld.",
   "Could not reset two-step sign-in.": "Kon nie tweestap-aanmelding terugstel nie.",
   "Two-step sign-in reset.": "Tweestap-aanmelding is teruggestel.",
   "They had not set up two-step sign-in yet.": "Hulle het nog nie tweestap-aanmelding opgestel nie.",
-  "For a lost phone: they set up two-step sign-in again at their next sign-in": "Vir 'n verlore foon: hulle stel tweestap-aanmelding weer op wanneer hulle volgende keer aanmeld",
   "Reset MFA": "Stel MFA terug",
   "You have {n} backup codes left. Ask another Super Admin to reset your two-step sign-in so you get new ones.": "U het nog {n} rugsteunkodes oor. Vra 'n ander Super Admin om u tweestap-aanmelding terug te stel sodat u nuwes kry.",
   "Save your backup codes": "Stoor u rugsteunkodes",
@@ -1804,5 +1802,7 @@
   "Cannot scan? Type this key into the app instead:": "Kan u nie skandeer nie? Tik eerder hierdie sleutel in die toep in:",
   "Then enter the 6-digit code the app shows": "Voer dan die 6-syfer-kode in wat die toep wys",
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Voer die 6-syfer-kode van u verifikasietoep in, of een van u rugsteunkodes",
-  "Continue": "Gaan voort"
+  "Continue": "Gaan voort",
+  "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Stel tweestap-aanmelding vir {name} terug? Dit meld hulle ook oral af. Hulle gebruik dan Wagwoord vergeet? op die aanmeldbladsy en stel hul foon weer op.",
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Vir 'n verlore foon: meld hulle oral af, dan stel hulle hul wagwoord terug en stel tweestap-aanmelding weer op"
 }

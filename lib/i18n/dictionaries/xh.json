@@ -1788,11 +1788,9 @@
   "SGB / Board": "SGB / Ibhodi",
   "Chairperson": "uSihlalo",
   "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.": "Ngubani ojonga idrafti. Ngokuqhelekileyo yiNqununu noSihlalo, usekela ekhutshelwa.",
-  "Reset two-step sign-in for {name}? They will set it up again with their phone at their next sign-in.": "Seta kwakhona ukungena ngamanyathelo amabini ka-{name}? Baya kuphinda bakuseta ngefowuni yabo xa bengena kwakhona.",
   "Could not reset two-step sign-in.": "Akukwazekanga ukuseta kwakhona ukungena ngamanyathelo amabini.",
   "Two-step sign-in reset.": "Ukungena ngamanyathelo amabini kusetwe kwakhona.",
   "They had not set up two-step sign-in yet.": "Bebengekakuseti ukungena ngamanyathelo amabini.",
-  "For a lost phone: they set up two-step sign-in again at their next sign-in": "Kwifowuni elahlekileyo: baya kuphinda baseta ukungena ngamanyathelo amabini xa bengena kwakhona",
   "Reset MFA": "Seta kwakhona i-MFA",
   "You have {n} backup codes left. Ask another Super Admin to reset your two-step sign-in so you get new ones.": "Ushiyelwe ziikhowudi ezingu-{n} zogcino. Cela omnye u-Super Admin ukuba aseta kwakhona ukungena kwakho ngamanyathelo amabini ukuze ufumane ezintsha.",
   "Save your backup codes": "Gcina iikhowudi zakho zogcino",
@@ -1804,5 +1802,7 @@
   "Cannot scan? Type this key into the app instead:": "Awukwazi ukuskena? Chwetheza esi sitshixo kwi-app endaweni yoko:",
   "Then enter the 6-digit code the app shows": "Emva koko faka ikhowudi enamanani ama-6 eboniswa yi-app",
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Faka ikhowudi enamanani ama-6 evela kwi-app yakho yokuqinisekisa, okanye enye yeekhowudi zakho zogcino",
-  "Continue": "Qhubeka"
+  "Continue": "Qhubeka",
+  "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Seta kwakhona ukungena ngamanyathelo amabini ka-{name}? Oku kukwabakhupha kuyo yonke indawo. Emva koko basebenzisa u-Uyilibele ipassword yakho? kwiphepha lokungena baze baphinde baseta ifowuni yabo.",
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Kwifowuni elahlekileyo: kubakhupha kuyo yonke indawo, emva koko baseta kwakhona ipassword yabo baze baphinde baseta ukungena ngamanyathelo amabini"
 }

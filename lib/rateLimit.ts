@@ -40,6 +40,8 @@ export interface Limit {
   platform?: boolean;
   /** Refuse, not allow, when the count cannot be saved for lost write races. */
   failClosed?: boolean;
+  /** Refuse on ANY failure to count (storage down too), not only races. */
+  refuseOnError?: boolean;
 }
 
 export const LIMITS = {
@@ -49,8 +51,11 @@ export const LIMITS = {
   // (five wrong passwords still lock it). The rest stay closed.
   loginIp: { scope: "login-ip", max: 20, windowSec: 15 * 60, message: "Too many sign-in attempts from this connection. Try again in {wait}." },
   loginAccount: { scope: "login-account", max: 5, windowSec: 15 * 60, message: "Too many wrong passwords for this account. Try again in {wait}, or reset your password." },
-  // Closed: this is the guessing limit on a 6-digit code.
-  mfaAccount: { scope: "mfa-account", failClosed: true, max: 5, windowSec: 15 * 60, message: "Too many wrong codes. Try again in {wait}." },
+  // The guessing limits on a 6-digit code (3 are valid at any moment), shut
+  // tight. The daily cap is what keeps a scripted 5-every-15-minutes slow:
+  // 20 a day is about 2% a YEAR, against ~50% a year on the short one alone.
+  mfaAccount: { scope: "mfa-account", failClosed: true, refuseOnError: true, max: 5, windowSec: 15 * 60, message: "Too many wrong codes. Try again in {wait}." },
+  mfaAccountDay: { scope: "mfa-account-day", failClosed: true, refuseOnError: true, max: 20, windowSec: 24 * 60 * 60, message: "Too many wrong codes today. Try again in {wait}, or ask another Super Admin to reset your two-step sign-in." },
   resetRequestIp: { scope: "reset-request-ip", max: 5, windowSec: 60 * 60, message: "Too many reset requests from this connection. Try again in {wait}." },
   resetRequestEmail: { scope: "reset-request-email", failClosed: true, max: 3, windowSec: 60 * 60, message: "Too many reset requests for this address. Check your inbox, or try again in {wait}." },
   resetCompleteIp: { scope: "reset-complete-ip", max: 10, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
@@ -126,7 +131,7 @@ export async function hit(limit: Limit, key: string, now = Date.now()): Promise<
     const b = limit.platform ? await runInControlStore(write) : await write();
     return decide(limit, b as Bucket, now);
   } catch (err) {
-    if (limit.failClosed && err instanceof UpdateConflictError) {
+    if (limit.failClosed && (limit.refuseOnError || err instanceof UpdateConflictError)) {
       console.error(`[rate-limit] ${limit.scope}: counter contended, refusing:`, err);
       return { ok: false, remaining: 0, retryAfter: 60, busy: true };
     }

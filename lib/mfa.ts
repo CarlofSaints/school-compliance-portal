@@ -116,6 +116,8 @@ export function matchTotp(secret: string, code: string, lastStep: number, now = 
 }
 
 export function otpauthUri(secret: string, account: string, issuer: string): string {
+  // ":" splits issuer from account in the label, so none in the name.
+  issuer = issuer.replace(/:/g, " ").trim();
   const label = encodeURIComponent(`${issuer}:${account}`);
   return `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=${STEP_SEC}`;
 }
@@ -258,9 +260,11 @@ export async function checkCode(userId: string, code: string, now = Date.now()):
 }
 
 /** First set-up: the code must come from the new secret. Returns the backup
- *  codes to show ONCE, or null for a wrong code. Never replaces an existing
- *  set-up: a set-up token used twice must not swap in a new app. */
-export async function enrol(userId: string, sealedSecret: string, code: string, now = Date.now()): Promise<string[] | null> {
+ *  codes to show ONCE, null for a wrong code, or "exists" when the account is
+ *  already set up (a second tab, a retried reply): a set-up token used twice
+ *  must never swap in a new app. */
+export async function enrol(userId: string, sealedSecret: string, code: string, now = Date.now()): Promise<string[] | null | "exists"> {
+  if (await getMfa(userId)) return "exists";
   const secret = openSecret(sealedSecret);
   const step = secret ? matchTotp(secret, code, -1, now) : null;
   if (step === null) return null;
@@ -276,5 +280,5 @@ export async function enrol(userId: string, sealedSecret: string, code: string, 
     written = !old;
     return old ? NO_CHANGE : rec;
   });
-  return written ? codes : null;
+  return written ? codes : "exists";
 }

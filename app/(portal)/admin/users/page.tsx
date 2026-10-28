@@ -5,9 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
-
-// lib/rolesData SUPER_ADMIN_ROLE_ID (server-only, so not importable here).
-const SUPER_ADMIN = "super-admin";
+import { SUPER_ADMIN_ROLE_ID as SUPER_ADMIN } from "@/lib/roles";
 
 
 // Sentinel for the Person picker meaning "this user is not on the register
@@ -351,7 +349,7 @@ export default function UsersPage() {
   // For a Super Admin who lost their phone and backup codes. Only a Super
   // Admin may do it (the server checks too).
   const resetMfa = async (user: UserRecord) => {
-    if (!confirm(t("Reset two-step sign-in for {name}? They will set it up again with their phone at their next sign-in.", { name: `${user.name} ${user.surname}`.trim() }))) return;
+    if (!confirm(t("Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.", { name: `${user.name} ${user.surname}`.trim() }))) return;
     const res = await authFetch(`/api/users/${user.id}/mfa`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -542,7 +540,7 @@ export default function UsersPage() {
                         {session?.role === SUPER_ADMIN && user.role === SUPER_ADMIN && (
                           <button
                             onClick={() => resetMfa(user)}
-                            title={t("For a lost phone: they set up two-step sign-in again at their next sign-in")}
+                            title={t("For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again")}
                             className="text-primary hover:text-primary-dark mr-3 text-xs font-medium"
                           >
                             {t("Reset MFA")}

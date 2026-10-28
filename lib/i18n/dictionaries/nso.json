@@ -1788,11 +1788,9 @@
   "SGB / Board": "SGB / Boto",
   "Chairperson": "Modulasetulo",
   "Who checks a draft. Usually the Principal and the Chairperson, with the deputy copied in.": "Ke mang yo a lekolago tokumente ya pele. Gantši ke Hlogo ya Sekolo le Modulasetulo, motlatša a romelwa kopi.",
-  "Reset two-step sign-in for {name}? They will set it up again with their phone at their next sign-in.": "Bea gape go tsena ka magato a mabedi ga {name}? Ba tla go beakanya gape ka mogala wa bona ge ba tsena gape.",
   "Could not reset two-step sign-in.": "Go be go sa kgonege go bea gape go tsena ka magato a mabedi.",
   "Two-step sign-in reset.": "Go tsena ka magato a mabedi go beilwe gape.",
   "They had not set up two-step sign-in yet.": "Ba be ba se ba beakanya go tsena ka magato a mabedi.",
-  "For a lost phone: they set up two-step sign-in again at their next sign-in": "Bakeng sa mogala wo o lahlegilego: ba beakanya gape go tsena ka magato a mabedi ge ba tsena gape",
   "Reset MFA": "Bea MFA gape",
   "You have {n} backup codes left. Ask another Super Admin to reset your two-step sign-in so you get new ones.": "O šetšwe ke dikhoutu tša poloko tše {n}. Kgopela Super Admin yo mongwe go bea gape go tsena ga gago ka magato a mabedi gore o hwetše tše mpsha.",
   "Save your backup codes": "Boloka dikhoutu tša gago tša poloko",
@@ -1804,5 +1802,7 @@
   "Cannot scan? Type this key into the app instead:": "Ga o kgone go skena? Ngwala senotlelo se ka go app go e na le moo:",
   "Then enter the 6-digit code the app shows": "Ke moka tsenya khoutu ya dinomoro tše 6 yeo app e e bontšhago",
   "Enter the 6-digit code from your authenticator app, or one of your backup codes": "Tsenya khoutu ya dinomoro tše 6 go tšwa go app ya gago ya netefatšo, goba e nngwe ya dikhoutu tša gago tša poloko",
-  "Continue": "Tšwela pele"
+  "Continue": "Tšwela pele",
+  "Reset two-step sign-in for {name}? This also signs them out everywhere. They then use Forgot your password? on the sign-in page and set up their phone again.": "Bea gape go tsena ka magato a mabedi ga {name}? Se se ba ntšha le gona gohle. Ke moka ba diriša O lebetše lentšu la gago la sephiri? letlakaleng la go tsena gomme ba beakanya mogala wa bona gape.",
+  "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Bakeng sa mogala wo o lahlegilego: e ba ntšha gohle, ke moka ba bea gape lentšu la bona la sephiri gomme ba beakanya gape go tsena ka magato a mabedi"
 }

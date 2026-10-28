@@ -78,7 +78,7 @@ function monthOf(iso: string): string {
   return iso.slice(0, 7); // YYYY-MM
 }
 
-const AUTH_PARTITION_ACTIONS = new Set(["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out"]);
+const AUTH_PARTITION_ACTIONS = new Set(["auth.sign_in", "auth.sign_in_failed", "auth.sign_in_blocked", "auth.sign_out", "auth.mfa_failed", "auth.mfa_enabled", "auth.mfa_backup_used"]);
 
 function pathFor(entry: ActivityEntry): string {
   const folder = AUTH_PARTITION_ACTIONS.has(entry.action) ? "activity-auth" : "activity";
