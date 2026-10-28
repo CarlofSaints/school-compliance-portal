@@ -113,7 +113,9 @@ export async function PATCH(
   let updated;
   try {
     updated = await updateSpendApplication(id, updates, {
-      base: expectedStatus !== undefined ? { status: expectedStatus as SpendApplication["status"] } : undefined,
+      // Always: the admin-only and own-application checks above were made on
+      // the status read at the start, so it must not have moved since.
+      base: { status: (expectedStatus ?? app.status) as SpendApplication["status"] },
       byName: actorFrom(req, session).actorName,
     });
   } catch (err) {

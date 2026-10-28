@@ -196,9 +196,9 @@ export const STATUS_DISPLAY: Record<string, string> = {
   completed: "COMPLETED",
 };
 
-/** What the spend edit page can change. Its save is a three-way merge on
- *  exactly these (mergeSpendEdit): fields the person did not touch keep what
- *  is stored now, so nobody's change is lost to a stale page. */
+/** What the spend edit page can change. Its save sends these as it loaded
+ *  them, and is refused if any has changed since (someone else saved the
+ *  details). Status, votes and notes are not in it, so they refuse nobody. */
 export const SPEND_EDIT_FIELDS = [
   "projectName", "description", "estimatedAmount", "supplierConnection",
   "budgeted", "sourceOfFunds", "fundingAllocations", "quoteDetails", "quotes",

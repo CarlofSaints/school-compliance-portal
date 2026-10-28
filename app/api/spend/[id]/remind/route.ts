@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requireLogin } from "@/lib/rolesData";
 import {
@@ -145,7 +144,7 @@ export async function POST(
     // Added to the history AS IT IS NOW, not the copy read before sending.
     await updateSpendApplication(id, (current) => ({
       manualReminders: [...(current.manualReminders || []), entry].slice(-20),
-    }), { byName: actorFrom(req, session).actorName });
+    }));
   }
 
   return NextResponse.json({

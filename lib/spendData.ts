@@ -141,27 +141,6 @@ export class SpendEditConflict extends SpendChangeRefused {
 
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-/** The edit page's save as a three-way merge. `mine` is what was submitted,
- *  `base` the same fields as the page loaded them, `current` the record now.
- *  A field the person did not change keeps `current`; one they changed wins,
- *  unless somebody else changed it too (to something else) - then the whole
- *  save is refused, naming those fields, and nothing is written. */
-export function mergeSpendEdit<T extends Record<string, unknown>>(
-  mine: T,
-  base: Partial<T>,
-  current: SpendApplication
-): T {
-  const out: Record<string, unknown> = {};
-  const clashes: string[] = [];
-  const now = current as unknown as Record<string, unknown>;
-  for (const k of Object.keys(mine)) {
-    if (sameValue(mine[k], base[k])) out[k] = now[k];
-    else if (!sameValue(now[k], base[k]) && !sameValue(now[k], mine[k])) clashes.push(k);
-    else out[k] = mine[k];
-  }
-  if (clashes.length) throw new SpendEditConflict(current, clashes);
-  return out as T;
-}
 
 // The fields of `base` (as the person's page loaded them) that are no longer
 // what is stored. Only these count: a note, a reminder or a vote landing
@@ -198,8 +177,9 @@ export async function updateSpendApplication(
       ...apps[idx],
       ...updates,
       rev: crypto.randomUUID(),
-      // Only saves that say who they are (edit, grid) move these, so the
-      // refusal message names the person behind the change, not a note.
+      // Only saves that change what a refusal is about (details, status,
+      // custodian, quote) pass a name, so the message names that person and
+      // time, not whoever last added a note or sent a reminder.
       ...(opts.byName ? { changedAt: new Date().toISOString(), changedByName: opts.byName } : {}),
     };
     updated = apps[idx];

@@ -7,7 +7,6 @@ import {
   updateSpendApplication,
   SpendChangeRefused,
   SpendEditConflict,
-  mergeSpendEdit,
   changedSince,
   uploadQuoteFile,
   deleteSpendApplication,
@@ -83,17 +82,21 @@ export async function PUT(
 
   try {
     const formData = await req.formData();
-    // The editable fields as the edit page loaded them: the save is merged
-    // against the record AS IT IS AT SAVE TIME (mergeSpendEdit), so only the
-    // fields this person changed are written. shortcut: a refused save may
-    // already have uploaded a quote over the same fixed path; rare at school
-    // scale, upgrade to unique quote paths if it ever bites.
+    // The editable fields as the edit page loaded them. If ANY of them has
+    // changed since (someone else saved the details), the save is refused
+    // here, before a quote file is uploaded, and nothing is written. No
+    // merging: a stale form must never quietly undo part of their change.
+    // Votes, notes and reminders touch other fields and refuse nobody.
     let base: Partial<SpendApplication> | undefined;
     try {
       const raw = formData.get("base");
       if (typeof raw === "string" && raw) base = pickSpendEditFields(JSON.parse(raw));
     } catch {
       return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
+    if (base) {
+      const moved = changedSince(app, base);
+      if (moved.length > 0) return spendConflictResponse(app, moved);
     }
     const projectName =
       (formData.get("projectName") as string) || app.projectName;
@@ -160,18 +163,6 @@ export async function PUT(
       : applicantUserIdRaw === null
         ? app.applicantUserId
         : (applicantUserIdRaw as string) || undefined;
-
-    // A new quote file goes to a fixed path, so refuse BEFORE uploading if
-    // someone else changed the quotes since this page loaded them: otherwise
-    // the refused save would already have replaced their file.
-    const uploading = [1, 2, 3, 4].some((i) => {
-      const f = formData.get(`quote${i}`) as File | null;
-      return !!f && f.size > 0;
-    });
-    if (base && uploading) {
-      const moved = changedSince(app, { quotes: base.quotes, quoteDetails: base.quoteDetails });
-      if (moved.length > 0) return spendConflictResponse(app, moved);
-    }
 
     // Handle quote files - check for new uploads
     const quotePaths = [...app.quotes];
@@ -253,18 +244,13 @@ export async function PUT(
       applicantEmail,
       submittedOnBehalf: isOnBehalf,
     };
-    // 🔴 Merged BEFORE anything is worked out from it: only the fields this
-    // person changed are theirs, the rest stay as stored. The band, votes and
-    // emails below all follow what will actually be SAVED - banding on the
-    // page's stale amount once re-banded a R250 000 project as R9 000.
-    const merged = base ? mergeSpendEdit(mine, base, app) : mine;
 
     // 🔴 A new amount is a new application as far as approval goes. The band,
     // and so WHO must approve, was frozen at submission; keeping it after the
     // amount changed let R9 000 approved by the Principal become R250 000 with
     // no FINCOM sign-off. So the approvers are worked out again and every
     // decision so far is cleared.
-    const amountChanged = Math.abs(merged.estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
+    const amountChanged = Math.abs(mine.estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
     // Any edit after votes have been cast restarts them, not just a new
     // amount: a swapped quote, supplier or description is a different
     // application from the one the earlier approvers said yes to.
@@ -286,7 +272,7 @@ export async function PUT(
       reband = { approvals: [], preferredQuotes: [] };
     }
     if (amountChanged || firstImportEdit) {
-      const approval = await resolveApprovers(merged.estimatedAmount);
+      const approval = await resolveApprovers(mine.estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
       reband = {
         approvalTierId: approval.tierId,
@@ -296,7 +282,7 @@ export async function PUT(
         approvalWarning: approval.warning,
         approvals: [],
         preferredQuotes: [],
-        approvedAmount: approval.logOnly ? merged.estimatedAmount : undefined,
+        approvedAmount: approval.logOnly ? mine.estimatedAmount : undefined,
       };
     }
 
@@ -310,19 +296,20 @@ export async function PUT(
       if (current.status === "approved" || current.status === "completed") {
         throw new SpendChangeRefused("Cannot edit approved or completed applications", 400);
       }
-      // The merge and band above were worked out from the record read at the
-      // start. If an edited field moved in the moment since, refuse with no
-      // fields named: the page keeps its base, and Save merges afresh.
-      if (base && changedSince(current, pickSpendEditFields(app)).length > 0) {
-        throw new SpendEditConflict(current, []);
+      // The same check against the record AS IT IS NOW, for a save that
+      // landed in the moment since. shortcut: a quote uploaded in that moment
+      // has already replaced the file at its fixed path; that window is the
+      // length of one upload, fine at school scale.
+      if (base) {
+        const moved = changedSince(current, base);
+        if (moved.length > 0) throw new SpendEditConflict(current, moved);
       }
-      const fields = merged;
       const votesNow =
         (current.approvals?.length ?? 0) > 0 &&
         (current.status === "pending" || current.status === "pending_decision");
       restartedNow = votesNow && !hadVotes && !amountChanged;
       return {
-      ...fields,
+      ...mine,
       // A resubmission after changes goes back to pending; otherwise the
       // status as it is NOW, never the copy read at the start of the request.
       status:

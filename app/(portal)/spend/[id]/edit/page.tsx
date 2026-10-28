@@ -203,8 +203,8 @@ export default function EditSpendPage() {
     setSubmitting(true);
 
     const formData = new FormData();
-    // The editable fields as this page loaded them: the server writes only
-    // the ones changed here, and refuses if someone else changed the same one.
+    // The editable fields as this page loaded them: the save is refused if
+    // someone else changed any of them since.
     formData.append("base", JSON.stringify(pickSpendEditFields(data)));
     formData.append("projectName", projectName);
     formData.append("description", description);
@@ -245,19 +245,16 @@ export default function EditSpendPage() {
       router.push(`/spend/${spendId}`);
     } else {
       const err = await res.json().catch(() => ({}));
-      // Someone else changed the same field(s) meanwhile. Only THOSE take
-      // their value as the new base, so a second Save replaces them on
-      // purpose while every other change of theirs is still kept. The form
-      // keeps what was typed.
-      if (res.status === 409 && err.current && Array.isArray(err.fields)) {
-        const fields: string[] = err.fields;
-        setData((prev) =>
-          prev
-            ? { ...prev, ...Object.fromEntries(fields.map((k) => [k, err.current[k]])) }
-            : prev
-        );
-      }
-      setToast({ message: err.error || t("Failed to save"), type: "error" });
+      // Someone else changed the details meanwhile. Nothing was saved; the
+      // form keeps what was typed so it can be copied before a reload. No
+      // second Save over theirs: that would quietly undo part of their work.
+      setToast({
+        message:
+          res.status === 409 && err.current
+            ? `${err.error} ${t("What you typed is still on this page: copy anything you need, then reload to see their version.")}`
+            : err.error || t("Failed to save"),
+        type: "error",
+      });
     }
     setSubmitting(false);
   };

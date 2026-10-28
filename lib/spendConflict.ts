@@ -5,8 +5,8 @@ import { SpendChangeRefused, SpendEditConflict } from "./spendData";
 
 // The 409 for a save refused because somebody else changed the same fields
 // after this person opened the project (SpendEditConflict). Carries the
-// record as it is now: the grid shows it, the edit page keeps what was typed
-// and takes it as the new base, so a second Save on purpose goes through. In the reader's language: the page shows it as it comes.
+// record as it is now: the grid shows it; the edit page keeps what was typed
+// on screen so it can be copied before a reload. In the reader's language: the page shows it as it comes.
 export async function spendConflictResponse(current: SpendApplication, fields: string[] = []): Promise<NextResponse> {
   const t = await getT();
   const when = current.changedAt ? new Date(current.changedAt) : null;
@@ -19,20 +19,20 @@ export async function spendConflictResponse(current: SpendApplication, fields: s
         timeZone: "Africa/Johannesburg",
         hour: "2-digit",
         minute: "2-digit",
-        ...(sameDay ? {} : { day: "numeric", month: "short" }),
+        // Numbers only: an English month name would sit inside a translated
+        // sentence.
+        ...(sameDay ? {} : { day: "2-digit", month: "2-digit" }),
       })
     : "";
   const who = current.changedByName || t("Someone else");
   return NextResponse.json(
     {
       error: t(
-        "{who} changed this project{when} while you had it open, so your change was not saved. Check what they changed, then save again if yours should replace it.",
+        "{who} changed this project{when} while you had it open, so your change was not saved. Look at their version, then make your change again.",
         { who, when: time ? ` (${time})` : "" }
       ),
       current,
-      // Which fields clashed: the edit page takes ONLY these from `current`
-      // as its new base, so a second Save overwrites them on purpose and
-      // still leaves the other person's other changes alone.
+      // Which fields had moved, for the record; the pages do not merge.
       fields,
     },
     { status: 409 }

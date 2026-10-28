@@ -261,71 +261,60 @@ export default function SpendPage() {
     // would be checked against the first's unsaved value and refused.
     setBusyRows((prev) => new Set(prev).add(id));
     try {
-      await sendPatch(id, previous, optimistic, url, body, failureMessage);
+      setApps((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, ...optimistic } : a))
+      );
+
+      const res = await authFetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // Changed by someone else meanwhile: show their version of the row
+        // (the server sends it), so picking again is a choice made knowingly.
+        const current = res.status === 409 && data.current ? (data.current as SpendRecord) : previous;
+        setApps((prev) => prev.map((a) => (a.id === id ? current : a)));
+        setToast({ message: data.error || failureMessage, type: "error" });
+        return;
+      }
+      // Take the server's version of the row back, so what the grid shows is
+      // what was actually stored rather than what was clicked.
+      const saved = await res.json().catch(() => null);
+      if (saved) {
+        setApps((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? {
+                  ...a,
+                  ...(saved.status !== undefined
+                    ? { status: saved.status }
+                    : {}),
+                  // The server fills in approvedAmount when a row is approved
+                  // or completed, and the summary cards are computed from it.
+                  ...(saved.approvedAmount !== undefined
+                    ? { approvedAmount: saved.approvedAmount }
+                    : {}),
+                  ...(saved.custodianUserId !== undefined ||
+                  saved.custodianName !== undefined
+                    ? {
+                        custodianUserId: saved.custodianUserId,
+                        custodianName: saved.custodianName,
+                      }
+                    : {}),
+                }
+              : a
+          )
+        );
+      }
     } finally {
       setBusyRows((prev) => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
-    }
-  };
-
-  const sendPatch = async (
-    id: string,
-    previous: SpendRecord,
-    optimistic: Partial<SpendRecord>,
-    url: string,
-    body: Record<string, unknown>,
-    failureMessage: string
-  ) => {
-    setApps((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, ...optimistic } : a))
-    );
-
-    const res = await authFetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      // Changed by someone else meanwhile: show their version of the row
-      // (the server sends it), so picking again is a choice made knowingly.
-      const current = res.status === 409 && data.current ? (data.current as SpendRecord) : previous;
-      setApps((prev) => prev.map((a) => (a.id === id ? current : a)));
-      setToast({ message: data.error || failureMessage, type: "error" });
-      return;
-    }
-    // Take the server's version of the row back, so what the grid shows is
-    // what was actually stored rather than what was clicked.
-    const saved = await res.json().catch(() => null);
-    if (saved) {
-      setApps((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                ...(saved.status !== undefined
-                  ? { status: saved.status }
-                  : {}),
-                // The server fills in approvedAmount when a row is approved
-                // or completed, and the summary cards are computed from it.
-                ...(saved.approvedAmount !== undefined
-                  ? { approvedAmount: saved.approvedAmount }
-                  : {}),
-                ...(saved.custodianUserId !== undefined ||
-                saved.custodianName !== undefined
-                  ? {
-                      custodianUserId: saved.custodianUserId,
-                      custodianName: saved.custodianName,
-                    }
-                  : {}),
-              }
-            : a
-        )
-      );
     }
   };
 

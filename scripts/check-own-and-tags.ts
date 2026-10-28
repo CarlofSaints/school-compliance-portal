@@ -122,18 +122,6 @@ async function main() {
   await S.updateSpendApplication("busy", { notes: [] } as never, { byName: "Approver" });
   const fresh = await S.getSpendById("busy");
   check("a note meanwhile does not refuse an edit of other fields", !!(await S.updateSpendApplication("busy", { description: "new" } as never, { base: { projectName: fresh?.projectName, description: fresh?.description } })), true);
-  const cur = { projectName: "Dee's name", description: "old", estimatedAmount: 100 } as never;
-  const merged = S.mergeSpendEdit({ projectName: "old name", description: "Carl's", estimatedAmount: 100 }, { projectName: "old name", description: "old", estimatedAmount: 100 }, cur);
-  check("merge: my untouched field keeps the other person's change", merged.projectName, "Dee's name");
-  check("merge: my changed field is written", merged.description, "Carl's");
-  let clash: string[] = [];
-  try {
-    S.mergeSpendEdit({ projectName: "Carl's name" }, { projectName: "old name" }, cur);
-  } catch (e) {
-    clash = e instanceof S.SpendEditConflict ? e.fields : ["other error"];
-  }
-  check("merge: both changed the same field = refused, naming it", clash, ["projectName"]);
-  check("merge: both made the SAME change is fine", S.mergeSpendEdit({ projectName: "Dee's name" }, { projectName: "old name" }, cur).projectName, "Dee's name");
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
 }
