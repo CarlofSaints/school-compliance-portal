@@ -1,3 +1,4 @@
+import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
@@ -216,10 +217,12 @@ export async function PUT(
     const hadVotes =
       (app.approvals?.length ?? 0) > 0 &&
       (app.status === "pending" || app.status === "pending_decision");
-    // The first edit of an imported row makes it an ordinary application, so
-    // it is banded like a new submission: its approvers are worked out and
-    // told. Without that it sat with nobody but a spend admin able to decide.
-    const firstImportEdit = !!app.importBatchId;
+    // The first edit of an untouched imported row makes it an ordinary
+    // application, so it is banded like a new submission: its approvers are
+    // worked out and told. Rows already put to a vote keep their approvers
+    // (frozen at submission). shortcut: read before the save, so two edits in
+    // the same second can both band and email; fine at school scale.
+    const firstImportEdit = isRegisterImport(app);
     let reband: Partial<SpendApplication> = {};
     if (hadVotes && !amountChanged) {
       newStatus = "pending";
@@ -278,14 +281,14 @@ export async function PUT(
       };
     });
 
-    // Whoever has to decide now must be TOLD, as on a new application. A
-    // re-banded application otherwise sat waiting on people who never heard
-    // of it.
     // Removed meanwhile (Undo import, a delete): nothing was saved.
     if (!saved) {
       return NextResponse.json({ error: "Spend application not found" }, { status: 404 });
     }
 
+    // Whoever has to decide now must be TOLD, as on a new application. A
+    // re-banded application otherwise sat waiting on people who never heard
+    // of it.
     if (amountChanged || hadVotes || restartedNow || firstImportEdit) {
       const approvers = (reband.requiredApprovers ?? app.requiredApprovers ?? []) as { name: string; email: string }[];
       const needsApproval = !(reband.approvalLogOnly ?? app.approvalLogOnly);
@@ -322,7 +325,7 @@ export async function PUT(
       });
     }
 
-    if (app.importBatchId) {
+    if (firstImportEdit) {
       await recordActivity({
         ...actorFrom(req, session),
         action: "spend.import.converted",

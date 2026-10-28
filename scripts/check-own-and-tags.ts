@@ -92,6 +92,15 @@ async function main() {
     check("...once per person", counts.sign, 2);
     check("tagged on both sides counts once", counts.fincom, 1);
   }
+  const S = await import("../lib/spendData");
+  const row = (id: string, extra: object) => ({ id, projectName: id, submittedBy: "carl", status: "pending", approvals: [], ...extra }) as never;
+  await S.createSpendApplications([
+    row("untouched", { importBatchId: "b9" }),
+    row("voted-legacy", { importBatchId: "b9", requiredApprovers: [{ userId: "boss" }] }),
+    row("by-hand", {}),
+  ]);
+  check("Undo import removes only untouched rows of the batch", await S.deleteSpendImportBatch("b9"), 1);
+  check("...a row already put to a vote is kept", !!(await S.getSpendById("voted-legacy")), true);
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
 }

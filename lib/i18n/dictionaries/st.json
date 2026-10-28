@@ -848,7 +848,6 @@
   "View Spend Applications": "Sheba Dikopo tsa Tshebediso",
   "Undoing...": "E a hlakola...",
   "Undo this import": "Hlakola ho kenya hona",
-  "Undo removes only the {n} project this import created. Anything captured by hand is untouched.": "Ho hlakola ho tlosa feela morero o {n} oo ho kenya hona ho o thehileng. Eng kapa eng e kentsweng ka letsoho ha e amehe.",
   "Import undone. Removed {n} project.": "Ho kenya ho hlakotswe. Ho tlositswe morero o {n}.",
   "Import undone. Removed {n} projects.": "Ho kenya ho hlakotswe. Ho tlositswe merero e {n}.",
   "Select at least one source of funds.": "Kgetha bonyane mohlodi o le mong wa ditjhelete.",
@@ -1807,5 +1806,6 @@
   "You are not the owner of this action item!": "Ha o mong wa ntlha ena ya ketso!",
   "Why are you changing the status?": "Hobaneng o fetola boemo?",
   "Not assigned, changed because: {reason}": "Ha a abelwa, e fetotswe hobane: {reason}",
-  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ho hlakola ho tlosa feela diprojeke tse entsweng ke ho kenya hona tseo ho seng motho ya di fetotseng ho tloha ka nako eo (ho fihla ho {n}). Ntho efe kapa efe e kentsweng ka letsoho, kapa e fetotsweng kamora ho kenya, e a bolokwa."
+  "Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.": "Ho hlakola ho tlosa feela diprojeke tse entsweng ke ho kenya hona tseo ho seng motho ya di fetotseng ho tloha ka nako eo (ho fihla ho {n}). Ntho efe kapa efe e kentsweng ka letsoho, kapa e fetotsweng kamora ho kenya, e a bolokwa.",
+  "Import undone. Nothing was removed: every project from it had been edited since, so they were kept.": "Ho kenya ho hlakotswe. Ha ho letho le tlositsweng: projeke e nngwe le e nngwe ho tswa ho yona e fetotswe ho tloha ka nako eo, kahoo di bolokilwe."
 }

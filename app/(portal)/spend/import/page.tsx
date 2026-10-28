@@ -66,7 +66,8 @@ export default function SpendImportPage() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
   const [undoing, setUndoing] = useState(false);
-  const [undone, setUndone] = useState(0);
+  // null until an undo has run, so an undo that removed nothing still says so.
+  const [undone, setUndone] = useState<number | null>(null);
 
   const loadContext = useCallback(async () => {
     const [appsRes, settingsRes, usersRes] = await Promise.all([
@@ -650,18 +651,18 @@ export default function SpendImportPage() {
             </button>
           </div>
           <p className="text-xs text-gray-400 mt-3">
-            {result.created === 1
-              ? t("Undo removes only the {n} project this import created. Anything captured by hand is untouched.", { n: result.created })
-              : t("Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.", { n: result.created })}
+            {t("Undo removes only the projects this import created that nobody has edited since (up to {n}). Anything captured by hand, or edited after the import, is kept.", { n: result.created })}
           </p>
         </div>
       )}
 
-      {undone > 0 && !result && (
+      {undone !== null && !result && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 text-sm text-gray-600">
-          {undone === 1
-            ? t("Import undone. Removed {n} project.", { n: undone })
-            : t("Import undone. Removed {n} projects.", { n: undone })}
+          {undone === 0
+            ? t("Import undone. Nothing was removed: every project from it had been edited since, so they were kept.")
+            : undone === 1
+              ? t("Import undone. Removed {n} project.", { n: undone })
+              : t("Import undone. Removed {n} projects.", { n: undone })}
         </div>
       )}
     </div>

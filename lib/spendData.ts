@@ -63,14 +63,16 @@ export async function createSpendApplications(
 
 // Removes every application created by one import batch. Returns how many were
 // removed. Only ever called with a batch id, so it cannot touch an application
-// somebody captured by hand.
+// somebody captured by hand. An edit takes a row out of its batch; a row put
+// to a vote by an edit made before that rule (approvers set) is kept too.
 export async function deleteSpendImportBatch(
   batchId: string
 ): Promise<number> {
   let doomed: SpendApplication[] = [];
   await updateJson<SpendApplication[]>(SPEND_INDEX, [], (apps) => {
-    doomed = apps.filter((a) => a.importBatchId === batchId);
-    return doomed.length ? apps.filter((a) => a.importBatchId !== batchId) : NO_CHANGE;
+    doomed = apps.filter((a) => a.importBatchId === batchId && !a.requiredApprovers?.length);
+    const ids = new Set(doomed.map((a) => a.id));
+    return doomed.length ? apps.filter((a) => !ids.has(a.id)) : NO_CHANGE;
   });
   for (const app of doomed) {
     // Best effort: the index is the source of truth for the list, so a failed
