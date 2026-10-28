@@ -246,6 +246,8 @@ export default function SpendPage() {
   // Each applies to local state first so the grid responds immediately, then
   // reverts to the previous value if the server refuses it.
 
+  const [busyRows, setBusyRows] = useState<Set<string>>(new Set());
+
   const patchRow = async (
     id: string,
     optimistic: Partial<SpendRecord>,
@@ -254,7 +256,29 @@ export default function SpendPage() {
     failureMessage: string
   ) => {
     const previous = apps.find((a) => a.id === id);
-    if (!previous) return;
+    if (!previous || busyRows.has(id)) return;
+    // One change per row at a time: a second pick before the first is saved
+    // would be checked against the first's unsaved value and refused.
+    setBusyRows((prev) => new Set(prev).add(id));
+    try {
+      await sendPatch(id, previous, optimistic, url, body, failureMessage);
+    } finally {
+      setBusyRows((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const sendPatch = async (
+    id: string,
+    previous: SpendRecord,
+    optimistic: Partial<SpendRecord>,
+    url: string,
+    body: Record<string, unknown>,
+    failureMessage: string
+  ) => {
     setApps((prev) =>
       prev.map((a) => (a.id === id ? { ...a, ...optimistic } : a))
     );
@@ -743,6 +767,7 @@ export default function SpendPage() {
                       {canEditInline ? (
                         <select
                           value={custodian.userId || ""}
+                          disabled={busyRows.has(app.id)}
                           onChange={(e) =>
                             changeCustodian(app.id, e.target.value)
                           }
@@ -773,6 +798,7 @@ export default function SpendPage() {
                       {canEditInline ? (
                         <select
                           value={app.status}
+                          disabled={busyRows.has(app.id)}
                           onChange={(e) =>
                             changeStatus(app.id, e.target.value)
                           }

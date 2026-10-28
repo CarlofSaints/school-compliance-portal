@@ -1,33 +1,25 @@
 import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
-import { spendConflictResponse } from "@/lib/spendConflict";
+import { spendRefusalResponse } from "@/lib/spendConflict";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getSpendById,
   updateSpendApplication,
-  SpendChangeRefused,
   SpendEditConflict,
-  changedSince,
+  mergeSpendEdit,
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
 import type { QuoteDetail, FundingAllocation, SpendApplication } from "@/lib/spendData";
+import { SPEND_EDIT_FIELDS } from "@/lib/spend";
 import { resolveApprovers } from "@/lib/approvalResolver";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { sendApprovalRequestEmail } from "@/lib/email";
 
-// What the edit page can change, so its "as I loaded it" copy is compared on
-// exactly these and nothing it does not show (status, votes, notes).
-const EDIT_FIELDS = [
-  "projectName", "description", "estimatedAmount", "supplierConnection",
-  "budgeted", "sourceOfFunds", "fundingAllocations", "quoteDetails", "quotes",
-  "applicantUserId", "applicantName", "applicantSurname", "applicantEmail",
-  "submittedOnBehalf",
-] as const;
 function pickEditFields(v: unknown): Partial<SpendApplication> {
   const src = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
-  return Object.fromEntries(EDIT_FIELDS.map((k) => [k, src[k]])) as Partial<SpendApplication>;
+  return Object.fromEntries(SPEND_EDIT_FIELDS.map((k) => [k, src[k]])) as Partial<SpendApplication>;
 }
 
 export async function GET(
@@ -94,20 +86,17 @@ export async function PUT(
 
   try {
     const formData = await req.formData();
-    // The editable fields as the edit page loaded them. Checked now, before
-    // any quote is uploaded, and again inside the save against the record as
-    // it is then. Only these fields count, so a note or a vote meanwhile does
-    // not refuse the save. shortcut: two saves in the same second can still
-    // both upload a quote to its fixed path; fine at school scale.
+    // The editable fields as the edit page loaded them: the save is merged
+    // against the record AS IT IS AT SAVE TIME (mergeSpendEdit), so only the
+    // fields this person changed are written. shortcut: a refused save may
+    // already have uploaded a quote over the same fixed path; rare at school
+    // scale, upgrade to unique quote paths if it ever bites.
     let base: Partial<SpendApplication> | undefined;
     try {
       const raw = formData.get("base");
       if (typeof raw === "string" && raw) base = pickEditFields(JSON.parse(raw));
     } catch {
       return NextResponse.json({ error: "Invalid body" }, { status: 400 });
-    }
-    if (base && changedSince(app, base).length > 0) {
-      return spendConflictResponse(app);
     }
     const projectName =
       (formData.get("projectName") as string) || app.projectName;
@@ -231,11 +220,9 @@ export async function PUT(
       }
     }
 
-    // If status was requires_changes, reset to pending on edit
-    let newStatus: SpendApplication["status"] =
-      app.status === "requires_changes" || app.status === "rejected"
-        ? "pending"
-        : app.status;
+    // Set only when this edit decides the status (votes restarted, re-banded);
+    // otherwise it is worked out from the record at save time, below.
+    let newStatus: SpendApplication["status"] | undefined;
 
     // 🔴 A new amount is a new application as far as approval goes. The band,
     // and so WHO must approve, was frozen at submission; keeping it after the
@@ -282,12 +269,7 @@ export async function PUT(
     // AT SAVE TIME: an approval that landed while this edit was being made
     // was cast on the old wording, so it is cleared too.
     let restartedNow = false;
-    const saved = await updateSpendApplication(id, (current) => {
-      const votesNow =
-        (current.approvals?.length ?? 0) > 0 &&
-        (current.status === "pending" || current.status === "pending_decision");
-      restartedNow = votesNow && !hadVotes && !amountChanged;
-      return {
+    const mine = {
       projectName,
       description,
       estimatedAmount,
@@ -302,7 +284,26 @@ export async function PUT(
       applicantSurname,
       applicantEmail,
       submittedOnBehalf: isOnBehalf,
-      status: newStatus,
+    };
+    const saved = await updateSpendApplication(id, (current) => {
+      // Approved or completed while this page was open: no longer editable.
+      if (current.status === "approved" || current.status === "completed") {
+        throw new SpendEditConflict(current, ["status"]);
+      }
+      const fields = base ? mergeSpendEdit(mine, base, current) : mine;
+      const votesNow =
+        (current.approvals?.length ?? 0) > 0 &&
+        (current.status === "pending" || current.status === "pending_decision");
+      restartedNow = votesNow && !hadVotes && !amountChanged;
+      return {
+      ...fields,
+      // A resubmission after changes goes back to pending; otherwise the
+      // status as it is NOW, never the copy read at the start of the request.
+      status:
+        newStatus ??
+        (current.status === "requires_changes" || current.status === "rejected"
+          ? "pending"
+          : current.status),
       // Clear approvals on re-submission after changes
       ...(current.status === "requires_changes" || current.status === "rejected"
         ? { approvals: [], preferredQuotes: [] }
@@ -314,7 +315,7 @@ export async function PUT(
       importBatchId: undefined,
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
-    }, { base, byName: actorFrom(req, session).actorName });
+    }, { byName: actorFrom(req, session).actorName });
 
     // Removed meanwhile (Undo import, a delete): nothing was saved.
     if (!saved) {
@@ -384,10 +385,8 @@ export async function PUT(
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    if (err instanceof SpendEditConflict) return spendConflictResponse(err.current);
-    if (err instanceof SpendChangeRefused) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
+    const refused = await spendRefusalResponse(err);
+    if (refused) return refused;
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

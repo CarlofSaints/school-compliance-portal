@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { getSpendById, updateSpendApplication, SpendChangeRefused, SpendEditConflict } from "@/lib/spendData";
-import { spendConflictResponse } from "@/lib/spendConflict";
+import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { spendRefusalResponse } from "@/lib/spendConflict";
 import type { SpendApplication } from "@/lib/spendData";
 import { isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 
@@ -96,20 +96,19 @@ export async function PATCH(
     );
   }
 
-  const updates: Partial<SpendApplication> = { status: next };
-
   // Changing the status from the grid has no quote selection behind it, so
   // fall back to the estimate rather than leaving the approved amount empty.
   // "Total Approved Spend" and the CAPEX report both sum approvedAmount, so a
   // row without one silently counts as zero. Completed counts too - a project
   // can be marked completed straight from the grid without passing through
-  // approved.
-  if (
-    (next === "approved" || next === "completed") &&
-    app.approvedAmount === undefined
-  ) {
-    updates.approvedAmount = app.estimatedAmount;
-  }
+  // approved. Worked out from the record AS IT IS AT SAVE TIME: an amount
+  // edited meanwhile is the one approved.
+  const updates = (current: SpendApplication): Partial<SpendApplication> => ({
+    status: next,
+    ...((next === "approved" || next === "completed") && current.approvedAmount === undefined
+      ? { approvedAmount: current.estimatedAmount }
+      : {}),
+  });
 
   let updated;
   try {
@@ -118,10 +117,8 @@ export async function PATCH(
       byName: actorFrom(req, session).actorName,
     });
   } catch (err) {
-    if (err instanceof SpendEditConflict) return spendConflictResponse(err.current);
-    if (err instanceof SpendChangeRefused) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
+    const refused = await spendRefusalResponse(err);
+    if (refused) return refused;
     throw err;
   }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { getSpendById, updateSpendApplication, SpendChangeRefused, SpendEditConflict } from "@/lib/spendData";
-import { spendConflictResponse } from "@/lib/spendConflict";
+import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { spendRefusalResponse } from "@/lib/spendConflict";
 import { actorFrom } from "@/lib/activityActor";
 import { getUsers } from "@/lib/userData";
 
@@ -80,10 +80,8 @@ export async function PATCH(
       custodianName: updated?.custodianName,
     });
   } catch (err) {
-    if (err instanceof SpendEditConflict) return spendConflictResponse(err.current);
-    if (err instanceof SpendChangeRefused) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
-    }
+    const refused = await spendRefusalResponse(err);
+    if (refused) return refused;
     throw err;
   }
 }

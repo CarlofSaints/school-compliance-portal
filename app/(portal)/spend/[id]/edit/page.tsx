@@ -7,6 +7,7 @@ import Toast from "@/components/Toast";
 import FundingSplit, { type Allocation } from "@/components/FundingSplit";
 import { DEFAULT_SUPPLIER_CONNECTIONS } from "@/lib/positions";
 import { useT } from "@/components/I18nProvider";
+import { SPEND_EDIT_FIELDS } from "@/lib/spend";
 
 interface SpendSettings {
   sourcesOfFunds: string[];
@@ -202,9 +203,13 @@ export default function EditSpendPage() {
     setSubmitting(true);
 
     const formData = new FormData();
-    // The project as this page loaded it: the save is refused if someone else
-    // changed any of these fields since. What was typed stays on screen.
-    formData.append("base", JSON.stringify(data));
+    // The editable fields as this page loaded them: the server writes only
+    // the ones changed here, and refuses if someone else changed the same one.
+    const loaded = data as unknown as Record<string, unknown>;
+    formData.append(
+      "base",
+      JSON.stringify(Object.fromEntries(SPEND_EDIT_FIELDS.map((k) => [k, loaded[k]])))
+    );
     formData.append("projectName", projectName);
     formData.append("description", description);
     formData.append("estimatedAmount", estimatedAmount);
@@ -244,10 +249,18 @@ export default function EditSpendPage() {
       router.push(`/spend/${spendId}`);
     } else {
       const err = await res.json().catch(() => ({}));
-      // Changed by someone else meanwhile. Their version becomes the base, so
-      // a second Save is the person choosing to replace it with what they
-      // typed (the form keeps it).
-      if (res.status === 409 && err.current) setData(err.current);
+      // Someone else changed the same field(s) meanwhile. Only THOSE take
+      // their value as the new base, so a second Save replaces them on
+      // purpose while every other change of theirs is still kept. The form
+      // keeps what was typed.
+      if (res.status === 409 && err.current && Array.isArray(err.fields)) {
+        const fields: string[] = err.fields;
+        setData((prev) =>
+          prev
+            ? { ...prev, ...Object.fromEntries(fields.map((k) => [k, err.current[k]])) }
+            : prev
+        );
+      }
       setToast({ message: err.error || t("Failed to save"), type: "error" });
     }
     setSubmitting(false);

@@ -195,3 +195,13 @@ export const STATUS_DISPLAY: Record<string, string> = {
   requires_changes: "NEEDS MORE WORK",
   completed: "COMPLETED",
 };
+
+/** What the spend edit page can change. Its save is a three-way merge on
+ *  exactly these (mergeSpendEdit): fields the person did not touch keep what
+ *  is stored now, so nobody's change is lost to a stale page. */
+export const SPEND_EDIT_FIELDS = [
+  "projectName", "description", "estimatedAmount", "supplierConnection",
+  "budgeted", "sourceOfFunds", "fundingAllocations", "quoteDetails", "quotes",
+  "applicantUserId", "applicantName", "applicantSurname", "applicantEmail",
+  "submittedOnBehalf",
+] as const;
