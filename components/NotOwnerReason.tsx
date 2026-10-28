@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { useT } from "@/components/I18nProvider";
 
 // The warning and reason box shown when someone not assigned to an action (an
@@ -13,16 +14,17 @@ export default function NotOwnerReason({
   onChange: (reason: string) => void;
 }) {
   const t = useT();
+  const id = useId();
   return (
     <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-2">
       <p className="text-sm font-semibold text-amber-800">
         {t("You are not the owner of this action item!")}
       </p>
-      <label className="block text-sm font-medium text-amber-900" htmlFor="not-owner-reason">
+      <label className="block text-sm font-medium text-amber-900" htmlFor={id}>
         {t("Why are you changing the status?")}
       </label>
       <textarea
-        id="not-owner-reason"
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={2}

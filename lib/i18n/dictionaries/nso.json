@@ -848,8 +848,6 @@
   "View Spend Applications": "Bona Dikgopelo tša Tšhomišo",
   "Undoing...": "E a phumola...",
   "Undo this import": "Phumola go tsenya mo",
-  "Undo removes only the {n} project this import created. Anything captured by hand is untouched.": "Go phumola go tloša fela projeke e {n} yeo go tsenya mo go e dirilego. Se sengwe le se sengwe seo se tsentšwego ka seatla ga se kgwathwe.",
-  "Undo removes only the {n} projects this import created. Anything captured by hand is untouched.": "Go phumola go tloša fela diprojeke tše {n} tšeo go tsenya mo go di dirilego. Se sengwe le se sengwe seo se tsentšwego ka seatla ga se kgwathwe.",
   "Import undone. Removed {n} project.": "Go tsenya go phumotšwe. Projeke e {n} e tlošitšwe.",
   "Import undone. Removed {n} projects.": "Go tsenya go phumotšwe. Diprojeke tše {n} di tlošitšwe.",
   "Select at least one source of funds.": "Kgetha bonyane mothopo o tee wa ditšhelete.",
@@ -1807,5 +1805,7 @@
   "For a lost phone: signs them out everywhere, then they reset their password and set up two-step sign-in again": "Bakeng sa mogala wo o lahlegilego: e ba ntšha gohle, ke moka ba bea gape lentšu la bona la sephiri gomme ba beakanya gape go tsena ka magato a mabedi",
   "You are not the owner of this action item!": "Ga o mong wa ntlha ye ya tiro!",
   "Why are you changing the status?": "Ke ka lebaka la eng o fetola maemo?",
-  "Not assigned, changed because: {reason}": "Ga a abelwa, e fetotšwe ka gobane: {reason}"
+  "Not assigned, changed because: {reason}": "Ga a abelwa, e fetotšwe ka gobane: {reason}",
+  "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Go phumola go tloša feela diprotšeke tšeo di hlotšwego ke go tsenya mo tšeo go se nago yo a di fetotšego go tloga ka nako yeo (go fihla go {n}). Se sengwe le se sengwe se se tsentšwego ka seatla, goba se fetotšwe ka morago ga go tsenya (se lokišitšwe, se dumeletšwe, se phethilwe goba se na le ntlha), se a bolokwa.",
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Go tsenya go phumotšwe. Ga go se se tlošitšwego: protšeke ye nngwe le ye nngwe go tšwa go yona e fetotšwe go tloga ka nako yeo, ka gona di bolokilwe."
 }

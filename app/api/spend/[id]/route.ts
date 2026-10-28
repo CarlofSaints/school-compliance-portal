@@ -1,3 +1,4 @@
+import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
@@ -216,12 +217,21 @@ export async function PUT(
     const hadVotes =
       (app.approvals?.length ?? 0) > 0 &&
       (app.status === "pending" || app.status === "pending_decision");
+    // The first edit of an untouched imported row makes it an ordinary
+    // application, so it is banded like a new submission: its approvers are
+    // worked out and told. Rows already put to a vote keep their approvers
+    // (frozen at submission). shortcut: read before the save, so two edits in
+    // the same second can both band and email; fine at school scale.
+    // Only a still-PENDING one: a rejected or historical row is not re-banded
+    // (a log-only band would otherwise approve a rejected row over a typo).
+    const firstImportEdit =
+      isRegisterImport(app) && (app.status === "pending" || app.status === "pending_decision");
     let reband: Partial<SpendApplication> = {};
     if (hadVotes && !amountChanged) {
       newStatus = "pending";
       reband = { approvals: [], preferredQuotes: [] };
     }
-    if (amountChanged) {
+    if (amountChanged || firstImportEdit) {
       const approval = await resolveApprovers(estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
       reband = {
@@ -240,7 +250,7 @@ export async function PUT(
     // AT SAVE TIME: an approval that landed while this edit was being made
     // was cast on the old wording, so it is cleared too.
     let restartedNow = false;
-    await updateSpendApplication(id, (current) => {
+    const saved = await updateSpendApplication(id, (current) => {
       const votesNow =
         (current.approvals?.length ?? 0) > 0 &&
         (current.status === "pending" || current.status === "pending_decision");
@@ -266,14 +276,23 @@ export async function PUT(
         ? { approvals: [], preferredQuotes: [] }
         : {}),
       ...reband,
+      // The first edit takes an imported row out of its batch (see
+      // importBatchId): an ordinary application from now on, which Undo
+      // import no longer deletes. Read from the record AS IT IS NOW.
+      importBatchId: undefined,
       ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
       };
     });
 
+    // Removed meanwhile (Undo import, a delete): nothing was saved.
+    if (!saved) {
+      return NextResponse.json({ error: "Spend application not found" }, { status: 404 });
+    }
+
     // Whoever has to decide now must be TOLD, as on a new application. A
     // re-banded application otherwise sat waiting on people who never heard
     // of it.
-    if (amountChanged || hadVotes || restartedNow) {
+    if (amountChanged || hadVotes || restartedNow || firstImportEdit) {
       const approvers = (reband.requiredApprovers ?? app.requiredApprovers ?? []) as { name: string; email: string }[];
       const needsApproval = !(reband.approvalLogOnly ?? app.approvalLogOnly);
       if (needsApproval) {
@@ -306,6 +325,17 @@ export async function PUT(
         entityId: app.id,
         summary: `Edited "${app.projectName}" after ${app.approvals.length} decision(s); approvals restarted`,
         detail: { previousApprovals: app.approvals.length },
+      });
+    }
+
+    if (firstImportEdit) {
+      await recordActivity({
+        ...actorFrom(req, session),
+        action: "spend.import.converted",
+        entity: "spend",
+        entityId: app.id,
+        summary: `Edited imported "${app.projectName}"; it is now an ordinary application${reband.approvalTierLabel ? ` in band "${reband.approvalTierLabel}"` : ""} and Undo import will not remove it`,
+        detail: { importBatchId: app.importBatchId, band: reband.approvalTierLabel, approvers: (reband.requiredApprovers || []).length },
       });
     }
 

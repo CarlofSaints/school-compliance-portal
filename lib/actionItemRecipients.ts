@@ -158,8 +158,9 @@ export function displayNameFor(
 
 // The register entries that are this signed-in person: linked to their login,
 // or (not linked to anybody) carrying their login's email. The page matches
-// the directory, where a linked entry shows its user's address, so this is
-// the same rule and the two never disagree on who owns an action.
+// the directory, where a linked entry shows its user's address, so the two
+// agree in the ordinary case; where they cannot (an entry linked to a deleted
+// user, say) the server answers needsReason and the page shows the box then.
 export function myPersonIdsIn(
   people: { id: string; userId?: string | null; email?: string }[],
   me: { id: string; email?: string }

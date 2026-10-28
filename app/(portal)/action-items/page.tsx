@@ -607,7 +607,7 @@ export default function ActionItemsPage() {
           key={editing?.id || "new"}
           directory={directory}
           existing={editing}
-          isOwner={!editing || isOwner(editing)}
+          myPersonIds={directory.length === 0 ? undefined : myPersonIds}
           onCancel={() => {
             setShowForm(false);
             setEditing(null);

@@ -3,6 +3,7 @@ import {
   matchActionCategory,
   movesStatus,
   normalise,
+  parseProgressInput,
   parseReminder,
 } from "./actionItems";
 import type {
@@ -126,8 +127,8 @@ export function parseActionEdit(
   if (VALID_STATUSES.includes(body.status as ActionStatus)) {
     updates.status = body.status as ActionStatus;
   }
-  if (body.progress !== undefined) {
-    const progress = Number(body.progress);
+  const progress = parseProgressInput(body.progress);
+  if (progress !== undefined) {
     if (!Number.isFinite(progress)) {
       return { updates: {}, newlyAssigned: [], error: "Progress must be a number between 0 and 100" };
     }

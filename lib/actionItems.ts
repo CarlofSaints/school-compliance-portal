@@ -426,6 +426,14 @@ export function summarise(
   };
 }
 
+// A progress value from a request. undefined = no change (missing, null, or
+// blank); NaN = refused (anything but a number or numeric string). The one
+// rule for Update progress and Edit - Number(null) would quietly be 0.
+export function parseProgressInput(v: unknown): number | undefined {
+  if (v === undefined || v === null || (typeof v === "string" && v.trim() === "")) return undefined;
+  return typeof v === "number" || typeof v === "string" ? Number(v) : NaN;
+}
+
 // Whether an edit moves the status or progress, compared as it would be SAVED
 // (normalise: done forces 100%, progress lifts not started). The one test the
 // routes, the Update progress box and the Edit form all use.

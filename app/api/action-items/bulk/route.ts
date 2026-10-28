@@ -62,9 +62,18 @@ export async function POST(req: NextRequest) {
     }[] = [];
     const newlyAssignedBy = new Map<string, string[]>();
     const problems: string[] = [];
+    let notOwnerRows = 0;
 
+    const seen = new Set<string>();
     for (const row of rows) {
       const id = String(row?.id ?? "");
+      // One row per action: repeats would each add a history line (and one
+      // call could then flood an action's history for a single limit charge).
+      if (seen.has(id)) {
+        problems.push(`${id || "(no id)"} appears more than once`);
+        continue;
+      }
+      seen.add(id);
       const existing = byId.get(id);
       if (!existing) {
         problems.push(`${id || "(no id)"} is not an action on the register`);
@@ -82,6 +91,7 @@ export async function POST(req: NextRequest) {
         problems.push(`${existing.ref}: you are not assigned to it, so say why you are changing its status (notOwnerReason)`);
         continue;
       }
+      if (notOwner) notOwnerRows++;
       edits.push({ id, updates: notOwner ? withHistoryLine(parsed.updates, by, "", reason) : parsed.updates });
       if (parsed.newlyAssigned.length > 0) {
         newlyAssignedBy.set(id, parsed.newlyAssigned);
@@ -95,6 +105,15 @@ export async function POST(req: NextRequest) {
         { error: "Nothing was changed", problems },
         { status: 400 }
       );
+    }
+
+    // One charge per call that writes non-owner history lines, the same limit
+    // as Update progress and Edit. A call writes at most one line per action,
+    // so flooding one action's history still takes a call per line; charging
+    // per row would make closing 40 actions after a meeting impossible.
+    if (notOwnerRows > 0) {
+      const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
+      if (limited) return limited;
     }
 
     const { saved, missing } = await updateActionItems(edits);

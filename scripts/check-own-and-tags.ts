@@ -47,7 +47,14 @@ async function main() {
   const withLine = F.withHistoryLine({ status: "done" }, { id: "u", name: "Admin" }, "", "owner left")({ ...(action as object), updates: [] } as never);
   check("reason lands on a history line, as saved (done = 100%)", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status, withLine.updates?.[0].progress], ["owner left", "done", 100]);
 
-  check("edited imported row put to a vote is the importer's own again", isOwnApplication({ ...imported, requiredApprovers: [{ userId: "boss" }] }, "carl"), true);
+  const { isRegisterImport } = await import("../lib/approvalEngine");
+  check("untouched import is a register row", isRegisterImport(imported), true);
+  const edited: { submittedBy: string; importBatchId?: string } = { submittedBy: "carl" }; // the first edit clears importBatchId
+  check("edited import is an ordinary application: the importer is its submitter", isOwnApplication(edited, "carl"), true);
+  check("edited import in a band with NO approvers is not a register row", isRegisterImport(edited), false);
+  const legacy = { ...imported, requiredApprovers: [{ userId: "boss" }] };
+  check("import put to a vote before the flag existed: the importer stays blocked", isOwnApplication(legacy, "carl"), true);
+
   const A = await import("../lib/actionItems");
   const act = { status: "in_progress", progress: 40, assigneeIds: [] } as never;
   check("not started at 40% is no move (saved as in progress)", A.movesStatus(act, { status: "not_started" }), false);
@@ -85,6 +92,20 @@ async function main() {
     check("...once per person", counts.sign, 2);
     check("tagged on both sides counts once", counts.fincom, 1);
   }
+  const S = await import("../lib/spendData");
+  const row = (id: string, extra: object) => ({ id, projectName: id, submittedBy: "carl", status: "pending", approvals: [], ...extra }) as never;
+  await S.createSpendApplications([
+    row("untouched", { importBatchId: "b9" }),
+    row("voted-legacy", { importBatchId: "b9", requiredApprovers: [{ userId: "boss" }] }),
+    row("completed-from-grid", { importBatchId: "b9" }),
+    row("by-hand", {}),
+  ]);
+  // Any later write stamps a rev: here the legacy edit and a grid completion.
+  await S.updateSpendApplication("voted-legacy", { requiredApprovers: [{ userId: "boss" }] } as never);
+  await S.updateSpendApplication("completed-from-grid", { status: "completed" } as never);
+  check("Undo import removes only rows nobody has changed since", await S.deleteSpendImportBatch("b9"), 1);
+  check("...a row completed from the grid is kept", !!(await S.getSpendById("completed-from-grid")), true);
+  check("...a row already put to a vote is kept", !!(await S.getSpendById("voted-legacy")), true);
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
 }

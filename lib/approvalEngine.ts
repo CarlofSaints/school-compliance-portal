@@ -178,16 +178,19 @@ export function isRequiredApprover(
  *  the submitter's own say-so (the applicant id is not checked), and would let
  *  anyone approve their own spending. */
 export function isOwnApplication(
-  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string; requiredApprovers?: { userId?: string }[] },
+  app: { submittedBy?: string; applicantUserId?: string; importBatchId?: string; requiredApprovers?: unknown[] },
   userId: string
 ): boolean {
   if (app.applicantUserId === userId) return true;
+  // An untouched import: the importer only brought the register in. Once
+  // edited it is an ordinary application, and the importer is its submitter.
   return app.submittedBy === userId && !isRegisterImport(app);
 }
 
-/** A row brought in from the school's register that nobody has to vote on.
- *  🔴 Ends the moment an edit re-bands it (requiredApprovers set): from then
- *  on it is a live application and gets every rule a live one gets. */
+/** A row brought in from the school's register, untouched since.
+ *  🔴 Ends with the first edit, which clears importBatchId, and for rows put to
+ *  a vote by an edit before that rule existed (approvers set). From then on it
+ *  is an ordinary application in every rule. */
 export function isRegisterImport(app: { importBatchId?: string; requiredApprovers?: unknown[] }): boolean {
   return !!app.importBatchId && !app.requiredApprovers?.length;
 }
@@ -207,7 +210,7 @@ export function mayActOnApproved(
   // a log-only or untagged band has no approvers at all: any approve_spend
   // holder (the importer, the submitter included) may pick the quote or
   // complete it, as before.
-  if (app.importBatchId || !app.requiredApprovers?.length) return true;
+  if (isRegisterImport(app) || !app.requiredApprovers?.length) return true;
   if (isOwnApplication(app, user.id)) return false;
   return isRequiredApprover(app, user.id) || user.permissions.includes("manage_spend_settings");
 }

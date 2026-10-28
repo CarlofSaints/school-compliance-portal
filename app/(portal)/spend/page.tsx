@@ -790,7 +790,7 @@ export default function SpendPage() {
                                 app.status !== "approved" &&
                                 app.status !== "completed" &&
                                 ((!isSpendAdmin && !isRegisterImport(app)) ||
-                                  isOwnApplication({ ...app, submittedBy: app.submittedBy || "" }, session?.id || ""))
+                                  isOwnApplication(app, session?.id || ""))
                               }
                             >
                               {t(STATUS_DISPLAY[s])}

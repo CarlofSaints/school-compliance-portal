@@ -6,7 +6,7 @@ import {
   STATUS_LABELS,
 } from "@/lib/actionItemData";
 import type { ActionStatus } from "@/lib/actionItemData";
-import { normalise, movesStatus } from "@/lib/actionItems";
+import { normalise, movesStatus, parseProgressInput } from "@/lib/actionItems";
 import { withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { isAssignee } from "@/lib/actionItemRecipients";
 import { LIMITS, enforce } from "@/lib/rateLimit";
@@ -46,8 +46,7 @@ export async function POST(
   try {
     const body = await req.json();
 
-    const raw =
-      body?.progress === undefined ? item.progress : Number(body.progress);
+    const raw = parseProgressInput(body?.progress) ?? item.progress;
     if (!Number.isFinite(raw)) {
       return NextResponse.json(
         { error: "Progress must be a number between 0 and 100" },
@@ -63,7 +62,7 @@ export async function POST(
     // Compared as it would be SAVED (done forces 100%, progress lifts not
     // started), so a figure the server would change anyway is not a "move".
     const after = normalise({ ...item, progress: raw, status });
-    const moved = movesStatus(item, { progress: raw, status });
+    const moved = movesStatus(item, after);
     if (!moved && !note) {
       return NextResponse.json(
         { error: "Nothing to save: change the status or progress, or write a note." },
@@ -77,9 +76,10 @@ export async function POST(
       return NextResponse.json(NEEDS_REASON, { status: 400 });
     }
     // History keeps the last 100 lines, so someone not on the action must not
-    // be able to push the real record out with a burst of status changes.
-    // Charged only for a real, valid move, so a refused try costs nothing.
-    if (notOwnerReason) {
+    // be able to push the real record out with a burst of updates, notes
+    // included. Charged once the update is valid, just before the save (a save
+    // that then fails still costs the slot).
+    if (!owner) {
       const limited = await enforce([[LIMITS.actionUpdateUser, session.id]]);
       if (limited) return limited;
     }

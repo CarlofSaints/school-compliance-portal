@@ -92,7 +92,9 @@ export interface SpendApplication {
   preferredQuotes: { userId: string; quoteIndex: number }[];
   selectedQuoteIndex?: number;
   approvedAmount?: number;
-  // Set on applications created by a bulk project-list import. The batch id is
+  // Set on applications created by a bulk project-list import, and CLEARED by
+  // the first edit: from then on it is an ordinary application in every rule
+  // (isRegisterImport) and Undo import leaves it alone. The batch id is
   // what makes an import undoable - there is no other delete path for a spend
   // application, so a mis-mapped import would otherwise be permanent.
   importBatchId?: string;

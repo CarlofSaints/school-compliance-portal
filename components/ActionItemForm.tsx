@@ -50,10 +50,11 @@ interface Props {
    * asserting that.
    */
   fromMinutes?: { minutesId: string; sectionId?: string };
-  // Whether the signed-in person is assigned to the action being edited.
-  // Anybody else, an administrator included, must say why they move its
-  // status or progress. Defaults to true; the server asks if it disagrees.
-  isOwner?: boolean;
+  // The register entries that are the signed-in person. Someone not assigned
+  // to the action both before and after this edit (an administrator included)
+  // must say why they move its status or progress. Left out (directory not
+  // loaded) nobody is warned; the server asks if it disagrees.
+  myPersonIds?: string[];
   onCancel: () => void;
   onSaved: (message: string, saved: ActionItem) => void;
   onError: (message: string) => void;
@@ -76,7 +77,7 @@ export default function ActionItemForm({
   existing,
   seed,
   fromMinutes,
-  isOwner = true,
+  myPersonIds,
   onCancel,
   onSaved,
   onError,
@@ -113,6 +114,11 @@ export default function ActionItemForm({
   const [serverAsksReason, setServerAsksReason] = useState(false);
   const [notOwnerReason, setNotOwnerReason] = useState("");
   const statusMoved = !!existing && movesStatus(existing, { status, progress: Number(progress) });
+  const isOwner =
+    !myPersonIds ||
+    (!!existing &&
+      existing.assigneeIds.some((id) => myPersonIds.includes(id)) &&
+      assigneeIds.some((id) => myPersonIds.includes(id)));
   const askReason = statusMoved && (!isOwner || serverAsksReason);
 
   const reminder = existing?.reminder || DEFAULT_REMINDER;
