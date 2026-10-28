@@ -132,7 +132,8 @@ export type SpendChange =
 
 /** Thrown when a field this person is saving was changed by somebody else
  *  after their page loaded it. Nothing is written; `current` goes back to the
- *  page so it can show what changed and let them save over it on purpose. */
+ *  page so it can show the record as it is now. There is deliberately no
+ *  "save over it anyway": a stale form would quietly undo their change. */
 export class SpendEditConflict extends SpendChangeRefused {
   constructor(readonly current: SpendApplication, readonly fields: string[] = []) {
     super("Changed by someone else", 409);
@@ -177,9 +178,9 @@ export async function updateSpendApplication(
       ...apps[idx],
       ...updates,
       rev: crypto.randomUUID(),
-      // Only saves that change what a refusal is about (details, status,
-      // custodian, quote) pass a name, so the message names that person and
-      // time, not whoever last added a note or sent a reminder.
+      // Only saves a refusal can be about (edit details, grid status and
+      // custodian, complete) pass a name, so the message names that person
+      // and time, not whoever last voted, noted or sent a reminder.
       ...(opts.byName ? { changedAt: new Date().toISOString(), changedByName: opts.byName } : {}),
     };
     updated = apps[idx];
@@ -195,9 +196,23 @@ export async function uploadQuoteFile(
   ext: string,
   data: Buffer
 ): Promise<string> {
-  const path = `spend/${spendId}/quote-${quoteNum}.${ext}`;
+  // A fresh path per upload, never the stored file's: a save refused after
+  // uploading then only leaves its own file behind (deleted by the caller),
+  // never one the record already points at.
+  const path = `spend/${spendId}/quote-${quoteNum}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
   await writeFile(path, data);
   return path;
+}
+
+/** Best effort: removes quote files nothing points at any more. */
+export async function deleteQuoteFiles(paths: string[]): Promise<void> {
+  for (const path of paths) {
+    try {
+      await deleteFile(path);
+    } catch (err) {
+      console.error("[spend] could not delete quote file", path, err);
+    }
+  }
 }
 
 export async function downloadQuoteFile(

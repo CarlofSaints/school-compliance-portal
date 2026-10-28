@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, authFetch } from "@/lib/useAuth";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import SortableTh from "@/components/SortableTh";
 import RowActions from "@/components/RowActions";
@@ -246,6 +246,9 @@ export default function SpendPage() {
   // Each applies to local state first so the grid responds immediately, then
   // reverts to the previous value if the server refuses it.
 
+  // The ref is the guard (two changes in one tick both see it); the state
+  // only redraws the disabled selects.
+  const busyRef = useRef<Set<string>>(new Set());
   const [busyRows, setBusyRows] = useState<Set<string>>(new Set());
 
   const patchRow = async (
@@ -256,7 +259,8 @@ export default function SpendPage() {
     failureMessage: string
   ) => {
     const previous = apps.find((a) => a.id === id);
-    if (!previous || busyRows.has(id)) return;
+    if (!previous || busyRef.current.has(id)) return;
+    busyRef.current.add(id);
     // One change per row at a time: a second pick before the first is saved
     // would be checked against the first's unsaved value and refused.
     setBusyRows((prev) => new Set(prev).add(id));
@@ -310,6 +314,7 @@ export default function SpendPage() {
         );
       }
     } finally {
+      busyRef.current.delete(id);
       setBusyRows((prev) => {
         const next = new Set(prev);
         next.delete(id);

@@ -6,8 +6,8 @@ import {
   getSpendById,
   updateSpendApplication,
   SpendChangeRefused,
-  SpendEditConflict,
   changedSince,
+  deleteQuoteFiles,
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
@@ -159,12 +159,15 @@ export async function PUT(
     // saved value when the form did not send the field at all.
     const applicantUserIdRaw = formData.get("applicantUserId");
     const applicantUserId = !isOnBehalf
-      ? wasOnBehalf ? session.id : app.applicantUserId
+      ? wasOnBehalf ? undefined : app.applicantUserId
       : applicantUserIdRaw === null
         ? app.applicantUserId
         : (applicantUserIdRaw as string) || undefined;
 
-    // Handle quote files - check for new uploads
+    // Handle quote files - check for new uploads. Each goes to a new path:
+    // `uploaded` is deleted if the save is refused, `replaced` once it lands.
+    const uploaded: string[] = [];
+    const replaced: string[] = [];
     const quotePaths = [...app.quotes];
     const quoteDetails = [...app.quoteDetails];
 
@@ -174,6 +177,8 @@ export async function PUT(
         const ext = quoteFile.name.split(".").pop() || "pdf";
         const buffer = Buffer.from(await quoteFile.arrayBuffer());
         const path = await uploadQuoteFile(id, i, ext, buffer);
+        uploaded.push(path);
+        if (i - 1 < quotePaths.length) replaced.push(quotePaths[i - 1]);
 
         // Replace or add the quote at this index
         if (i - 1 < quotePaths.length) {
@@ -290,50 +295,52 @@ export async function PUT(
     // AT SAVE TIME: an approval that landed while this edit was being made
     // was cast on the old wording, so it is cleared too.
     let restartedNow = false;
-    const saved = await updateSpendApplication(id, (current) => {
-      // Approved or completed while this page was open: no longer editable,
-      // and saving again will not change that.
-      if (current.status === "approved" || current.status === "completed") {
-        throw new SpendChangeRefused("Cannot edit approved or completed applications", 400);
-      }
-      // The same check against the record AS IT IS NOW, for a save that
-      // landed in the moment since. shortcut: a quote uploaded in that moment
-      // has already replaced the file at its fixed path; that window is the
-      // length of one upload, fine at school scale.
-      if (base) {
-        const moved = changedSince(current, base);
-        if (moved.length > 0) throw new SpendEditConflict(current, moved);
-      }
-      const votesNow =
-        (current.approvals?.length ?? 0) > 0 &&
-        (current.status === "pending" || current.status === "pending_decision");
-      restartedNow = votesNow && !hadVotes && !amountChanged;
-      return {
-      ...mine,
-      // A resubmission after changes goes back to pending; otherwise the
-      // status as it is NOW, never the copy read at the start of the request.
-      status:
-        newStatus ??
-        (current.status === "requires_changes" || current.status === "rejected"
-          ? "pending"
-          : current.status),
-      // Clear approvals on re-submission after changes
-      ...(current.status === "requires_changes" || current.status === "rejected"
-        ? { approvals: [], preferredQuotes: [] }
-        : {}),
-      ...reband,
-      // The first edit takes an imported row out of its batch (see
-      // importBatchId): an ordinary application from now on, which Undo
-      // import no longer deletes. Read from the record AS IT IS NOW.
-      importBatchId: undefined,
-      ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
-      };
-    }, { byName: actorFrom(req, session).actorName });
+    let saved: SpendApplication | null;
+    try {
+      saved = await updateSpendApplication(id, (current) => {
+        // Approved or completed while this page was open: no longer editable,
+        // and saving again will not change that.
+        if (current.status === "approved" || current.status === "completed") {
+          throw new SpendChangeRefused("Cannot edit approved or completed applications", 400);
+        }
+        const votesNow =
+          (current.approvals?.length ?? 0) > 0 &&
+          (current.status === "pending" || current.status === "pending_decision");
+        restartedNow = votesNow && !hadVotes && !amountChanged;
+        return {
+        ...mine,
+        // A resubmission after changes goes back to pending; otherwise the
+        // status as it is NOW, never the copy read at the start of the request.
+        status:
+          newStatus ??
+          (current.status === "requires_changes" || current.status === "rejected"
+            ? "pending"
+            : current.status),
+        // Clear approvals on re-submission after changes
+        ...(current.status === "requires_changes" || current.status === "rejected"
+          ? { approvals: [], preferredQuotes: [] }
+          : {}),
+        ...reband,
+        // The first edit takes an imported row out of its batch (see
+        // importBatchId): an ordinary application from now on, which Undo
+        // import no longer deletes. Read from the record AS IT IS NOW.
+        importBatchId: undefined,
+        ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
+        };
+      // base: the same check as at the top, against the record AS IT IS NOW,
+      // for a save that landed in the moment since.
+      }, { base, byName: actorFrom(req, session).actorName });
+    } catch (err) {
+      await deleteQuoteFiles(uploaded);
+      throw err;
+    }
 
     // Removed meanwhile (Undo import, a delete): nothing was saved.
     if (!saved) {
+      await deleteQuoteFiles(uploaded);
       return NextResponse.json({ error: "Spend application not found" }, { status: 404 });
     }
+    await deleteQuoteFiles(replaced);
 
     // Whoever has to decide now must be TOLD, as on a new application. A
     // re-banded application otherwise sat waiting on people who never heard

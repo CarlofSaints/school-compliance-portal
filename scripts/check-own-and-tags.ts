@@ -119,8 +119,9 @@ async function main() {
   }
   check("a save over someone else's change is refused, with their version", conflict instanceof S.SpendEditConflict && (conflict as InstanceType<typeof S.SpendEditConflict>).current.changedByName, "Dee");
   check("...and nothing was overwritten", (await S.getSpendById("busy"))?.projectName, "Dee's");
-  await S.updateSpendApplication("busy", { notes: [] } as never, { byName: "Approver" });
+  await S.updateSpendApplication("busy", { notes: [] } as never);
   const fresh = await S.getSpendById("busy");
+  check("a note does not change who a refusal names", fresh?.changedByName, "Dee");
   check("a note meanwhile does not refuse an edit of other fields", !!(await S.updateSpendApplication("busy", { description: "new" } as never, { base: { projectName: fresh?.projectName, description: fresh?.description } })), true);
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);

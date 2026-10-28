@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { actorFrom } from "@/lib/activityActor";
 import { requirePermission } from "@/lib/rolesData";
 import { getSpendById, updateSpendApplication, SpendChangeRefused } from "@/lib/spendData";
 import { mayActOnApproved } from "@/lib/approvalEngine";
@@ -75,7 +74,7 @@ export async function POST(
         band = quoteBandProblem(tiers, approvedAmount, current.approvedAmount ?? current.estimatedAmount, current.approvalTierId);
         if (band) throw new SpendChangeRefused("band", 409);
         return { selectedQuoteIndex: quoteIndex, approvedAmount };
-      }, { byName: actorFrom(req, session).actorName });
+      });
     } catch (err) {
       if (!(err instanceof SpendChangeRefused)) throw err;
       if (band) {

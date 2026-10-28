@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getT } from "./i18n/server";
+import { schoolToday } from "./actionSummary";
 import type { SpendApplication } from "./spend";
 import { SpendChangeRefused, SpendEditConflict } from "./spendData";
 
@@ -10,10 +11,7 @@ import { SpendChangeRefused, SpendEditConflict } from "./spendData";
 export async function spendConflictResponse(current: SpendApplication, fields: string[] = []): Promise<NextResponse> {
   const t = await getT();
   const when = current.changedAt ? new Date(current.changedAt) : null;
-  const sameDay =
-    when &&
-    when.toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg" }) ===
-      new Date().toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg" });
+  const sameDay = when && schoolToday(when) === schoolToday();
   const time = when
     ? when.toLocaleString("en-ZA", {
         timeZone: "Africa/Johannesburg",

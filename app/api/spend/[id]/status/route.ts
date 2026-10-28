@@ -3,7 +3,7 @@ import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
-import { spendRefusalResponse } from "@/lib/spendConflict";
+import { spendRefusalResponse, spendConflictResponse } from "@/lib/spendConflict";
 import type { SpendApplication } from "@/lib/spendData";
 import { isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 
@@ -64,6 +64,12 @@ export async function PATCH(
 
   const next = status as SpendApplication["status"];
 
+  // The grid showed a different status from the one stored: someone changed
+  // it since. Refuse before any check is made on the stale picture.
+  if (expectedStatus !== undefined && expectedStatus !== app.status) {
+    return spendConflictResponse(app, ["status"]);
+  }
+
   // Approving from the grid skips the vote on the application, so only a spend
   // admin may do it - except on an imported row nobody has to vote on (the
   // school's existing register being brought in; see isRegisterImport). An
@@ -114,8 +120,15 @@ export async function PATCH(
   try {
     updated = await updateSpendApplication(id, updates, {
       // Always: the admin-only and own-application checks above were made on
-      // the status read at the start, so it must not have moved since.
-      base: { status: (expectedStatus ?? app.status) as SpendApplication["status"] },
+      // the record read at the start, so none of what they used may have
+      // moved since (a first edit turns an import into a live application).
+      base: {
+        status: app.status,
+        importBatchId: app.importBatchId,
+        requiredApprovers: app.requiredApprovers,
+        applicantUserId: app.applicantUserId,
+        submittedBy: app.submittedBy,
+      },
       byName: actorFrom(req, session).actorName,
     });
   } catch (err) {
