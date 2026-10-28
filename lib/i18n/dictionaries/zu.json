@@ -1807,5 +1807,8 @@
   "Why are you changing the status?": "Kungani ushintsha isimo?",
   "Not assigned, changed because: {reason}": "Akabelwanga, kushintshwe ngoba: {reason}",
   "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Ukuhlehlisa kususa kuphela amaphrojekthi adalwe yilokhu kungenisa angakaze ashintshwe ngubani kusukela lapho (kufika ku-{n}). Noma yini efakwe ngesandla, noma eshintshwe ngemva kokungenisa (ehleliwe, egunyaziwe, eqediwe noma enenothi), iyagcinwa.",
-  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Ukungenisa kuhlehlisiwe. Akukho okususiwe: yonke iphrojekthi evela kukho ishintshiwe kusukela lapho, ngakho igciniwe."
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Ukungenisa kuhlehlisiwe. Akukho okususiwe: yonke iphrojekthi evela kukho ishintshiwe kusukela lapho, ngakho igciniwe.",
+  "Someone else": "Omunye umuntu",
+  "{who} changed this project{when} while you had it open, so your change was not saved. Look at their version, then make your change again.": "U-{who} ushintshe le phrojekthi{when} ngesikhathi uyivulile, ngakho ushintsho lwakho alulondolozwanga. Bheka inguqulo yabo, bese wenza ushintsho lwakho futhi.",
+  "What you typed is still on this page: copy anything you need, then reload to see their version.": "Okuthayiphile kusekhona kuleli khasi: kopisha noma yini oyidingayo, bese ulayisha kabusha ukuze ubone inguqulo yabo."
 }

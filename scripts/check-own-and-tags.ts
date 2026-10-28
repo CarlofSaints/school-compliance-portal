@@ -106,6 +106,23 @@ async function main() {
   check("Undo import removes only rows nobody has changed since", await S.deleteSpendImportBatch("b9"), 1);
   check("...a row completed from the grid is kept", !!(await S.getSpendById("completed-from-grid")), true);
   check("...a row already put to a vote is kept", !!(await S.getSpendById("voted-legacy")), true);
+  // Changed by someone else since you opened it: refused, nothing written.
+  await S.createSpendApplications([row("busy", { description: "old" })]);
+  const opened = await S.getSpendById("busy");
+  const base = { projectName: opened?.projectName, description: opened?.description };
+  check("first save on what you opened works", !!(await S.updateSpendApplication("busy", { projectName: "Dee's" } as never, { base, byName: "Dee" })), true);
+  let conflict: unknown = null;
+  try {
+    await S.updateSpendApplication("busy", { projectName: "Carl's" } as never, { base, byName: "Carl" });
+  } catch (e) {
+    conflict = e;
+  }
+  check("a save over someone else's change is refused, with their version", conflict instanceof S.SpendEditConflict && (conflict as InstanceType<typeof S.SpendEditConflict>).current.changedByName, "Dee");
+  check("...and nothing was overwritten", (await S.getSpendById("busy"))?.projectName, "Dee's");
+  await S.updateSpendApplication("busy", { notes: [] } as never);
+  const fresh = await S.getSpendById("busy");
+  check("a note does not change who a refusal names", fresh?.changedByName, "Dee");
+  check("a note meanwhile does not refuse an edit of other fields", !!(await S.updateSpendApplication("busy", { description: "new" } as never, { base: { projectName: fresh?.projectName, description: fresh?.description } })), true);
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);
 }

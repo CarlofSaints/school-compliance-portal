@@ -1807,5 +1807,8 @@
   "Why are you changing the status?": "Kutheni utshintsha imeko?",
   "Not assigned, changed because: {reason}": "Akabelwanga, kutshintshwe ngenxa yokuba: {reason}",
   "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Ukurhoxisa kususa kuphela iiprojekthi ezenziwe kukungenisa ekungekho mntu uzitshintshileyo ukususela ngoko (ukuya kuthi ga ku-{n}). Nantoni na efakwe ngesandla, okanye etshintshwe emva kokungenisa (ihleliwe, yamkelwe, igqityiwe okanye inenqaku), iyagcinwa.",
-  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Ukungenisa kurhoxisiwe. Akukho nto isusiweyo: yonke iprojekthi evela kuko itshintshiwe ukususela ngoko, ngoko zigciniwe."
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Ukungenisa kurhoxisiwe. Akukho nto isusiweyo: yonke iprojekthi evela kuko itshintshiwe ukususela ngoko, ngoko zigciniwe.",
+  "Someone else": "Omnye umntu",
+  "{who} changed this project{when} while you had it open, so your change was not saved. Look at their version, then make your change again.": "U-{who} utshintshe le projekthi{when} ngoxa ubuyivulile, ngoko utshintsho lwakho alugcinwanga. Jonga inguqulelo yabo, emva koko wenze utshintsho lwakho kwakhona.",
+  "What you typed is still on this page: copy anything you need, then reload to see their version.": "Oko ukuchwetheze kusekho kweli phepha: kopa nantoni na oyifunayo, emva koko ulayishe kwakhona ukuze ubone inguqulelo yabo."
 }

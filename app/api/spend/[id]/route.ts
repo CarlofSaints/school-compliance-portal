@@ -1,13 +1,18 @@
 import { isRegisterImport } from "@/lib/approvalEngine";
 import { NextRequest, NextResponse } from "next/server";
+import { spendRefusalResponse, spendConflictResponse } from "@/lib/spendConflict";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
 import {
   getSpendById,
   updateSpendApplication,
+  SpendChangeRefused,
+  changedSince,
+  deleteQuoteFiles,
   uploadQuoteFile,
   deleteSpendApplication,
 } from "@/lib/spendData";
 import type { QuoteDetail, FundingAllocation, SpendApplication } from "@/lib/spendData";
+import { pickSpendEditFields } from "@/lib/spend";
 import { resolveApprovers } from "@/lib/approvalResolver";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -77,6 +82,22 @@ export async function PUT(
 
   try {
     const formData = await req.formData();
+    // The editable fields as the edit page loaded them. If ANY of them has
+    // changed since (someone else saved the details), the save is refused
+    // here, before a quote file is uploaded, and nothing is written. No
+    // merging: a stale form must never quietly undo part of their change.
+    // Votes, notes and reminders touch other fields and refuse nobody.
+    let base: Partial<SpendApplication> | undefined;
+    try {
+      const raw = formData.get("base");
+      if (typeof raw === "string" && raw) base = pickSpendEditFields(JSON.parse(raw));
+    } catch {
+      return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    }
+    if (base) {
+      const moved = changedSince(app, base);
+      if (moved.length > 0) return spendConflictResponse(app, moved);
+    }
     const projectName =
       (formData.get("projectName") as string) || app.projectName;
     const description =
@@ -118,28 +139,35 @@ export async function PUT(
 
     // On-behalf-of fields
     const onBehalfStr = formData.get("onBehalf") as string;
+    const wasOnBehalf = !!app.submittedOnBehalf;
     const isOnBehalf =
       onBehalfStr !== null ? onBehalfStr === "yes" : app.submittedOnBehalf;
     const applicantName = isOnBehalf
       ? (formData.get("applicantName") as string) || app.applicantName
-      : session.name;
+      : wasOnBehalf ? session.name : app.applicantName;
     const applicantSurname = isOnBehalf
       ? (formData.get("applicantSurname") as string) || app.applicantSurname
-      : session.surname;
+      : wasOnBehalf ? session.surname : app.applicantSurname;
     const applicantEmail = isOnBehalf
       ? (formData.get("applicantEmail") as string) || app.applicantEmail
-      : session.email;
+      : wasOnBehalf ? session.email : app.applicantEmail;
+    // Not on behalf, and it never was: the applicant stays who it is (an admin
+    // fixing a typo must not become it). Switched off "on behalf": the person
+    // saving is the applicant, as on a new application.
     // The applicant is a portal user where one was picked. An empty string is
     // a real choice ("someone not on the portal"), so only fall back to the
     // saved value when the form did not send the field at all.
     const applicantUserIdRaw = formData.get("applicantUserId");
     const applicantUserId = !isOnBehalf
-      ? undefined
+      ? wasOnBehalf ? undefined : app.applicantUserId
       : applicantUserIdRaw === null
         ? app.applicantUserId
         : (applicantUserIdRaw as string) || undefined;
 
-    // Handle quote files - check for new uploads
+    // Handle quote files - check for new uploads. Each goes to a new path:
+    // `uploaded` is deleted if the save is refused, `replaced` once it lands.
+    const uploaded: string[] = [];
+    const replaced: string[] = [];
     const quotePaths = [...app.quotes];
     const quoteDetails = [...app.quoteDetails];
 
@@ -149,6 +177,8 @@ export async function PUT(
         const ext = quoteFile.name.split(".").pop() || "pdf";
         const buffer = Buffer.from(await quoteFile.arrayBuffer());
         const path = await uploadQuoteFile(id, i, ext, buffer);
+        uploaded.push(path);
+        if (i - 1 < quotePaths.length) replaced.push(quotePaths[i - 1]);
 
         // Replace or add the quote at this index
         if (i - 1 < quotePaths.length) {
@@ -199,18 +229,33 @@ export async function PUT(
       }
     }
 
-    // If status was requires_changes, reset to pending on edit
-    let newStatus: SpendApplication["status"] =
-      app.status === "requires_changes" || app.status === "rejected"
-        ? "pending"
-        : app.status;
+    // Set only when this edit decides the status (votes restarted, re-banded);
+    // otherwise it is worked out from the record at save time, below.
+    let newStatus: SpendApplication["status"] | undefined;
+
+    const mine = {
+      projectName,
+      description,
+      estimatedAmount,
+      supplierConnection,
+      budgeted,
+      sourceOfFunds,
+      fundingAllocations,
+      quotes: quotePaths,
+      quoteDetails,
+      applicantUserId,
+      applicantName,
+      applicantSurname,
+      applicantEmail,
+      submittedOnBehalf: isOnBehalf,
+    };
 
     // 🔴 A new amount is a new application as far as approval goes. The band,
     // and so WHO must approve, was frozen at submission; keeping it after the
     // amount changed let R9 000 approved by the Principal become R250 000 with
     // no FINCOM sign-off. So the approvers are worked out again and every
     // decision so far is cleared.
-    const amountChanged = Math.abs(estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
+    const amountChanged = Math.abs(mine.estimatedAmount - (Number(app.estimatedAmount) || 0)) >= 0.01;
     // Any edit after votes have been cast restarts them, not just a new
     // amount: a swapped quote, supplier or description is a different
     // application from the one the earlier approvers said yes to.
@@ -232,7 +277,7 @@ export async function PUT(
       reband = { approvals: [], preferredQuotes: [] };
     }
     if (amountChanged || firstImportEdit) {
-      const approval = await resolveApprovers(estimatedAmount);
+      const approval = await resolveApprovers(mine.estimatedAmount);
       newStatus = approval.logOnly ? "approved" : "pending";
       reband = {
         approvalTierId: approval.tierId,
@@ -242,7 +287,7 @@ export async function PUT(
         approvalWarning: approval.warning,
         approvals: [],
         preferredQuotes: [],
-        approvedAmount: approval.logOnly ? estimatedAmount : undefined,
+        approvedAmount: approval.logOnly ? mine.estimatedAmount : undefined,
       };
     }
 
@@ -250,44 +295,52 @@ export async function PUT(
     // AT SAVE TIME: an approval that landed while this edit was being made
     // was cast on the old wording, so it is cleared too.
     let restartedNow = false;
-    const saved = await updateSpendApplication(id, (current) => {
-      const votesNow =
-        (current.approvals?.length ?? 0) > 0 &&
-        (current.status === "pending" || current.status === "pending_decision");
-      restartedNow = votesNow && !hadVotes && !amountChanged;
-      return {
-      projectName,
-      description,
-      estimatedAmount,
-      supplierConnection,
-      budgeted,
-      sourceOfFunds,
-      fundingAllocations,
-      quotes: quotePaths,
-      quoteDetails,
-      applicantUserId,
-      applicantName,
-      applicantSurname,
-      applicantEmail,
-      submittedOnBehalf: isOnBehalf,
-      status: newStatus,
-      // Clear approvals on re-submission after changes
-      ...(current.status === "requires_changes" || current.status === "rejected"
-        ? { approvals: [], preferredQuotes: [] }
-        : {}),
-      ...reband,
-      // The first edit takes an imported row out of its batch (see
-      // importBatchId): an ordinary application from now on, which Undo
-      // import no longer deletes. Read from the record AS IT IS NOW.
-      importBatchId: undefined,
-      ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
-      };
-    });
+    let saved: SpendApplication | null;
+    try {
+      saved = await updateSpendApplication(id, (current) => {
+        // Approved or completed while this page was open: no longer editable,
+        // and saving again will not change that.
+        if (current.status === "approved" || current.status === "completed") {
+          throw new SpendChangeRefused("Cannot edit approved or completed applications", 400);
+        }
+        const votesNow =
+          (current.approvals?.length ?? 0) > 0 &&
+          (current.status === "pending" || current.status === "pending_decision");
+        restartedNow = votesNow && !hadVotes && !amountChanged;
+        return {
+        ...mine,
+        // A resubmission after changes goes back to pending; otherwise the
+        // status as it is NOW, never the copy read at the start of the request.
+        status:
+          newStatus ??
+          (current.status === "requires_changes" || current.status === "rejected"
+            ? "pending"
+            : current.status),
+        // Clear approvals on re-submission after changes
+        ...(current.status === "requires_changes" || current.status === "rejected"
+          ? { approvals: [], preferredQuotes: [] }
+          : {}),
+        ...reband,
+        // The first edit takes an imported row out of its batch (see
+        // importBatchId): an ordinary application from now on, which Undo
+        // import no longer deletes. Read from the record AS IT IS NOW.
+        importBatchId: undefined,
+        ...(votesNow && !amountChanged ? { approvals: [], preferredQuotes: [], status: "pending" as const } : {}),
+        };
+      // base: the same check as at the top, against the record AS IT IS NOW,
+      // for a save that landed in the moment since.
+      }, { base, byName: actorFrom(req, session).actorName });
+    } catch (err) {
+      await deleteQuoteFiles(uploaded);
+      throw err;
+    }
 
     // Removed meanwhile (Undo import, a delete): nothing was saved.
     if (!saved) {
+      await deleteQuoteFiles(uploaded);
       return NextResponse.json({ error: "Spend application not found" }, { status: 404 });
     }
+    await deleteQuoteFiles(replaced);
 
     // Whoever has to decide now must be TOLD, as on a new application. A
     // re-banded application otherwise sat waiting on people who never heard
@@ -303,10 +356,10 @@ export async function PUT(
               approver.email,
               approver.name,
               app.id,
-              projectName,
-              sourceOfFunds,
-              quoteDetails.length,
-              estimatedAmount,
+              saved.projectName,
+              saved.sourceOfFunds,
+              saved.quoteDetails.length,
+              saved.estimatedAmount,
               app.submittedByName,
               (reband.approvalTierLabel ?? app.approvalTierLabel) || "Approval required"
             );
@@ -345,13 +398,15 @@ export async function PUT(
         action: "spend.amount.changed",
         entity: "spend",
         entityId: app.id,
-        summary: `Changed "${app.projectName}" from R${Number(app.estimatedAmount || 0).toLocaleString()} to R${estimatedAmount.toLocaleString()}; approvals restarted`,
-        detail: { from: app.estimatedAmount, to: estimatedAmount, previousApprovals: app.approvals?.length ?? 0 },
+        summary: `Changed "${app.projectName}" from R${Number(app.estimatedAmount || 0).toLocaleString()} to R${saved.estimatedAmount.toLocaleString()}; approvals restarted`,
+        detail: { from: app.estimatedAmount, to: saved.estimatedAmount, previousApprovals: app.approvals?.length ?? 0 },
       });
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    const refused = await spendRefusalResponse(err);
+    if (refused) return refused;
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

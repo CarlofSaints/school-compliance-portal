@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth, authFetch } from "@/lib/useAuth";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import SortableTh from "@/components/SortableTh";
 import RowActions from "@/components/RowActions";
@@ -246,6 +246,11 @@ export default function SpendPage() {
   // Each applies to local state first so the grid responds immediately, then
   // reverts to the previous value if the server refuses it.
 
+  // The ref is the guard (two changes in one tick both see it); the state
+  // only redraws the disabled selects.
+  const busyRef = useRef<Set<string>>(new Set());
+  const [busyRows, setBusyRows] = useState<Set<string>>(new Set());
+
   const patchRow = async (
     id: string,
     optimistic: Partial<SpendRecord>,
@@ -254,51 +259,67 @@ export default function SpendPage() {
     failureMessage: string
   ) => {
     const previous = apps.find((a) => a.id === id);
-    if (!previous) return;
-    setApps((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, ...optimistic } : a))
-    );
-
-    const res = await authFetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      setApps((prev) => prev.map((a) => (a.id === id ? previous : a)));
-      const data = await res.json().catch(() => ({}));
-      setToast({ message: data.error || failureMessage, type: "error" });
-      return;
-    }
-    // Take the server's version of the row back, so what the grid shows is
-    // what was actually stored rather than what was clicked.
-    const saved = await res.json().catch(() => null);
-    if (saved) {
+    if (!previous || busyRef.current.has(id)) return;
+    busyRef.current.add(id);
+    // One change per row at a time: a second pick before the first is saved
+    // would be checked against the first's unsaved value and refused.
+    setBusyRows((prev) => new Set(prev).add(id));
+    try {
       setApps((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                ...(saved.status !== undefined
-                  ? { status: saved.status }
-                  : {}),
-                // The server fills in approvedAmount when a row is approved
-                // or completed, and the summary cards are computed from it.
-                ...(saved.approvedAmount !== undefined
-                  ? { approvedAmount: saved.approvedAmount }
-                  : {}),
-                ...(saved.custodianUserId !== undefined ||
-                saved.custodianName !== undefined
-                  ? {
-                      custodianUserId: saved.custodianUserId,
-                      custodianName: saved.custodianName,
-                    }
-                  : {}),
-              }
-            : a
-        )
+        prev.map((a) => (a.id === id ? { ...a, ...optimistic } : a))
       );
+
+      const res = await authFetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // Changed by someone else meanwhile: show their version of the row
+        // (the server sends it), so picking again is a choice made knowingly.
+        const current = res.status === 409 && data.current ? (data.current as SpendRecord) : previous;
+        setApps((prev) => prev.map((a) => (a.id === id ? current : a)));
+        setToast({ message: data.error || failureMessage, type: "error" });
+        return;
+      }
+      // Take the server's version of the row back, so what the grid shows is
+      // what was actually stored rather than what was clicked.
+      const saved = await res.json().catch(() => null);
+      if (saved) {
+        setApps((prev) =>
+          prev.map((a) =>
+            a.id === id
+              ? {
+                  ...a,
+                  ...(saved.status !== undefined
+                    ? { status: saved.status }
+                    : {}),
+                  // The server fills in approvedAmount when a row is approved
+                  // or completed, and the summary cards are computed from it.
+                  ...(saved.approvedAmount !== undefined
+                    ? { approvedAmount: saved.approvedAmount }
+                    : {}),
+                  ...(saved.custodianUserId !== undefined ||
+                  saved.custodianName !== undefined
+                    ? {
+                        custodianUserId: saved.custodianUserId,
+                        custodianName: saved.custodianName,
+                      }
+                    : {}),
+                }
+              : a
+          )
+        );
+      }
+    } finally {
+      busyRef.current.delete(id);
+      setBusyRows((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -318,7 +339,8 @@ export default function SpendPage() {
       id,
       optimistic,
       `/api/spend/${id}/status`,
-      { status },
+      // What this grid showed: refused if someone else changed it since.
+      { status, expectedStatus: app?.status },
       t("Could not change the status")
     );
   };
@@ -332,7 +354,7 @@ export default function SpendPage() {
         custodianName: user ? `${user.name} ${user.surname}` : undefined,
       },
       `/api/spend/${id}/custodian`,
-      { custodianUserId: userId },
+      { custodianUserId: userId, expectedCustodianUserId: apps.find((a) => a.id === id)?.custodianUserId ?? "" },
       t("Could not change the custodian")
     );
   };
@@ -739,6 +761,7 @@ export default function SpendPage() {
                       {canEditInline ? (
                         <select
                           value={custodian.userId || ""}
+                          disabled={busyRows.has(app.id)}
                           onChange={(e) =>
                             changeCustodian(app.id, e.target.value)
                           }
@@ -769,6 +792,7 @@ export default function SpendPage() {
                       {canEditInline ? (
                         <select
                           value={app.status}
+                          disabled={busyRows.has(app.id)}
                           onChange={(e) =>
                             changeStatus(app.id, e.target.value)
                           }

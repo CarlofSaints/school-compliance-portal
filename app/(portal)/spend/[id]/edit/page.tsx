@@ -7,6 +7,7 @@ import Toast from "@/components/Toast";
 import FundingSplit, { type Allocation } from "@/components/FundingSplit";
 import { DEFAULT_SUPPLIER_CONNECTIONS } from "@/lib/positions";
 import { useT } from "@/components/I18nProvider";
+import { pickSpendEditFields } from "@/lib/spend";
 
 interface SpendSettings {
   sourcesOfFunds: string[];
@@ -202,6 +203,9 @@ export default function EditSpendPage() {
     setSubmitting(true);
 
     const formData = new FormData();
+    // The editable fields as this page loaded them: the save is refused if
+    // someone else changed any of them since.
+    formData.append("base", JSON.stringify(pickSpendEditFields(data)));
     formData.append("projectName", projectName);
     formData.append("description", description);
     formData.append("estimatedAmount", estimatedAmount);
@@ -240,8 +244,17 @@ export default function EditSpendPage() {
     if (res.ok) {
       router.push(`/spend/${spendId}`);
     } else {
-      const err = await res.json();
-      setToast({ message: err.error || t("Failed to save"), type: "error" });
+      const err = await res.json().catch(() => ({}));
+      // Someone else changed the details meanwhile. Nothing was saved; the
+      // form keeps what was typed so it can be copied before a reload. No
+      // second Save over theirs: that would quietly undo part of their work.
+      setToast({
+        message:
+          res.status === 409 && err.current
+            ? `${err.error} ${t("What you typed is still on this page: copy anything you need, then reload to see their version.")}`
+            : err.error || t("Failed to save"),
+        type: "error",
+      });
     }
     setSubmitting(false);
   };

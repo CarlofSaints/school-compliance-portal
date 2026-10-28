@@ -33,6 +33,10 @@ export interface SpendApplication {
   id: string;
   /** Random per write (updateSpendApplication): see the updateJson note. */
   rev?: string;
+  /** When and by whom it was last saved, for the "someone else changed this"
+   *  message. The name is only known where the route passes it. */
+  changedAt?: string;
+  changedByName?: string;
   projectName: string;
   description: string;
   estimatedAmount: number;
@@ -191,3 +195,19 @@ export const STATUS_DISPLAY: Record<string, string> = {
   requires_changes: "NEEDS MORE WORK",
   completed: "COMPLETED",
 };
+
+/** What the spend edit page can change. Its save sends these as it loaded
+ *  them, and is refused if any has changed since (someone else saved the
+ *  details). Status, votes and notes are not in it, so they refuse nobody. */
+export const SPEND_EDIT_FIELDS = [
+  "projectName", "description", "estimatedAmount", "supplierConnection",
+  "budgeted", "sourceOfFunds", "fundingAllocations", "quoteDetails", "quotes",
+  "applicantUserId", "applicantName", "applicantSurname", "applicantEmail",
+  "submittedOnBehalf",
+] as const;
+
+/** Just the SPEND_EDIT_FIELDS of a record or payload. */
+export function pickSpendEditFields(v: unknown): Partial<SpendApplication> {
+  const src = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+  return Object.fromEntries(SPEND_EDIT_FIELDS.map((k) => [k, src[k]])) as Partial<SpendApplication>;
+}

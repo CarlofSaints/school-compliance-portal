@@ -1807,5 +1807,8 @@
   "Why are you changing the status?": "Hoekom verander jy die status?",
   "Not assigned, changed because: {reason}": "Nie toegewys nie, verander omdat: {reason}",
   "Undo removes only the projects this import created that nobody has changed since (up to {n}). Anything captured by hand, or changed after the import (edited, approved, completed or noted), is kept.": "Ongedaan maak verwyder slegs die projekte wat hierdie invoer geskep het en wat niemand sedertdien verander het nie (tot {n}). Enigiets wat met die hand vasgelê is, of ná die invoer verander is (gewysig, goedgekeur, voltooi of met 'n nota), bly behou.",
-  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Invoer ongedaan gemaak. Niks is verwyder nie: elke projek daaruit is sedertdien verander, so hulle is behou."
+  "Import undone. Nothing was removed: every project from it had been changed since, so they were kept.": "Invoer ongedaan gemaak. Niks is verwyder nie: elke projek daaruit is sedertdien verander, so hulle is behou.",
+  "Someone else": "Iemand anders",
+  "{who} changed this project{when} while you had it open, so your change was not saved. Look at their version, then make your change again.": "{who} het hierdie projek verander{when} terwyl jy dit oop gehad het, so jou verandering is nie gestoor nie. Kyk na hulle weergawe, en maak dan jou verandering weer.",
+  "What you typed is still on this page: copy anything you need, then reload to see their version.": "Wat jy getik het, is nog op hierdie bladsy: kopieer enigiets wat jy nodig het, en laai dan weer om hulle weergawe te sien."
 }

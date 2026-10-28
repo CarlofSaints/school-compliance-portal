@@ -3,6 +3,7 @@ import { requireLogin } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
+import { spendRefusalResponse, spendConflictResponse } from "@/lib/spendConflict";
 import type { SpendApplication } from "@/lib/spendData";
 import { isOwnApplication, isRegisterImport } from "@/lib/approvalEngine";
 
@@ -43,8 +44,13 @@ export async function PATCH(
   }
 
   let status: string | undefined;
+  // The status the grid showed when it was changed: refused if someone else
+  // changed it since (a note or a vote meanwhile refuses nothing).
+  let expectedStatus: string | undefined;
   try {
-    ({ status } = await req.json());
+    const body = await req.json();
+    status = body?.status;
+    expectedStatus = typeof body?.expectedStatus === "string" ? body.expectedStatus : undefined;
   } catch {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
@@ -57,6 +63,12 @@ export async function PATCH(
   }
 
   const next = status as SpendApplication["status"];
+
+  // The grid showed a different status from the one stored: someone changed
+  // it since. Refuse before any check is made on the stale picture.
+  if (expectedStatus !== undefined && expectedStatus !== app.status) {
+    return spendConflictResponse(app, ["status"]);
+  }
 
   // Approving from the grid skips the vote on the application, so only a spend
   // admin may do it - except on an imported row nobody has to vote on (the
@@ -90,22 +102,40 @@ export async function PATCH(
     );
   }
 
-  const updates: Partial<SpendApplication> = { status: next };
-
   // Changing the status from the grid has no quote selection behind it, so
   // fall back to the estimate rather than leaving the approved amount empty.
   // "Total Approved Spend" and the CAPEX report both sum approvedAmount, so a
   // row without one silently counts as zero. Completed counts too - a project
   // can be marked completed straight from the grid without passing through
-  // approved.
-  if (
-    (next === "approved" || next === "completed") &&
-    app.approvedAmount === undefined
-  ) {
-    updates.approvedAmount = app.estimatedAmount;
-  }
+  // approved. Worked out from the record AS IT IS AT SAVE TIME: an amount
+  // edited meanwhile is the one approved.
+  const updates = (current: SpendApplication): Partial<SpendApplication> => ({
+    status: next,
+    ...((next === "approved" || next === "completed") && current.approvedAmount === undefined
+      ? { approvedAmount: current.estimatedAmount }
+      : {}),
+  });
 
-  const updated = await updateSpendApplication(id, updates);
+  let updated;
+  try {
+    updated = await updateSpendApplication(id, updates, {
+      // Always: the admin-only and own-application checks above were made on
+      // the record read at the start, so none of what they used may have
+      // moved since (a first edit turns an import into a live application).
+      base: {
+        status: app.status,
+        importBatchId: app.importBatchId,
+        requiredApprovers: app.requiredApprovers,
+        applicantUserId: app.applicantUserId,
+        submittedBy: app.submittedBy,
+      },
+      byName: actorFrom(req, session).actorName,
+    });
+  } catch (err) {
+    const refused = await spendRefusalResponse(err);
+    if (refused) return refused;
+    throw err;
+  }
 
   // A status set by hand, outside the approval flow, always leaves a trace.
   if (next !== app.status) {
