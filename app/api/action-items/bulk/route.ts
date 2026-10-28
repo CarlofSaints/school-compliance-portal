@@ -4,9 +4,9 @@ import { requireAnyPermission } from "@/lib/rolesData";
 import { getPeople } from "@/lib/peopleData";
 import { getUsers } from "@/lib/userData";
 import { getActionItems, updateActionItems } from "@/lib/actionItemData";
-import type { ActionItem } from "@/lib/actionItemData";
+import type { ActionChange } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
-import { parseActionEdit } from "@/lib/actionItemFields";
+import { parseActionEdit, isNotOwnerStatusChange, withNotOwnerReason } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 import { withMinutesMeetingDates } from "@/lib/minutesAccess";
@@ -53,10 +53,12 @@ export async function POST(req: NextRequest) {
       getActionCategories(),
     ]);
     const byId = new Map(items.map((i) => [i.id, i]));
+    const mine = people.filter((p) => p.userId === session.id).map((p) => p.id);
+    const by = { id: session.id, name: `${session.name} ${session.surname}`.trim() };
 
     const edits: {
       id: string;
-      updates: Partial<Omit<ActionItem, "id" | "ref">>;
+      updates: ActionChange;
     }[] = [];
     const newlyAssignedBy = new Map<string, string[]>();
     const problems: string[] = [];
@@ -73,7 +75,14 @@ export async function POST(req: NextRequest) {
         problems.push(`${existing.ref}: ${parsed.error}`);
         continue;
       }
-      edits.push({ id, updates: parsed.updates });
+      // Not assigned to it: moving its status needs a reason, admins included.
+      const reason = String(row.notOwnerReason ?? "").trim().slice(0, 2000);
+      const notOwner = isNotOwnerStatusChange(existing, parsed.updates, mine);
+      if (notOwner && !reason) {
+        problems.push(`${existing.ref}: you are not assigned to it, so say why you are changing its status (notOwnerReason)`);
+        continue;
+      }
+      edits.push({ id, updates: notOwner ? withNotOwnerReason(parsed.updates, by, reason) : parsed.updates });
       if (parsed.newlyAssigned.length > 0) {
         newlyAssignedBy.set(id, parsed.newlyAssigned);
       }

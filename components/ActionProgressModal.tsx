@@ -37,9 +37,12 @@ export default function ActionProgressModal({
   const [status, setStatus] = useState<ActionStatus>(item.status);
   const [note, setNote] = useState("");
   // The server has the last word on who is assigned; a 400 saying a reason is
-  // needed shows the box even if this page thought they were.
-  const [askReason, setAskReason] = useState(!isOwner);
+  // needed shows the box even if this page thought they were. Only asked when
+  // the status or progress moves: a note on its own needs no reason.
+  const [serverAsksReason, setServerAsksReason] = useState(false);
   const [reason, setReason] = useState("");
+  const moved = status !== item.status || progress !== item.progress;
+  const askReason = moved && (!isOwner || serverAsksReason);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -64,7 +67,7 @@ export default function ActionProgressModal({
     if (!res.ok) {
       if (res.status === 400) {
         const data = await res.clone().json().catch(() => ({}));
-        if (data.needsReason) setAskReason(true);
+        if (data.needsReason) setServerAsksReason(true);
       }
       const message = await apiErrorMessage(res, t("Could not save that update"));
       setError(message);

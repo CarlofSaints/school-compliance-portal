@@ -171,19 +171,19 @@ export function isRequiredApprover(
   return (app.requiredApprovers || []).some((a) => a.userId === userId);
 }
 
-/** Whether this is the person's OWN spending: they are the applicant. The
- *  submitter only counts when they did not capture it for somebody else (a
- *  secretary filing for a teacher, or an admin importing the register). */
+/** Whether this is the person's OWN spending: they are the applicant, or they
+ *  submitted it. The submitter is let off only when another PORTAL USER is the
+ *  applicant (a secretary filing for a teacher) or the row was imported.
+ *  🔴 Not on the "on behalf" tick or a typed-in name: those are the
+ *  submitter's own say-so, and would let anyone approve their own spending. */
 export function isOwnApplication(
-  // Loose on purpose: older records carry no submittedOnBehalf at all.
-  app: { submittedBy: string; applicantUserId?: string; submittedOnBehalf?: boolean; importBatchId?: string },
+  app: { submittedBy: string; applicantUserId?: string; importBatchId?: string },
   userId: string
 ): boolean {
-  // An imported row names the importing admin as submitter, never as spender.
-  return (
-    app.applicantUserId === userId ||
-    (!app.submittedOnBehalf && !app.importBatchId && app.submittedBy === userId)
-  );
+  if (app.applicantUserId === userId) return true;
+  if (app.submittedBy !== userId) return false;
+  const someoneElseApplies = !!app.applicantUserId && app.applicantUserId !== userId;
+  return !someoneElseApplies && !app.importBatchId;
 }
 
 /** Who may pick the quote, or close the project, on an APPROVED application:
@@ -192,7 +192,7 @@ export function isOwnApplication(
  *  approve_spend holder but the applicant). The whole rule the routes apply, so the page shows the
  *  buttons to exactly these people. */
 export function mayActOnApproved(
-  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId"> & { submittedOnBehalf?: boolean },
+  app: Pick<SpendApplication, "requiredApprovers" | "submittedBy" | "applicantUserId" | "importBatchId">,
   user: { id: string; permissions: string[] }
 ): boolean {
   if (!user.permissions.includes("approve_spend")) return false;

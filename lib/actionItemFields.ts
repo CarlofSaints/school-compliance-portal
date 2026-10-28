@@ -7,6 +7,7 @@ import type {
   ActionItem,
   ActionPriority,
   ActionStatus,
+  ActionUpdate,
 } from "./actionItems";
 import { displayNameFor } from "./actionItemRecipients";
 import type { Person } from "./peopleData";
@@ -22,6 +23,42 @@ export interface ParsedEdit {
   // so an edit does not re-notify everybody already carrying it.
   newlyAssigned: string[];
   error?: string;
+}
+
+// Whether an edit moves the status or progress of an action the editor is not
+// assigned to (an administrator included). Those must carry a reason, the same
+// as the Update progress box asks for.
+export function isNotOwnerStatusChange(
+  existing: ActionItem,
+  updates: Partial<ActionItem>,
+  myPersonIds: string[]
+): boolean {
+  const moved =
+    (updates.status !== undefined && updates.status !== existing.status) ||
+    (updates.progress !== undefined && updates.progress !== existing.progress);
+  return moved && !existing.assigneeIds.some((id) => myPersonIds.includes(id));
+}
+
+// The edit with a line added to the action's history saying who moved it and
+// why, built from the action AS IT IS NOW so a concurrent update is kept.
+export function withNotOwnerReason(
+  updates: Partial<ActionItem>,
+  by: { id: string; name: string },
+  reason: string
+): (current: ActionItem) => Partial<ActionItem> {
+  return (current) => {
+    const line: ActionUpdate = {
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      byId: by.id,
+      byName: by.name,
+      note: "",
+      progress: Math.max(0, Math.min(100, Math.round(updates.progress ?? current.progress))),
+      status: updates.status ?? current.status,
+      notOwnerReason: reason,
+    };
+    return { ...updates, updates: [line, ...(current.updates || [])].slice(0, 100) };
+  };
 }
 
 // Turns an edit payload into the fields to write.

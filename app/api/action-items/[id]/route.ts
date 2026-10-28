@@ -8,7 +8,7 @@ import {
   deleteActionItem,
 } from "@/lib/actionItemData";
 import { ACTION_ADMIN_PERMISSIONS } from "@/lib/actionItemRecipients";
-import { parseActionEdit } from "@/lib/actionItemFields";
+import { parseActionEdit, isNotOwnerStatusChange, withNotOwnerReason } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
 import { notifyAssignees } from "@/lib/actionItemNotify";
 import { withMinutesMeetingDates } from "@/lib/minutesAccess";
@@ -48,7 +48,22 @@ export async function PATCH(
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
 
-    const saved = await updateActionItem(id, parsed.updates);
+    // Not assigned to it: moving its status needs a reason, admins included.
+    const mine = people.filter((p) => p.userId === session.id).map((p) => p.id);
+    const reason = String(body.notOwnerReason ?? "").trim().slice(0, 2000);
+    const notOwner = isNotOwnerStatusChange(existing, parsed.updates, mine);
+    if (notOwner && !reason) {
+      return NextResponse.json(
+        { error: "You are not assigned to this action. Say why you are changing its status.", needsReason: true },
+        { status: 400 }
+      );
+    }
+
+    const by = { id: session.id, name: `${session.name} ${session.surname}`.trim() };
+    const saved = await updateActionItem(
+      id,
+      notOwner ? withNotOwnerReason(parsed.updates, by, reason) : parsed.updates
+    );
     if (!saved) {
       return NextResponse.json({ error: "Action not found" }, { status: 404 });
     }

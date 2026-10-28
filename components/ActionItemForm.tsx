@@ -48,6 +48,10 @@ interface Props {
    * asserting that.
    */
   fromMinutes?: { minutesId: string; sectionId?: string };
+  // Whether the signed-in person is assigned to the action being edited.
+  // Anybody else, an administrator included, must say why they move its
+  // status or progress. Defaults to true; the server asks if it disagrees.
+  isOwner?: boolean;
   onCancel: () => void;
   onSaved: (message: string, saved: ActionItem) => void;
   onError: (message: string) => void;
@@ -70,6 +74,7 @@ export default function ActionItemForm({
   existing,
   seed,
   fromMinutes,
+  isOwner = true,
   onCancel,
   onSaved,
   onError,
@@ -103,6 +108,11 @@ export default function ActionItemForm({
     existing?.status || "not_started"
   );
   const [progress, setProgress] = useState(existing?.progress ?? 0);
+  const [serverAsksReason, setServerAsksReason] = useState(false);
+  const [notOwnerReason, setNotOwnerReason] = useState("");
+  const statusMoved =
+    !!existing && (status !== existing.status || Number(progress) !== existing.progress);
+  const askReason = statusMoved && (!isOwner || serverAsksReason);
 
   const reminder = existing?.reminder || DEFAULT_REMINDER;
   const [remindOn, setRemindOn] = useState(reminder.enabled);
@@ -172,6 +182,7 @@ export default function ActionItemForm({
       meetingDate,
       status,
       progress: Number(progress),
+      ...(askReason ? { notOwnerReason } : {}),
       notify,
       // Only on a NEW action. An edit must not be able to re-point an existing
       // action at different minutes: where it came from is part of the record.
@@ -203,6 +214,10 @@ export default function ActionItemForm({
     setSaving(false);
 
     if (!res.ok) {
+      if (res.status === 400) {
+        const data = await res.clone().json().catch(() => ({}));
+        if (data.needsReason) setServerAsksReason(true);
+      }
       const message = await apiErrorMessage(res, t("Could not save that action"));
       setError(message);
       onError(message);
@@ -482,12 +497,31 @@ export default function ActionItemForm({
         </div>
       </div>
 
+      {askReason && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 space-y-2 mt-4">
+          <p className="text-sm font-semibold text-amber-800">
+            {t("You are not the owner of this action item!")}
+          </p>
+          <label className="block text-sm font-medium text-amber-900" htmlFor="edit-not-owner-reason">
+            {t("Why are you changing the status?")}
+          </label>
+          <textarea
+            id="edit-not-owner-reason"
+            value={notOwnerReason}
+            onChange={(e) => setNotOwnerReason(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            className={fieldClass + " bg-white"}
+          />
+        </div>
+      )}
+
       {error && <p className="text-sm text-risk-high mt-4">{error}</p>}
 
       <div className="flex gap-3 mt-6">
         <button
           onClick={save}
-          disabled={saving}
+          disabled={saving || (askReason && !notOwnerReason.trim())}
           className="bg-primary hover:bg-primary-dark disabled:bg-gray-300 text-white px-6 py-2 rounded-lg text-sm font-medium"
         >
           {saving ? t("Saving...") : existing ? t("Save changes") : t("Raise the action")}

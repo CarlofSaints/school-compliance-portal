@@ -21,16 +21,28 @@ async function main() {
     process.exit(1);
   }
   const { isOwnApplication, mayActOnApproved } = await import("../lib/approvalEngine");
-  const own = { submittedBy: "carl", applicantUserId: "carl", submittedOnBehalf: false };
-  const behalf = { submittedBy: "carl", applicantUserId: "dee", submittedOnBehalf: true };
-  const old = { submittedBy: "carl", applicantUserId: undefined, submittedOnBehalf: undefined };
+  const own = { submittedBy: "carl", applicantUserId: "carl" };
+  const forDee = { submittedBy: "carl", applicantUserId: "dee", submittedOnBehalf: true };
+  const typedName = { submittedBy: "carl", applicantUserId: undefined, submittedOnBehalf: true };
+  const old = { submittedBy: "carl" };
+  const imported = { submittedBy: "carl", importBatchId: "b1" };
   check("own application is own", isOwnApplication(own, "carl"), true);
-  check("captured for someone else is NOT the submitter's", isOwnApplication(behalf, "carl"), false);
-  check("...but is the applicant's", isOwnApplication(behalf, "dee"), true);
+  check("captured for another portal user is NOT the submitter's", isOwnApplication(forDee, "carl"), false);
+  check("...but is the applicant's", isOwnApplication(forDee, "dee"), true);
+  check("'on behalf' with a typed-in name is still the submitter's", isOwnApplication(typedName, "carl"), true);
   check("older record with no applicant id: submitter is the applicant", isOwnApplication(old, "carl"), true);
+  check("imported row is not the importer's", isOwnApplication(imported, "carl"), false);
   const approver = { id: "carl", permissions: ["approve_spend"] };
-  check("on-behalf submitter who is an approver may act", mayActOnApproved({ ...behalf, requiredApprovers: [{ userId: "carl" }] } as never, approver), true);
+  check("submitter for another user who is an approver may act", mayActOnApproved({ ...forDee, requiredApprovers: [{ userId: "carl" }] } as never, approver), true);
   check("own submitter who is an approver may not", mayActOnApproved({ ...own, requiredApprovers: [{ userId: "carl" }] } as never, approver), false);
+
+  const F = await import("../lib/actionItemFields");
+  const action = { status: "in_progress", progress: 40, assigneeIds: ["p-owner"] } as never;
+  check("non-owner moving status needs a reason", F.isNotOwnerStatusChange(action, { status: "done" }, ["p-other"]), true);
+  check("owner moving status does not", F.isNotOwnerStatusChange(action, { status: "done" }, ["p-owner"]), false);
+  check("non-owner saving the same status does not", F.isNotOwnerStatusChange(action, { status: "in_progress", progress: 40 }, []), false);
+  const withLine = F.withNotOwnerReason({ status: "done" }, { id: "u", name: "Admin" }, "owner left")({ ...(action as object), updates: [] } as never);
+  check("reason lands on a history line", [withLine.updates?.[0].notOwnerReason, withLine.updates?.[0].status], ["owner left", "done"]);
 
   const { writeJson } = await import("../lib/controlData");
   const { getTagCounts, getTagMembers } = await import("../lib/tagData");
@@ -49,7 +61,8 @@ async function main() {
   const users = await getUsers();
   const people = await getPeople();
   if (!users.length || !people.length) {
-    console.log("SKIP  tag counts: fake store paths differ from users.json/people.json");
+    failures++;
+    console.log("FAIL  tag counts did not run: fake store paths differ from users.json/people.json");
   } else {
     const counts = await getTagCounts();
     check("tag on a linked person's register entry is counted", counts.sign, (await getTagMembers("sign")).length);

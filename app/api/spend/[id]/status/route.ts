@@ -4,7 +4,7 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { getSpendById, updateSpendApplication } from "@/lib/spendData";
 import type { SpendApplication } from "@/lib/spendData";
-import { isOwnApplication, isRequiredApprover } from "@/lib/approvalEngine";
+import { isOwnApplication } from "@/lib/approvalEngine";
 
 const VALID: SpendApplication["status"][] = [
   "pending",
@@ -58,23 +58,23 @@ export async function PATCH(
 
   const next = status as SpendApplication["status"];
 
-  // Approving from the grid skips the vote on the application, so it is open
-  // to a spend admin, to one of the approvers THIS application asked for, and
-  // on an imported row or one with no approvers (nobody's vote to skip) to any
-  // approve_spend holder. Moving an approved project on to completed is
-  // bookkeeping and stays open to all of them.
+  // Approving from the grid skips the vote on the application, so only a spend
+  // admin may do it - except on an imported row, which is the school's existing
+  // register being brought in, not a decision anyone has to vote on. An
+  // approver on a live application decides on the application itself, where
+  // their vote is recorded and every other approver still has their say.
+  // Moving an approved project on to completed is bookkeeping and stays open.
   const alreadyApproved = app.status === "approved" || app.status === "completed";
   const approving = (next === "approved" || next === "completed") && !alreadyApproved;
   if (
     approving &&
     !session.permissions.includes("manage_spend_settings") &&
-    !isRequiredApprover(app, session.id) &&
-    !(app.importBatchId || !app.requiredApprovers?.length)
+    !app.importBatchId
   ) {
     return NextResponse.json(
       {
         error:
-          "Only a spend admin or one of this project's approvers can set it to approved or completed.",
+          "Only a spend admin can approve a project from the grid. If you are one of its approvers, open the project and click Approve, so your vote is recorded.",
       },
       { status: 403 }
     );
