@@ -84,6 +84,8 @@ export default function DashboardPage() {
   const [totalPolicies, setTotalPolicies] = useState(0);
   const [financialYear, setFinancialYear] = useState<number | null>(null);
   const [actions, setActions] = useState<ActionItem[]>([]);
+  // Zeros painted before the numbers land read as "empty school" on a projector.
+  const [fetched, setFetched] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -116,7 +118,7 @@ export default function DashboardPage() {
           pendingSpendCount(apps, year, settings.financialYearEndMonth ?? 12)
         );
       }
-    })();
+    })().finally(() => setFetched(true));
   }, [session]);
 
   const totalChecks = checks.length;
@@ -146,7 +148,7 @@ export default function DashboardPage() {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 5);
 
-  if (loading) return <div className="p-6">{t("Loading...")}</div>;
+  if (loading || !fetched) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
