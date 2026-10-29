@@ -79,29 +79,28 @@ export default function DashboardPage() {
   const branding = useBranding();
   const DASH_STATUS_META = dashStatusMeta(branding.shortName, t);
   const { session, loading } = useAuth("view_dashboard");
-  const [checks, setChecks] = useState<CheckSummary[]>([]);
-  const [pendingSpend, setPendingSpend] = useState(0);
-  const [totalPolicies, setTotalPolicies] = useState(0);
+  // null = not loaded yet (or the fetch failed): shown as "–", never as a 0
+  // that reads as "empty school" on a projector.
+  const [checks, setChecks] = useState<CheckSummary[] | null>(null);
+  const [pendingSpend, setPendingSpend] = useState<number | null>(null);
+  const [totalPolicies, setTotalPolicies] = useState<number | null>(null);
   const [financialYear, setFinancialYear] = useState<number | null>(null);
-  const [actions, setActions] = useState<ActionItem[]>([]);
-  // Zeros painted before the numbers land read as "empty school" on a projector.
-  const [fetched, setFetched] = useState(false);
+  const [actions, setActions] = useState<ActionItem[] | null>(null);
 
   useEffect(() => {
     if (!session) return;
     (async () => {
-      const res = await authFetch("/api/compliance/checks", { cache: "no-store" });
-      if (res.ok) setChecks(await res.json());
-
       // Spend awaiting approval, scoped to the current financial year.
-      const [spendRes, settingsRes, policiesRes, actionsRes] =
+      const [res, spendRes, settingsRes, policiesRes, actionsRes] =
         await Promise.all([
+          authFetch("/api/compliance/checks", { cache: "no-store" }),
           authFetch("/api/spend", { cache: "no-store" }),
           authFetch("/api/settings/spend", { cache: "no-store" }),
           authFetch("/api/policies", { cache: "no-store" }),
           authFetch("/api/action-items", { cache: "no-store" }),
         ]);
 
+      if (res.ok) setChecks(await res.json());
       if (actionsRes.ok) setActions(await actionsRes.json());
 
       // Same number the Policies page shows in its header, from the same index.
@@ -118,14 +117,14 @@ export default function DashboardPage() {
           pendingSpendCount(apps, year, settings.financialYearEndMonth ?? 12)
         );
       }
-    })().finally(() => setFetched(true));
+    })().catch(() => {});
   }, [session]);
 
-  const totalChecks = checks.length;
-  const policyChecks = checks.filter((c) => c.policyId).length;
+  const totalChecks = checks?.length ?? 0;
+  const policyChecks = checks?.filter((c) => c.policyId).length ?? 0;
   const documentChecks = totalChecks - policyChecks;
-  const nonCompliant = checks.filter((c) => c.issueCount > 0).length;
-  const statusTotals = checks.reduce(
+  const nonCompliant = checks?.filter((c) => c.issueCount > 0).length ?? 0;
+  const statusTotals = (checks ?? []).reduce(
     (acc, c) => {
       if (c.statusCounts) {
         acc.not_an_issue += c.statusCounts.not_an_issue;
@@ -139,16 +138,16 @@ export default function DashboardPage() {
     { not_an_issue: 0, needs_addressing: 0, in_progress: 0, addressed: 0, unreviewed: 0 } as StatusCounts
   );
 
-  const actionSummary = summarise(actions);
+  const actionSummary = summarise(actions ?? []);
   // What is closest to biting: open, dated, soonest first. An action with no
   // ETA cannot be ranked against one that has a date, so it is left off this
   // list rather than sorted to either end of it.
-  const nextActions = actions
+  const nextActions = (actions ?? [])
     .filter((a) => !isClosed(a) && a.dueDate)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 5);
 
-  if (loading || !fetched) return <div className="p-6">{t("Loading...")}</div>;
+  if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   return (
     <div>
@@ -167,7 +166,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <DashboardCard
           title={t("Total Policies")}
-          value={totalPolicies}
+          value={totalPolicies ?? "–"}
           subtitle={t("Uploaded to repository")}
           icon={
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -177,7 +176,7 @@ export default function DashboardPage() {
         />
         <DashboardCard
           title={t("Compliance Checks")}
-          value={totalChecks}
+          value={checks ? totalChecks : "–"}
           subtitle={
             totalChecks === 0
               ? t("Total checks run")
@@ -192,7 +191,7 @@ export default function DashboardPage() {
         />
         <DashboardCard
           title={t("Non-Compliant")}
-          value={nonCompliant}
+          value={checks ? nonCompliant : "–"}
           subtitle={t("Checks with issues")}
           color="bg-risk-high"
           icon={
@@ -203,7 +202,7 @@ export default function DashboardPage() {
         />
         <DashboardCard
           title={t("Spend Pending")}
-          value={pendingSpend}
+          value={pendingSpend ?? "–"}
           subtitle={
             financialYear
               ? t("Awaiting approval · FY {financialYear}", { financialYear })
@@ -232,7 +231,7 @@ export default function DashboardPage() {
           {ACTION_TILES.map((tile) => (
             <div key={tile.key} className="border border-gray-100 rounded-lg p-4">
               <p className={`text-3xl font-bold ${tile.text}`}>
-                {actionSummary[tile.key]}
+                {actions ? actionSummary[tile.key] : "–"}
               </p>
               <p className="text-xs text-gray-500 mt-1">{t(tile.label)}</p>
             </div>
@@ -267,7 +266,7 @@ export default function DashboardPage() {
               );
             })}
           </ul>
-        ) : (
+        ) : actions && (
           <p className="text-sm text-gray-500 mt-4">
             {t("Nothing open with a date on it.")}{" "}
             <Link href="/action-items" className="text-primary hover:underline">
@@ -278,7 +277,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {checks.length > 0 && (
+      {checks && checks.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
           <h2 className="text-lg font-semibold text-dark mb-4">{t("Issues by Status")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -301,7 +300,7 @@ export default function DashboardPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
         <h2 className="text-lg font-semibold text-dark mb-4">{t("Compliance Checks")}</h2>
-        {checks.length === 0 ? (
+        {!checks ? null : checks.length === 0 ? (
           <p className="text-sm text-gray-500">
             {t("Nothing has been checked yet. Run a check from the")}{" "}
             <Link href="/compliance" className="text-primary hover:underline">
