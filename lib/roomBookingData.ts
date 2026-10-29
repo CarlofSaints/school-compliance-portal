@@ -124,6 +124,17 @@ export interface RoomBooking {
   updatedAt: string;
   cancelledAt?: string;
   cancelledByName?: string;
+  /** Booked from the room's public link by someone with no login. */
+  guest?: GuestDetails;
+  /** A guest booking blocks the slot at once but waits for a room manager. */
+  pendingApproval?: boolean;
+}
+
+export interface GuestDetails {
+  name: string;
+  organisation: string;
+  email: string;
+  phone: string;
 }
 
 /** Who is acting. Built from the server session, never from the request body. */
@@ -234,6 +245,10 @@ export function bookingView(b: RoomBooking, actor: Actor) {
     canEdit: (mine || canManageRooms(actor)) && !hasEnded(b.date, b.endMinute),
     // Who it is for is the booker's call (or a room manager's), not the bookee's.
     canChangeHolder: b.bookedById === actor.id || canManageRooms(actor),
+    pendingApproval: !!b.pendingApproval,
+    isGuest: !!b.guest,
+    // A guest's contact details are for the people who approve, nobody else.
+    guest: canManageRooms(actor) ? b.guest ?? null : null,
   };
 }
 
@@ -677,7 +692,7 @@ async function resolveBookedFor(bookedForId: string, ownerId: string, stored?: R
 
 // --- Create ----------------------------------------------------------------------
 
-export async function createBooking(actor: Actor, input: BookingInput, nowAt: Date = new Date()): Promise<Outcome<{ bookings: RoomBooking[]; room: Room }>> {
+export async function createBooking(actor: Actor, input: BookingInput, nowAt: Date = new Date(), extra: Partial<RoomBooking> = {}): Promise<Outcome<{ bookings: RoomBooking[]; room: Room }>> {
   if (!canBookRooms(actor)) return fail(403, "You can't book rooms");
   const room = await getRoom(input.roomId);
   if (!room || !room.active) return fail(400, "That room isn't available");
@@ -719,6 +734,7 @@ export async function createBooking(actor: Actor, input: BookingInput, nowAt: Da
     requests: [],
     createdAt: now,
     updatedAt: now,
+    ...extra,
   }));
 
   const byMonth = new Map<string, RoomBooking[]>();
@@ -1174,6 +1190,8 @@ export async function requestRoom(
   const booking = await findBooking(roomId, date, id);
   if (!booking || booking.status !== "confirmed") return fail(404, "That booking is no longer live");
   if (isHolder(booking, actor.id)) return fail(400, "You already have this room");
+  // A guest cannot sign in to answer a request: ask a room manager instead.
+  if (booking.guest) return fail(400, "This room is booked by an outside group. Ask a room manager.");
   // Nobody can hand over a meeting that has already started.
   if (isPast(booking.date, booking.startMinute, nowAt)) return fail(400, STARTED);
   const room = await getRoom(roomId);
@@ -1508,7 +1526,7 @@ export async function bookingsDueForReminder(now: Date = new Date()): Promise<{ 
   const lists = await Promise.all(rooms.flatMap((room) => months.map(async (m) => ({ room, list: await readMonth(room.id, m) }))));
   for (const { room, list } of lists) {
     for (const b of list) {
-      if (b.status !== "confirmed") continue;
+      if (b.status !== "confirmed" || b.pendingApproval) continue;
       // Done once every holder has it. A claim with no finish after
       // REMINDER_CLAIM_STALE_MS is a run that died mid-send: due again, and
       // only the holders not yet reminded are sent it.
@@ -1587,4 +1605,80 @@ export async function claimReminder(b: RoomBooking, stamp: string | null, onlyIf
     return list.map((x) => (x.id === b.id ? touch(x, { reminderSentAt: stamp }) : x));
   });
   return claimed;
+}
+
+// --- Guest bookings from a room's public link ---------------------------------
+
+/** What the public calendar may show: when the room is taken, nothing else. */
+export async function takenSlots(roomId: string, from: string, to: string): Promise<{ date: string; startMinute: number; endMinute: number }[]> {
+  return (await bookingsBetween(roomId, from, to)).map((b) => ({ date: b.date, startMinute: b.startMinute, endMinute: b.endMinute }));
+}
+
+/** Decline cancels it in ONE atomic write that still requires it to be
+ *  pending, so a decline racing an approve can never cancel the approved one. */
+export async function declineGuestBooking(actor: Actor, roomId: string, date: string, id: string): Promise<Outcome<{ booking: RoomBooking; withdrawn: Withdrawal[] }>> {
+  if (!canManageRooms(actor)) return fail(403, "Only room managers can decline a booking");
+  if (!isId(roomId) || !isId(id) || !isDate(date)) return fail(404, "That booking no longer exists");
+  let before: RoomBooking | null = null;
+  let after: RoomBooking | null = null;
+  await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(date)), [], (list) => {
+    const i = list.findIndex((b) => b.id === id && b.status === "confirmed" && b.pendingApproval);
+    if (i < 0) return NO_CHANGE;
+    before = list[i];
+    const at = new Date().toISOString();
+    after = touch(list[i], {
+      status: "cancelled",
+      pendingApproval: false,
+      cancelledAt: at,
+      cancelledByName: actor.name,
+      requests: list[i].requests.map((r) => (r.status === "pending" ? { ...r, status: "withdrawn" as const, respondedAt: at } : r)),
+    });
+    return list.map((b, j) => (j === i ? after! : b));
+  });
+  if (!before || !after) return fail(404, "That booking is no longer waiting for approval");
+  return { ok: true, value: { booking: after, withdrawn: pendingWithdrawals(before, "cancelled") } };
+}
+
+/** Approve clears the hold; the caller emails the guest. */
+export async function approveGuestBooking(actor: Actor, roomId: string, date: string, id: string): Promise<Outcome<RoomBooking>> {
+  if (!canManageRooms(actor)) return fail(403, "Only room managers can approve a booking");
+  if (!isId(roomId) || !isId(id) || !isDate(date)) return fail(400, "That booking no longer exists");
+  let found: RoomBooking | null = null;
+  await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(date)), [], (list) => {
+    const i = list.findIndex((b) => b.id === id && b.status === "confirmed" && b.pendingApproval);
+    if (i < 0) return NO_CHANGE;
+    found = touch(list[i], { pendingApproval: false });
+    return list.map((b, j) => (j === i ? found! : b));
+  });
+  return found ? { ok: true, value: found } : fail(404, "That booking is no longer waiting for approval");
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const GUEST_MAX_MINUTES = 12 * 60;
+const GUEST_MAX_DAYS_AHEAD = 365;
+
+/** A booking from the public link: one date, no repeat, nobody else on it. */
+export function parseGuestBooking(body: unknown): Parsed<{ input: BookingInput; guest: GuestDetails }> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const booking = parseBookingInput({ ...b, bookedForId: "", recurrence: null });
+  if (!booking.ok) return booking;
+  const fields: [keyof GuestDetails, number, boolean, string][] = [
+    ["name", 100, true, "Your name"],
+    ["organisation", 120, false, "Organisation"],
+    ["email", 200, true, "Email"],
+    ["phone", 30, true, "Phone"],
+  ];
+  const guest = {} as GuestDetails;
+  for (const [k, max, req, label] of fields) {
+    const v = text(b[k], max, req, label);
+    if (typeof v !== "string") return { ok: false, ...v };
+    guest[k] = v;
+  }
+  if (!EMAIL.test(guest.email)) return { ok: false, error: "Enter a valid email address" };
+  // A held slot costs the school a manager's time: keep it to one sitting, within a year.
+  if (booking.value.endMinute - booking.value.startMinute > GUEST_MAX_MINUTES) return { ok: false, error: "A booking can be at most 12 hours. Ask the school for longer." };
+  if (booking.value.date > addDays(sastToday(), GUEST_MAX_DAYS_AHEAD)) return { ok: false, error: "You can book up to a year ahead." };
+  // POPIA: we keep their contact details, so they must agree to it.
+  if (b.consent !== true) return { ok: false, error: "Tick the box to agree to how we use your details" };
+  return { ok: true, value: { input: booking.value, guest } };
 }

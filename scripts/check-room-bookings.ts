@@ -1309,6 +1309,47 @@ async function main() {
   check("K9 a second lapse pass with nothing left writes no booking file", [firstPass >= 0, lapseWrites], [true, 0]);
 
 
+  // P guest booking from the public link: held as pending, blocks the slot,
+  // never reminded, only a room manager approves, then the guest is emailed.
+  {
+    const hall = await D.saveRoom(admin, null, { name: "Guest Hall", capacity: 200, color: "#0d9488", notes: "" });
+    if (!hall.ok) throw new Error("hall create failed");
+    const room = hall.value.room;
+    const input = (date: string, start: string, end: string) => { const p = D.parseBookingInput({ roomId: room.id, title: "Meeting", date, startMinute: Number(start.slice(0, 2)) * 60, endMinute: Number(end.slice(0, 2)) * 60 + Number(end.slice(3)), attendeeCount: 4 }); if (!p.ok) throw new Error(p.error); return p.value; };
+    const { addDays: ad, sastToday: today } = await import("../lib/roomBookings");
+    const gd = ad(today(), 30);
+    const body = { roomId: room.id, title: "Church service", date: gd, startMinute: 540, endMinute: 690, attendeeCount: 6, name: "Pat Guest", organisation: "Hope Church", email: "pat@guest.test", phone: "0820000000", consent: true };
+    check("P1 no consent tick is refused", D.parseGuestBooking({ ...body, consent: false }).ok, false);
+    check("P2 a bad email is refused", D.parseGuestBooking({ ...body, email: "nope" }).ok, false);
+    check("P3 a repeat is ignored: guests book one date", (() => { const p = D.parseGuestBooking({ ...body, recurrence: { frequency: "daily", interval: 1, weekdays: [], endMode: "count", count: 5, until: "" } }); return p.ok && p.value.input.recurrence.frequency; })(), "none");
+    const g = D.parseGuestBooking(body);
+    if (!g.ok) throw new Error(g.error);
+    const guestActor = { id: "guest:x", name: "Pat Guest", email: "pat@guest.test", permissions: ["book_rooms"] };
+    const made = await D.createBooking(guestActor, g.value.input, new Date(), { guest: g.value.guest, pendingApproval: true });
+    check("P4 guest booking is written pending", made.ok && made.value.bookings[0].pendingApproval, true);
+    const gb = made.ok ? made.value.bookings[0] : null!;
+    check("P5 it blocks the slot for staff", (await D.createBooking(alice, input(gd, "10:00", "10:30"), new Date())).ok, false);
+    check("P6 the public calendar shows times only", Object.keys((await D.takenSlots(room.id, gd, gd))[0] ?? {}).sort(), ["date", "endMinute", "startMinute"]);
+    check("P7 only staff with manage_rooms see guest contact details", [D.bookingView(gb, alice).guest, D.bookingView(gb, admin).guest?.email], [null, "pat@guest.test"]);
+    const due = await D.bookingsDueForReminder(new Date(`${ad(gd, -1)}T05:00:00Z`));
+    check("P8 a pending guest booking is never reminded", due.some((d) => d.booking.id === gb.id), false);
+    check("P9 a booker cannot approve", (await D.approveGuestBooking(alice, room.id, gb.date, gb.id)).ok, false);
+    const ok = await D.approveGuestBooking(admin, room.id, gb.date, gb.id);
+    check("P10 a room manager approves it", ok.ok && ok.value.pendingApproval, false);
+    check("P11 approving twice is refused", (await D.approveGuestBooking(admin, room.id, gb.date, gb.id)).ok, false);
+    const { notifyGuestDecision } = await import("../lib/roomBookingNotify");
+    if (ok.ok) await viaMail((q) => notifyGuestDecision(ok.value, room, true, q));
+    check("P12 the guest is emailed the approval", mailTo("pat@guest.test", "Booking approved"), 1);
+    check("P13 declining an approved booking is refused (no race cancel)", (await D.declineGuestBooking(admin, room.id, gb.date, gb.id)).ok, false);
+    check("P14 staff cannot ask a guest for the room", (await D.requestRoom(alice, room.id, gb.date, gb.id, { title: "x", message: "y", attendeeCount: 1 })).ok, false);
+    check("P15 over 12 hours refused", D.parseGuestBooking({ ...body, startMinute: 0, endMinute: 13 * 60 }).ok, false);
+    check("P16 more than a year ahead refused", D.parseGuestBooking({ ...body, date: ad(today(), 400) }).ok, false);
+    const g2 = D.parseGuestBooking({ ...body, startMinute: 1200, endMinute: 1260 });
+    if (!g2.ok) throw new Error(g2.error);
+    const m2 = await D.createBooking(guestActor, g2.value.input, new Date(), { guest: g2.value.guest, pendingApproval: true });
+    const dec = m2.ok ? await D.declineGuestBooking(admin, room.id, gd, m2.value.bookings[0].id) : null;
+    check("P17 decline cancels a pending one and frees the slot", [dec?.ok && dec.value.booking.status, (await D.createBooking(alice, input(gd, "20:00", "21:00"), new Date())).ok], ["cancelled", true]);
+  }
   console.log(failures ? `\n${failures} FAILED` : "\nAll passed");
   process.exit(failures ? 1 : 0);
 }

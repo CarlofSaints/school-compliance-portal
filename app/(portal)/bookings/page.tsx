@@ -337,6 +337,22 @@ function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking:
     onDone(data.skipped > 0 ? `${msg} ${t("{n} held by someone else were left alone.", { n: data.skipped })}` : msg);
   };
 
+  const decide = async (approve: boolean) => {
+    if (!approve && !confirm(t("Decline this booking? The time is freed and they are emailed."))) return;
+    setBusy(true);
+    setError("");
+    const res = await authFetch(`/api/bookings/${booking.id}/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ roomId: booking.roomId, date: booking.date, approve }),
+    });
+    setBusy(false);
+    if (!res.ok) return setError(await apiErrorMessage(res, t("Failed")));
+    const data = await res.json().catch(() => ({}));
+    const msg = approve ? t("Booking approved") : t("Booking declined");
+    onDone(data.emailFailed ? `${msg}. ${t("The email to them didn't send, so let them know.")}` : msg, !!data.emailFailed);
+  };
+
   const sendAsk = async () => {
     setBusy(true);
     setError("");
@@ -400,6 +416,13 @@ function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking:
     [t("Booked by"), booking.bookedByName],
     [t("Attendees"), String(booking.attendeeCount)],
     ...(booking.recurrence ? ([[t("Repeats"), describeRecurrence(booking.recurrence, t)]] as [string, string][]) : []),
+    ...(booking.guest
+      ? ([
+          [t("Organisation"), booking.guest.organisation || "-"],
+          [t("Email"), booking.guest.email],
+          [t("Phone"), booking.guest.phone],
+        ] as [string, string][])
+      : []),
   ];
 
   return (
@@ -412,10 +435,17 @@ function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking:
           </div>
         ))}
       </dl>
+      {booking.pendingApproval && <WarnLine text={t("Booked from the public link. The time is held until a room manager approves or declines it.")} />}
       {booking.pendingRequests > 0 && <WarnLine text={t("{n} outstanding request(s) for this slot.", { n: booking.pendingRequests })} />}
       <ErrorLine text={error} />
       <div className="flex flex-wrap justify-end gap-2">
-        {booking.canEdit && (
+        {booking.pendingApproval && booking.guest && (
+          <>
+            <button type="button" disabled={busy} onClick={() => decide(false)} className={`${btnGhost} text-risk-high`}>{t("Decline")}</button>
+            <button type="button" disabled={busy} onClick={() => decide(true)} className={btnPrimary}>{t("Approve")}</button>
+          </>
+        )}
+        {booking.canEdit && !booking.pendingApproval && (
           <>
             <button type="button" onClick={onEdit} className={btnGhost}>{t("Edit")}</button>
             {booking.seriesId && (
@@ -424,7 +454,7 @@ function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking:
             <button type="button" disabled={busy} onClick={() => cancel("one")} className={`${btnGhost} text-risk-high`}>{t("Cancel booking")}</button>
           </>
         )}
-        {!booking.isMine && canBook &&
+        {!booking.isMine && !booking.isGuest && canBook &&
           (booking.iAsked ? (
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">{t("You've asked for this room")}</span>
           ) : (
@@ -620,9 +650,9 @@ export default function BookingsPage() {
                           <span className="block truncate text-[10px] leading-tight text-gray-600">
                             {b.bookedForName ?? b.bookedByName} · {t("{n} people", { n: b.attendeeCount })}
                           </span>
-                          {(b.recurrence || b.pendingRequests > 0) && (
+                          {(b.recurrence || b.pendingRequests > 0 || b.pendingApproval) && (
                             <span className="block truncate text-[10px] leading-tight text-amber-700">
-                              {[b.recurrence ? t("Repeats") : "", b.pendingRequests > 0 ? t("Requested") : ""].filter(Boolean).join(" · ")}
+                              {[b.pendingApproval ? t("Pending approval") : "", b.recurrence ? t("Repeats") : "", b.pendingRequests > 0 ? t("Requested") : ""].filter(Boolean).join(" · ")}
                             </span>
                           )}
                         </button>

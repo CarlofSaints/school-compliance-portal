@@ -155,6 +155,12 @@ export default function RoomsPage() {
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-sm">
+                {/* A plain link: right-click > Copy link address to send it to an outside group. */}
+                {r.active && (
+                  <a href={`/book/${r.id}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                    {t("Public booking link")}
+                  </a>
+                )}
                 <button onClick={() => open(r)} className="text-primary hover:underline">{t("Edit")}</button>
                 <button onClick={() => toggleActive(r)} className="text-gray-600 hover:underline">
                   {r.active ? t("Retire") : t("Bring back")}
