@@ -1678,3 +1678,45 @@ export function sendRoomRequestDeclinedEmail(
     { kind: "booking.declined", personal: true }
   );
 }
+
+// --- Guest bookings from a room's public link --------------------------------
+// The guest has no login, so their links go back to the public room page.
+
+const GUEST_LINK = (site: string, roomId: string) => `${site}/book/${roomId}`;
+
+export function sendGuestBookingReceivedEmail(to: string, name: string, roomId: string, f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Booking request received: ${f.roomName}, ${f.dateLabel}`, "Request received", (P, site) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Thank you. The time below is held for you while the school looks at your request. You will get another email once it is approved or declined.</p>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, GUEST_LINK(site, roomId), "View the room calendar")}
+  `, { kind: "booking.guest_received" });
+}
+
+export function sendGuestBookingToApproveEmail(to: string, managerName: string, guest: { name: string; organisation: string; email: string; phone: string }, f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Approve a booking: ${f.roomName}, ${f.dateLabel}`, "A booking needs your approval", (P, site) => `
+    <p style="color:#333;">Dear ${esc(managerName)},</p>
+    <p style="color:#333;">${esc(guest.name)}${guest.organisation ? ` (${esc(guest.organisation)})` : ""} booked ${esc(f.roomName)} from its public link. The time is held until you approve or decline it.</p>
+    ${bookingFactsBlock(f)}
+    <p style="color:#333;">Email: ${esc(guest.email)}<br/>Phone: ${esc(guest.phone)}</p>
+    ${bookingButton(P, CALENDAR_LINK(site), "Open the calendar to approve or decline")}
+  `, { kind: "booking.guest_approve" });
+}
+
+export function sendGuestBookingApprovedEmail(to: string, name: string, roomId: string, f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Booking approved: ${f.roomName}, ${f.dateLabel}`, "Booking approved", (P, site) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Good news: your booking is approved.</p>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, GUEST_LINK(site, roomId), "View the room calendar")}
+  `, { kind: "booking.guest_approved" });
+}
+
+export function sendGuestBookingDeclinedEmail(to: string, name: string, roomId: string, f: RoomBookingEmailFacts): Promise<boolean> {
+  return sendBookingMail(to, `Booking declined: ${f.roomName}, ${f.dateLabel}`, "Booking declined", (P, site) => `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">Sorry, the school could not approve this booking, so the time has been released. You are welcome to pick another time.</p>
+    ${bookingFactsBlock(f)}
+    ${bookingButton(P, GUEST_LINK(site, roomId), "Pick another time")}
+  `, { kind: "booking.guest_declined" });
+}
