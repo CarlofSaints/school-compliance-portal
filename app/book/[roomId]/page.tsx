@@ -4,7 +4,6 @@ import { use, useCallback, useEffect, useState } from "react";
 import { useT } from "@/components/I18nProvider";
 import { useBranding } from "@/components/BrandingProvider";
 import SchoolCrest from "@/components/SchoolCrest";
-import LanguagePicker from "@/components/LanguagePicker";
 import {
   addDays,
   dayShortName,
@@ -278,12 +277,11 @@ function Shell({ name, children }: { name: string; children: React.ReactNode }) 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6">
           <div className="flex items-center gap-3">
             <SchoolCrest width={40} height={48} />
             <span className="font-semibold text-dark">{name}</span>
           </div>
-          <LanguagePicker />
         </div>
         <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">{children}</div>
       </div>
