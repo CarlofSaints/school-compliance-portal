@@ -12,6 +12,65 @@ interface HandbookMeta {
   title: string;
 }
 
+// Runs INSIDE the guide frame (sandboxed, opaque origin):
+// - "#ch07" contents links: Chrome blocks the frame navigating its own blob: URL,
+//   so it scrolls the frame itself (not scrollIntoView, which nudges the portal).
+// - "Watch how" .mp4 links play in a box over the guide with a big Close button,
+//   not a new tab: people who rarely use a browser don't find their way back.
+// String.raw: written as plain JS, no double escaping.
+const GUIDE_FRAME_SCRIPT = String.raw`(function () {
+  var CLOSE = __CLOSE__;
+  var opener = null;
+  function shut() {
+    var o = document.getElementById("clip-box");
+    if (o) o.remove();
+    if (opener) opener.focus();
+    opener = null;
+  }
+  function play(src, from) {
+    shut();
+    opener = from;
+    var o = document.createElement("div");
+    o.id = "clip-box";
+    o.setAttribute("role", "dialog");
+    o.setAttribute("aria-modal", "true");
+    o.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px";
+    var b = document.createElement("button");
+    b.textContent = "\u2715 " + CLOSE;
+    b.style.cssText = "font:600 16px system-ui,sans-serif;padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#111;cursor:pointer";
+    b.onclick = shut;
+    var v = document.createElement("video");
+    v.src = src;
+    v.controls = true;
+    v.playsInline = true;
+    v.style.cssText = "max-width:100%;max-height:80vh;border-radius:8px;background:#000";
+    // A clip that cannot load must not leave a black box: close it again.
+    v.onerror = shut;
+    o.onclick = function (e) { if (e.target === o) shut(); };
+    o.appendChild(b);
+    o.appendChild(v);
+    document.body.appendChild(o);
+    b.focus();
+    // Started inside the click, so autoplay rules allow it; a refusal just leaves it paused.
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {});
+  }
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") shut(); });
+  document.addEventListener("click", function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest("a[href]");
+    if (!a) return;
+    var h = a.getAttribute("href");
+    if (/\.mp4([?#]|$)/i.test(h)) { e.preventDefault(); play(a.href, a); return; }
+    if (h.charAt(0) !== "#") return;
+    var id = h.slice(1);
+    try { id = decodeURIComponent(id); } catch (err) {}
+    if (id === "" || id === "top") { e.preventDefault(); window.scrollTo(0, 0); return; }
+    var el = document.getElementById(id) || document.getElementsByName(id)[0];
+    if (el) { e.preventDefault(); window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY); }
+  });
+})();`;
+
 export default function GuidePage() {
   const t = useT();
   // The standard guide comes back in the reader's language, so a switch reloads it.
@@ -55,19 +114,9 @@ export default function GuidePage() {
     // Chrome will not let it navigate its own blob: URL, so "#ch07" did nothing.
     // Scroll the frame to the target instead (scrollIntoView would also nudge the
     // portal page around it); uploaded guides with "#..." links get it too.
-    // A "Watch how" clip plays in a box over the guide with a big Close button,
-    // not in a new tab: people who rarely use a browser don't find their way back.
+    // "Watch how" clips play in a box over the guide (GUIDE_FRAME_SCRIPT).
     const close = JSON.stringify(t("Close")).replace(/</g, "\\u003c");
-    const jump = `<script>(function(){var CLOSE=${close};
-function shut(){var o=document.getElementById("clip-box");if(o)o.remove();}
-function play(src){shut();var o=document.createElement("div");o.id="clip-box";o.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px";
-var b=document.createElement("button");b.textContent="✕ "+CLOSE;b.style.cssText="font:600 16px system-ui,sans-serif;padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#111;cursor:pointer";b.onclick=shut;
-var v=document.createElement("video");v.src=src;v.controls=true;v.autoplay=true;v.playsInline=true;v.style.cssText="max-width:100%;max-height:80vh;border-radius:8px;background:#000";
-o.onclick=function(e){if(e.target===o)shut();};o.appendChild(b);o.appendChild(v);document.body.appendChild(o);b.focus();}
-document.addEventListener("keydown",function(e){if(e.key==="Escape")shut();});
-document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");if(!a)return;var h=a.getAttribute("href");
-if(/\\.mp4([?#]|$)/i.test(h)){e.preventDefault();play(a.href);return;}
-if(h.charAt(0)!=="#")return;var el=document.getElementById(decodeURIComponent(h.slice(1)));if(el){e.preventDefault();window.scrollTo(0,el.getBoundingClientRect().top+window.scrollY);}});})();</script>`;
+    const jump = `<script>${GUIDE_FRAME_SCRIPT.replace("__CLOSE__", close)}</script>`;
     const doc = `<!doctype html><html lang="${locale}" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}${jump}</body></html>`;
     const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
     setDocUrl(url);
@@ -204,6 +253,8 @@ if(h.charAt(0)!=="#")return;var el=document.getElementById(decodeURIComponent(h.
           title={meta?.title || t("Guide")}
           src={docUrl ?? undefined}
           sandbox="allow-scripts allow-modals allow-popups"
+          // Fullscreen and autoplay for the clip box; neither loosens the origin sandbox.
+          allow="fullscreen; autoplay"
           className="flex-1 w-full rounded-xl border border-gray-200 bg-white min-h-0"
         />
       )}
