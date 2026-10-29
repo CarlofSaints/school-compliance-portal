@@ -55,14 +55,26 @@ export default function GuidePage() {
     // Chrome will not let it navigate its own blob: URL, so "#ch07" did nothing.
     // Scroll the frame to the target instead (scrollIntoView would also nudge the
     // portal page around it); uploaded guides with "#..." links get it too.
-    const jump = `<script>document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;var el=document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));if(el){e.preventDefault();window.scrollTo(0,el.getBoundingClientRect().top+window.scrollY);}});</script>`;
+    // A "Watch how" clip plays in a box over the guide with a big Close button,
+    // not in a new tab: people who rarely use a browser don't find their way back.
+    const close = JSON.stringify(t("Close")).replace(/</g, "\\u003c");
+    const jump = `<script>(function(){var CLOSE=${close};
+function shut(){var o=document.getElementById("clip-box");if(o)o.remove();}
+function play(src){shut();var o=document.createElement("div");o.id="clip-box";o.style.cssText="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px";
+var b=document.createElement("button");b.textContent="✕ "+CLOSE;b.style.cssText="font:600 16px system-ui,sans-serif;padding:10px 20px;border-radius:999px;border:0;background:#fff;color:#111;cursor:pointer";b.onclick=shut;
+var v=document.createElement("video");v.src=src;v.controls=true;v.autoplay=true;v.playsInline=true;v.style.cssText="max-width:100%;max-height:80vh;border-radius:8px;background:#000";
+o.onclick=function(e){if(e.target===o)shut();};o.appendChild(b);o.appendChild(v);document.body.appendChild(o);b.focus();}
+document.addEventListener("keydown",function(e){if(e.key==="Escape")shut();});
+document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a[href]");if(!a)return;var h=a.getAttribute("href");
+if(/\\.mp4([?#]|$)/i.test(h)){e.preventDefault();play(a.href);return;}
+if(h.charAt(0)!=="#")return;var el=document.getElementById(decodeURIComponent(h.slice(1)));if(el){e.preventDefault();window.scrollTo(0,el.getBoundingClientRect().top+window.scrollY);}});})();</script>`;
     const doc = `<!doctype html><html lang="${locale}" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}${jump}</body></html>`;
     const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
     setDocUrl(url);
     // Revoked when the guide is replaced or the page is left, or every publish
     // would leak a couple of megabytes for the life of the tab.
     return () => URL.revokeObjectURL(url);
-  }, [html, locale]);
+  }, [html, locale, t]);
 
   const load = useCallback(async () => {
     setState("loading");
