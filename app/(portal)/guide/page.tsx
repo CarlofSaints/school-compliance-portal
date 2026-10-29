@@ -53,8 +53,9 @@ export default function GuidePage() {
     }
     // The sandbox (no allow-same-origin) gives the frame an opaque origin, and
     // Chrome will not let it navigate its own blob: URL, so "#ch07" did nothing.
-    // Scroll to the target instead; uploaded guides with "#..." links get it too.
-    const jump = `<script>document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;var el=document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));if(el){e.preventDefault();el.scrollIntoView({block:"start"});}});</script>`;
+    // Scroll the frame to the target instead (scrollIntoView would also nudge the
+    // portal page around it); uploaded guides with "#..." links get it too.
+    const jump = `<script>document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;var el=document.getElementById(decodeURIComponent(a.getAttribute("href").slice(1)));if(el){e.preventDefault();window.scrollTo(0,el.getBoundingClientRect().top+window.scrollY);}});</script>`;
     const doc = `<!doctype html><html lang="${locale}" data-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="margin:0">${html}${jump}</body></html>`;
     const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
     setDocUrl(url);
