@@ -454,7 +454,7 @@ function BookingDetail({ booking, room, canBook, onEdit, onDone, t }: { booking:
             <button type="button" disabled={busy} onClick={() => cancel("one")} className={`${btnGhost} text-risk-high`}>{t("Cancel booking")}</button>
           </>
         )}
-        {!booking.isMine && canBook &&
+        {!booking.isMine && !booking.isGuest && canBook &&
           (booking.iAsked ? (
             <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">{t("You've asked for this room")}</span>
           ) : (

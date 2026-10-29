@@ -23,7 +23,7 @@ import {
 // time at once and waits for a room manager to approve it.
 
 type Taken = { date: string; startMinute: number; endMinute: number };
-type RoomInfo = { id: string; name: string; capacity: number; notes: string };
+type RoomInfo = { id: string; name: string; capacity: number };
 
 const FIRST = 7 * 60;
 const LAST = 22 * 60;
@@ -56,15 +56,18 @@ export default function PublicBookingPage({ params }: { params: Promise<{ roomId
 
   const load = useCallback(async () => {
     setTaken(null);
+    setError("");
     const res = await fetch(`/api/public/rooms/${encodeURIComponent(roomId)}?week=${monday}`, { cache: "no-store" });
-    if (!res.ok) return setMissing(true);
+    // Only "no such room" ends the page; a busy server or a blip just retries on the next click.
+    if (res.status === 404) return setMissing(true);
+    if (!res.ok) return setError(t("Could not reach the server. Check your connection and try again."));
     const data = await res.json();
     setRoom(data.room);
     setTaken(data.taken);
-  }, [roomId, monday]);
+  }, [roomId, monday, t]);
   useEffect(() => {
-    load().catch(() => setMissing(true));
-  }, [load]);
+    load().catch(() => setError(t("Could not reach the server. Check your connection and try again.")));
+  }, [load, t]);
 
   const today = sastToday();
   const nowMin = sastNowMinute();
@@ -127,7 +130,6 @@ export default function PublicBookingPage({ params }: { params: Promise<{ roomId
       {room && (
         <p className="mt-1 text-sm text-gray-500">
           {t("seats {n}", { n: room.capacity })}
-          {room.notes ? ` · ${room.notes}` : ""}
         </p>
       )}
       <p className="mt-3 text-sm text-gray-600">

@@ -1684,15 +1684,6 @@ export function sendRoomRequestDeclinedEmail(
 
 const GUEST_LINK = (site: string, roomId: string) => `${site}/book/${roomId}`;
 
-export function sendGuestBookingReceivedEmail(to: string, name: string, roomId: string, f: RoomBookingEmailFacts): Promise<boolean> {
-  return sendBookingMail(to, `Booking request received: ${f.roomName}, ${f.dateLabel}`, "Request received", (P, site) => `
-    <p style="color:#333;">Dear ${esc(name)},</p>
-    <p style="color:#333;">Thank you. The time below is held for you while the school looks at your request. You will get another email once it is approved or declined.</p>
-    ${bookingFactsBlock(f)}
-    ${bookingButton(P, GUEST_LINK(site, roomId), "View the room calendar")}
-  `, { kind: "booking.guest_received" });
-}
-
 export function sendGuestBookingToApproveEmail(to: string, managerName: string, guest: { name: string; organisation: string; email: string; phone: string }, f: RoomBookingEmailFacts): Promise<boolean> {
   return sendBookingMail(to, `Approve a booking: ${f.roomName}, ${f.dateLabel}`, "A booking needs your approval", (P, site) => `
     <p style="color:#333;">Dear ${esc(managerName)},</p>

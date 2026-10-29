@@ -12,7 +12,6 @@ import {
   sendRoomRequestWithdrawnEmail,
   sendGuestBookingApprovedEmail,
   sendGuestBookingDeclinedEmail,
-  sendGuestBookingReceivedEmail,
   sendGuestBookingToApproveEmail,
   type RoomBookingEmailFacts,
 } from "./email";
@@ -24,6 +23,7 @@ import {
   settleStaleMoves,
   lapseStartedRequests,
   finishReminder,
+  displayName,
   holderLabel,
   holders,
   pendingWithdrawals,
@@ -365,19 +365,19 @@ async function roomManagers(): Promise<{ name: string; email: string }[]> {
   const [users, roles] = await Promise.all([getUsers(), getRoles()]);
   return users
     .filter((u) => u.email && resolveRolePermissions(u.role, roles.find((r) => r.id === u.role)).includes("manage_rooms"))
-    .map((u) => ({ name: `${u.name} ${u.surname}`.trim() || u.email, email: u.email }));
+    .filter((u, i, all) => all.findIndex((o) => same(o.email, u.email)) === i)
+    .map((u) => ({ name: displayName(u), email: u.email }));
 }
 
-/** The guest hears it is held; every room manager is asked to approve it.
- *  Resolves to how many room managers were reached. */
+/** Every room manager is asked to approve it. The guest is NOT emailed yet:
+ *  their address is unchecked and the title is theirs, so an automatic reply
+ *  would let anyone send the school's email to anyone. They hear once a person
+ *  has approved or declined. Resolves to how many managers were reached. */
 export async function notifyGuestBooked(b: RoomBooking, room: Room, mail: MailQueue): Promise<number> {
   const g = b.guest!;
   const f = facts(b, room);
   const managers = await roomManagers();
-  const [, ...sent] = await Promise.all([
-    mail.add(() => sendGuestBookingReceivedEmail(g.email, g.name, room.id, f)),
-    ...managers.map((m) => mail.add(() => sendGuestBookingToApproveEmail(m.email, m.name, g, f))),
-  ]);
+  const sent = await Promise.all(managers.map((m) => mail.add(() => sendGuestBookingToApproveEmail(m.email, m.name, g, f))));
   return sent.filter(Boolean).length;
 }
 

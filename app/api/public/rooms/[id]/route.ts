@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   if (!room || !room.active) return NextResponse.json({ error: "That room isn't available" }, { status: 404 });
   const monday = weekStart(week);
   return NextResponse.json(
-    { room: { id: room.id, name: room.name, capacity: room.capacity, notes: room.notes }, taken: await takenSlots(room.id, monday, addDays(monday, 6)) },
+    { room: { id: room.id, name: room.name, capacity: room.capacity }, taken: await takenSlots(room.id, monday, addDays(monday, 6)) },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

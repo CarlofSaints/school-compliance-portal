@@ -246,6 +246,7 @@ export function bookingView(b: RoomBooking, actor: Actor) {
     // Who it is for is the booker's call (or a room manager's), not the bookee's.
     canChangeHolder: b.bookedById === actor.id || canManageRooms(actor),
     pendingApproval: !!b.pendingApproval,
+    isGuest: !!b.guest,
     // A guest's contact details are for the people who approve, nobody else.
     guest: canManageRooms(actor) ? b.guest ?? null : null,
   };
@@ -1189,6 +1190,8 @@ export async function requestRoom(
   const booking = await findBooking(roomId, date, id);
   if (!booking || booking.status !== "confirmed") return fail(404, "That booking is no longer live");
   if (isHolder(booking, actor.id)) return fail(400, "You already have this room");
+  // A guest cannot sign in to answer a request: ask a room manager instead.
+  if (booking.guest) return fail(400, "This room is booked by an outside group. Ask a room manager.");
   // Nobody can hand over a meeting that has already started.
   if (isPast(booking.date, booking.startMinute, nowAt)) return fail(400, STARTED);
   const room = await getRoom(roomId);
@@ -1611,6 +1614,31 @@ export async function takenSlots(roomId: string, from: string, to: string): Prom
   return (await bookingsBetween(roomId, from, to)).map((b) => ({ date: b.date, startMinute: b.startMinute, endMinute: b.endMinute }));
 }
 
+/** Decline cancels it in ONE atomic write that still requires it to be
+ *  pending, so a decline racing an approve can never cancel the approved one. */
+export async function declineGuestBooking(actor: Actor, roomId: string, date: string, id: string): Promise<Outcome<{ booking: RoomBooking; withdrawn: Withdrawal[] }>> {
+  if (!canManageRooms(actor)) return fail(403, "Only room managers can decline a booking");
+  if (!isId(roomId) || !isId(id) || !isDate(date)) return fail(404, "That booking no longer exists");
+  let before: RoomBooking | null = null;
+  let after: RoomBooking | null = null;
+  await updateJson<RoomBooking[]>(fileFor(roomId, monthOf(date)), [], (list) => {
+    const i = list.findIndex((b) => b.id === id && b.status === "confirmed" && b.pendingApproval);
+    if (i < 0) return NO_CHANGE;
+    before = list[i];
+    const at = new Date().toISOString();
+    after = touch(list[i], {
+      status: "cancelled",
+      pendingApproval: false,
+      cancelledAt: at,
+      cancelledByName: actor.name,
+      requests: list[i].requests.map((r) => (r.status === "pending" ? { ...r, status: "withdrawn" as const, respondedAt: at } : r)),
+    });
+    return list.map((b, j) => (j === i ? after! : b));
+  });
+  if (!before || !after) return fail(404, "That booking is no longer waiting for approval");
+  return { ok: true, value: { booking: after, withdrawn: pendingWithdrawals(before, "cancelled") } };
+}
+
 /** Approve clears the hold; the caller emails the guest. */
 export async function approveGuestBooking(actor: Actor, roomId: string, date: string, id: string): Promise<Outcome<RoomBooking>> {
   if (!canManageRooms(actor)) return fail(403, "Only room managers can approve a booking");
@@ -1626,6 +1654,8 @@ export async function approveGuestBooking(actor: Actor, roomId: string, date: st
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const GUEST_MAX_MINUTES = 12 * 60;
+const GUEST_MAX_DAYS_AHEAD = 365;
 
 /** A booking from the public link: one date, no repeat, nobody else on it. */
 export function parseGuestBooking(body: unknown): Parsed<{ input: BookingInput; guest: GuestDetails }> {
@@ -1645,6 +1675,9 @@ export function parseGuestBooking(body: unknown): Parsed<{ input: BookingInput; 
     guest[k] = v;
   }
   if (!EMAIL.test(guest.email)) return { ok: false, error: "Enter a valid email address" };
+  // A held slot costs the school a manager's time: keep it to one sitting, within a year.
+  if (booking.value.endMinute - booking.value.startMinute > GUEST_MAX_MINUTES) return { ok: false, error: "A booking can be at most 12 hours. Ask the school for longer." };
+  if (booking.value.date > addDays(sastToday(), GUEST_MAX_DAYS_AHEAD)) return { ok: false, error: "You can book up to a year ahead." };
   // POPIA: we keep their contact details, so they must agree to it.
   if (b.consent !== true) return { ok: false, error: "Tick the box to agree to how we use your details" };
   return { ok: true, value: { input: booking.value, guest } };
