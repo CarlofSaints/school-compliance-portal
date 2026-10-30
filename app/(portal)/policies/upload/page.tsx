@@ -129,6 +129,9 @@ export default function UploadPolicyPage() {
               value={file}
               label={t("Upload policy document (PDF, DOCX, TXT)")}
             />
+            <p className="text-xs text-gray-500 mt-2">
+              {t("Only have a paper copy? Scan it to PDF and upload it here. The compliance check reads scans, and Convert to Word on the policy page turns it into an editable Word document.")}
+            </p>
           </div>
           <div className="flex gap-3 pt-2">
             <button

@@ -11,6 +11,7 @@ import RiskBadge from "@/components/RiskBadge";
 import FileUpload from "@/components/FileUpload";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
+import { downloadWithAuth } from "@/lib/download";
 
 interface PolicyDetail {
   policy: {
@@ -53,6 +54,7 @@ export default function PolicyDetailPage() {
   const [data, setData] = useState<PolicyDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [newVersionFile, setNewVersionFile] = useState<File | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -145,6 +147,19 @@ export default function PolicyDetailPage() {
     setRemovingCheck(null);
   };
 
+  // A scanned (flat) PDF read by AI and saved back as a Word version.
+  const convertToWord = async () => {
+    setConverting(true);
+    const res = await downloadWithAuth(`/api/policies/${policyId}/word`, `${data?.policy.name || "policy"}.docx`, { method: "POST" });
+    setToast(
+      res.ok
+        ? { message: t("Converted to Word and saved as a new version"), type: "success" }
+        : { message: res.error || t("The conversion failed. Please try again."), type: "error" }
+    );
+    if (res.ok) fetchData();
+    setConverting(false);
+  };
+
   const uploadVersion = async () => {
     if (!newVersionFile) return;
     setUploading(true);
@@ -227,6 +242,17 @@ export default function PolicyDetailPage() {
               </button>
             </>
           )}
+          {session?.permissions.includes("upload_policies") &&
+            versions.find((v) => v.version === policy.currentVersion)?.ext.toLowerCase() === "pdf" && (
+              <button
+                onClick={convertToWord}
+                disabled={converting}
+                title={t("For a scanned paper policy: AI reads every page and saves an editable Word copy as the next version. The scan stays in the version history. A long document can take a few minutes.")}
+                className="border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {converting ? t("Converting... (this can take a few minutes)") : t("Convert to Word")}
+              </button>
+            )}
           {session?.permissions.includes("check_compliance") && (
             <button
               onClick={runCheck}

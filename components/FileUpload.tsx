@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { useT } from "@/components/I18nProvider";
 
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
 interface FileUploadProps {
   accept?: string;
   label?: string;
@@ -19,12 +21,30 @@ export default function FileUpload({
   const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [tooBig, setTooBig] = useState("");
+
+  // Uploads go through a Vercel function, which refuses a request body over
+  // 4.5 MB with a bare error. Scans are the files that hit it, so say why here.
+  // shortcut: hard 4 MB cap; upgrade to direct-to-Blob client uploads if schools need bigger scans.
+  const pick = (file: File) => {
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setTooBig(
+        t("{name} is {size} MB. Files must be under 4 MB. For a scan, scan in black and white at 150 to 200 dpi, or split it into parts.", {
+          name: file.name,
+          size: (file.size / 1024 / 1024).toFixed(1),
+        })
+      );
+      return;
+    }
+    setTooBig("");
+    onChange(file);
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) onChange(file);
+    if (file) pick(file);
   };
 
   return (
@@ -48,7 +68,7 @@ export default function FileUpload({
         accept={accept}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) onChange(file);
+          if (file) pick(file);
         }}
         className="hidden"
       />
@@ -75,6 +95,7 @@ export default function FileUpload({
           </p>
         </>
       )}
+      {tooBig && <p className="text-xs text-red-600 mt-2">{tooBig}</p>}
     </div>
   );
 }
