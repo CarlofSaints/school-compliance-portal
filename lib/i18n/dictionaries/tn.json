@@ -1984,5 +1984,10 @@
   "Add all courses": "Oketsa dikhoso tsotlhe",
   "{lessons} lessons, {questions} questions": "Dithuto di le {lessons}, dipotso di le {questions}",
   "+ Add to our Campus": "+ Oketsa mo Campus ya rona",
-  "Passed": "O fetile"
+  "Passed": "O fetile",
+  "Why is he called Jono?": "Ke eng fa a bidiwa Jono?",
+  "Jono is named in honour of Professor Jonathan Jansen, one of South Africa's best-known voices on education. He has been a school teacher, a dean of education, the Vice-Chancellor of the University of the Free State and a Distinguished Professor at Stellenbosch University, and has written widely about schools, leadership and change.": "Jono o reeleditswe go tlotla Moporofesa Jonathan Jansen, mongwe wa mantswe a a itsegeng thata mo thutong mo Aforika Borwa. O kile a nna morutabana wa sekolo, tine ya thuto, Motlatsamokhanselara wa Yunibesiti ya Free State le Moporofesa yo o Tlhomologileng kwa Yunibesiting ya Stellenbosch, mme o kwadile thata ka dikolo, boeteledipele le phetogo.",
+  "Our thinking was simple: if you are going to ask anyone about running a school, ask someone like him. So we named our assistant after him.": "Kakanyo ya rona e ne e le bonolo: fa o tla botsa mongwe ka go tsamaisa sekolo, botsa motho yo o tshwanang le ene. Ka jalo re reeletse mothusi wa rona ka leina la gagwe.",
+  "Jono is an AI assistant, not Professor Jansen, and is not connected to or endorsed by him. Jono can be wrong, so check before acting.": "Jono ke mothusi wa AI, ga se Moporofesa Jansen, mme ga a golagane le ene kgotsa a tshegediwa ke ene. Jono a ka nna phoso, ka jalo tlhola pele o tsaya kgato.",
+  "Back to the chat": "Boela kwa puisanong"
 }

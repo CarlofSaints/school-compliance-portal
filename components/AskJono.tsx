@@ -15,6 +15,7 @@ interface Turn {
 export default function AskJono() {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [about, setAbout] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -77,7 +78,17 @@ export default function AskJono() {
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div>
-          <p className="font-semibold text-dark">{t("Ask Jono")}</p>
+          <p className="font-semibold text-dark flex items-center gap-2">
+            {t("Ask Jono")}
+            <button
+              onClick={() => setAbout(!about)}
+              aria-label={t("Why is he called Jono?")}
+              title={t("Why is he called Jono?")}
+              className={`w-5 h-5 rounded-full border text-[11px] font-bold leading-none flex items-center justify-center ${about ? "bg-primary text-white border-primary" : "border-gray-300 text-gray-500 hover:border-primary hover:text-primary"}`}
+            >
+              i
+            </button>
+          </p>
           <p className="text-xs text-gray-400">{t("About your minutes, actions and projects, or school law")}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -92,7 +103,22 @@ export default function AskJono() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      {about && (
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 text-sm text-gray-700">
+          <p className="text-base font-semibold text-dark">🎓 {t("Why is he called Jono?")}</p>
+          <p>
+            {t("Jono is named in honour of Professor Jonathan Jansen, one of South Africa's best-known voices on education. He has been a school teacher, a dean of education, the Vice-Chancellor of the University of the Free State and a Distinguished Professor at Stellenbosch University, and has written widely about schools, leadership and change.")}
+          </p>
+          <p>{t("Our thinking was simple: if you are going to ask anyone about running a school, ask someone like him. So we named our assistant after him.")}</p>
+          <p className="text-xs text-gray-400">
+            {t("Jono is an AI assistant, not Professor Jansen, and is not connected to or endorsed by him. Jono can be wrong, so check before acting.")}
+          </p>
+          <button onClick={() => setAbout(false)} className="text-sm font-medium text-primary">
+            &larr; {t("Back to the chat")}
+          </button>
+        </div>
+      )}
+      <div className={`flex-1 overflow-y-auto px-4 py-3 space-y-3 ${about ? "hidden" : ""}`}>
         {turns.length === 0 && (
           <div className="space-y-2">
             <p className="text-sm text-gray-600">{t("Hi, I'm Jono. Ask me anything about your school's meetings, actions and projects, or about the rules schools must follow. For example:")}</p>
