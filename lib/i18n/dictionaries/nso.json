@@ -2135,7 +2135,6 @@
   "Included in your subscription, no credits": "Go akareditšwe peeletšong ya gago, ga go dikhrediti",
   "Compliance checks on the Compliance, Policies and Documents pages": "Ditekolo tša go obamela matlakaleng a Go obamela, Dipholisi le Ditokumente",
   "Convert a scanned PDF policy to Word": "Fetoša pholisi ya PDF ye e sekenilwego go Word",
-  "Campus courses, and building a course with AI": "Dithuto tša Campus, le go aga thuto ka AI",
   "Switching the portal's own screens to another language": "Go fetolela dikrini tša phothale polelong ye nngwe",
   "If we ever start charging credits for one of these, this page changes first and your school's administrators are told by email before it starts.": "Ge re ka thoma go lefiša dikhrediti go ye nngwe ya tše, letlakala le le fetoga pele gomme balaodi ba sekolo sa gago ba botšwa ka imeile pele e thoma.",
   "Buying credits": "Go reka dikhrediti",
@@ -2158,5 +2157,7 @@
   "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Se se ngwadilwe ke motho sekolong sa gago, ka gona se ka Seisemane. Go se fetolela go šomiša dikhrediti tša sekolo ({cost}); ka morago ga moo bohle ba se bala ka polelo ye mahala.",
   "Translating... this can take a minute": "E a fetolela... se se ka tšea motsotso",
   "Translate ({cost})": "Fetolela ({cost})",
-  "Ask someone who may spend the school's credits to translate it.": "Kgopela motho yo a dumeletšwego go šomiša dikhrediti tša sekolo gore a se fetolele."
+  "Ask someone who may spend the school's credits to translate it.": "Kgopela motho yo a dumeletšwego go šomiša dikhrediti tša sekolo gore a se fetolele.",
+  "Translating a Campus lesson or test written by someone at your school": "Go fetolela thuto goba teko ya Campus yeo e ngwadilwego ke motho sekolong sa gago",
+  "Campus courses from the library or built with AI, in every language": "Dithuto tša Campus go tšwa bokgobapukung goba tšeo di agilwego ka AI, ka dipolelo ka moka"
 }

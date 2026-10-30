@@ -2135,7 +2135,6 @@
   "Included in your subscription, no credits": "Go akareditswe mo peeletsong ya gago, ga go na dikhrediti",
   "Compliance checks on the Compliance, Policies and Documents pages": "Ditlhatlhobo tsa go obamela mo ditsebeng tsa Go obamela, Dipholisi le Ditokomane",
   "Convert a scanned PDF policy to Word": "Fetola pholisi ya PDF e e sekenilweng go nna Word",
-  "Campus courses, and building a course with AI": "Dithuto tsa Campus, le go aga thuto ka AI",
   "Switching the portal's own screens to another language": "Go fetolela dikerini tsa phothale go puo e nngwe",
   "If we ever start charging credits for one of these, this page changes first and your school's administrators are told by email before it starts.": "Fa re ka simolola go duedisa dikhrediti mo go nngwe ya tse, tsebe e e fetoga pele mme batsamaisi ba sekolo sa gago ba bolelelwa ka imeile pele e simolola.",
   "Buying credits": "Go reka dikhrediti",
@@ -2158,5 +2157,7 @@
   "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Se se kwadilwe ke mongwe kwa sekolong sa gago, ka jalo se ka Seesimane. Go se ranola go dirisa dikhrediti tsa sekolo ({cost}); morago ga moo botlhe ba se bala ka puo e mahala.",
   "Translating... this can take a minute": "E a ranola... se se ka tsaya motsotso",
   "Translate ({cost})": "Ranola ({cost})",
-  "Ask someone who may spend the school's credits to translate it.": "Kopa mongwe yo o letleletsweng go dirisa dikhrediti tsa sekolo gore a se ranole."
+  "Ask someone who may spend the school's credits to translate it.": "Kopa mongwe yo o letleletsweng go dirisa dikhrediti tsa sekolo gore a se ranole.",
+  "Translating a Campus lesson or test written by someone at your school": "Go ranola thuto kgotsa teko ya Campus e e kwadilweng ke mongwe kwa sekolong sa gago",
+  "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus go tswa mo bobolokelong kgotsa tse di agilweng ka AI, ka dipuo tsotlhe"
 }
