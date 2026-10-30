@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/components/I18nProvider";
 import { CopyLinkButton, DraftPill } from "@/components/trainingUi";
+import TranslationBanner, { type CampusTranslation } from "@/components/campus/TranslationBanner";
 
 interface Paper {
   id: string;
@@ -17,6 +18,7 @@ interface Paper {
   timeLimitMinutes?: number;
   /** When this timed sitting ends (ISO), or null. */
   deadline: string | null;
+  translation?: CampusTranslation;
 }
 interface Result {
   scorePct: number;
@@ -145,6 +147,8 @@ export default function TestView(props: {
           {paper.status !== "published" && <DraftPill />}
         </h1>
         {paper.description && <p className="text-gray-500 text-sm mt-1">{paper.description}</p>}
+        {/* Answers are kept by question id, so a paper translated mid-sitting keeps what was already ticked. */}
+        <TranslationBanner kind="test" id={paper.id} translation={paper.translation} guest={api.startsWith("/api/share")} onTranslated={load} />
         <p className="text-xs text-gray-400 mt-2">
           {t("{count} questions", { count: paper.questions.length })} &middot; {t("Pass mark {pct}%", { pct: paper.passMark })}
           {left !== null && <> &middot; {t("{left} of {max} attempts left", { left: Math.max(0, left), max: paper.maxAttempts })}</>}

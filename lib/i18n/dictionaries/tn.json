@@ -2150,5 +2150,13 @@
   "If the AI fails or returns nothing usable, the credits go straight back to your school.": "Fa AI e palelwa kgotsa e sa busetse sepe se se dirisegang, dikhrediti di boela kwa sekolong sa gago ka bonako.",
   "When your school runs out, the paid feature simply does not run. There is no overdraft and no bill afterwards.": "Fa sekolo sa gago se felelwa ke dikhrediti, karolo e e duelwang ga e dire fela. Ga go na sekoloto morago.",
   "Your balance is shown on Admin > Translation Credits and on the Compile a policy page.": "Palo ya gago e e setseng e bontshiwa mo Admin > Translation Credits le mo tsebeng ya Rulaganya pholisi.",
-  "A charge you think is wrong? Email {email} and we will look into it.": "Tuediso e o akanyang gore e phoso? Romela imeile go {email} mme re tla e sekaseka."
+  "A charge you think is wrong? Email {email} and we will look into it.": "Tuediso e o akanyang gore e phoso? Romela imeile go {email} mme re tla e sekaseka.",
+  "This is being translated into your language. It shows in English this once; open it again in a minute or two.": "Se se ranolwa go puo ya gago. Se bontshiwa ka Seesimane lekgetlo le fela; se bule gape morago ga motsotso kgotsa e mebedi.",
+  "Translate this for 1 credit?": "Ranola se ka khrediti e le 1?",
+  "Translate this for {n} credits?": "Ranola se ka dikhrediti di le {n}?",
+  "The content changed since it was priced. Please try again.": "Diteng di fetogile fa e sale di tlhwaelwa tlhwatlhwa. Tsweetswee leka gape.",
+  "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Se se kwadilwe ke mongwe kwa sekolong sa gago, ka jalo se ka Seesimane. Go se ranola go dirisa dikhrediti tsa sekolo ({cost}); morago ga moo botlhe ba se bala ka puo e mahala.",
+  "Translating... this can take a minute": "E a ranola... se se ka tsaya motsotso",
+  "Translate ({cost})": "Ranola ({cost})",
+  "Ask someone who may spend the school's credits to translate it.": "Kopa mongwe yo o letleletsweng go dirisa dikhrediti tsa sekolo gore a se ranole."
 }

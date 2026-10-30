@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useT } from "@/components/I18nProvider";
 import LessonText from "@/components/LessonText";
 import { CopyLinkButton, DraftPill } from "@/components/trainingUi";
+import TranslationBanner, { type CampusTranslation } from "@/components/campus/TranslationBanner";
 
 interface MaterialView {
   id: string;
@@ -16,6 +17,7 @@ interface MaterialView {
   icon?: string;
   file?: { filename: string; size: number };
   minutes: number;
+  translation?: CampusTranslation;
 }
 
 /**
@@ -41,6 +43,7 @@ export default function LessonView(props: {
   const { id, api, fetcher, ready, onLoaded } = props;
   const [m, setM] = useState<MaterialView | null>(null);
   const [error, setError] = useState("");
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     if (!ready) return;
@@ -53,7 +56,7 @@ export default function LessonView(props: {
       } else setError(body.error || t("This material could not be opened."));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, id, api]);
+  }, [ready, id, api, version]);
 
   if (!m && !error) return <div className="p-6">{t("Loading...")}</div>;
 
@@ -70,6 +73,7 @@ export default function LessonView(props: {
             {m.status !== "published" && <DraftPill />}
           </h1>
           {m.description && <p className="text-gray-500 text-sm mt-1">{m.description}</p>}
+          <TranslationBanner kind="material" id={m.id} translation={m.translation} guest={api.startsWith("/api/share")} onTranslated={() => setVersion((v) => v + 1)} />
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             {m.body && <span className="text-xs text-gray-500 mr-2">📖 {t("About {n} minutes to read", { n: m.minutes })}</span>}
             {props.copyPath && <CopyLinkButton path={props.copyPath} />}

@@ -19,6 +19,9 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // Opening material counts as having read it (the first time is recorded), the
 // same rule Campus uses, so a module's next step unlocks.
+// A free translation still missing runs after the response, inside this limit.
+export const maxDuration = 300;
+
 export async function GET(req: NextRequest, { params }: Ctx) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;

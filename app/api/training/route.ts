@@ -4,10 +4,12 @@ import { getMaterials, getModules, getProgress, getTests } from "@/lib/trainingD
 import { attemptsAt, hasPassed, isLocked, itemDone, liveKeys, readingMinutes } from "@/lib/training";
 import { canManageTraining } from "@/lib/trainingAccess";
 import { ensureLibraryDefaults } from "@/lib/campusLibrary";
+import { inReaderLanguageLists } from "@/lib/campusTranslation";
 
 export const dynamic = "force-dynamic";
 // The first opening adds the course library (a few dozen writes).
-export const maxDuration = 120;
+// The background translation of free content runs after the response, inside this limit.
+export const maxDuration = 300;
 
 // The catalogue for whoever is asking: published training for everybody,
 // drafts too for the people who build it. Each piece says whether THIS person
@@ -19,12 +21,12 @@ export async function GET(req: NextRequest) {
   // Library courses arrive by default the first time a school opens Campus.
   await ensureLibraryDefaults().catch((err) => console.error("[campus] library defaults failed:", err));
 
-  const [materials, tests, modules, progress] = await Promise.all([
-    getMaterials(),
-    getTests(),
-    getModules(),
+  const [english, progress] = await Promise.all([
+    Promise.all([getMaterials(), getTests(), getModules()]),
     getProgress(session.id),
   ]);
+  // In the reader's language (lib/campusTranslation.ts); free AI content still missing is translated in the background.
+  const { materials, tests, modules } = await inReaderLanguageLists({ materials: english[0], tests: english[1], modules: english[2] });
   const live = liveKeys(materials, tests);
   const visible = <T extends { status: string }>(list: T[]) => (manager ? list : list.filter((x) => x.status === "published"));
 
@@ -35,7 +37,8 @@ export async function GET(req: NextRequest) {
     status: m.status,
     source: m.source,
     kind: m.kind,
-    minutes: readingMinutes(m),
+    // From the English, as on the lesson page, so the two never disagree.
+    minutes: readingMinutes(english[0].find((x) => x.id === m.id) ?? m),
     updatedAt: m.updatedAt,
     done: Boolean(progress.opened[m.id]),
     locked: !manager && isLocked(progress, modules, { kind: "material", id: m.id }, live),
@@ -60,7 +63,7 @@ export async function GET(req: NextRequest) {
     };
   });
   const titles = new Map<string, { title: string; status: string; icon?: string; minutes?: number }>([
-    ...materials.map((m) => [`material:${m.id}`, { ...m, minutes: readingMinutes(m) }] as const),
+    ...materials.map((m) => [`material:${m.id}`, { ...m, minutes: readingMinutes(english[0].find((x) => x.id === m.id) ?? m) }] as const),
     ...tests.map((t) => [`test:${t.id}`, { ...t, minutes: t.timeLimitMinutes || undefined }] as const),
   ]);
   const moduleRows = visible(modules).map((m) => {
