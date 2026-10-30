@@ -2150,5 +2150,13 @@
   "If the AI fails or returns nothing usable, the credits go straight back to your school.": "Ge AI e palelwa goba e sa buše selo se se šomišegago, dikhrediti di boela thwi sekolong sa gago.",
   "When your school runs out, the paid feature simply does not run. There is no overdraft and no bill afterwards.": "Ge sekolo sa gago se fetelwa ke dikhrediti, karolo ye e lefelwago ga e šome fela. Ga go na sekoloto ka morago.",
   "Your balance is shown on Admin > Translation Credits and on the Compile a policy page.": "Tšhelete ya gago ye e šetšego e bontšhwa go Admin > Translation Credits le letlakaleng la Hlama pholisi.",
-  "A charge you think is wrong? Email {email} and we will look into it.": "Tefišo yeo o naganago gore e fošagetše? Romela imeile go {email} gomme re tla e lebelela."
+  "A charge you think is wrong? Email {email} and we will look into it.": "Tefišo yeo o naganago gore e fošagetše? Romela imeile go {email} gomme re tla e lebelela.",
+  "This is being translated into your language. It shows in English this once; open it again in a minute or two.": "Se se fetolelwa polelong ya gago. Se bontšhwa ka Seisemane lekga le fela; se bule gape ka morago ga motsotso goba e mebedi.",
+  "Translate this for 1 credit?": "Fetolela se ka khrediti e 1?",
+  "Translate this for {n} credits?": "Fetolela se ka dikhrediti tše {n}?",
+  "The content changed since it was priced. Please try again.": "Diteng di fetogile go tloga ge di bewa theko. Hle leka gape.",
+  "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Se se ngwadilwe ke motho sekolong sa gago, ka gona se ka Seisemane. Go se fetolela go šomiša dikhrediti tša sekolo ({cost}); ka morago ga moo bohle ba se bala ka polelo ye mahala.",
+  "Translating... this can take a minute": "E a fetolela... se se ka tšea motsotso",
+  "Translate ({cost})": "Fetolela ({cost})",
+  "Ask someone who may spend the school's credits to translate it.": "Kgopela motho yo a dumeletšwego go šomiša dikhrediti tša sekolo gore a se fetolele."
 }

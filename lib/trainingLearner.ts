@@ -13,6 +13,15 @@ import {
   type TrainingStatus,
 } from "./training";
 import { getMaterial, getMaterials, getModules, getProgress, getTest, getTests, markOpened, readMaterialFile, recordAttempt, startSitting } from "./trainingData";
+import { getLocale } from "./i18n/server";
+import type { Locale } from "./i18n/locales";
+
+// English outside a request (scripts, the daily job), where there is no language cookie to read.
+const readerLocale = (): Promise<Locale> => getLocale().catch(() => "en" as const);
+import { afterResponse } from "./activityActor";
+import { creditsFor, maySpendCredits, textPages } from "./contentTranslation";
+import { applyUnit, isFree, storedFor, translateMissingFree, translationsFor, unitOf, type CampusKind, type TranslationState } from "./campusTranslation";
+import type { Material, Test } from "./training";
 
 // ---------------------------------------------------------------------------
 // What a LEARNER does on Campus (open a lesson, sit a paper, hand it in), in
@@ -53,13 +62,35 @@ async function gate(learner: Learner, item: (ModuleItem & { status: TrainingStat
   return isLocked(progress, modules, item, liveKeys(materials, tests)) ? fail(403, "Finish the earlier steps of this module first.") : null;
 }
 
+/**
+ * The item in the reader's language (lib/campusTranslation.ts): the stored
+ * translation if there is one; otherwise free AI content is translated in the
+ * background and shows in English this once, and manual content says what it
+ * would cost and whether this reader may spend the school's credits on it.
+ */
+async function inReaderLanguage<T extends Material | Test>(learner: Learner, kind: CampusKind, item: T): Promise<{ item: T; translation: TranslationState & { canSpend?: boolean } }> {
+  const locale = await readerLocale();
+  if (locale === "en") return { item, translation: { state: "english" } };
+  const unit = storedFor(await translationsFor(locale), kind, item);
+  if (unit) return { item: applyUnit(kind, item, unit), translation: { state: "translated" } };
+  if (isFree(kind, item.source)) {
+    await afterResponse(() => translateMissingFree(locale, [{ kind, item }]));
+    return { item, translation: { state: "pending" } };
+  }
+  const canSpend = !learner.progressId.startsWith("guest-") && (await maySpendCredits(learner.progressId));
+  return { item, translation: { state: "paid", credits: creditsFor(textPages(JSON.stringify(unitOf(kind, item)))), canSpend } };
+}
+
 /** A lesson, recorded as read the first time it is opened (unless only being looked at to edit). */
 export async function openMaterial(learner: Learner, id: string, markRead = true) {
   const material = await getMaterial(id);
   const blocked = await gate(learner, material && { kind: "material", id, status: material.status }, await getProgress(learner.progressId));
   if (blocked) return blocked;
   if (markRead) await markOpened(learner.progressId, id);
-  return { ok: true as const, body: { ...material!, minutes: readingMinutes(material!) } };
+  // The editor (markRead false) always gets the English it edits.
+  if (!markRead) return { ok: true as const, body: { ...material!, minutes: readingMinutes(material!) } };
+  const { item, translation } = await inReaderLanguage(learner, "material", material!);
+  return { ok: true as const, body: { ...item, minutes: readingMinutes(material!), translation } };
 }
 
 export async function materialFile(learner: Learner, id: string): Promise<Result<{ bytes: Buffer; filename: string; ext: string }>> {
@@ -96,7 +127,9 @@ export async function openPaper(learner: Learner, id: string) {
     }
   }
   const attempts = attemptsAt(progress, id).map((a) => ({ id: a.id, submittedAt: a.submittedAt, scorePct: a.scorePct, passed: a.passed }));
-  return { ok: true as const, body: { ...paperFor(test), attempts, deadline: deadline ? new Date(deadline).toISOString() : null } };
+  // Translated BEFORE paperFor, so the memo is stripped from the translated paper exactly as from the English.
+  const { item, translation } = await inReaderLanguage(learner, "test", test);
+  return { ok: true as const, body: { ...paperFor(item), attempts, deadline: deadline ? new Date(deadline).toISOString() : null, translation } };
 }
 
 /**
@@ -106,7 +139,11 @@ export async function openPaper(learner: Learner, id: string) {
  * questions were wrong, not the answers.
  */
 export async function handIn(learner: Learner, id: string, responses: Record<string, unknown>) {
-  const test = await getTest(id);
+  const stored = await getTest(id);
+  // Marked and explained in the reader's language when a translation is stored: a typed answer is accepted in either language.
+  const locale = await readerLocale();
+  const unit = stored && locale !== "en" ? storedFor(await translationsFor(locale), "test", stored) : null;
+  const test = stored && unit ? applyUnit("test", stored, unit) : stored;
   const before = await getProgress(learner.progressId);
   const blocked = await gate(learner, test && { kind: "test", id, status: test.status }, before);
   if (blocked || !test) return blocked!;

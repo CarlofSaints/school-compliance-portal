@@ -2150,5 +2150,13 @@
   "If the AI fails or returns nothing usable, the credits go straight back to your school.": "Uma i-AI ihluleka noma ingabuyisi lutho olusebenzisekayo, amakhredithi abuyela ngqo esikoleni sakho.",
   "When your school runs out, the paid feature simply does not run. There is no overdraft and no bill afterwards.": "Uma isikole sakho siphelelwa, isici esikhokhelwayo asisebenzi nje. Akukho okweqile futhi akukho sikweletu kamuva.",
   "Your balance is shown on Admin > Translation Credits and on the Compile a policy page.": "Ibhalansi yakho ikhonjiswa ku-Admin > Translation Credits nasekhasini elithi Hlanganisa inqubomgomo.",
-  "A charge you think is wrong? Email {email} and we will look into it.": "Inkokhiso ocabanga ukuthi ayilungile? Thumela i-imeyili ku-{email} sizoyibheka."
+  "A charge you think is wrong? Email {email} and we will look into it.": "Inkokhiso ocabanga ukuthi ayilungile? Thumela i-imeyili ku-{email} sizoyibheka.",
+  "This is being translated into your language. It shows in English this once; open it again in a minute or two.": "Lokhu kuyahunyushwa ngolimi lwakho. Kuvela ngesiNgisi kulokhu kuphela; kuvule futhi emizuzwini embalwa.",
+  "Translate this for 1 credit?": "Humusha lokhu ngekhredithi eli-1?",
+  "Translate this for {n} credits?": "Humusha lokhu ngamakhredithi angu-{n}?",
+  "The content changed since it was priced. Please try again.": "Okuqukethwe kushintshile kusukela kunikezwa intengo. Sicela uzame futhi.",
+  "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Lokhu kubhalwe ngumuntu esikoleni sakho, ngakho kungesiNgisi. Ukukuhumusha kusebenzisa amakhredithi esikole ({cost}); emva kwalokho wonke umuntu ukufunda ngalolu limi mahhala.",
+  "Translating... this can take a minute": "Kuyahunyushwa... lokhu kungathatha umzuzu",
+  "Translate ({cost})": "Humusha ({cost})",
+  "Ask someone who may spend the school's credits to translate it.": "Cela umuntu ovunyelwe ukusebenzisa amakhredithi esikole ukuthi akuhumushe."
 }

@@ -2150,5 +2150,13 @@
   "If the AI fails or returns nothing usable, the credits go straight back to your school.": "Ukuba i-AI iyasilela okanye ayibuyisi nto isebenzisekayo, iikhredithi zibuyela ngqo kwisikolo sakho.",
   "When your school runs out, the paid feature simply does not run. There is no overdraft and no bill afterwards.": "Xa isikolo sakho siphelelwa, uphawu oluhlawulelwayo alusebenzi nje. Akukho kutsalwa ngaphezulu kwaye akukho tyala emva koko.",
   "Your balance is shown on Admin > Translation Credits and on the Compile a policy page.": "Ibhalansi yakho iboniswa kwi-Admin > Translation Credits nakwiphepha elithi Qulunqa umgaqo-nkqubo.",
-  "A charge you think is wrong? Email {email} and we will look into it.": "Intlawulo ocinga ukuba ayichanekanga? Thumela i-imeyile ku-{email} kwaye siza kuyijonga."
+  "A charge you think is wrong? Email {email} and we will look into it.": "Intlawulo ocinga ukuba ayichanekanga? Thumela i-imeyile ku-{email} kwaye siza kuyijonga.",
+  "This is being translated into your language. It shows in English this once; open it again in a minute or two.": "Oku kuyaguqulelwa kulwimi lwakho. Kuboniswa ngesiNgesi ngeli xesha kuphela; kuvule kwakhona emva komzuzu okanye emibini.",
+  "Translate this for 1 credit?": "Guqulela oku ngekhredithi e-1?",
+  "Translate this for {n} credits?": "Guqulela oku ngeekhredithi ezi-{n}?",
+  "The content changed since it was priced. Please try again.": "Umxholo utshintshile ukusukela unikwa ixabiso. Nceda uzame kwakhona.",
+  "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Oku kubhalwe ngumntu esikolweni sakho, ngoko kusesiNgesini. Ukukuguqulela kusebenzisa iikhredithi zesikolo ({cost}); emva koko wonke umntu ukufunda ngolu lwimi simahla.",
+  "Translating... this can take a minute": "Kuyaguqulelwa... oku kunokuthatha umzuzu",
+  "Translate ({cost})": "Guqulela ({cost})",
+  "Ask someone who may spend the school's credits to translate it.": "Cela umntu ovumelekileyo ukusebenzisa iikhredithi zesikolo ukuba akuguqulele."
 }

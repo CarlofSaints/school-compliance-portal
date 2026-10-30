@@ -2150,5 +2150,13 @@
   "If the AI fails or returns nothing usable, the credits go straight back to your school.": "As die KI misluk of niks bruikbaars teruggee nie, gaan die krediete dadelik terug na u skool.",
   "When your school runs out, the paid feature simply does not run. There is no overdraft and no bill afterwards.": "Wanneer u skool se krediete opraak, loop die betaalde funksie eenvoudig nie. Daar is geen oortrekking en geen rekening agterna nie.",
   "Your balance is shown on Admin > Translation Credits and on the Compile a policy page.": "U saldo word op Admin > Translation Credits en op die Stel 'n beleid op-bladsy gewys.",
-  "A charge you think is wrong? Email {email} and we will look into it.": "'n Heffing wat u dink verkeerd is? E-pos {email} en ons sal daarna kyk."
+  "A charge you think is wrong? Email {email} and we will look into it.": "'n Heffing wat u dink verkeerd is? E-pos {email} en ons sal daarna kyk.",
+  "This is being translated into your language. It shows in English this once; open it again in a minute or two.": "Dit word in u taal vertaal. Dit wys hierdie keer in Engels; maak dit oor 'n minuut of twee weer oop.",
+  "Translate this for 1 credit?": "Vertaal dit vir 1 krediet?",
+  "Translate this for {n} credits?": "Vertaal dit vir {n} krediete?",
+  "The content changed since it was priced. Please try again.": "Die inhoud het verander sedert dit geprys is. Probeer asseblief weer.",
+  "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Dit is deur iemand by u skool geskryf, so dit is in Engels. Om dit te vertaal gebruik die skool se krediete ({cost}); daarna lees almal dit gratis in hierdie taal.",
+  "Translating... this can take a minute": "Vertaal tans... dit kan 'n minuut neem",
+  "Translate ({cost})": "Vertaal ({cost})",
+  "Ask someone who may spend the school's credits to translate it.": "Vra iemand wat die skool se krediete mag spandeer om dit te vertaal."
 }

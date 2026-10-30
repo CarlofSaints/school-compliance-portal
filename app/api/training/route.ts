@@ -4,10 +4,12 @@ import { getMaterials, getModules, getProgress, getTests } from "@/lib/trainingD
 import { attemptsAt, hasPassed, isLocked, itemDone, liveKeys, readingMinutes } from "@/lib/training";
 import { canManageTraining } from "@/lib/trainingAccess";
 import { ensureLibraryDefaults } from "@/lib/campusLibrary";
+import { inReaderLanguageLists } from "@/lib/campusTranslation";
 
 export const dynamic = "force-dynamic";
 // The first opening adds the course library (a few dozen writes).
-export const maxDuration = 120;
+// The background translation of free content runs after the response, inside this limit.
+export const maxDuration = 300;
 
 // The catalogue for whoever is asking: published training for everybody,
 // drafts too for the people who build it. Each piece says whether THIS person
@@ -19,12 +21,12 @@ export async function GET(req: NextRequest) {
   // Library courses arrive by default the first time a school opens Campus.
   await ensureLibraryDefaults().catch((err) => console.error("[campus] library defaults failed:", err));
 
-  const [materials, tests, modules, progress] = await Promise.all([
-    getMaterials(),
-    getTests(),
-    getModules(),
+  const [english, progress] = await Promise.all([
+    Promise.all([getMaterials(), getTests(), getModules()]),
     getProgress(session.id),
   ]);
+  // In the reader's language (lib/campusTranslation.ts); free AI content still missing is translated in the background.
+  const { materials, tests, modules } = await inReaderLanguageLists({ materials: english[0], tests: english[1], modules: english[2] });
   const live = liveKeys(materials, tests);
   const visible = <T extends { status: string }>(list: T[]) => (manager ? list : list.filter((x) => x.status === "published"));
 

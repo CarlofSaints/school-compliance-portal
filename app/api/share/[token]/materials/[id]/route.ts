@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { guestContext } from "@/lib/campusGuestRoute";
 import { openMaterial } from "@/lib/trainingLearner";
 
+// A free translation still missing runs after the response, inside this limit.
+export const maxDuration = 300;
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string; id: string }> }) {
   const { token, id } = await params;
   const ctx = await guestContext(req, token);

@@ -11,6 +11,9 @@ type Ctx = { params: Promise<{ id: string }> };
 
 // ?edit=1 (managers) gives the whole test with its memo, for the editor.
 // Everyone else gets the paper WITHOUT the answers, plus their own attempts.
+// A free translation still missing runs after the response, inside this limit.
+export const maxDuration = 300;
+
 export async function GET(req: NextRequest, { params }: Ctx) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;

@@ -2150,5 +2150,13 @@
   "If the AI fails or returns nothing usable, the credits go straight back to your school.": "Haeba AI e hloleha kapa e sa kgutlise letho le sebetsang, dikhrediti di kgutlela sekolong sa hao hang.",
   "When your school runs out, the paid feature simply does not run. There is no overdraft and no bill afterwards.": "Ha dikhrediti tsa sekolo sa hao di fela, karolo e lefuwang ha e sebetse feela. Ha ho sekoloto kamora moo.",
   "Your balance is shown on Admin > Translation Credits and on the Compile a policy page.": "Palo ya hao e setseng e bontshwa ho Admin > Translation Credits le leqepheng la Hlophisa leano.",
-  "A charge you think is wrong? Email {email} and we will look into it.": "Tefiso eo o nahanang hore e fosahetse? Romela imeile ho {email} mme re tla e sheba."
+  "A charge you think is wrong? Email {email} and we will look into it.": "Tefiso eo o nahanang hore e fosahetse? Romela imeile ho {email} mme re tla e sheba.",
+  "This is being translated into your language. It shows in English this once; open it again in a minute or two.": "Sena se a fetolelwa puong ya hao. Se bontshwa ka Senyesemane lekgetlo lena feela; se bule hape kamora motsotso kapa e mmedi.",
+  "Translate this for 1 credit?": "Fetolela sena ka khrediti e 1?",
+  "Translate this for {n} credits?": "Fetolela sena ka dikhrediti tse {n}?",
+  "The content changed since it was priced. Please try again.": "Dikahare di fetohile ho tloha ha di behelwa theko. Ka kopo leka hape.",
+  "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Sena se ngotswe ke motho sekolong sa hao, ka hona se ka Senyesemane. Ho se fetolela ho sebedisa dikhrediti tsa sekolo ({cost}); kamora moo bohle ba se bala ka puo ena mahala.",
+  "Translating... this can take a minute": "E a fetolela... sena se ka nka motsotso",
+  "Translate ({cost})": "Fetolela ({cost})",
+  "Ask someone who may spend the school's credits to translate it.": "Kopa motho ya dumelletsweng ho sebedisa dikhrediti tsa sekolo hore a se fetolele."
 }

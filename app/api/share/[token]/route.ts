@@ -5,6 +5,9 @@ import { guestCookieValue, guestFromRequest, guestLearner, joinGuest, setGuestCo
 import { getMaterials, getModules, getProgress, getTests } from "@/lib/trainingData";
 import { emptyProgress, isLocked, itemDone, liveKeys, readingMinutes } from "@/lib/training";
 import { resolveBranding } from "@/lib/brandingData";
+import { inReaderLanguageLists } from "@/lib/campusTranslation";
+
+export const maxDuration = 300;
 
 export const dynamic = "force-dynamic";
 const gone = () => NextResponse.json({ error: "This link has expired or been switched off." }, { status: 404 });
@@ -15,13 +18,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const { token } = await params;
   const link = await usableLink(token);
   if (!link) return gone();
-  const [guest, materials, tests, modules, branding] = await Promise.all([
+  const [guest, english, branding] = await Promise.all([
     guestFromRequest(req, token),
-    getMaterials(),
-    getTests(),
-    getModules(),
+    Promise.all([getMaterials(), getTests(), getModules()]),
     resolveBranding(),
   ]);
+  const { materials, tests, modules } = await inReaderLanguageLists({ materials: english[0], tests: english[1], modules: english[2] });
   const progress = guest ? await getProgress((await guestLearner(link, guest)).progressId) : emptyProgress("none");
   const live = liveKeys(materials, tests);
   const describe = (kind: "material" | "test", id: string) => {
