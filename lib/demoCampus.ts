@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { savePeople, type Person } from "./peopleData";
+import { getPeople, savePeople, type Person } from "./peopleData";
 import { createUser, getUserByEmail } from "./userData";
 import { LIBRARY, addLibraryCourse } from "./campusLibrary";
 import { getModules, getTests, saveProgress } from "./trainingData";
@@ -55,7 +55,10 @@ export async function seedDemoCampus(people: Person[]): Promise<{ users: number;
     }
     linked.push({ ...p, userId: user.id });
   }
-  await savePeople(linked);
+  // Only the demo entries get their link; anybody else on the register (a real
+  // person added for a demo) is left exactly as they are.
+  const byId = new Map(linked.map((p) => [p.id, p]));
+  await savePeople((await getPeople()).map((p) => byId.get(p.id) ?? p));
 
   // Modules in library order, each with its lessons and its test.
   const [modules, tests] = await Promise.all([getModules(), getTests()]);
