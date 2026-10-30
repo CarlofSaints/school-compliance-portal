@@ -13,14 +13,10 @@ import {
   type TrainingStatus,
 } from "./training";
 import { getMaterial, getMaterials, getModules, getProgress, getTest, getTests, markOpened, readMaterialFile, recordAttempt, startSitting } from "./trainingData";
-import { getLocale } from "./i18n/server";
-import type { Locale } from "./i18n/locales";
 
-// English outside a request (scripts, the daily job), where there is no language cookie to read.
-const readerLocale = (): Promise<Locale> => getLocale().catch(() => "en" as const);
 import { afterResponse } from "./activityActor";
 import { creditsFor, maySpendCredits, textPages } from "./contentTranslation";
-import { applyUnit, isFree, storedFor, translateMissingFree, translationsFor, unitOf, type CampusKind, type TranslationState } from "./campusTranslation";
+import { applyUnit, isFree, readerLocale, storedFor, translateMissingFree, translationsFor, unitOf, type CampusKind, type TranslationState } from "./campusTranslation";
 import type { Material, Test } from "./training";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +69,10 @@ async function inReaderLanguage<T extends Material | Test>(learner: Learner, kin
   if (locale === "en") return { item, translation: { state: "english" } };
   const unit = storedFor(await translationsFor(locale), kind, item);
   if (unit) return { item: applyUnit(kind, item, unit), translation: { state: "translated" } };
+  // A draft is not translated: every edit would pay for a translation nobody reads until it is published.
+  if (item.status !== "published") return { item, translation: { state: "english" } };
+  // An uploaded document cannot be translated here, so it is not offered for credits.
+  if (kind === "material" && (item as Material).kind === "file" && !isFree(kind, item.source)) return { item, translation: { state: "english" } };
   if (isFree(kind, item.source)) {
     await afterResponse(() => translateMissingFree(locale, [{ kind, item }]));
     return { item, translation: { state: "pending" } };
@@ -139,11 +139,11 @@ export async function openPaper(learner: Learner, id: string) {
  * questions were wrong, not the answers.
  */
 export async function handIn(learner: Learner, id: string, responses: Record<string, unknown>) {
-  const stored = await getTest(id);
-  // Marked and explained in the reader's language when a translation is stored: a typed answer is accepted in either language.
+  const test = await getTest(id);
+  // Marked on the school's own English memo; only the explanations shown afterwards are in the reader's language.
   const locale = await readerLocale();
-  const unit = stored && locale !== "en" ? storedFor(await translationsFor(locale), "test", stored) : null;
-  const test = stored && unit ? applyUnit("test", stored, unit) : stored;
+  const unit = test && locale !== "en" ? storedFor(await translationsFor(locale), "test", test) : null;
+  const shown = test && unit ? applyUnit("test", test, unit) : test;
   const before = await getProgress(learner.progressId);
   const blocked = await gate(learner, test && { kind: "test", id, status: test.status }, before);
   if (blocked || !test) return blocked!;
@@ -166,7 +166,7 @@ export async function handIn(learner: Learner, id: string, responses: Record<str
           isCorrect: mine?.isCorrect ?? false,
           correctOptionIds: reveal ? q.options.filter((o) => o.isCorrect).map((o) => o.id) : [],
           acceptedAnswers: reveal ? q.acceptedAnswers : [],
-          explanation: reveal ? q.explanation : "",
+          explanation: reveal ? shown!.questions.find((x) => x.id === q.id)?.explanation ?? q.explanation : "",
         };
       })
     : null;

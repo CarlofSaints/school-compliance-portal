@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
   // Same visibility as the learner pages: a draft is only there for the people who build training.
   if (!item || (item.status !== "published" && !canManageTraining(session))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (isFree(kind, item.source)) return NextResponse.json({ error: "This is translated for free. Open it again in a minute." }, { status: 409 });
+  if ("kind" in item && item.kind === "file") return NextResponse.json({ error: "An uploaded document cannot be translated here." }, { status: 400 });
   if (storedFor(await translationsFor(locale), kind, item)) return NextResponse.json({ ok: true, already: true });
 
   if (!(await maySpendCredits(session.id))) {
@@ -39,6 +40,8 @@ export async function POST(req: NextRequest) {
       { status: 403 }
     );
   }
+  const quoteLimited = await enforce([[LIMITS.translateQuoteUser, session.id]]);
+  if (quoteLimited) return quoteLimited;
   const unit = unitOf(kind, item);
   const credits = creditsFor(textPages(JSON.stringify(unit)));
   if (body.confirm !== true) return NextResponse.json({ quote: { credits } });

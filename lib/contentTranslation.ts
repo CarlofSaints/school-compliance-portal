@@ -157,6 +157,8 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
 export async function spendCredits(n: number): Promise<boolean> {
   let ok = false;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
+    // Reset on every run: updateJson re-runs this after a lost write race, and only the run that lands counts.
+    ok = false;
     if (c.balance < n) return NO_CHANGE;
     ok = true;
     return { balance: c.balance - n, updatedAt: new Date().toISOString(), rev: randomUUID() };
@@ -270,6 +272,7 @@ const IN_FLIGHT_MS = 15 * 60_000;
 async function claimInFlight(kind: ContentKind, id: string, locale: Locale): Promise<boolean> {
   let ok = false;
   await updateJson<{ at: number; rev?: string } | null>(inFlightPath(kind, id, locale), null, (cur) => {
+    ok = false; // re-run after a lost race: only the run that lands counts
     if (cur && Date.now() - cur.at < IN_FLIGHT_MS) return NO_CHANGE;
     ok = true;
     // rev: two claims in the same millisecond must not both win (updateJson note).

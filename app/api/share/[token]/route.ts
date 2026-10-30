@@ -23,7 +23,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     Promise.all([getMaterials(), getTests(), getModules()]),
     resolveBranding(),
   ]);
-  const { materials, tests, modules } = await inReaderLanguageLists({ materials: english[0], tests: english[1], modules: english[2] });
+  // Only what this link covers is translated: a public link must not set off translation of the whole Campus.
+  const covered = new Set<string>(
+    link.kind === "module"
+      ? [`module:${link.targetId}`, ...(english[2].find((m) => m.id === link.targetId)?.items ?? []).map((i) => `${i.kind}:${i.id}`)]
+      : [`${link.kind}:${link.targetId}`]
+  );
+  const { materials, tests, modules } = await inReaderLanguageLists({
+    materials: english[0].filter((m) => covered.has(`material:${m.id}`)),
+    tests: english[1].filter((t) => covered.has(`test:${t.id}`)),
+    modules: english[2].filter((m) => covered.has(`module:${m.id}`)),
+  });
   const progress = guest ? await getProgress((await guestLearner(link, guest)).progressId) : emptyProgress("none");
   const live = liveKeys(materials, tests);
   const describe = (kind: "material" | "test", id: string) => {

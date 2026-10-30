@@ -33,7 +33,8 @@ export interface Unit {
   title: string;
   description: string;
   body: string;
-  questions: { text: string; options: string[]; explanation: string; acceptedAnswers: string[] }[];
+  // No accepted typed answers: marking stays on the school's own English memo, never on AI output.
+  questions: { text: string; options: string[]; explanation: string }[];
 }
 
 interface Entry {
@@ -46,7 +47,18 @@ interface Entry {
 type Store = Record<string, Entry>;
 
 const storePath = (locale: Locale) => `training/translations/${locale}.json`;
+const failedPath = (locale: Locale) => `training/translations/${locale}-failed.json`;
+type Failed = Record<string, { hash: string; count: number; at: number }>;
+/** A free translation that keeps failing is tried again after an hour, and at most 3 times per version of the English. */
+const MAX_FREE_TRIES = 3;
+const RETRY_AFTER_MS = 60 * 60_000;
 const claimPath = (locale: Locale, key: string) => `training/translations/claims/${locale}/${key.replace(/[^\w-]/g, "_")}.json`;
+/** The reader's language; English outside a request (scripts, the daily job), where there is no cookie to read. */
+export async function readerLocale(): Promise<Locale> {
+  const { getLocale } = await import("./i18n/server");
+  return getLocale().catch(() => "en" as const);
+}
+
 export const keyOf = (kind: CampusKind, id: string) => `${kind}:${id}`;
 
 export function unitOf(kind: CampusKind, item: Item): Unit {
@@ -59,7 +71,6 @@ export function unitOf(kind: CampusKind, item: Item): Unit {
         text: q.text,
         options: q.options.map((o) => o.text),
         explanation: q.explanation ?? "",
-        acceptedAnswers: q.acceptedAnswers ?? [],
       })),
     };
   return base;
@@ -75,13 +86,14 @@ export function sameShape(a: Unit, b: Unit): boolean {
     typeof b.body === "string" &&
     Array.isArray(b.questions) &&
     a.questions.length === b.questions.length &&
-    a.questions.every((q, i) => b.questions[i] && q.options.length === b.questions[i].options.length && Array.isArray(b.questions[i].acceptedAnswers))
+    a.questions.every((q, i) => b.questions[i] && Array.isArray(b.questions[i].options) && q.options.length === b.questions[i].options.length)
   );
 }
 
 /** The item with its words replaced by the translation, position by position. Ids, memo and settings untouched. */
 export function applyUnit<T extends Item>(kind: CampusKind, item: T, u: Unit): T {
-  const out = { ...item, title: u.title || item.title, description: u.description };
+  // Every field falls back to the English when the model returned it empty.
+  const out = { ...item, title: u.title || item.title, description: u.description || item.description };
   if (kind === "material") return { ...out, body: u.body || (item as Material).body } as T;
   if (kind === "test") {
     return {
@@ -89,10 +101,8 @@ export function applyUnit<T extends Item>(kind: CampusKind, item: T, u: Unit): T
       questions: (item as Test).questions.map((q, i) => ({
         ...q,
         text: u.questions[i].text || q.text,
-        explanation: u.questions[i].explanation,
+        explanation: u.questions[i].explanation || q.explanation,
         options: q.options.map((o, j) => ({ ...o, text: u.questions[i].options[j] || o.text })),
-        // Both kept: a typed answer is accepted in English or in the translation.
-        acceptedAnswers: [...q.acceptedAnswers, ...u.questions[i].acceptedAnswers.filter((a) => a.trim())],
       })),
     } as T;
   }
@@ -130,6 +140,7 @@ export async function saveTranslation(locale: Locale, kind: CampusKind, item: It
 export async function claim(locale: Locale, key: string): Promise<boolean> {
   let ok = false;
   await updateJson<{ at: number; rev?: string } | null>(claimPath(locale, key), null, (cur) => {
+    ok = false; // re-run after a lost race: only the run that lands counts
     if (cur && Date.now() - cur.at < 10 * 60_000) return NO_CHANGE;
     ok = true;
     return { at: Date.now(), rev: randomUUID() };
@@ -159,9 +170,8 @@ const UNIT_SCHEMA = {
                 text: { type: "string" },
                 options: { type: "array", items: { type: "string" } },
                 explanation: { type: "string" },
-                acceptedAnswers: { type: "array", items: { type: "string" } },
               },
-              required: ["text", "options", "explanation", "acceptedAnswers"],
+              required: ["text", "options", "explanation"],
               additionalProperties: false,
             },
           },
@@ -192,8 +202,7 @@ export async function translateUnits(locale: Locale, units: Unit[], deadline: nu
         system:
           "You translate South African school training (lessons and multiple-choice tests for SGB or board of governors members and staff). " +
           "Translate every string faithfully into the target language. Keep Act names, section numbers (SASA s20), amounts, dates, emoji, and the markdown marks ('## ', '- ', '**', '> ') exactly as they are. " +
-          "Return exactly the same structure: the same number of units, questions and options, in the same order. Empty strings stay empty. " +
-          "acceptedAnswers: translate each accepted typed answer the way a learner would type it in the target language.",
+          "Return exactly the same structure: the same number of units, questions and options, in the same order. Empty strings stay empty.",
         messages: [{ role: "user", content: `Translate into ${language}:\n\n${JSON.stringify({ units })}` }],
       },
       { signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())) }
@@ -223,9 +232,17 @@ export async function translateUnits(locale: Locale, units: Unit[], deadline: nu
  */
 export async function translateMissingFree(locale: Locale, items: { kind: CampusKind; item: Item }[], limit = 12): Promise<void> {
   if (locale === "en") return;
-  const store = await translationsFor(locale);
-  const todo = items.filter(({ kind, item }) => isFree(kind, item.source) && !storedFor(store, kind, item)).slice(0, limit);
-  const deadline = Date.now() + 240_000;
+  const [store, failed] = await Promise.all([translationsFor(locale), readJson<Failed>(failedPath(locale), {})]);
+  const givenUp = (kind: CampusKind, item: Item) => {
+    const f = failed[keyOf(kind, item.id)];
+    return !!f && f.hash === unitHash(unitOf(kind, item)) && (f.count >= MAX_FREE_TRIES || Date.now() - f.at < RETRY_AFTER_MS);
+  };
+  // Drafts are never translated, and failing items are left out BEFORE the limit so they cannot crowd out the rest.
+  const todo = items
+    .filter(({ kind, item }) => item.status === "published" && isFree(kind, item.source) && !storedFor(store, kind, item) && !givenUp(kind, item))
+    .slice(0, limit);
+  // Leaves room inside the route's 300s for whatever ran before the response.
+  const deadline = Date.now() + 180_000;
   const heads = todo.filter((x) => x.kind === "module");
   const bodies = todo.filter((x) => x.kind !== "module");
   const run = async (group: typeof todo) => {
@@ -237,6 +254,15 @@ export async function translateMissingFree(locale: Locale, items: { kind: Campus
       for (let i = 0; i < mine.length; i++) await saveTranslation(locale, mine[i].kind, mine[i].item, out[i]);
     } catch (err) {
       console.error("[campus translate] free translation failed", locale, err);
+      await updateJson<Failed>(failedPath(locale), {}, (cur) => {
+        const next = { ...cur };
+        for (const x of mine) {
+          const key = keyOf(x.kind, x.item.id);
+          const hash = unitHash(unitOf(x.kind, x.item));
+          next[key] = { hash, count: cur[key]?.hash === hash ? cur[key].count + 1 : 1, at: Date.now() };
+        }
+        return next;
+      }).catch(() => {});
     } finally {
       await Promise.all(mine.map((x) => release(locale, keyOf(x.kind, x.item.id))));
     }
@@ -256,8 +282,7 @@ export async function translateMissingFree(locale: Locale, items: { kind: Campus
 export async function inReaderLanguageLists<M extends Material, T extends Test, D extends TrainingModule>(
   lists: { materials: M[]; tests: T[]; modules: D[] }
 ): Promise<{ materials: M[]; tests: T[]; modules: D[] }> {
-  const { getLocale } = await import("./i18n/server");
-  const locale = await getLocale().catch(() => "en" as const);
+  const locale = await readerLocale();
   if (locale === "en") return lists;
   const store = await translationsFor(locale);
   const one = <X extends Item>(kind: CampusKind, item: X): X => {

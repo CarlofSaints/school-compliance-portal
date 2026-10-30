@@ -26,8 +26,8 @@ import { stamp } from "../lib/trainingData";
     body: "",
     questions: [
       // A translation that tries to move the right answer only changes words: isCorrect stays on option 0.
-      { text: "SASA-zu?", options: ["84 ka 1996", "32 ka 2024"], explanation: "ex-zu", acceptedAnswers: [] },
-      { text: "Muphi uMthetho?", options: [], explanation: "", acceptedAnswers: ["UMthetho weSikole"] },
+      { text: "SASA-zu?", options: ["84 ka 1996", "32 ka 2024"], explanation: "ex-zu" },
+      { text: "Muphi uMthetho?", options: [], explanation: "" },
     ],
   };
   assert.ok(sameShape(unitOf("test", test), zu));
@@ -35,7 +35,8 @@ import { stamp } from "../lib/trainingData";
   assert.equal(out.questions[0].options[0].isCorrect, true, "memo comes from the English item only");
   assert.equal(out.questions[0].options[0].id, mc.options[0].id, "ids untouched");
   assert.equal(out.questions[0].text, "SASA-zu?");
-  assert.deepEqual(out.questions[1].acceptedAnswers, ["SASA", "UMthetho weSikole"], "a typed answer is accepted in either language");
+  assert.deepEqual(out.questions[1].acceptedAnswers, ["SASA"], "typed answers are marked on the school's own English memo only");
+  assert.equal(out.questions[1].explanation, q.explanation, "an empty translated explanation falls back to the English");
   assert.equal(out.passMark, 50, "settings untouched");
 
   const wrong = { ...zu, questions: [zu.questions[0]] };

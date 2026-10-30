@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
     status: m.status,
     source: m.source,
     kind: m.kind,
-    minutes: readingMinutes(m),
+    // From the English, as on the lesson page, so the two never disagree.
+    minutes: readingMinutes(english[0].find((x) => x.id === m.id) ?? m),
     updatedAt: m.updatedAt,
     done: Boolean(progress.opened[m.id]),
     locked: !manager && isLocked(progress, modules, { kind: "material", id: m.id }, live),
@@ -62,7 +63,7 @@ export async function GET(req: NextRequest) {
     };
   });
   const titles = new Map<string, { title: string; status: string; icon?: string; minutes?: number }>([
-    ...materials.map((m) => [`material:${m.id}`, { ...m, minutes: readingMinutes(m) }] as const),
+    ...materials.map((m) => [`material:${m.id}`, { ...m, minutes: readingMinutes(english[0].find((x) => x.id === m.id) ?? m) }] as const),
     ...tests.map((t) => [`test:${t.id}`, { ...t, minutes: t.timeLimitMinutes || undefined }] as const),
   ]);
   const moduleRows = visible(modules).map((m) => {
