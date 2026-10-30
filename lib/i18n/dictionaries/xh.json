@@ -2159,5 +2159,6 @@
   "Translate ({cost})": "Guqulela ({cost})",
   "Ask someone who may spend the school's credits to translate it.": "Cela umntu ovumelekileyo ukusebenzisa iikhredithi zesikolo ukuba akuguqulele.",
   "Translating a Campus lesson or test written by someone at your school": "Ukuguqulela isifundo okanye uvavanyo lwe-Campus olubhalwe ngumntu esikolweni sakho",
-  "Campus courses from the library or built with AI, in every language": "Iikhosi ze-Campus ezivela kwithala okanye ezakhiwe nge-AI, ngazo zonke iilwimi"
+  "Campus courses from the library or built with AI, in every language": "Iikhosi ze-Campus ezivela kwithala okanye ezakhiwe nge-AI, ngazo zonke iilwimi",
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Izifundo novavanyo ezi-{n} zisaguqulelwa kulwimi lwakho. Zivela ngesiNgesi de zigqitywe, kwaye eli phepha lizihlaziya ngokwalo."
 }

@@ -2159,5 +2159,6 @@
   "Translate ({cost})": "Fetolela ({cost})",
   "Ask someone who may spend the school's credits to translate it.": "Kopa motho ya dumelletsweng ho sebedisa dikhrediti tsa sekolo hore a se fetolele.",
   "Translating a Campus lesson or test written by someone at your school": "Ho fetolela thuto kapa teko ya Campus e ngotsweng ke motho sekolong sa hao",
-  "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus ho tswa laeboraring kapa tse hahilweng ka AI, ka dipuo tsohle"
+  "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus ho tswa laeboraring kapa tse hahilweng ka AI, ka dipuo tsohle",
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Dithuto le diteko tse {n} di ntse di fetolelwa puong ya hao. Di hlaha ka Senyesemane ho fihlela di qetwa, mme leqephe lena le a intjhafatsa."
 }

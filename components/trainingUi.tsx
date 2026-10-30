@@ -44,7 +44,7 @@ export interface TestRow {
   done: boolean;
   locked: boolean;
 }
-export interface Catalogue { canManage: boolean; modules: ModuleRow[]; materials: MaterialRow[]; tests: TestRow[] }
+export interface Catalogue { canManage: boolean; modules: ModuleRow[]; materials: MaterialRow[]; tests: TestRow[]; translating?: number }
 
 export const stepHref = (s: { kind: string; id: string }, moduleId?: string) =>
   `/campus/${s.kind === "material" ? "material" : "tests"}/${s.id}${moduleId ? `?module=${moduleId}` : ""}`;

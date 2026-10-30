@@ -23,6 +23,15 @@ export default function TrainingPage() {
     if (session) load();
   }, [session, load]);
 
+  // While free courses are still being translated in the background, look again every 30 seconds (for up to 10 minutes).
+  const translating = data?.translating ?? 0;
+  useEffect(() => {
+    if (!translating) return;
+    let tries = 0;
+    const timer = setInterval(() => (++tries > 20 ? clearInterval(timer) : load()), 30_000);
+    return () => clearInterval(timer);
+  }, [translating > 0, load]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading || (!data && !error)) return <div className="p-6">{t("Loading...")}</div>;
   if (!data) return <div className="p-6 text-sm text-gray-700">{error}</div>;
 
@@ -51,6 +60,12 @@ export default function TrainingPage() {
           )}
         </div>
       </div>
+
+      {translating > 0 && (
+        <p className="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          {t("{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.", { n: translating })}
+        </p>
+      )}
 
       {data.modules.length === 0 && looseMaterial.length === 0 && looseTests.length === 0 && (
         <p className="text-sm text-gray-500 bg-white rounded-xl border border-gray-100 p-6">

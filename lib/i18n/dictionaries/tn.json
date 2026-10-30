@@ -2159,5 +2159,6 @@
   "Translate ({cost})": "Ranola ({cost})",
   "Ask someone who may spend the school's credits to translate it.": "Kopa mongwe yo o letleletsweng go dirisa dikhrediti tsa sekolo gore a se ranole.",
   "Translating a Campus lesson or test written by someone at your school": "Go ranola thuto kgotsa teko ya Campus e e kwadilweng ke mongwe kwa sekolong sa gago",
-  "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus go tswa mo bobolokelong kgotsa tse di agilweng ka AI, ka dipuo tsotlhe"
+  "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus go tswa mo bobolokelong kgotsa tse di agilweng ka AI, ka dipuo tsotlhe",
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Dithuto le diteko di le {n} di sa ntse di ranolwa go puo ya gago. Di bonala ka Seesimane go fitlha di fela, mme tsebe e e a itšhwafatsa."
 }

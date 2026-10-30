@@ -2159,5 +2159,6 @@
   "Translate ({cost})": "Vertaal ({cost})",
   "Ask someone who may spend the school's credits to translate it.": "Vra iemand wat die skool se krediete mag spandeer om dit te vertaal.",
   "Translating a Campus lesson or test written by someone at your school": "Om 'n Campus-les of -toets te vertaal wat deur iemand by u skool geskryf is",
-  "Campus courses from the library or built with AI, in every language": "Campus-kursusse uit die biblioteek of met KI gebou, in elke taal"
+  "Campus courses from the library or built with AI, in every language": "Campus-kursusse uit die biblioteek of met KI gebou, in elke taal",
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "{n} lesse en toetse word nog in u taal vertaal. Hulle verskyn in Engels totdat hulle klaar is, en hierdie bladsy werk self by."
 }
