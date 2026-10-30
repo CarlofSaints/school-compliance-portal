@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { readJson, updateJson, NO_CHANGE } from "./controlData";
-import { getUsers, updateUser, type User } from "./userData";
+import { getUsers, updateUser, updateUsersWhere, type User } from "./userData";
 import { getPeople } from "./peopleData";
 import { tenantScope } from "./tenantContext";
 import { recordActivity } from "./activityLog";
@@ -8,11 +8,11 @@ import { sendTermEndedEmail } from "./email";
 import {
   EMPTY_TERMS,
   exemptReason,
+  headsByLink,
   lockDue,
   positionsOf,
   todaySast,
   usersToLock,
-  TERM_EXEMPT_POSITIONS,
   type GovernanceTerm,
   type TermSettings,
 } from "./governanceTerm";
@@ -38,55 +38,81 @@ export async function saveTerm(startDate: string, endDate: string, mode: "edit" 
   return refused ? "locked" : saved;
 }
 
-// How often a request may look at whether a term has ended. The look is one
-// small read; the lock itself runs once per term.
+// How often a sign-in may look at whether a term has ended (the daily job and
+// the term page always look).
 const CHECK_EVERY_MS = 10 * 60 * 1000;
 const lastCheck = new Map<string, number>();
 
 /**
  * Locks every member who is not exempt once the current term has ended, then
- * emails the Principal and Deputy the list. Safe to call from anywhere and at
- * the same time: locking skips anybody already locked, and only the call that
- * records the lock sends the email. True when it locked anyone just now.
+ * emails the Principal and Deputy the list. The run is CLAIMED first (lockedAt
+ * set under a guarded write), so two runs at once cannot both lock, and the
+ * lock itself is one guarded write over users.json that decides from the
+ * accounts as they are at that moment, so nobody switched back on is locked
+ * again. Returns the ids locked by THIS call.
  */
-export async function applyTermLockIfDue(opts: { force?: boolean } = {}): Promise<boolean> {
+export async function applyTermLockIfDue(opts: { force?: boolean } = {}): Promise<Set<string>> {
+  const none = new Set<string>();
   const { key } = await tenantScope();
-  if (!opts.force && Date.now() - (lastCheck.get(key) ?? 0) < CHECK_EVERY_MS) return false;
+  if (!opts.force && Date.now() - (lastCheck.get(key) ?? 0) < CHECK_EVERY_MS) return none;
   lastCheck.set(key, Date.now());
 
   const terms = await getTerms();
-  if (!lockDue(terms.current, todaySast())) return false;
+  if (!lockDue(terms.current, todaySast())) return none;
   const term = terms.current;
 
-  const [users, people] = await Promise.all([getUsers(), getPeople()]);
-  const toLock = usersToLock(users, people);
-  for (const u of toLock) await updateUser(u.id, { termLocked: true });
-
-  let recorded = false;
+  let claimed = false;
+  const claimedAt = new Date().toISOString();
   await updateJson<TermSettings>(PATH, EMPTY_TERMS, (t) => {
+    claimed = false;
     if (!t.current || t.current.id !== term.id || t.current.lockedAt) return NO_CHANGE;
-    recorded = true;
-    return { ...t, current: { ...t.current, lockedAt: new Date().toISOString(), lockedCount: toLock.length } };
+    claimed = true;
+    return { ...t, current: { ...t.current, lockedAt: claimedAt } };
   });
-  if (!recorded) return toLock.length > 0;
+  if (!claimed) return none;
 
+  let lockedIds: string[];
+  try {
+    lockedIds = await updateUsersWhere((u) => (usersToLock([u]).length ? { termLocked: true } : null));
+  } catch (err) {
+    // Give the claim back so the next run tries again.
+    await updateJson<TermSettings>(PATH, EMPTY_TERMS, (t) =>
+      t.current?.id === term.id && t.current.lockedAt === claimedAt ? { ...t, current: { ...t.current, lockedAt: undefined } } : NO_CHANGE
+    ).catch(() => {});
+    throw err;
+  }
+  await updateJson<TermSettings>(PATH, EMPTY_TERMS, (t) =>
+    t.current?.id === term.id ? { ...t, current: { ...t.current, lockedCount: lockedIds.length } } : NO_CHANGE
+  ).catch(() => {});
+
+  const [users, people] = await Promise.all([getUsers(), getPeople()]);
+  const locked = users.filter((u) => lockedIds.includes(u.id));
   await recordActivity({
     actorName: "System",
     action: "term.ended",
     entity: "user",
-    summary: `Term ended ${term.endDate}: ${toLock.length} member${toLock.length === 1 ? "" : "s"} locked out until switched back on`,
-    detail: { termId: term.id, locked: toLock.map((u) => u.email) },
+    summary: `Term ended ${term.endDate}: ${locked.length} member${locked.length === 1 ? "" : "s"} locked out until switched back on`,
+    detail: { termId: term.id, locked: locked.map((u) => u.email) },
   });
-  const heads = users.filter((u) => positionsOf(u, people).some((p) => TERM_EXEMPT_POSITIONS.includes(p)) && u.email);
-  for (const h of heads) {
-    await sendTermEndedEmail(h.email, h.name, term.endDate, toLock.map((u) => `${u.name} ${u.surname}`.trim())).catch((err) =>
+  for (const h of users.filter((u) => headsByLink(u, people) && u.email && !u.termLocked && !u.retiredAt)) {
+    await sendTermEndedEmail(h.email, h.name, term.endDate, locked.map((u) => `${u.name} ${u.surname}`.trim())).catch((err) =>
       console.error("[term] email to", h.email, "failed:", err)
     );
   }
-  return toLock.length > 0;
+  return new Set(lockedIds);
 }
 
-export type TermAction = "switch_on" | "retire" | "unretire" | "keep_access" | "no_keep_access";
+/**
+ * When a term is set, the Principal and Deputy (linked to their logins on the
+ * People register) are ticked to keep access. A manager's action, logged by the
+ * caller; anybody else can be ticked by hand.
+ */
+export async function keepHeadsOn(): Promise<string[]> {
+  const people = await getPeople();
+  return updateUsersWhere((u) => (headsByLink(u, people) && !u.keepsAccessAfterTerm ? { keepsAccessAfterTerm: true } : null));
+}
+
+export type TermAction = "switch_on" | "retire" | "keep_access" | "no_keep_access";
 
 /** What the Principal does to one member after a term ends. */
 export async function setMemberState(userId: string, action: TermAction): Promise<User | null> {
@@ -95,9 +121,7 @@ export async function setMemberState(userId: string, action: TermAction): Promis
       ? { termLocked: false, retiredAt: undefined }
       : action === "retire"
         ? { retiredAt: new Date().toISOString(), termLocked: false }
-        : action === "unretire"
-          ? { retiredAt: undefined }
-          : { keepsAccessAfterTerm: action === "keep_access" };
+        : { keepsAccessAfterTerm: action === "keep_access" };
   return updateUser(userId, change);
 }
 
@@ -109,7 +133,8 @@ export async function termRoster() {
     name: `${u.name} ${u.surname}`.trim(),
     email: u.email,
     positions: positionsOf(u, people),
-    exempt: exemptReason(u, people),
+    exempt: exemptReason(u),
+    superAdmin: u.role === "super-admin",
     keepsAccessAfterTerm: Boolean(u.keepsAccessAfterTerm),
     termLocked: Boolean(u.termLocked),
     retiredAt: u.retiredAt ?? null,

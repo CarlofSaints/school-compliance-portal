@@ -12,6 +12,7 @@ interface Member {
   email: string;
   positions: string[];
   exempt: string | null;
+  superAdmin: boolean;
   keepsAccessAfterTerm: boolean;
   termLocked: boolean;
   retiredAt: string | null;
@@ -74,7 +75,7 @@ export default function TermPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <h1 className="text-2xl font-bold text-dark">{t("SGB or Board Term")}</h1>
       <p className="text-gray-500 text-sm mt-1 mb-6">
-        {t("When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.")}
+        {t("When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.")}
       </p>
 
       <div
@@ -172,7 +173,7 @@ export default function TermPage() {
                       {t("Switch back on")}
                     </button>
                   )}
-                  {!m.retiredAt && m.id !== data.me && m.exempt !== "Super Admin" && (
+                  {!m.retiredAt && m.id !== data.me && !m.superAdmin && (
                     <button onClick={() => act(m, "retire")} disabled={busy !== null} className="text-xs text-gray-500 hover:text-red-600 disabled:opacity-50">
                       {t("Retire")}
                     </button>

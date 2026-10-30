@@ -70,8 +70,11 @@ export async function resolveApprovers(
   const [tags, people, users] = await Promise.all([
     getTags(),
     needsPeople ? getPeople() : Promise.resolve([]),
-    needsPeople ? getUsers() : Promise.resolve([]),
+    getUsers(),
   ]);
+  // A member locked out when the term ended, or retired, cannot click Approve,
+  // so they are never made a required approver (lib/governanceTerm.ts).
+  const ended = new Set(users.filter((u) => u.retiredAt || u.termLocked).map((u) => u.id));
   const approvers: RequiredApprover[] = [];
   // Requirements that resolved to nobody at all — an empty tag, or a person
   // who has since been removed from the register.
@@ -93,6 +96,10 @@ export async function resolveApprovers(
       const linked = person.userId
         ? users.find((u) => u.id === person.userId)
         : undefined;
+      if (linked && ended.has(linked.id)) {
+        unresolved.push(`${person.position} (access ended)`);
+        continue;
+      }
 
       approvers.push({
         key: linked ? linked.id : personGroupKey(person.id),
@@ -115,7 +122,7 @@ export async function resolveApprovers(
 
     const tag = tags.find((t) => t.id === requirement.tagId);
     const tagName = tag?.name || "a removed tag";
-    const members = tag ? await getTagMembers(tag.id) : [];
+    const members = (tag ? await getTagMembers(tag.id) : []).filter((m) => !m.userId || !ended.has(m.userId));
 
     if (members.length === 0) {
       unresolved.push(tagName);

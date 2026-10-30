@@ -1990,7 +1990,6 @@
   "Term saved": "Ixesha lokusebenza ligciniwe",
   "Retire {name}? They will not be able to sign in again unless switched back on.": "Misa u-{name}? Akazukukwazi ukungena kwakhona ngaphandle kokuba ufikelelo lwakhe luvulwe kwakhona.",
   "SGB or Board Term": "Ixesha lokusebenza le-SGB okanye leBhodi",
-  "When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.": "Xa ixesha lokusebenza liphela, onke amalungu avalelwa ngaphandle kwe-portal ngaphandle kweNqununu, iSekela-Nqununu nabani na omiselwe ukugcina ufikelelo. Vula kwakhona amalungu anyulwe kwakhona, uze umise abo bangaqhubekiyo.",
   "No term is set. Enter the dates of the current term below.": "Akukho xesha lokusebenza limisiweyo. Faka imihla yexesha lokusebenza langoku apha ngezantsi.",
   "The term ended on {date}.": "Ixesha lokusebenza liphele ngo-{date}.",
   "{count} members are locked out. Switch on the ones who were re-elected, retire the rest, then start the new term.": "Amalungu angama-{count} avalelwe ngaphandle. Vula abo banyulwe kwakhona, umise abanye, uze uqale ixesha lokusebenza elitsha.",
@@ -2006,5 +2005,6 @@
   "Keeps access when a term ends": "Ugcina ufikelelo xa ixesha lokusebenza liphela",
   "Locked: term ended": "Ivaliwe: ixesha lokusebenza liphelile",
   "Always ({why})": "Rhoqo ({why})",
-  "Switch back on": "Vula kwakhona"
+  "Switch back on": "Vula kwakhona",
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Xa ixesha lokusebenza liphela, onke amalungu avalelwa ngaphandle kwephotali ngaphandle kwabaLawuli abaPhezulu nabani na ophawulweyo ukuba agcine ukufikelela. Ukuseta ixesha lokusebenza kuphawula iNqununu neSekela-Nqununu ngokuzenzekelayo (xa ungeniso lwabo kuBantu lunxulunyaniswe nokungena kwabo). Vula kwakhona amalungu aphinde anyulwa, uze uthathise umhlala-phantsi abo bangaqhubekiyo."
 }

@@ -1990,7 +1990,6 @@
   "Term saved": "Paka ya go šoma e bolokilwe",
   "Retire {name}? They will not be able to sign in again unless switched back on.": "Emiša {name}? Ba ka se kgone go tsena gape ntle le ge phihlelelo ya bona e bulwa gape.",
   "SGB or Board Term": "Paka ya SGB goba ya Boto",
-  "When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.": "Ge paka ya go šoma e fela, leloko le lengwe le le lengwe le notlelwa ka ntle ga portal ntle le Hlogo ya Sekolo, Motlatša Hlogo ya Sekolo le mang le mang yo a beakantšwego go boloka phihlelelo. Bula gape maloko ao a kgethilwego gape, gomme o emiše bao ba sa tšwelego pele.",
   "No term is set. Enter the dates of the current term below.": "Ga go na paka ya go šoma ye e beakantšwego. Tsenya matšatšikgwedi a paka ya bjale ka fase.",
   "The term ended on {date}.": "Paka ya go šoma e fedile ka {date}.",
   "{count} members are locked out. Switch on the ones who were re-elected, retire the rest, then start the new term.": "Maloko a {count} a notletšwe ka ntle. Bula bao ba kgethilwego gape, o emiše ba bangwe, ke moka o thome paka ye mpsha.",
@@ -2006,5 +2005,6 @@
   "Keeps access when a term ends": "O boloka phihlelelo ge paka e fela",
   "Locked: term ended": "E notletšwe: paka e fedile",
   "Always ({why})": "Ka mehla ({why})",
-  "Switch back on": "Bula gape"
+  "Switch back on": "Bula gape",
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Ge paka ya go šoma e fela, leloko le lengwe le le lengwe le notlelwa ka ntle ga portala ntle le Balaodi ba Godimodimo le mang le mang yo a swailwego go boloka phihlelelo. Go bea paka go swaya Hlogo ya Sekolo le Motlatšahlogo ka bowona (ge tsenyo ya bona go Batho e kgokagantšwe le go tsena ga bona). Bula gape maloko ao a kgethilwego gape, gomme o rotše bao ba sa tšwelego pele."
 }

@@ -1990,7 +1990,6 @@
   "Term saved": "Nako ya tshebeletso e bolokilwe",
   "Retire {name}? They will not be able to sign in again unless switched back on.": "Emisa {name}? Ba ke ke ba kgona ho kena hape ntle le haeba phihlello ya bona e butswa hape.",
   "SGB or Board Term": "Nako ya tshebeletso ya SGB kapa ya Boto",
-  "When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.": "Ha nako ya tshebeletso e fela, setho se seng le se seng se notlelwa kantle ho portal ntle le Mosuwehlooho, Motlatsi wa Mosuwehlooho le mang kapa mang ya beetsweng ho boloka phihlello. Bula hape ditho tse kgethilweng hape, mme o emise ba sa tsweleng pele.",
   "No term is set. Enter the dates of the current term below.": "Ha ho nako ya tshebeletso e beilweng. Kenya matsatsi a nako ya tshebeletso ya jwale ka tlase.",
   "The term ended on {date}.": "Nako ya tshebeletso e fedile ka {date}.",
   "{count} members are locked out. Switch on the ones who were re-elected, retire the rest, then start the new term.": "Ditho tse {count} di notletswe kantle. Bula ba kgethilweng hape, o emise ba bang, ebe o qala nako e ntjha.",
@@ -2006,5 +2005,6 @@
   "Keeps access when a term ends": "O boloka phihlello ha nako ya tshebeletso e fela",
   "Locked: term ended": "E notletswe: nako ya tshebeletso e fedile",
   "Always ({why})": "Kamehla ({why})",
-  "Switch back on": "Bula hape"
+  "Switch back on": "Bula hape",
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Ha nako ya tshebeletso e fela, setho se seng le se seng se notlelwa kantle ho portale ntle le Batsamaisi ba Phahameng le mang kapa mang ya tshwailweng ho boloka phihlello. Ho beha nako ho tshwaya Mosuwehlooho le Motlatsi wa Mosuwehlooho ka bowona (ha keno ya bona ho Batho e hokahantswe le ho kena ha bona). Bulela hape ditho tse kgethilweng hape, mme o tlohele ba sa tsweleng pele."
 }

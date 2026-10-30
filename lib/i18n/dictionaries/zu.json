@@ -1990,7 +1990,6 @@
   "Term saved": "Ihlandla lilondoloziwe",
   "Retire {name}? They will not be able to sign in again unless switched back on.": "Misa u-{name}? Ngeke akwazi ukungena ngemvume futhi ngaphandle uma ukufinyelela kwakhe kuvulwa kabusha.",
   "SGB or Board Term": "Ihlandla le-SGB noma leBhodi",
-  "When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.": "Uma ihlandla liphela, wonke amalungu avalelwa ngaphandle kwe-portal ngaphandle kukaThishanhloko, iPhini likaThishanhloko nanoma ubani obekelwe ukugcina ukufinyelela. Vula kabusha amalungu akhethwe kabusha, bese umisa labo abangaqhubeki.",
   "No term is set. Enter the dates of the current term below.": "Alikho ihlandla elisethiwe. Faka izinsuku zehlandla lamanje ngezansi.",
   "The term ended on {date}.": "Ihlandla liphele ngomhla ka-{date}.",
   "{count} members are locked out. Switch on the ones who were re-elected, retire the rest, then start the new term.": "Amalungu angu-{count} avalelwe ngaphandle. Vula labo abakhethwe kabusha, umise abanye, bese uqala ihlandla elisha.",
@@ -2006,5 +2005,6 @@
   "Keeps access when a term ends": "Ugcina ukufinyelela uma ihlandla liphela",
   "Locked: term ended": "Kuvaliwe: ihlandla liphelile",
   "Always ({why})": "Njalo ({why})",
-  "Switch back on": "Vula kabusha"
+  "Switch back on": "Vula kabusha",
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Uma ihlandla liphela, wonke amalungu avalelwa ngaphandle kwephothali ngaphandle kwabaPhathi Abakhulu kanye nanoma ubani omakelwe ukuthi agcine ukufinyelela. Ukusetha ihlandla kumaka uThishanhloko kanye nePhini likaThishanhloko ngokuzenzakalelayo (uma ukufakwa kwabo kuBantu kuxhumene nokungena kwabo). Vula futhi amalungu aphinde akhethwa, bese uthatha umhlalaphansi kulabo abangaqhubeki."
 }

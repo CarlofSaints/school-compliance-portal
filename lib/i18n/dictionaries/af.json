@@ -1990,7 +1990,6 @@
   "Term saved": "Ampstermyn gestoor",
   "Retire {name}? They will not be able to sign in again unless switched back on.": "Onttrek {name}? Hulle sal nie weer kan aanmeld nie, tensy hul toegang weer aangeskakel word.",
   "SGB or Board Term": "SBL- of Raad-ampstermyn",
-  "When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.": "Wanneer die ampstermyn eindig, word elke lid uit die portaal gesluit, behalwe die Skoolhoof, die Adjunkhoof en enigiemand wat ingestel is om toegang te behou. Skakel herverkose lede weer aan, en onttrek dié wat nie aanbly nie.",
   "No term is set. Enter the dates of the current term below.": "Geen ampstermyn is ingestel nie. Voer die datums van die huidige ampstermyn hieronder in.",
   "The term ended on {date}.": "Die ampstermyn het op {date} geëindig.",
   "{count} members are locked out. Switch on the ones who were re-elected, retire the rest, then start the new term.": "{count} lede is uitgesluit. Skakel dié aan wat herverkies is, onttrek die res, en begin dan die nuwe ampstermyn.",
@@ -2006,5 +2005,6 @@
   "Keeps access when a term ends": "Behou toegang wanneer ’n ampstermyn eindig",
   "Locked: term ended": "Gesluit: ampstermyn het geëindig",
   "Always ({why})": "Altyd ({why})",
-  "Switch back on": "Skakel weer aan"
+  "Switch back on": "Skakel weer aan",
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Wanneer die ampstermyn eindig, word elke lid uit die portaal gesluit, behalwe Superadministrateurs en enigiemand wat gemerk is om toegang te behou. Wanneer u die termyn instel, word die Skoolhoof en Adjunkhoof outomaties gemerk (wanneer hul inskrywing onder Mense aan hul aanmelding gekoppel is). Skakel herverkose lede weer aan, en tree diegene af wat nie voortgaan nie."
 }

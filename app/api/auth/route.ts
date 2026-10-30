@@ -233,11 +233,13 @@ export async function POST(req: NextRequest) {
     // SGB terms: the right password, but the term has ended or they were
     // retired. Said plainly (they proved who they are), with what to do.
     const { applyTermLockIfDue } = await import("@/lib/governanceTermData");
-    const termUser = (await applyTermLockIfDue({ force: true }).catch(() => false)) ? ((await getUserByEmail(email)) ?? user) : user;
-    if (termUser.retiredAt || termUser.termLocked) {
+    // Throttled, and the ids it locks are used directly: reading the account
+    // back straight after the write could still show it unlocked.
+    const lockedNow = await applyTermLockIfDue().catch(() => new Set<string>());
+    if (user.retiredAt || user.termLocked || lockedNow.has(user.id)) {
       return NextResponse.json(
         {
-          error: termUser.retiredAt
+          error: user.retiredAt
             ? "Your access to this portal has ended. If this is a mistake, ask the Principal."
             : "The governing body's term has ended. Ask the Principal to switch your access back on if you were re-elected.",
         },

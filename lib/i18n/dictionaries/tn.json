@@ -1990,7 +1990,6 @@
   "Term saved": "Paka ya tirelo e bolokilwe",
   "Retire {name}? They will not be able to sign in again unless switched back on.": "Emisa {name}? Ba ka se kgone go tsena gape fa e se fa phitlhelelo ya bone e bulwa gape.",
   "SGB or Board Term": "Paka ya SGB kgotsa ya Boto",
-  "When the term ends, every member is locked out of the portal except the Principal, the Deputy Principal and anyone set to keep access. Switch re-elected members back on, and retire those not continuing.": "Fa paka ya tirelo e fela, leloko lengwe le lengwe le notlelwa kwa ntle ga portal kwa ntle ga Mogokgo, Motlatsa Mogokgo le mongwe le mongwe yo o beetsweng go boloka phitlhelelo. Bula gape maloko a a tlhophilweng gape, mme o emise ba ba sa tsweleleng.",
   "No term is set. Enter the dates of the current term below.": "Ga go na paka ya tirelo e e beilweng. Tsenya malatsi a paka ya tirelo ya jaanong fa tlase.",
   "The term ended on {date}.": "Paka ya tirelo e fedile ka {date}.",
   "{count} members are locked out. Switch on the ones who were re-elected, retire the rest, then start the new term.": "Maloko a le {count} a notletswe kwa ntle. Bula ba ba tlhophilweng gape, o emise ba bangwe, morago o simolole paka e ntšhwa.",
@@ -2006,5 +2005,6 @@
   "Keeps access when a term ends": "O boloka phitlhelelo fa paka e fela",
   "Locked: term ended": "E notletswe: paka e fedile",
   "Always ({why})": "Ka metlha ({why})",
-  "Switch back on": "Bula gape"
+  "Switch back on": "Bula gape",
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Fa paka ya tirelo e fela, leloko lengwe le lengwe le notlelwa kwa ntle ga portale kwa ntle ga Balaodi ba Kwa Godimo le mongwe le mongwe yo o tshwailweng go boloka phitlhelelo. Go baya paka go tshwaya Mogokgo le Motlatsamogokgo ka bosone (fa tsenyo ya bone mo Bathong e golagantswe le go tsena ga bone). Bula gape maloko a a tlhophilweng gape, mme o rolele ba ba sa tsweleleng."
 }

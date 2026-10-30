@@ -132,7 +132,7 @@ async function runForSchool() {
 
   // SGB terms: lock members out the morning after a term ends, even if nobody signs in.
   try {
-    if (await applyTermLockIfDue({ force: true })) detail.push("Term ended: members locked, Principal emailed");
+    if ((await applyTermLockIfDue({ force: true })).size) detail.push("Term ended: members locked, Principal emailed");
   } catch (err) {
     detail.push(`Term check failed: ${err instanceof Error ? err.message : String(err)}`);
   }
