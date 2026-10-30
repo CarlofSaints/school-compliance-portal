@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useT } from "@/components/I18nProvider";
+import { useLocale, useT } from "@/components/I18nProvider";
 import { CopyLinkButton, DraftPill } from "@/components/trainingUi";
 import TranslationBanner, { type CampusTranslation } from "@/components/campus/TranslationBanner";
 
@@ -55,6 +55,8 @@ export default function TestView(props: {
 }) {
   const t = useT();
   const { id, api, fetcher, ready } = props;
+  // Switching language fetches the paper again in the new language (answers are kept by question id).
+  const locale = useLocale();
   const [now, setNow] = useState(() => Date.now());
   const [paper, setPaper] = useState<Paper | null>(null);
   const [error, setError] = useState("");
@@ -73,7 +75,7 @@ export default function TestView(props: {
     if (res.ok) setPaper(body);
     else setError(body.error || t("This test could not be opened."));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, api, t]);
+  }, [id, api, t, locale]);
 
   useEffect(() => {
     if (ready) load();
