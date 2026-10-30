@@ -2135,7 +2135,6 @@
   "Included in your subscription, no credits": "Kufakiwe ekubhaliseni kwakho, awekho amakhredithi",
   "Compliance checks on the Compliance, Policies and Documents pages": "Ukuhlolwa kokuthobela emakhasini Okuthobela, Izinqubomgomo kanye Namadokhumenti",
   "Convert a scanned PDF policy to Word": "Guqula inqubomgomo ye-PDF eskeniwe ibe yi-Word",
-  "Campus courses, and building a course with AI": "Izifundo ze-Campus, nokwakha isifundo nge-AI",
   "Switching the portal's own screens to another language": "Ukushintshela izikrini zephothali ngolunye ulimi",
   "If we ever start charging credits for one of these, this page changes first and your school's administrators are told by email before it starts.": "Uma singake siqale ukukhokhisa amakhredithi ngokukodwa kwalokhu, leli khasi liyashintsha kuqala futhi abalawuli besikole sakho baziswa nge-imeyili ngaphambi kokuba kuqale.",
   "Buying credits": "Ukuthenga amakhredithi",
@@ -2158,5 +2157,7 @@
   "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Lokhu kubhalwe ngumuntu esikoleni sakho, ngakho kungesiNgisi. Ukukuhumusha kusebenzisa amakhredithi esikole ({cost}); emva kwalokho wonke umuntu ukufunda ngalolu limi mahhala.",
   "Translating... this can take a minute": "Kuyahunyushwa... lokhu kungathatha umzuzu",
   "Translate ({cost})": "Humusha ({cost})",
-  "Ask someone who may spend the school's credits to translate it.": "Cela umuntu ovunyelwe ukusebenzisa amakhredithi esikole ukuthi akuhumushe."
+  "Ask someone who may spend the school's credits to translate it.": "Cela umuntu ovunyelwe ukusebenzisa amakhredithi esikole ukuthi akuhumushe.",
+  "Translating a Campus lesson or test written by someone at your school": "Ukuhumusha isifundo noma isivivinyo se-Campus esibhalwe ngumuntu esikoleni sakho",
+  "Campus courses from the library or built with AI, in every language": "Izifundo ze-Campus ezivela emtatsheni noma ezakhiwe nge-AI, ngazo zonke izilimi"
 }

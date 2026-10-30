@@ -44,6 +44,10 @@ export default function BillingPage() {
               <td className="py-2">{t("1 credit per {pages} pages, per language", { pages: PAGES_PER_CREDIT })}</td>
             </tr>
             <tr className="border-b border-gray-50">
+              <td className="py-2 pr-4">{t("Translating a Campus lesson or test written by someone at your school")}</td>
+              <td className="py-2">{t("1 credit per {pages} pages, per language", { pages: PAGES_PER_CREDIT })}</td>
+            </tr>
+            <tr className="border-b border-gray-50">
               <td className="py-2 pr-4">{t("Compile a policy: writing the draft")}</td>
               <td className="py-2">{t("{n} credits", { n: POLICY_AI_CREDITS.draft })}</td>
             </tr>
@@ -69,7 +73,7 @@ export default function BillingPage() {
         <ul className="list-disc pl-5 space-y-1.5 text-sm text-gray-700">
           <li>{t("Compliance checks on the Compliance, Policies and Documents pages")}</li>
           <li>{t("Convert a scanned PDF policy to Word")}</li>
-          <li>{t("Campus courses, and building a course with AI")}</li>
+          <li>{t("Campus courses from the library or built with AI, in every language")}</li>
           <li>{t("Ask Jono")}</li>
           <li>{t("Switching the portal's own screens to another language")}</li>
         </ul>

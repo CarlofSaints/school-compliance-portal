@@ -2135,7 +2135,6 @@
   "Included in your subscription, no credits": "Kubandakanyiwe kumrhumo wakho, akukho khredithi",
   "Compliance checks on the Compliance, Policies and Documents pages": "Uhlolo lokuthobela kumaphepha oKuthobela, iMigaqo-nkqubo kunye neeNgxelo",
   "Convert a scanned PDF policy to Word": "Guqula umgaqo-nkqubo we-PDF oskeniweyo ube yi-Word",
-  "Campus courses, and building a course with AI": "Iikhosi ze-Campus, nokwakha ikhosi nge-AI",
   "Switching the portal's own screens to another language": "Ukutshintshela izikrini zephothali kolunye ulwimi",
   "If we ever start charging credits for one of these, this page changes first and your school's administrators are told by email before it starts.": "Ukuba singaqala ukuhlawulisa iikhredithi kwenye yezi, eli phepha litshintsha kuqala kwaye abalawuli besikolo sakho baxelelwa nge-imeyile phambi kokuba kuqale.",
   "Buying credits": "Ukuthenga iikhredithi",
@@ -2158,5 +2157,7 @@
   "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Oku kubhalwe ngumntu esikolweni sakho, ngoko kusesiNgesini. Ukukuguqulela kusebenzisa iikhredithi zesikolo ({cost}); emva koko wonke umntu ukufunda ngolu lwimi simahla.",
   "Translating... this can take a minute": "Kuyaguqulelwa... oku kunokuthatha umzuzu",
   "Translate ({cost})": "Guqulela ({cost})",
-  "Ask someone who may spend the school's credits to translate it.": "Cela umntu ovumelekileyo ukusebenzisa iikhredithi zesikolo ukuba akuguqulele."
+  "Ask someone who may spend the school's credits to translate it.": "Cela umntu ovumelekileyo ukusebenzisa iikhredithi zesikolo ukuba akuguqulele.",
+  "Translating a Campus lesson or test written by someone at your school": "Ukuguqulela isifundo okanye uvavanyo lwe-Campus olubhalwe ngumntu esikolweni sakho",
+  "Campus courses from the library or built with AI, in every language": "Iikhosi ze-Campus ezivela kwithala okanye ezakhiwe nge-AI, ngazo zonke iilwimi"
 }

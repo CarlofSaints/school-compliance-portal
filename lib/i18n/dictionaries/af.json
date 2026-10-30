@@ -2135,7 +2135,6 @@
   "Included in your subscription, no credits": "Ingesluit by u intekening, geen krediete nie",
   "Compliance checks on the Compliance, Policies and Documents pages": "Nakomingskontroles op die Nakoming-, Beleide- en Dokumente-bladsye",
   "Convert a scanned PDF policy to Word": "Skakel 'n geskandeerde PDF-beleid na Word om",
-  "Campus courses, and building a course with AI": "Campus-kursusse, en 'n kursus met KI bou",
   "Switching the portal's own screens to another language": "Om die portaal se eie skerms na 'n ander taal oor te skakel",
   "If we ever start charging credits for one of these, this page changes first and your school's administrators are told by email before it starts.": "As ons ooit begin om krediete vir een hiervan te vra, verander hierdie bladsy eers en word u skool se administrateurs per e-pos ingelig voordat dit begin.",
   "Buying credits": "Krediete koop",
@@ -2158,5 +2157,7 @@
   "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Dit is deur iemand by u skool geskryf, so dit is in Engels. Om dit te vertaal gebruik die skool se krediete ({cost}); daarna lees almal dit gratis in hierdie taal.",
   "Translating... this can take a minute": "Vertaal tans... dit kan 'n minuut neem",
   "Translate ({cost})": "Vertaal ({cost})",
-  "Ask someone who may spend the school's credits to translate it.": "Vra iemand wat die skool se krediete mag spandeer om dit te vertaal."
+  "Ask someone who may spend the school's credits to translate it.": "Vra iemand wat die skool se krediete mag spandeer om dit te vertaal.",
+  "Translating a Campus lesson or test written by someone at your school": "Om 'n Campus-les of -toets te vertaal wat deur iemand by u skool geskryf is",
+  "Campus courses from the library or built with AI, in every language": "Campus-kursusse uit die biblioteek of met KI gebou, in elke taal"
 }

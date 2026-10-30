@@ -2135,7 +2135,6 @@
   "Included in your subscription, no credits": "Ho kenyeleditswe peeletsong ya hao, ha ho dikhrediti",
   "Compliance checks on the Compliance, Policies and Documents pages": "Ditlhahlobo tsa ho latela maqepheng a Ho latela, Maano le Ditokomane",
   "Convert a scanned PDF policy to Word": "Fetola leano la PDF le skenilweng hore e be Word",
-  "Campus courses, and building a course with AI": "Dithuto tsa Campus, le ho aha thuto ka AI",
   "Switching the portal's own screens to another language": "Ho fetolela diskrini tsa phothale puong e nngwe",
   "If we ever start charging credits for one of these, this page changes first and your school's administrators are told by email before it starts.": "Haeba re ka qala ho lefisa dikhrediti ho e nngwe ya tsena, leqephe lena le fetoha pele mme batsamaisi ba sekolo sa hao ba bolellwa ka imeile pele e qala.",
   "Buying credits": "Ho reka dikhrediti",
@@ -2158,5 +2157,7 @@
   "This was written by someone at your school, so it is in English. Translating it uses the school's credits ({cost}); after that everyone reads it in this language for free.": "Sena se ngotswe ke motho sekolong sa hao, ka hona se ka Senyesemane. Ho se fetolela ho sebedisa dikhrediti tsa sekolo ({cost}); kamora moo bohle ba se bala ka puo ena mahala.",
   "Translating... this can take a minute": "E a fetolela... sena se ka nka motsotso",
   "Translate ({cost})": "Fetolela ({cost})",
-  "Ask someone who may spend the school's credits to translate it.": "Kopa motho ya dumelletsweng ho sebedisa dikhrediti tsa sekolo hore a se fetolele."
+  "Ask someone who may spend the school's credits to translate it.": "Kopa motho ya dumelletsweng ho sebedisa dikhrediti tsa sekolo hore a se fetolele.",
+  "Translating a Campus lesson or test written by someone at your school": "Ho fetolela thuto kapa teko ya Campus e ngotsweng ke motho sekolong sa hao",
+  "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus ho tswa laeboraring kapa tse hahilweng ka AI, ka dipuo tsohle"
 }
