@@ -49,9 +49,9 @@ type Store = Record<string, Entry>;
 const storePath = (locale: Locale) => `training/translations/${locale}.json`;
 const failedPath = (locale: Locale) => `training/translations/${locale}-failed.json`;
 type Failed = Record<string, { hash: string; count: number; at: number }>;
-/** A free translation that keeps failing is tried again after an hour, and at most 3 times per version of the English. */
+/** A free translation that fails is tried again after a wait; one whose translation itself keeps failing, at most 3 times per version of the English. */
 const MAX_FREE_TRIES = 3;
-const RETRY_AFTER_MS = 60 * 60_000;
+const RETRY_AFTER_MS = 15 * 60_000;
 const claimPath = (locale: Locale, key: string) => `training/translations/claims/${locale}/${key.replace(/[^\w-]/g, "_")}.json`;
 /** The reader's language; English outside a request (scripts, the daily job), where there is no cookie to read. */
 export async function readerLocale(): Promise<Locale> {
@@ -259,7 +259,10 @@ export async function translateMissingFree(locale: Locale, items: { kind: Campus
         for (const x of mine) {
           const key = keyOf(x.kind, x.item.id);
           const hash = unitHash(unitOf(x.kind, x.item));
-          next[key] = { hash, count: cur[key]?.hash === hash ? cur[key].count + 1 : 1, at: Date.now() };
+          const before = cur[key]?.hash === hash ? cur[key].count : 0;
+          // Only a failure of the translation itself counts toward giving up. A billing, key, rate or
+          // connection error (HVPS ran out of Anthropic credit, 30 Oct 2026) just waits and tries again.
+          next[key] = { hash, count: err instanceof CampusTranslateError ? before + 1 : before, at: Date.now() };
         }
         return next;
       }).catch(() => {});
