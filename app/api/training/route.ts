@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     getProgress(session.id),
   ]);
   // In the reader's language (lib/campusTranslation.ts); free AI content still missing is translated in the background.
-  const { materials, tests, modules } = await inReaderLanguageLists({ materials: english[0], tests: english[1], modules: english[2] });
+  const { materials, tests, modules, translating } = await inReaderLanguageLists({ materials: english[0], tests: english[1], modules: english[2] });
   const live = liveKeys(materials, tests);
   const visible = <T extends { status: string }>(list: T[]) => (manager ? list : list.filter((x) => x.status === "published"));
 
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(
-    { canManage: manager, modules: moduleRows, materials: materialRows, tests: testRows },
+    { canManage: manager, modules: moduleRows, materials: materialRows, tests: testRows, translating },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

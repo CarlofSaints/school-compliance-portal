@@ -2159,5 +2159,6 @@
   "Translate ({cost})": "Humusha ({cost})",
   "Ask someone who may spend the school's credits to translate it.": "Cela umuntu ovunyelwe ukusebenzisa amakhredithi esikole ukuthi akuhumushe.",
   "Translating a Campus lesson or test written by someone at your school": "Ukuhumusha isifundo noma isivivinyo se-Campus esibhalwe ngumuntu esikoleni sakho",
-  "Campus courses from the library or built with AI, in every language": "Izifundo ze-Campus ezivela emtatsheni noma ezakhiwe nge-AI, ngazo zonke izilimi"
+  "Campus courses from the library or built with AI, in every language": "Izifundo ze-Campus ezivela emtatsheni noma ezakhiwe nge-AI, ngazo zonke izilimi",
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Izifundo nezivivinyo ezingu-{n} zisahunyushwa ngolimi lwakho. Zivela ngesiNgisi zize ziqedwe, futhi leli khasi lizibuyekeza lodwa."
 }

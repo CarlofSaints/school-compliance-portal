@@ -230,7 +230,7 @@ export async function translateUnits(locale: Locale, units: Unit[], deadline: nu
  * translate it twice. shortcut: at most `limit` items per call, the rest go
  * on the next visit; fine for a school's Campus, revisit if it grows to hundreds.
  */
-export async function translateMissingFree(locale: Locale, items: { kind: CampusKind; item: Item }[], limit = 12): Promise<void> {
+export async function translateMissingFree(locale: Locale, items: { kind: CampusKind; item: Item }[], limit = BODIES_PER_VISIT): Promise<void> {
   if (locale === "en") return;
   const [store, failed] = await Promise.all([translationsFor(locale), readJson<Failed>(failedPath(locale), {})]);
   const givenUp = (kind: CampusKind, item: Item) => {
@@ -238,13 +238,13 @@ export async function translateMissingFree(locale: Locale, items: { kind: Campus
     return !!f && f.hash === unitHash(unitOf(kind, item)) && (f.count >= MAX_FREE_TRIES || Date.now() - f.at < RETRY_AFTER_MS);
   };
   // Drafts are never translated, and failing items are left out BEFORE the limit so they cannot crowd out the rest.
-  const todo = items
-    .filter(({ kind, item }) => item.status === "published" && isFree(kind, item.source) && !storedFor(store, kind, item) && !givenUp(kind, item))
-    .slice(0, limit);
+  const todo = items.filter(({ kind, item }) => item.status === "published" && isFree(kind, item.source) && !storedFor(store, kind, item) && !givenUp(kind, item));
   // Leaves room inside the route's 300s for whatever ran before the response.
   const deadline = Date.now() + 180_000;
+  // Every module heading in one small call; lessons and tests (the big ones) up to the limit, several at a time.
+  // 🔴 The headings used to count against the limit too, so the 11 library courses left room for ONE lesson per visit.
   const heads = todo.filter((x) => x.kind === "module");
-  const bodies = todo.filter((x) => x.kind !== "module");
+  const bodies = todo.filter((x) => x.kind !== "module").slice(0, limit);
   const run = async (group: typeof todo) => {
     const mine: typeof todo = [];
     for (const x of group) if (await claim(locale, keyOf(x.kind, x.item.id))) mine.push(x);
@@ -267,12 +267,20 @@ export async function translateMissingFree(locale: Locale, items: { kind: Campus
       await Promise.all(mine.map((x) => release(locale, keyOf(x.kind, x.item.id))));
     }
   };
-  if (heads.length) await run(heads);
-  for (const x of bodies) {
-    if (Date.now() > deadline - 60_000) break;
-    await run([x]);
-  }
+  const queue = [...bodies];
+  const worker = async () => {
+    for (let x = queue.shift(); x; x = queue.shift()) {
+      // No new lesson started that could not finish before the deadline.
+      if (Date.now() > deadline - 60_000) return;
+      await run([x]);
+    }
+  };
+  await Promise.all([heads.length ? run(heads) : Promise.resolve(), ...Array.from({ length: PARALLEL }, worker)]);
 }
+
+/** Lessons and tests translated per visit, and how many at once. shortcut: fixed numbers; a whole library (about 55 pieces) takes two visits. */
+const BODIES_PER_VISIT = 30;
+const PARALLEL = 6;
 
 /**
  * Whole Campus lists in the reader's language, for the catalogue pages:
@@ -281,9 +289,9 @@ export async function translateMissingFree(locale: Locale, items: { kind: Campus
  */
 export async function inReaderLanguageLists<M extends Material, T extends Test, D extends TrainingModule>(
   lists: { materials: M[]; tests: T[]; modules: D[] }
-): Promise<{ materials: M[]; tests: T[]; modules: D[] }> {
+): Promise<{ materials: M[]; tests: T[]; modules: D[]; translating: number }> {
   const locale = await readerLocale();
-  if (locale === "en") return lists;
+  if (locale === "en") return { ...lists, translating: 0 };
   const store = await translationsFor(locale);
   const one = <X extends Item>(kind: CampusKind, item: X): X => {
     const unit = storedFor(store, kind, item);
@@ -303,5 +311,7 @@ export async function inReaderLanguageLists<M extends Material, T extends Test, 
     materials: lists.materials.map((m) => one("material", m)),
     tests: lists.tests.map((t) => one("test", t)),
     modules: lists.modules.map((m) => one("module", m)),
+    // Free pieces still in English, so the page can say translation is under way.
+    translating: missing.length,
   };
 }
