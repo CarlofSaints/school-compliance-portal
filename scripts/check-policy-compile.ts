@@ -2,13 +2,15 @@
 // the draft becomes a Word file on the school's letterhead (crest, name,
 // footer text, page numbers) with its headings and bullets intact.
 //
-//   npx tsx scripts/check-policy-compile.ts
+//   npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-policy-compile.ts
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import JSZip from "jszip";
 import { branding } from "../lib/branding";
 import { cleanCompileRequest, policyDocx, policyFilename } from "../lib/policyCompile";
 import { clearUserBackups, policyDraftKey } from "../lib/minutesBackupKeys";
+import { addCredits, getCredits, spendCredits } from "../lib/contentTranslation";
+import { POLICY_AI_CREDITS } from "../lib/creditPack";
 
 (async () => {
   const ok = { name: "Cellphone Policy", description: "Phones in class", comply: ["sasa", "bela", "nonsense"], province: "", guidelineIds: [] };
@@ -45,5 +47,14 @@ import { clearUserBackups, policyDraftKey } from "../lib/minutesBackupKeys";
   store.set(policyDraftKey("hvps.test", "u10"), "{}");
   clearUserBackups(ls, "hvps.test", "u1");
   assert.deepEqual([...store.keys()], [policyDraftKey("hvps.test", "u2"), policyDraftKey("hvps.test", "u10")], "sign-out clears that person's policy draft only");
+
+  // Credits: a step the school cannot afford takes nothing; an affordable one takes its price.
+  await addCredits(3);
+  assert.equal(await spendCredits(POLICY_AI_CREDITS.draft), true);
+  assert.equal(await getCredits(), 1);
+  assert.equal(await spendCredits(POLICY_AI_CREDITS.revise), false, "not enough left for a change");
+  assert.equal(await getCredits(), 1, "a refused step takes nothing");
+  assert.equal(await spendCredits(POLICY_AI_CREDITS.check), true);
+  assert.equal(await getCredits(), 0);
   console.log("policy compile: all checks passed");
 })();

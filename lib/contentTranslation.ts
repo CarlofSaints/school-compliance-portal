@@ -154,7 +154,7 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
 }
 
 /** Takes n credits, atomically. False when the school has fewer. */
-async function spend(n: number): Promise<boolean> {
+export async function spendCredits(n: number): Promise<boolean> {
   let ok = false;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     if (c.balance < n) return NO_CHANGE;
@@ -249,7 +249,7 @@ async function translateClaimed(opts: Parameters<typeof translateContent>[0]): P
   const stored = await storedTranslation(kind, id, locale, sourceHash);
   if (stored) return stored;
 
-  if (!(await spend(opts.credits))) {
+  if (!(await spendCredits(opts.credits))) {
     return { ok: false, status: 402, error: "Your school does not have enough translation credits for this document." };
   }
 

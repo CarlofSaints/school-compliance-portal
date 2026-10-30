@@ -7,6 +7,9 @@ import { schoolCrest } from "@/lib/minutesDocxFile";
 import { createPolicy, savePolicyVersions, uploadPolicyFile } from "@/lib/policyData";
 import { REQUIRED_POLICY_CATEGORY } from "@/lib/policyCategories";
 import { runComplianceCheck } from "@/lib/complianceEngine";
+import { getUserById } from "@/lib/userData";
+import { POLICY_AI_CREDITS } from "@/lib/creditPack";
+import { addCredits, getCredits, spendCredits } from "@/lib/contentTranslation";
 import {
   CompileError,
   MAX_DRAFT,
@@ -31,6 +34,23 @@ const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice
 //   check  - the usual compliance check on the draft (not saved: it is a draft)
 //   save   - the draft as Word on the letterhead, added to the register
 // The draft itself lives in the browser until it is saved.
+/** Ticked per user on the Users screen. Read fresh, never from the session (same rule as /api/translate). */
+async function maySpendCredits(userId: string): Promise<boolean> {
+  return !!(await getUserById(userId))?.canSpendTranslationCredits;
+}
+
+async function refund(credits: number): Promise<void> {
+  await addCredits(credits).catch((e) => console.error("[policy compile] 🔴 REFUND FAILED, add back by hand:", credits, "credits", e));
+}
+
+// What the page shows before anything is clicked: the balance, what each step costs, and whether this person may spend.
+export async function GET(req: NextRequest) {
+  const session = await requirePermission(req, "upload_policies");
+  if (session instanceof NextResponse) return session;
+  const [balance, canSpend] = await Promise.all([getCredits(), maySpendCredits(session.id)]);
+  return NextResponse.json({ balance, canSpend, prices: POLICY_AI_CREDITS });
+}
+
 export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const action = body.action;
@@ -51,6 +71,10 @@ export async function POST(req: NextRequest) {
   if (action === "revise" && !change) return NextResponse.json({ error: "Say what to change." }, { status: 400 });
   if (change.length > MAX_CHANGE) return NextResponse.json({ error: "That change is too long. Ask for it in smaller parts." }, { status: 400 });
   const deadline = Date.now() + 280_000;
+
+  // Paid in the school's credits (Admin > Translation Credits), taken before the AI call and given back if it fails.
+  const cost = action === "save" ? 0 : POLICY_AI_CREDITS[action as keyof typeof POLICY_AI_CREDITS];
+  let paid = false;
 
   try {
     if (action === "save") {
@@ -83,12 +107,27 @@ export async function POST(req: NextRequest) {
     ]);
     if (limited) return limited;
 
-    if (action === "check") {
-      return NextResponse.json(await runComplianceCheck(draft, name, "policy"), { headers: { "Cache-Control": "no-store" } });
+    if (!(await maySpendCredits(session.id))) {
+      return NextResponse.json(
+        { error: "You are not allowed to spend the school's credits. Ask your administrator to tick \"Can spend translation credits\" on your user." },
+        { status: 403 }
+      );
     }
-    if (action === "revise") return NextResponse.json({ draft: await revisePolicy(request!, draft, change, deadline) });
-    return NextResponse.json({ draft: await compilePolicy(request!, await resolveBranding(), deadline) });
+    if (!(await spendCredits(cost))) {
+      return NextResponse.json({ error: "Your school does not have enough credits for this. Buy more under Admin > Translation Credits.", balance: await getCredits() }, { status: 402 });
+    }
+    paid = true;
+
+    if (action === "check") {
+      const result = await runComplianceCheck(draft, name, "policy");
+      // The engine reports a failed run as score 0 with no risks rather than throwing: not charged.
+      if (result.score === 0 && result.risks.length === 0) await refund(cost);
+      return NextResponse.json({ ...result, balance: await getCredits() }, { headers: { "Cache-Control": "no-store" } });
+    }
+    const text = action === "revise" ? await revisePolicy(request!, draft, change, deadline) : await compilePolicy(request!, await resolveBranding(), deadline);
+    return NextResponse.json({ draft: text, balance: await getCredits() });
   } catch (err) {
+    if (paid) await refund(cost);
     if (err instanceof CompileError) return NextResponse.json({ error: err.message }, { status: 422 });
     console.error(`[policy compile] ${String(action)} failed:`, err);
     const timedOut = err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError" || /abort/i.test(err.message));

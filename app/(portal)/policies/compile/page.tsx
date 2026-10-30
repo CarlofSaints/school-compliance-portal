@@ -7,6 +7,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 import { useBranding } from "@/components/BrandingProvider";
 import { DEFAULT_POLICY_CATEGORIES, REQUIRED_POLICY_CATEGORY } from "@/lib/policyCategories";
+import { POLICY_AI_CREDITS } from "@/lib/creditPack";
 import { COMPLY_WITH, MAX_DESCRIPTION, MAX_INSTRUCTION, MAX_NAME } from "@/lib/policyCompileOptions";
 import { PROVINCES } from "@/lib/trainingTopics";
 import SchoolCrest from "@/components/SchoolCrest";
@@ -57,6 +58,7 @@ export default function CompilePolicyPage() {
   const [restored, setRestored] = useState(false);
   const [guidelines, setGuidelines] = useState<{ id: string; name: string }[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_POLICY_CATEGORIES);
+  const [credits, setCredits] = useState<{ balance: number; canSpend: boolean; prices: typeof POLICY_AI_CREDITS } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const backup = session ? policyDraftKey(window.location.host, session.id) : "";
@@ -86,6 +88,7 @@ export default function CompilePolicyPage() {
 
   useEffect(() => {
     if (!session) return;
+    authFetch("/api/policies/compile").then(async (r) => r.ok && setCredits(await r.json())).catch(() => {});
     authFetch("/api/guidelines").then(async (r) => r.ok && setGuidelines(await r.json())).catch(() => {});
     authFetch("/api/settings/policy-categories")
       .then(async (r) => {
@@ -104,6 +107,7 @@ export default function CompilePolicyPage() {
         body: JSON.stringify({ action, ...form, draft, ...extra }),
       });
       const body = await r.json().catch(() => ({}));
+      if (typeof body.balance === "number") setCredits((c) => (c ? { ...c, balance: body.balance } : c));
       if (!r.ok) {
         setToast({ message: body.error || t("Something went wrong. Please try again."), type: "error" });
         return null;
@@ -170,6 +174,10 @@ export default function CompilePolicyPage() {
   const stale = check !== null && check.of !== draft;
   if (loading || !restored) return <div className="p-6">{t("Loading...")}</div>;
   const working = busy !== "";
+  // Each AI step is paid in the school's credits. Until the balance has loaded nothing is blocked: the server decides.
+  const price = credits?.prices ?? POLICY_AI_CREDITS;
+  const affordable = (n: number) => !credits || (credits.canSpend && credits.balance >= n);
+  const cost = (n: number) => t("{n} credits", { n });
 
   return (
     <div>
@@ -243,8 +251,8 @@ export default function CompilePolicyPage() {
             </select>
           </div>
           <div className="flex flex-wrap gap-3 pt-1">
-            <button type="submit" disabled={working} className={solid}>
-              {busy === "draft" ? t("Writing the policy... this takes a minute or two") : draft ? t("Write a new draft") : t("Write the draft")}
+            <button type="submit" disabled={working || !affordable(price.draft)} className={solid}>
+              {busy === "draft" ? t("Writing the policy... this takes a minute or two") : `${draft ? t("Write a new draft") : t("Write the draft")} (${cost(price.draft)})`}
             </button>
             {(draft || form.name) && (
               <button type="button" onClick={startOver} disabled={working} className={ghost}>{t("Start over")}</button>
@@ -253,6 +261,26 @@ export default function CompilePolicyPage() {
         </form>
 
         <div className="space-y-6">
+          <div className="rounded-xl border border-gray-200 bg-white px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-dark">{credits ? t("Your school has {n} credits", { n: credits.balance }) : t("Loading...")}</p>
+              <p className="text-xs text-gray-500">
+                {t("The AI is paid for in credits: a draft uses {a}, each change {b}, a compliance check {c}. Editing the text yourself and adding to the library are free.", { a: price.draft, b: price.revise, c: price.check })}
+              </p>
+              {credits && !credits.canSpend && (
+                <p className="text-xs text-amber-700 mt-1">{t("You are not allowed to spend the school's credits. Ask your administrator to tick \"Can spend translation credits\" on your user.")}</p>
+              )}
+            </div>
+            {session?.permissions.includes("manage_users") ? (
+              <Link href="/admin/translation-credits" className={solid}>{t("Buy credits")}</Link>
+            ) : (
+              <span className="text-xs text-gray-500">{t("To buy credits, ask your administrator (Admin > Translation Credits).")}</span>
+            )}
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-900 space-y-1">
+            <p><strong>{t("Not a legal review.")}</strong> {t("A draft is a starting point. The SGB or board of governors should read it before adopting it.")}</p>
+            <p><strong>{t("The compliance check here is not saved.")}</strong> {t("It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.")}</p>
+          </div>
           {!draft ? (
             <div className="bg-white rounded-xl shadow-sm border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">
               {t("The draft appears here, on your school's letterhead.")}
@@ -266,8 +294,8 @@ export default function CompilePolicyPage() {
                     <button type="button" onClick={() => setEditing(!editing)} disabled={working} className={ghost}>
                       {editing ? t("Done editing") : t("Edit the text myself")}
                     </button>
-                    <button type="button" onClick={runCheck} disabled={working || !session?.permissions.includes("check_compliance")} className={ghost}>
-                      {busy === "check" ? t("Checking...") : t("Run Compliance Check")}
+                    <button type="button" onClick={runCheck} disabled={working || !session?.permissions.includes("check_compliance") || !affordable(price.check)} className={ghost}>
+                      {busy === "check" ? t("Checking...") : `${t("Run Compliance Check")} (${cost(price.check)})`}
                     </button>
                     <button type="button" onClick={save} disabled={working} className={solid}>
                       {busy === "save" ? t("Adding...") : t("Add to policy library")}
@@ -310,8 +338,8 @@ export default function CompilePolicyPage() {
                   placeholder={t("e.g. Add a section on phones during exams, and make the confiscation period 24 hours.")}
                   className={`${input} resize-y`}
                 />
-                <button type="button" onClick={() => revise(change.trim())} disabled={working || !change.trim()} className={`${solid} mt-3`}>
-                  {busy === "revise" ? t("Rewriting the draft...") : t("Make the change")}
+                <button type="button" onClick={() => revise(change.trim())} disabled={working || !change.trim() || !affordable(price.revise)} className={`${solid} mt-3`}>
+                  {busy === "revise" ? t("Rewriting the draft...") : `${t("Make the change")} (${cost(price.revise)})`}
                 </button>
               </div>
 
@@ -337,11 +365,11 @@ export default function CompilePolicyPage() {
                   </div>
                   {stale && <p className="text-xs text-amber-600 mt-3">{t("The draft has changed since this check. Run it again to see where it stands now.")}</p>}
                   {check.risks.length > 0 && !stale && (
-                    <button type="button" onClick={fixIssues} disabled={working} className={`${solid} mt-4`}>
-                      {busy === "revise" ? t("Rewriting the draft...") : t("Fix these in the draft")}
+                    <button type="button" onClick={fixIssues} disabled={working || !affordable(price.revise)} className={`${solid} mt-4`}>
+                      {busy === "revise" ? t("Rewriting the draft...") : `${t("Fix these in the draft")} (${cost(price.revise)})`}
                     </button>
                   )}
-                  <p className="text-xs text-gray-400 mt-3">{t("This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.")}</p>
+                  <p className="text-xs text-amber-700 mt-3">{t("This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.")}</p>
                 </div>
               )}
             </>
