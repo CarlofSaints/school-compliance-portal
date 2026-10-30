@@ -266,7 +266,7 @@ export default function CompilePolicyPage() {
             <div>
               <p className="font-medium text-dark">{credits ? (credits.balance === 1 ? t("Your school has {n} credit", { n: 1 }) : t("Your school has {n} credits", { n: credits.balance })) : t("Loading...")}</p>
               <p className="text-xs text-gray-500">
-                {t("The AI is paid for in credits: a draft uses {a}, each change {b}, a compliance check {c}. Editing the text yourself and adding to the library are free.", { a: price.draft, b: price.revise, c: price.check })}
+                {t("The AI is paid for in credits: a draft uses {a}, each change {b}, a compliance check {c}. Editing the text yourself and adding to the library are free.", { a: price.draft, b: price.revise, c: price.check })} <Link href="/billing" className="underline">{t("How billing works")}</Link>
               </p>
               {credits && !credits.canSpend && (
                 <p className="text-xs text-amber-700 mt-1">{t("You are not allowed to spend the school's credits. Ask your administrator to tick \"Can spend translation credits\" on your user.")}</p>
