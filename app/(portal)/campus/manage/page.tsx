@@ -18,13 +18,26 @@ export default function ManageTrainingPage() {
   const [data, setData] = useState<Catalogue | null>(null);
   const [library, setLibrary] = useState<LibraryRow[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
+  const [demo, setDemo] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const load = useCallback(async () => {
     const [res, lib] = await Promise.all([authFetch("/api/training"), authFetch("/api/training/library")]);
     if (res.ok) setData(await res.json());
     if (lib.ok) setLibrary(await lib.json());
+    const d = await authFetch("/api/training/demo-fill");
+    if (d.ok) setDemo((await d.json()).available === true);
   }, []);
+
+  // Demo school only (the server refuses anywhere else).
+  const fillDemo = async () => {
+    setAdding("demo");
+    const res = await authFetch("/api/training/demo-fill", { method: "POST" });
+    const out = await res.json().catch(() => ({}));
+    setToast(res.ok ? { message: `Demo leaderboard filled: ${out.progress} governors`, type: "success" } : { message: out.error || "Failed", type: "error" });
+    setAdding(null);
+    load();
+  };
 
   const addCourses = async (body: { slug?: string; all?: boolean }) => {
     setAdding(body.slug ?? "all");
@@ -116,6 +129,11 @@ export default function ManageTrainingPage() {
                 {t("Ready-made courses with a multiple-choice test each. Adding one copies it into your Campus, published, for you to edit as you like.")}
               </p>
             </div>
+            {demo && (
+              <button onClick={fillDemo} disabled={adding !== null} className="border border-gray-300 bg-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                {adding === "demo" ? "Filling..." : "Fill demo leaderboard"}
+              </button>
+            )}
             {library.some((c) => !c.added) && (
               <button
                 onClick={() => addCourses({ all: true })}
