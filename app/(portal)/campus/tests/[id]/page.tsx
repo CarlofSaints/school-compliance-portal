@@ -1,0 +1,210 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { useAuth, authFetch } from "@/lib/useAuth";
+import { useT } from "@/components/I18nProvider";
+import { DraftPill } from "@/components/trainingUi";
+
+interface Paper {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  passMark: number;
+  maxAttempts: number;
+  questions: { id: string; type: "single" | "multi" | "truefalse" | "text"; text: string; points: number; options: { id: string; text: string }[] }[];
+  attempts: { id: string; submittedAt: string; scorePct: number; passed: boolean }[];
+}
+interface Result {
+  scorePct: number;
+  passed: boolean;
+  pointsAwarded: number;
+  pointsPossible: number;
+  passMark: number;
+  memo: { questionId: string; isCorrect: boolean; correctOptionIds: string[]; acceptedAnswers: string[]; explanation: string }[] | null;
+}
+
+export default function TestPage() {
+  const t = useT();
+  const { session, loading } = useAuth();
+  const { id } = useParams<{ id: string }>();
+  const [paper, setPaper] = useState<Paper | null>(null);
+  const [error, setError] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [result, setResult] = useState<Result | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = useCallback(async () => {
+    const res = await authFetch(`/api/training/tests/${id}`);
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) setPaper(body);
+    else setError(body.error || t("This test could not be opened."));
+  }, [id, t]);
+
+  useEffect(() => {
+    if (session) load();
+  }, [session, load]);
+
+  const submit = async () => {
+    if (!paper) return;
+    const blank = paper.questions.filter((q) => {
+      const a = answers[q.id];
+      return a === undefined || (Array.isArray(a) ? a.length === 0 : !a.trim());
+    }).length;
+    if (blank && !confirm(t("{count} questions are not answered. Hand in anyway?", { count: blank }))) return;
+    setSubmitting(true);
+    setError("");
+    const res = await authFetch(`/api/training/tests/${id}/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ responses: answers }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setResult(body);
+      window.scrollTo({ top: 0 });
+      load();
+    } else setError(body.error || t("Your answers could not be handed in. Try again."));
+    setSubmitting(false);
+  };
+
+  const retake = () => {
+    setResult(null);
+    setAnswers({});
+    window.scrollTo({ top: 0 });
+  };
+
+  if (loading || (!paper && !error)) return <div className="p-6">{t("Loading...")}</div>;
+  if (!paper) {
+    return (
+      <div className="max-w-3xl">
+        <Link href="/campus" className="text-sm text-primary">&larr; {t("Back to Campus")}</Link>
+        <p className="mt-4 text-sm text-gray-700">{error}</p>
+      </div>
+    );
+  }
+
+  const used = paper.attempts.length;
+  const left = paper.maxAttempts > 0 ? paper.maxAttempts - used : null;
+  const best = used ? Math.max(...paper.attempts.map((a) => a.scorePct)) : null;
+  const memoFor = (qid: string) => result?.memo?.find((m) => m.questionId === qid);
+
+  return (
+    <div className="max-w-3xl">
+      <Link href="/campus" className="text-sm text-primary">&larr; {t("Back to Campus")}</Link>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-3">
+        <h1 className="text-2xl font-bold text-dark">
+          {paper.title}
+          {paper.status !== "published" && <DraftPill />}
+        </h1>
+        {paper.description && <p className="text-gray-500 text-sm mt-1">{paper.description}</p>}
+        <p className="text-xs text-gray-400 mt-2">
+          {t("{count} questions", { count: paper.questions.length })} &middot; {t("Pass mark {pct}%", { pct: paper.passMark })}
+          {left !== null && <> &middot; {t("{left} of {max} attempts left", { left: Math.max(0, left), max: paper.maxAttempts })}</>}
+          {best !== null && <> &middot; {t("Your best: {pct}%", { pct: best })}</>}
+        </p>
+      </div>
+
+      {result && (
+        <div className={`rounded-xl p-6 mt-4 border ${result.passed ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+          <p className="text-3xl font-bold text-dark">{result.scorePct}%</p>
+          <p className="text-sm mt-1">
+            {result.passed ? t("Passed. Well done.") : t("Not passed. The pass mark is {pct}%.", { pct: result.passMark })}{" "}
+            {t("{got} of {total} points.", { got: result.pointsAwarded, total: result.pointsPossible })}
+          </p>
+          <div className="flex gap-2 mt-4">
+            {(left === null || left > 0) && (
+              <button onClick={retake} className="border border-gray-300 bg-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
+                {t("Try again")}
+              </button>
+            )}
+            <Link href="/campus/leaderboard" className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium">
+              {t("See the leaderboard")}
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!result && left !== null && left <= 0 ? (
+        <p className="mt-4 text-sm text-gray-700 bg-white rounded-xl border border-gray-100 p-6">{t("You have used all your attempts at this test.")}</p>
+      ) : (
+        <div className="space-y-4 mt-4">
+          {paper.questions.map((q, i) => {
+            const memo = memoFor(q.id);
+            const value = answers[q.id];
+            const set = (v: string | string[]) => !result && setAnswers((a) => ({ ...a, [q.id]: v }));
+            return (
+              <div
+                key={q.id}
+                className={`bg-white rounded-xl shadow-sm border p-5 ${memo ? (memo.isCorrect ? "border-emerald-300" : "border-red-300") : "border-gray-100"}`}
+              >
+                <p className="text-sm font-medium text-dark">
+                  {i + 1}. {q.text}
+                  {q.type === "multi" && <span className="text-xs text-gray-400 font-normal"> ({t("tick all that apply")})</span>}
+                </p>
+                {q.type === "text" ? (
+                  <input
+                    value={typeof value === "string" ? value : ""}
+                    onChange={(e) => set(e.target.value)}
+                    disabled={Boolean(result)}
+                    className="mt-3 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    placeholder={t("Type your answer")}
+                  />
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {q.options.map((o) => {
+                      const multi = q.type === "multi";
+                      const chosen = multi ? Array.isArray(value) && value.includes(o.id) : value === o.id;
+                      const right = memo?.correctOptionIds.includes(o.id);
+                      return (
+                        <label
+                          key={o.id}
+                          className={`flex items-center gap-3 text-sm px-3 py-2 rounded-lg border ${
+                            memo && right ? "bg-emerald-50 border-emerald-200" : memo && chosen ? "bg-red-50 border-red-200" : "border-gray-100"
+                          }`}
+                        >
+                          <input
+                            type={multi ? "checkbox" : "radio"}
+                            name={q.id}
+                            checked={chosen}
+                            disabled={Boolean(result)}
+                            onChange={() =>
+                              multi
+                                ? set(chosen ? (value as string[]).filter((x) => x !== o.id) : [...(Array.isArray(value) ? value : []), o.id])
+                                : set(o.id)
+                            }
+                          />
+                          {o.text === "True" ? t("True") : o.text === "False" ? t("False") : o.text}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {memo && (
+                  <div className="mt-3 text-xs text-gray-600">
+                    {q.type === "text" && !memo.isCorrect && <p>{t("Accepted answer:")} {memo.acceptedAnswers.join(" / ")}</p>}
+                    {memo.explanation && <p className="mt-1">{memo.explanation}</p>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {!result && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={submit}
+                disabled={submitting}
+                className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {submitting ? t("Marking...") : t("Hand in")}
+              </button>
+              {error && <p className="text-sm text-red-600">{error}</p>}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

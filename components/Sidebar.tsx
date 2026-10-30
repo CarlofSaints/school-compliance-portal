@@ -77,6 +77,22 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    // No permission: courses and the leaderboard are for everybody in the
+    // portal. Building training is gated on the page behind manage_training.
+    label: tk("Campus"),
+    href: "/campus",
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422A12.083 12.083 0 0118 17.5c-2.2 1.3-4.1 2-6 2.5-1.9-.5-3.8-1.2-6-2.5a12.083 12.083 0 01-.16-6.922L12 14z" />
+      </svg>
+    ),
+    children: [
+      { label: tk("Courses"), href: "/campus" },
+      { label: tk("Leaderboard"), href: "/campus/leaderboard" },
+      { label: tk("Manage Campus"), href: "/campus/manage", permission: "manage_training" },
+    ],
+  },
+  {
     // No permission: the guide explains the portal to whoever is using it.
     label: tk("Guide"),
     href: "/guide",

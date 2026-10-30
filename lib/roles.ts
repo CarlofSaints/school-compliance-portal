@@ -52,6 +52,9 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   { key: "manage_rooms", name: "Manage Meeting Rooms", category: "Rooms" },
   // Seeing who is on the portal is separate from being able to change them:
   // view_users opens the Users page read-only, manage_users allows editing.
+  // Building and publishing training (manual or AI). Taking courses and the
+  // leaderboard need no key: they are for everybody in the portal.
+  { key: "manage_training", name: "Manage Campus", category: "Campus" },
   { key: "view_users", name: "View Users", category: "Admin" },
   { key: "manage_users", name: "Manage Users", category: "Admin" },
   { key: "manage_roles", name: "Manage Roles & Permissions", category: "Admin" },

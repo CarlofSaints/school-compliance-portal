@@ -45,6 +45,7 @@ export type ActivityEntity =
   | "compliance"
   | "branding"
   | "room"
+  | "training"
   | "auth"
   | "password"
   | "system";
