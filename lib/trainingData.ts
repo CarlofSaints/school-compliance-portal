@@ -18,6 +18,7 @@ import {
   type Progress,
   type Test,
   type TrainingModule,
+  type TrainingSource,
 } from "./training";
 
 // Storage for training. Everything goes through controlData, which is already
@@ -53,7 +54,7 @@ export async function getModule(id: string) {
 type Kind = "material" | "test" | "module";
 const LISTS: Record<Kind, string> = { material: MATERIALS, test: TESTS, module: MODULES };
 
-export function stamp(by: string, source: "manual" | "ai" = "manual") {
+export function stamp(by: string, source: TrainingSource = "manual") {
   const now = new Date().toISOString();
   return { id: randomUUID(), source, createdBy: by, createdAt: now, updatedAt: now };
 }

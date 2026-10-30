@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       locked: !manager && isLocked(progress, modules, { kind: "test", id: t.id }, live),
     };
   });
-  const titles = new Map<string, { title: string; status: string }>([
+  const titles = new Map<string, { title: string; status: string; icon?: string }>([
     ...materials.map((m) => [`material:${m.id}`, m] as const),
     ...tests.map((t) => [`test:${t.id}`, t] as const),
   ]);
@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
         ...i,
         title: titles.get(`${i.kind}:${i.id}`)!.title,
         status: titles.get(`${i.kind}:${i.id}`)!.status,
+        icon: titles.get(`${i.kind}:${i.id}`)!.icon ?? (i.kind === "test" ? "📝" : "📖"),
         done: itemDone(progress, i),
         locked: !manager && isLocked(progress, modules, i, live),
       }));
@@ -74,6 +75,8 @@ export async function GET(req: NextRequest) {
       status: m.status,
       source: m.source,
       sequential: m.sequential,
+      icon: m.icon || "🎓",
+      colour: m.colour || "violet",
       updatedAt: m.updatedAt,
       items,
       doneCount: items.filter((i) => i.done).length,

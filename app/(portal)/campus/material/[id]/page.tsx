@@ -16,6 +16,7 @@ interface MaterialView {
   status: string;
   kind: "text" | "file";
   body: string;
+  icon?: string;
   file?: { filename: string; size: number };
 }
 
@@ -53,6 +54,7 @@ export default function MaterialPage() {
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mt-3">
           <h1 className="text-2xl font-bold text-dark">
+            {m.icon && <span className="mr-2" aria-hidden>{m.icon}</span>}
             {m.title}
             {m.status !== "published" && <DraftPill />}
           </h1>

@@ -7,6 +7,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 import Toast from "@/components/Toast";
 import { DraftPill, stepHref, type Catalogue } from "@/components/trainingUi";
+import { MODULE_COLOURS } from "@/lib/trainingTopics";
 
 const input = "w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none";
 type Item = { kind: "material" | "test"; id: string };
@@ -18,7 +19,7 @@ export default function ModuleEditorPage() {
   const isNew = id === "new";
   const { session, loading } = useAuth("manage_training");
   const [cat, setCat] = useState<Catalogue | null>(null);
-  const [form, setForm] = useState({ title: "", description: "", topic: "", sequential: true, status: "draft", items: [] as Item[], source: "manual" });
+  const [form, setForm] = useState({ title: "", description: "", topic: "", sequential: true, status: "draft", items: [] as Item[], source: "manual", icon: "🎓", colour: "violet" });
   const [ready, setReady] = useState(isNew);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -101,6 +102,26 @@ export default function ModuleEditorPage() {
           <span className="block text-sm font-medium text-gray-700 mb-1">{t("Topic (optional)")}</span>
           <input value={form.topic} onChange={(e) => setForm({ ...form, topic: e.target.value })} maxLength={200} className={input} />
         </label>
+        <div className="flex gap-4 items-end flex-wrap">
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-700 mb-1">{t("Icon (an emoji)")}</span>
+            <input value={form.icon ?? ""} onChange={(e) => setForm({ ...form, icon: e.target.value })} maxLength={16} className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-2xl text-center" />
+          </label>
+          <div>
+            <span className="block text-sm font-medium text-gray-700 mb-1">{t("Colour")}</span>
+            <div className="flex gap-2">
+              {Object.entries(MODULE_COLOURS).map(([key, c]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setForm({ ...form, colour: key })}
+                  aria-label={key}
+                  className={`w-8 h-8 rounded-full ${c.band} ${(form.colour ?? "violet") === key ? "ring-2 ring-offset-2 ring-gray-800" : ""}`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={form.sequential} onChange={(e) => setForm({ ...form, sequential: e.target.checked })} />
           {t("Steps must be done in order (each one unlocks when the one before it is done)")}

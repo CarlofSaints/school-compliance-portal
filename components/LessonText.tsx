@@ -1,5 +1,5 @@
 // Lesson text written in the small markdown the AI and the editor use:
-// "#"/"##"/"###" headings, "- " bullets, "1. " numbered lines, **bold**,
+// "#"/"##"/"###" headings, "- " bullets, "1. " numbered lines, **bold**, "> " callout box,
 // blank line between paragraphs. Rendered as React text, never as HTML, so a
 // lesson can never inject markup into the page.
 
@@ -35,6 +35,15 @@ export default function LessonText({ body }: { body: string }) {
     }
     flush();
     if (!line) continue;
+    if (line.startsWith("> ")) {
+      const warn = /^> ?(⚠️|❗|🚫)/u.test(line);
+      blocks.push(
+        <div key={blocks.length} className={`my-3 rounded-lg border-l-4 px-4 py-3 ${warn ? "border-amber-400 bg-amber-50 text-amber-900" : "border-sky-400 bg-sky-50 text-sky-900"}`}>
+          {inline(line.slice(2))}
+        </div>
+      );
+      continue;
+    }
     const h = /^(#{1,3}) (.*)$/.exec(line);
     if (h) {
       const size = h[1].length === 1 ? "text-xl" : h[1].length === 2 ? "text-lg" : "text-base";

@@ -7,6 +7,7 @@ import { useT } from "@/components/I18nProvider";
 // Shared by the training pages.
 
 export interface Step {
+  icon: string;
   kind: "material" | "test";
   id: string;
   title: string;
@@ -21,6 +22,8 @@ export interface ModuleRow {
   topic: string;
   status: string;
   sequential: boolean;
+  icon: string;
+  colour: string;
   items: Step[];
   doneCount: number;
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 import { DraftPill, stepHref, type Catalogue } from "@/components/trainingUi";
+import { MODULE_COLOURS, type ModuleColour } from "@/lib/trainingTopics";
 
 export default function TrainingPage() {
   const t = useT();
@@ -62,42 +63,52 @@ export default function TrainingPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {data.modules.map((m) => {
           const pct = m.items.length ? Math.round((m.doneCount / m.items.length) * 100) : 0;
+          const c = MODULE_COLOURS[m.colour as ModuleColour] ?? MODULE_COLOURS.violet;
+          const complete = m.items.length > 0 && m.doneCount === m.items.length;
           return (
-            <div key={m.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold text-dark">
+            <div key={m.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className={`${c.band} px-5 py-4 flex items-center gap-4 text-white`}>
+                <span className="text-4xl leading-none" aria-hidden>{m.icon}</span>
+                <div className="min-w-0 flex-1">
+                  {m.topic && <p className="text-xs font-semibold uppercase tracking-wide text-white/80">{m.topic}</p>}
+                  <h2 className="font-bold text-lg leading-snug">
                     {m.title}
                     {m.status !== "published" && <DraftPill />}
                   </h2>
-                  {m.topic && <p className="text-xs text-gray-400 mt-0.5">{m.topic}</p>}
                 </div>
-                <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
-                  {t("{done} of {total} done", { done: m.doneCount, total: m.items.length })}
-                </span>
+                {complete && <span className="text-3xl" title={t("Completed")}>🏆</span>}
               </div>
-              {m.description && <p className="text-sm text-gray-600 mt-2">{m.description}</p>}
-              <div className="h-1.5 bg-gray-100 rounded-full mt-3">
-                <div className="h-1.5 bg-primary rounded-full" style={{ width: `${pct}%` }} />
-              </div>
-              <ol className="mt-4 space-y-1">
-                {m.items.map((s, i) => (
-                  <li key={`${s.kind}:${s.id}`}>
-                    {s.locked ? (
-                      <span className="flex items-center gap-2 text-sm text-gray-400 py-1" title={t("Finish the earlier steps first")}>
-                        <span className="w-5 text-center">🔒</span>
-                        {i + 1}. {s.title}
-                      </span>
+              <div className="p-5">
+                {m.description && <p className="text-sm text-gray-600">{m.description}</p>}
+                <div className="flex items-center gap-3 mt-3">
+                  <div className="h-2 flex-1 bg-gray-100 rounded-full">
+                    <div className={`h-2 ${c.bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className={`text-xs font-semibold ${c.text} whitespace-nowrap`}>
+                    {t("{done} of {total} done", { done: m.doneCount, total: m.items.length })}
+                  </span>
+                </div>
+                <ol className="mt-4 space-y-1.5">
+                  {m.items.map((s, i) =>
+                    s.locked ? (
+                      <li key={`${s.kind}:${s.id}`} className="flex items-center gap-3 text-sm text-gray-400 px-3 py-2 rounded-lg bg-gray-50" title={t("Finish the earlier steps first")}>
+                        <span className="text-lg w-6 text-center" aria-hidden>🔒</span>
+                        <span className="flex-1">{i + 1}. {s.title}</span>
+                      </li>
                     ) : (
-                      <Link href={stepHref(s, m.id)} className="flex items-center gap-2 text-sm text-gray-700 hover:text-primary py-1">
-                        <span className={`w-5 text-center ${s.done ? "text-emerald-600" : "text-gray-300"}`}>{s.done ? "✓" : "○"}</span>
-                        {i + 1}. {s.title}
-                        <span className="text-xs text-gray-400">{s.kind === "test" ? t("Test") : t("Lesson")}</span>
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ol>
+                      <li key={`${s.kind}:${s.id}`}>
+                        <Link href={stepHref(s, m.id)} className={`flex items-center gap-3 text-sm px-3 py-2 rounded-lg ${c.hover} ${s.done ? c.soft : ""}`}>
+                          <span className="text-lg w-6 text-center" aria-hidden>{s.icon}</span>
+                          <span className="flex-1 text-gray-800">{i + 1}. {s.title}</span>
+                          <span className={`text-xs font-medium ${s.done ? "text-emerald-600" : "text-gray-400"}`}>
+                            {s.done ? (s.kind === "test" ? t("Passed") : t("Read")) : s.kind === "test" ? t("Test") : t("Lesson")}
+                          </span>
+                        </Link>
+                      </li>
+                    )
+                  )}
+                </ol>
+              </div>
             </div>
           );
         })}

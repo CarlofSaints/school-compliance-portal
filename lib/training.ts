@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { markAttempt, type MarkedAnswer, type QuestionType } from "./trainingMarking";
+import { MODULE_COLOURS, type ModuleColour } from "./trainingTopics";
 
 // ---------------------------------------------------------------------------
 // Training: material, tests and modules, ported from iRam Campus onto this
@@ -17,7 +18,7 @@ import { markAttempt, type MarkedAnswer, type QuestionType } from "./trainingMar
 // ---------------------------------------------------------------------------
 
 export type TrainingStatus = "draft" | "published";
-export type TrainingSource = "manual" | "ai";
+export type TrainingSource = "manual" | "ai" | "library";
 
 interface Stamped {
   id: string;
@@ -34,6 +35,8 @@ export interface Material extends Stamped {
   /** "text" is written in the portal (or by AI); "file" is an uploaded document. */
   kind: "text" | "file";
   body: string;
+  /** One emoji, shown beside the lesson in its module. */
+  icon?: string;
   file?: { filename: string; ext: string; size: number };
 }
 
@@ -67,6 +70,11 @@ export interface TrainingModule extends Stamped {
   topic: string;
   sequential: boolean;
   items: ModuleItem[];
+  /** One emoji and a card colour, to make the catalogue friendlier. */
+  icon?: string;
+  colour?: ModuleColour;
+  /** Set when the module was added from the built-in course library. */
+  librarySlug?: string;
 }
 
 export interface Attempt {
@@ -191,6 +199,8 @@ export function cleanModuleFields(raw: Record<string, unknown>) {
     topic: str(raw.topic, 200),
     status: status(raw.status),
     sequential: raw.sequential === true,
+    icon: str(raw.icon, 16),
+    colour: (typeof raw.colour === "string" && raw.colour in MODULE_COLOURS ? raw.colour : "violet") as ModuleColour,
     items: (Array.isArray(raw.items) ? raw.items : [])
       .map((i) => (i ?? {}) as Record<string, unknown>)
       .filter((i) => (i.kind === "material" || i.kind === "test") && typeof i.id === "string")
