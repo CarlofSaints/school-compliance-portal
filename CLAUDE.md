@@ -24,6 +24,23 @@ The near-identical names bite. `school-compliance` in Vercel is the marketing
 site, connected Jun 20 to its own repo; it has no cron and no portal routes.
 Portal env vars go on the two `*-compliance` school projects only.
 
+## Campus (training) + Ask Jono (2026-10-30, branch `training-campus`)
+**Campus** = iRam Campus ported onto the Blob store: material (text or a <4 MB file), auto-marked
+tests (single/multi/true-false/typed, spelling allowance; `lib/trainingMarking.ts` is a COPY of
+Campus `src/lib/marking.ts`, keep in step), modules (ordered, optionally "in order" with a
+SERVER-side lock), leaderboard of EVERY user (best % per published test summed). AI builds a
+draft module (lessons + test) on BELA/SASA/GDE/provincial topics, optionally from the school's
+uploaded guidelines (`lib/trainingAi.ts`); nothing reaches a learner until Publish (publishing a
+module publishes its pieces). Pages `/campus`, API `/api/training/*`, permission `manage_training`
+(everyone may take courses). Storage: `training/{materials,tests,modules}.json` (guarded lists),
+`training/files/`, `training/progress/<userId>.json` (only that user writes it). The memo never
+leaves the server before hand-in (`paperFor`). Check: `scripts/check-training.ts`,
+`scripts/check-training-marking.ts`. NOT ported from Campus: scheduled sends, reminders, share
+links/guests, tag targeting, reports page, edit lock, Mark again, time limits.
+**Ask Jono** (`components/AskJono.tsx` in the portal layout, `/api/jono`, `lib/askJono.ts`):
+answers from the asker's OWN visible records (readableMinutes, visibleActionsFor, spend by the
+Spend page rule) plus SA school law. Questions are not stored or logged. Check: `scripts/check-jono.ts`.
+
 ## Meeting room bookings (2026-10-18, branch `room-bookings`, ported from the COLAB hub)
 Rooms (`/rooms`, `manage_rooms`) and a week calendar (`/bookings`, `book_rooms` or
 `manage_rooms`). Clash check, repeats (daily/weekly/monthly, max 52), edit one
