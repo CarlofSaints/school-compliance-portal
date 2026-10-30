@@ -1975,5 +1975,14 @@
   "Jono only sees what you may see in the portal. Your question goes to Anthropic's AI in the United States. Answers can be wrong: check before acting, and this is not legal advice.": "Jono sien net wat u in die portaal mag sien. U vraag gaan na Anthropic se KI in die Verenigde State. Antwoorde kan verkeerd wees: kontroleer voordat u optree, en dit is nie regsadvies nie.",
   "Courses": "Kursusse",
   "Show the right answers and explanations once a person passes, or has used their last attempt": "Wys die regte antwoorde en verduidelikings sodra iemand slaag, of sy of haar laaste poging gebruik het",
-  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Die vrae wat u verkeerd gehad het, is in rooi gemerk. Die regte antwoorde word gewys sodra u slaag."
+  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Die vrae wat u verkeerd gehad het, is in rooi gemerk. Die regte antwoorde word gewys sodra u slaag.",
+  "Icon (an emoji)": "Ikoon (’n emoji)",
+  "{count} courses added to your Campus and published": "{count} kursusse by u Campus gevoeg en gepubliseer",
+  "That could not be added.": "Dit kon nie bygevoeg word nie.",
+  "Course library": "Kursusbiblioteek",
+  "Ready-made courses with a multiple-choice test each. Adding one copies it into your Campus, published, for you to edit as you like.": "Klaargemaakte kursusse, elk met ’n meerkeusetoets. As u een byvoeg, word dit na u Campus gekopieer, gepubliseer, sodat u dit kan wysig soos u wil.",
+  "Add all courses": "Voeg alle kursusse by",
+  "{lessons} lessons, {questions} questions": "{lessons} lesse, {questions} vrae",
+  "+ Add to our Campus": "+ Voeg by ons Campus",
+  "Passed": "Geslaag"
 }

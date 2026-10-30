@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import {
   readJson,
+  writeJson,
   updateJson,
   NO_CHANGE,
   addToList,
@@ -118,6 +119,9 @@ export const removeMaterialFile = (id: string, ext: string) => deleteFile(filePa
 export async function getProgress(userId: string): Promise<Progress> {
   return readJson<Progress>(progressPath(userId), emptyProgress(userId));
 }
+
+/** Replaces a person's whole record. Only the demo school's seed uses this. */
+export const saveProgress = (p: Progress) => writeJson(progressPath(p.userId), p);
 
 /** Records the FIRST time somebody opens a piece of material. */
 export async function markOpened(userId: string, materialId: string): Promise<void> {

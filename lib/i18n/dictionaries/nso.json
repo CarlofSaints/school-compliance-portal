@@ -1975,5 +1975,14 @@
   "Jono only sees what you may see in the portal. Your question goes to Anthropic's AI in the United States. Answers can be wrong: check before acting, and this is not legal advice.": "Jono o bona fela seo o dumeletšwego go se bona portaleng. Potšišo ya gago e ya go AI ya Anthropic kua United States. Dikarabo di ka fošagala: lekola pele o tšea kgato, gomme se ga se keletšo ya molao.",
   "Courses": "Dikhoso",
   "Show the right answers and explanations once a person passes, or has used their last attempt": "Bontšha dikarabo tše di nepagetšego le ditlhalošo ge motho a phasitše, goba a šomišitše teko ya gagwe ya mafelelo",
-  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Dipotšišo tšeo o di fošitšego di swaiwa ka bohwibidu. Dikarabo tše di nepagetšego di bontšhwa ge o phasitše."
+  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Dipotšišo tšeo o di fošitšego di swaiwa ka bohwibidu. Dikarabo tše di nepagetšego di bontšhwa ge o phasitše.",
+  "Icon (an emoji)": "Leswao (emoji)",
+  "{count} courses added to your Campus and published": "Dikhoso tše {count} di okeditšwe go Campus ya gago gomme tša gatišwa",
+  "That could not be added.": "Seo ga se a kgona go okeletšwa.",
+  "Course library": "Bokgobelo bja dikhoso",
+  "Ready-made courses with a multiple-choice test each. Adding one copies it into your Campus, published, for you to edit as you like.": "Dikhoso tše di lokišitšwego e šetše, ye nngwe le ye nngwe e na le teko ya go kgetha karabo. Go oketša ye tee go e kopiša go Campus ya gago, e gatišitšwe, gore o e fetole ka mo o ratago.",
+  "Add all courses": "Oketša dikhoso ka moka",
+  "{lessons} lessons, {questions} questions": "Dithuto tše {lessons}, dipotšišo tše {questions}",
+  "+ Add to our Campus": "+ Oketša go Campus ya rena",
+  "Passed": "O phasitše"
 }
