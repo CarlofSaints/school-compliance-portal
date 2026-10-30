@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useT } from "@/components/I18nProvider";
+import { useLocale, useT } from "@/components/I18nProvider";
 import LessonText from "@/components/LessonText";
 import { CopyLinkButton, DraftPill } from "@/components/trainingUi";
 import TranslationBanner, { type CampusTranslation } from "@/components/campus/TranslationBanner";
@@ -40,6 +40,8 @@ export default function LessonView(props: {
   editHref?: string;
 }) {
   const t = useT();
+  // 🔴 In the deps below: switching language on an open lesson must fetch it again in the new language.
+  const locale = useLocale();
   const { id, api, fetcher, ready, onLoaded } = props;
   const [m, setM] = useState<MaterialView | null>(null);
   const [error, setError] = useState("");
@@ -56,7 +58,16 @@ export default function LessonView(props: {
       } else setError(body.error || t("This material could not be opened."));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, id, api, version]);
+  }, [ready, id, api, version, locale]);
+
+  // A free translation being made in the background: look again every 20 seconds, for up to 3 minutes.
+  const pending = m?.translation?.state === "pending";
+  useEffect(() => {
+    if (!pending) return;
+    let tries = 0;
+    const timer = setInterval(() => (++tries > 9 ? clearInterval(timer) : setVersion((v) => v + 1)), 20_000);
+    return () => clearInterval(timer);
+  }, [pending, locale]);
 
   if (!m && !error) return <div className="p-6">{t("Loading...")}</div>;
 
