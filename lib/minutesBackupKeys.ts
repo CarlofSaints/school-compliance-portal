@@ -26,6 +26,11 @@ export function backupKeys(
   return { main: tabsPrefix + tabId, tabsPrefix, offered: `minutes-draft-offered:${host}:${userId}:${minutesId}` };
 }
 
+/** The "Compile a policy" draft, per site and per person, cleared on sign-out like the minutes backups. */
+export function policyDraftKey(host: string, userId: string): string {
+  return `policy-draft:${host}:${userId}:`;
+}
+
 type Listing = (Pick<Storage, "key" | "getItem" | "removeItem"> & { readonly length: number }) | null;
 
 export function keysWith(store: NonNullable<Listing>, prefixes: string[]): string[] {
@@ -42,7 +47,7 @@ export function keysWith(store: NonNullable<Listing>, prefixes: string[]): strin
 export function clearUserBackups(store: Listing, host: string, userId: string): void {
   try {
     if (!store) return;
-    keysWith(store, [`minutes-draft:${host}:${userId}:`, `minutes-draft-offered:${host}:${userId}:`]).forEach((k) =>
+    keysWith(store, [`minutes-draft:${host}:${userId}:`, `minutes-draft-offered:${host}:${userId}:`, policyDraftKey(host, userId)]).forEach((k) =>
       store.removeItem(k)
     );
   } catch {

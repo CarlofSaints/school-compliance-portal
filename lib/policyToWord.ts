@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
-import { docxText } from "./branding";
+import { parseTranscript } from "./policyText";
 
 // ---------------------------------------------------------------------------
 // A scanned (flat) PDF policy turned into an editable Word document, for a
@@ -62,22 +62,19 @@ export async function transcribePdf(pdf: Buffer, title: string, deadline: number
   return text;
 }
 
-export type Line = { kind: "h1" | "h2" | "bullet" | "para"; text: string };
+export { parseTranscript, type Line } from "./policyText";
 
-/** The transcript as Word paragraphs. Pure, so scripts/check-policy-to-word.ts can test it. */
-export function parseTranscript(text: string): Line[] {
-  const out: Line[] = [];
-  for (const block of docxText(text).replace(/\r\n/g, "\n").split(/\n\s*\n/)) {
-    for (const raw of block.split("\n")) {
-      const line = raw.trim();
-      if (!line) continue;
-      if (line.startsWith("## ")) out.push({ kind: "h2", text: line.slice(3).trim() });
-      else if (line.startsWith("# ")) out.push({ kind: "h1", text: line.slice(2).trim() });
-      else if (/^[-•*] /.test(line)) out.push({ kind: "bullet", text: line.slice(2).trim() });
-      else out.push({ kind: "para", text: line });
-    }
-  }
-  return out;
+/** The transcript as Word paragraphs, also the body of a compiled policy (lib/policyCompile.ts). */
+export function transcriptParagraphs(text: string): Paragraph[] {
+  return parseTranscript(text).map((l) =>
+    l.kind === "h1"
+      ? new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(l.text)] })
+      : l.kind === "h2"
+        ? new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(l.text)] })
+        : l.kind === "bullet"
+          ? new Paragraph({ bullet: { level: 0 }, children: [new TextRun(l.text)] })
+          : new Paragraph({ spacing: { after: 120 }, children: [new TextRun(l.text)] })
+  );
 }
 
 export async function transcriptToDocx(text: string): Promise<Buffer> {
@@ -85,15 +82,7 @@ export async function transcriptToDocx(text: string): Promise<Buffer> {
     styles: { default: { document: { run: { font: "Arial", size: 22 } } } },
     sections: [
       {
-        children: parseTranscript(text).map((l) =>
-          l.kind === "h1"
-            ? new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun(l.text)] })
-            : l.kind === "h2"
-              ? new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun(l.text)] })
-              : l.kind === "bullet"
-                ? new Paragraph({ bullet: { level: 0 }, children: [new TextRun(l.text)] })
-                : new Paragraph({ spacing: { after: 120 }, children: [new TextRun(l.text)] })
-        ),
+        children: transcriptParagraphs(text),
       },
     ],
   });
