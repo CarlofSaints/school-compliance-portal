@@ -9,7 +9,7 @@ import JSZip from "jszip";
 import { branding } from "../lib/branding";
 import { cleanCompileRequest, policyDocx, policyFilename } from "../lib/policyCompile";
 import { clearUserBackups, policyDraftKey } from "../lib/minutesBackupKeys";
-import { addCredits, getCredits, spendCredits } from "../lib/contentTranslation";
+import { addCredits, getCredits, spendCredits, withCredits } from "../lib/contentTranslation";
 import { POLICY_AI_CREDITS } from "../lib/creditPack";
 
 (async () => {
@@ -56,5 +56,16 @@ import { POLICY_AI_CREDITS } from "../lib/creditPack";
   assert.equal(await getCredits(), 1, "a refused step takes nothing");
   assert.equal(await spendCredits(POLICY_AI_CREDITS.check), true);
   assert.equal(await getCredits(), 0);
+
+  // The shared paid-step helper: refunds ONCE on a throw or a worthless result, keeps a finished result.
+  await addCredits(2);
+  await assert.rejects(withCredits(2, async () => { throw new Error("AI down"); }));
+  assert.equal(await getCredits(), 2, "a failed step is refunded once");
+  const empty = await withCredits(1, async () => ({ score: 0 }), (r) => r.score === 0);
+  assert.ok(empty.ok && (await getCredits()) === 2, "a worthless result is refunded");
+  const good = await withCredits(2, async () => "the draft");
+  assert.ok(good.ok && good.result === "the draft" && good.balance === 0, "a finished step is charged and its result kept");
+  const broke = await withCredits(1, async () => "never runs");
+  assert.ok(!broke.ok && broke.balance === 0, "not enough credits: nothing runs, nothing taken");
   console.log("policy compile: all checks passed");
 })();

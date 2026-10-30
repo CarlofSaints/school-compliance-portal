@@ -58,7 +58,7 @@ export default function CompilePolicyPage() {
   const [restored, setRestored] = useState(false);
   const [guidelines, setGuidelines] = useState<{ id: string; name: string }[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_POLICY_CATEGORIES);
-  const [credits, setCredits] = useState<{ balance: number; canSpend: boolean; prices: typeof POLICY_AI_CREDITS } | null>(null);
+  const [credits, setCredits] = useState<{ balance: number; canSpend: boolean } | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const backup = session ? policyDraftKey(window.location.host, session.id) : "";
@@ -108,6 +108,7 @@ export default function CompilePolicyPage() {
       });
       const body = await r.json().catch(() => ({}));
       if (typeof body.balance === "number") setCredits((c) => (c ? { ...c, balance: body.balance } : c));
+      if (body.canSpend === false) setCredits((c) => (c ? { ...c, canSpend: false } : c));
       if (!r.ok) {
         setToast({ message: body.error || t("Something went wrong. Please try again."), type: "error" });
         return null;
@@ -175,9 +176,9 @@ export default function CompilePolicyPage() {
   if (loading || !restored) return <div className="p-6">{t("Loading...")}</div>;
   const working = busy !== "";
   // Each AI step is paid in the school's credits. Until the balance has loaded nothing is blocked: the server decides.
-  const price = credits?.prices ?? POLICY_AI_CREDITS;
+  const price = POLICY_AI_CREDITS;
   const affordable = (n: number) => !credits || (credits.canSpend && credits.balance >= n);
-  const cost = (n: number) => t("{n} credits", { n });
+  const cost = (n: number) => (n === 1 ? t("{n} credit", { n }) : t("{n} credits", { n }));
 
   return (
     <div>
@@ -263,7 +264,7 @@ export default function CompilePolicyPage() {
         <div className="space-y-6">
           <div className="rounded-xl border border-gray-200 bg-white px-5 py-3 flex flex-wrap items-center justify-between gap-3 text-sm">
             <div>
-              <p className="font-medium text-dark">{credits ? t("Your school has {n} credits", { n: credits.balance }) : t("Loading...")}</p>
+              <p className="font-medium text-dark">{credits ? (credits.balance === 1 ? t("Your school has {n} credit", { n: 1 }) : t("Your school has {n} credits", { n: credits.balance })) : t("Loading...")}</p>
               <p className="text-xs text-gray-500">
                 {t("The AI is paid for in credits: a draft uses {a}, each change {b}, a compliance check {c}. Editing the text yourself and adding to the library are free.", { a: price.draft, b: price.revise, c: price.check })}
               </p>

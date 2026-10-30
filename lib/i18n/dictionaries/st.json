@@ -2115,5 +2115,7 @@
   "Not a legal review.": "Hase tlhahlobo ya molao.",
   "A draft is a starting point. The SGB or board of governors should read it before adopting it.": "Moralo ke qalo. SGB kapa boto ya babusi ba lokela ho o bala pele ba o amohela.",
   "The compliance check here is not saved.": "Tlhahlobo ya ho latela mona ha e bolokwe.",
-  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "E hlahloba moralo feela. Hang ha leano le se le le laeboraring ya hao, etsa tlhahlobo hape leqepheng la lona hore dintlha di bolokwe."
+  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "E hlahloba moralo feela. Hang ha leano le se le le laeboraring ya hao, etsa tlhahlobo hape leqepheng la lona hore dintlha di bolokwe.",
+  "{n} credit": "khrediti e {n}",
+  "Your school has {n} credit": "Sekolo sa hao se na le khrediti e {n}"
 }

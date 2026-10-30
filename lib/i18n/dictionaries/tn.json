@@ -2115,5 +2115,7 @@
   "Not a legal review.": "Ga se tlhatlhobo ya semolao.",
   "A draft is a starting point. The SGB or board of governors should read it before adopting it.": "Thalosokakanyo ke tshimologo. SGB kgotsa boto ya balaodi ba tshwanetse go e bala pele ba e amogela.",
   "The compliance check here is not saved.": "Tlhatlhobo ya go obamela fano ga e bolokwe.",
-  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "E tlhatlhoba thalosokakanyo fela. Fa pholisi e setse e le mo bobolokelong jwa gago, dira tlhatlhobo gape mo tsebeng ya yone gore maduo a bolokwe."
+  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "E tlhatlhoba thalosokakanyo fela. Fa pholisi e setse e le mo bobolokelong jwa gago, dira tlhatlhobo gape mo tsebeng ya yone gore maduo a bolokwe.",
+  "{n} credit": "khrediti e le {n}",
+  "Your school has {n} credit": "Sekolo sa gago se na le khrediti e le {n}"
 }

@@ -2115,5 +2115,7 @@
   "Not a legal review.": "Ayilohlolo lwezomthetho.",
   "A draft is a starting point. The SGB or board of governors should read it before adopting it.": "Uyilo sisiqalo. I-SGB okanye ibhodi yabalawuli kufuneka baluphonononge phambi kokuba balwamkele.",
   "The compliance check here is not saved.": "Uhlolo lokuthobela apha alugcinwa.",
-  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "Luhlola uyilo kuphela. Xa umgaqo-nkqubo sele ukwithala lakho, phinda uhlolo kwiphepha lawo ukuze amanqaku agcinwe."
+  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "Luhlola uyilo kuphela. Xa umgaqo-nkqubo sele ukwithala lakho, phinda uhlolo kwiphepha lawo ukuze amanqaku agcinwe.",
+  "{n} credit": "ikhredithi e-{n}",
+  "Your school has {n} credit": "Isikolo sakho sinekhredithi e-{n}"
 }

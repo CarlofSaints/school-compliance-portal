@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { requireLogin } from "@/lib/rolesData";
-import { getUserById } from "@/lib/userData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { getLocale } from "@/lib/i18n/server";
 import { getPolicyById, getPolicyVersions, downloadPolicyFile } from "@/lib/policyData";
@@ -13,6 +12,7 @@ import { extractTextFromBuffer } from "@/lib/pdfParser";
 import {
   creditsFor,
   getCredits,
+  maySpendCredits,
   pdfBlock,
   pdfPages,
   storedTranslation,
@@ -35,10 +35,7 @@ interface Doc {
   source: () => Promise<{ content: Anthropic.ContentBlockParam[]; pages: number }>;
 }
 
-/** Ticked per user on the Users screen. Read fresh, never from the session. */
-async function maySpend(session: Session): Promise<boolean> {
-  return !!(await getUserById(session.id))?.canSpendTranslationCredits;
-}
+const maySpend = (session: Session) => maySpendCredits(session.id);
 
 // The same read rule as the document itself: whoever cannot open it cannot
 // have it translated, and gets the same 404 as for one that does not exist.
