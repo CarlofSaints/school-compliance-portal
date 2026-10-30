@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMaterials, getModules, getProgress, getTests } from "@/lib/trainingData";
-import { attemptsAt, hasPassed, isLocked, itemDone, liveKeys } from "@/lib/training";
+import { attemptsAt, hasPassed, isLocked, itemDone, liveKeys, readingMinutes } from "@/lib/training";
 import { canManageTraining } from "@/lib/trainingAccess";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     status: m.status,
     source: m.source,
     kind: m.kind,
+    minutes: readingMinutes(m),
     updatedAt: m.updatedAt,
     done: Boolean(progress.opened[m.id]),
     locked: !manager && isLocked(progress, modules, { kind: "material", id: m.id }, live),
@@ -46,15 +47,16 @@ export async function GET(req: NextRequest) {
       questionCount: t.questions.length,
       passMark: t.passMark,
       maxAttempts: t.maxAttempts,
+      timeLimitMinutes: t.timeLimitMinutes ?? 0,
       attempts: mine.length,
       bestPct: mine.length ? Math.max(...mine.map((a) => a.scorePct)) : null,
       done: hasPassed(progress, t.id),
       locked: !manager && isLocked(progress, modules, { kind: "test", id: t.id }, live),
     };
   });
-  const titles = new Map<string, { title: string; status: string; icon?: string }>([
-    ...materials.map((m) => [`material:${m.id}`, m] as const),
-    ...tests.map((t) => [`test:${t.id}`, t] as const),
+  const titles = new Map<string, { title: string; status: string; icon?: string; minutes?: number }>([
+    ...materials.map((m) => [`material:${m.id}`, { ...m, minutes: readingMinutes(m) }] as const),
+    ...tests.map((t) => [`test:${t.id}`, { ...t, minutes: t.timeLimitMinutes || undefined }] as const),
   ]);
   const moduleRows = visible(modules).map((m) => {
     const items = m.items
@@ -64,6 +66,7 @@ export async function GET(req: NextRequest) {
         title: titles.get(`${i.kind}:${i.id}`)!.title,
         status: titles.get(`${i.kind}:${i.id}`)!.status,
         icon: titles.get(`${i.kind}:${i.id}`)!.icon ?? (i.kind === "test" ? "📝" : "📖"),
+        minutes: titles.get(`${i.kind}:${i.id}`)!.minutes ?? null,
         done: itemDone(progress, i),
         locked: !manager && isLocked(progress, modules, i, live),
       }));

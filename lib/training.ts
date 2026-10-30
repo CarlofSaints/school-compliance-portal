@@ -37,6 +37,8 @@ export interface Material extends Stamped {
   body: string;
   /** One emoji, shown beside the lesson in its module. */
   icon?: string;
+  /** Reading time shown to learners; blank = worked out from the length. */
+  estimatedMinutes?: number;
   file?: { filename: string; ext: string; size: number };
 }
 
@@ -58,6 +60,10 @@ export interface Test extends Stamped {
   /** 0 = unlimited. */
   maxAttempts: number;
   showAnswers: boolean;
+  /** Minutes allowed once the paper is opened; 0 = no limit. */
+  timeLimitMinutes?: number;
+  /** A different question order for each sitting. */
+  shuffleQuestions?: boolean;
   questions: Question[];
 }
 
@@ -93,6 +99,8 @@ export interface Progress {
   userId: string;
   opened: Record<string, string>; // materialId -> first opened
   attempts: Attempt[];
+  /** testId -> when the paper now being sat was opened (timed tests only). */
+  started?: Record<string, string>;
 }
 
 export const emptyProgress = (userId: string): Progress => ({ userId, opened: {}, attempts: [] });
@@ -175,6 +183,8 @@ export function cleanTestFields(raw: Record<string, unknown>) {
     passMark: int(raw.passMark, 0, 100, 70),
     maxAttempts: int(raw.maxAttempts, 0, 50, 0),
     showAnswers: raw.showAnswers !== false,
+    timeLimitMinutes: int(raw.timeLimitMinutes, 0, 600, 0),
+    shuffleQuestions: raw.shuffleQuestions === true,
     questions: (Array.isArray(raw.questions) ? raw.questions : [])
       .map(cleanQuestion)
       .filter((q): q is Question => q !== null)
@@ -188,6 +198,7 @@ export function cleanMaterialFields(raw: Record<string, unknown>) {
     description: str(raw.description, 2000),
     status: status(raw.status),
     body: str(raw.body, 200_000),
+    estimatedMinutes: int(raw.estimatedMinutes, 0, 600, 0) || undefined,
   };
 }
 
@@ -213,10 +224,34 @@ export function cleanModuleFields(raw: Record<string, unknown>) {
 // --- What a learner may see --------------------------------------------------
 
 /** The paper without its memo. */
+/** Reading time: the editor's figure, else about 200 words a minute. */
+export const readingMinutes = (m: Pick<Material, "estimatedMinutes" | "body">) =>
+  m.estimatedMinutes || Math.max(1, Math.round(m.body.split(/\s+/).filter(Boolean).length / 200));
+
+/** A fresh order for each sitting (Fisher-Yates). */
+function shuffled<T>(list: T[]): T[] {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+// Late hand-ins are accepted for this long after the limit (a slow connection,
+// the auto-submit at zero); beyond it the paper is marked as handed in blank.
+export const TIME_GRACE_MS = 2 * 60 * 1000;
+
+/** When a timed sitting must end, or null for an untimed test or one not yet opened. */
+export function deadlineFor(test: Test, p: Progress): number | null {
+  const started = p.started?.[test.id];
+  return test.timeLimitMinutes && started ? Date.parse(started) + test.timeLimitMinutes * 60_000 : null;
+}
+
 export function paperFor(test: Test) {
   return {
     ...test,
-    questions: test.questions.map((q) => ({
+    questions: (test.shuffleQuestions ? shuffled(test.questions) : test.questions).map((q) => ({
       id: q.id,
       type: q.type,
       text: q.text,
@@ -274,7 +309,10 @@ export const MAX_STORED_ATTEMPTS = 100;
 export function submitAttempt(test: Test, p: Progress, responses: Record<string, unknown>, now: string): Attempt | "no_attempts_left" {
   const used = attemptsAt(p, test.id).length;
   if ((test.maxAttempts > 0 && used >= test.maxAttempts) || used >= MAX_STORED_ATTEMPTS) return "no_attempts_left";
-  const marked = markAttempt(test.questions, cleanResponses(test, responses), test.passMark);
+  // A timed paper handed in well after its limit counts, but with nothing answered.
+  const deadline = deadlineFor(test, p);
+  const late = deadline !== null && Date.parse(now) > deadline + TIME_GRACE_MS;
+  const marked = markAttempt(test.questions, late ? {} : cleanResponses(test, responses), test.passMark);
   // Rounded DOWN and passed decided on the same figure, so "70%" never sits beside "Not passed".
   const scorePct = Math.floor(marked.scorePct);
   return {

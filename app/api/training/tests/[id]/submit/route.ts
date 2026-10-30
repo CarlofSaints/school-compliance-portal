@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { attemptsAt, submitAttempt } from "@/lib/training";
+import { attemptsAt, deadlineFor, submitAttempt, TIME_GRACE_MS } from "@/lib/training";
 import { getProgress, getTest, recordAttempt } from "@/lib/trainingData";
 import { trainingGate } from "@/lib/trainingAccess";
 import { recordActivity } from "@/lib/activityLog";
@@ -13,8 +13,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (session instanceof NextResponse) return session;
   const { id } = await params;
   const test = await getTest(id);
-  const blocked = await trainingGate(session, test && { kind: "test", id, status: test.status }, await getProgress(session.id));
+  const before = await getProgress(session.id);
+  const blocked = await trainingGate(session, test && { kind: "test", id, status: test.status }, before);
   if (blocked || !test) return blocked!;
+  const deadline = deadlineFor(test, before);
+  const timedOut = deadline !== null && Date.now() > deadline + TIME_GRACE_MS;
 
   const body = await req.json().catch(() => ({}));
   const responses = body && typeof body.responses === "object" && body.responses ? (body.responses as Record<string, unknown>) : {};
@@ -60,6 +63,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     pointsPossible: attempt.pointsPossible,
     passMark: test.passMark,
     answersShown: reveal,
+    timedOut,
     memo,
   });
 }

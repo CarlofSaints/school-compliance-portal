@@ -2011,5 +2011,17 @@
   "Locked: term ended": "Gesluit: ampstermyn het geëindig",
   "Always ({why})": "Altyd ({why})",
   "Switch back on": "Skakel weer aan",
-  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Wanneer die ampstermyn eindig, word elke lid uit die portaal gesluit, behalwe Superadministrateurs en enigiemand wat gemerk is om toegang te behou. Wanneer u die termyn instel, word die Skoolhoof en Adjunkhoof outomaties gemerk (wanneer hul inskrywing onder Mense aan hul aanmelding gekoppel is). Skakel herverkose lede weer aan, en tree diegene af wat nie voortgaan nie."
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Wanneer die ampstermyn eindig, word elke lid uit die portaal gesluit, behalwe Superadministrateurs en enigiemand wat gemerk is om toegang te behou. Wanneer u die termyn instel, word die Skoolhoof en Adjunkhoof outomaties gemerk (wanneer hul inskrywing onder Mense aan hul aanmelding gekoppel is). Skakel herverkose lede weer aan, en tree diegene af wat nie voortgaan nie.",
+  "Reading time in minutes (blank = worked out from the length)": "Leestyd in minute (leeg = bereken uit die lengte)",
+  "pass {pct}%": "slaag {pct}%",
+  "{n} attempts": "{n} pogings",
+  "unlimited attempts": "onbeperkte pogings",
+  "Time allowed in minutes (0 = no limit)": "Toegelate tyd in minute (0 = geen limiet)",
+  "Shuffle the question order for each sitting": "Skommel die volgorde van die vrae vir elke sitting",
+  "About {n} minutes to read": "Ongeveer {n} minute om te lees",
+  "{n} minutes allowed": "{n} minute toegelaat",
+  "Time left: {time}": "Tyd oor: {time}",
+  "The time ran out before this paper was handed in, so it was marked as blank.": "Die tyd het verstryk voordat hierdie vraestel ingedien is, so dit is as leeg nagesien.",
+  "Link copied": "Skakel gekopieer",
+  "Copy link": "Kopieer skakel"
 }

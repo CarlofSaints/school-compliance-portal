@@ -8,6 +8,8 @@ import { useT } from "@/components/I18nProvider";
 
 export interface Step {
   icon: string;
+  /** Reading time for a lesson, time limit for a test, or null. */
+  minutes: number | null;
   kind: "material" | "test";
   id: string;
   title: string;
@@ -35,6 +37,8 @@ export interface TestRow {
   status: string;
   questionCount: number;
   passMark: number;
+  maxAttempts: number;
+  timeLimitMinutes: number;
   attempts: number;
   bestPct: number | null;
   done: boolean;
@@ -74,4 +78,23 @@ export function useNextStep(moduleId: string, kind: "material" | "test", id: str
     };
   }, [moduleId, kind, id, refresh]);
   return href;
+}
+
+/** Copies the address of a page to send to somebody in the school. A person not signed in is taken to sign in first and brought back. */
+export function CopyLinkButton({ path, className = "" }: { path: string; className?: string }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        await navigator.clipboard.writeText(`${window.location.origin}${path}`).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className={`border border-gray-200 bg-white text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50 ${className}`}
+    >
+      {copied ? `✓ ${t("Link copied")}` : `🔗 ${t("Copy link")}`}
+    </button>
+  );
 }

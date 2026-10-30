@@ -2011,5 +2011,17 @@
   "Locked: term ended": "Ivaliwe: ixesha lokusebenza liphelile",
   "Always ({why})": "Rhoqo ({why})",
   "Switch back on": "Vula kwakhona",
-  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Xa ixesha lokusebenza liphela, onke amalungu avalelwa ngaphandle kwephotali ngaphandle kwabaLawuli abaPhezulu nabani na ophawulweyo ukuba agcine ukufikelela. Ukuseta ixesha lokusebenza kuphawula iNqununu neSekela-Nqununu ngokuzenzekelayo (xa ungeniso lwabo kuBantu lunxulunyaniswe nokungena kwabo). Vula kwakhona amalungu aphinde anyulwa, uze uthathise umhlala-phantsi abo bangaqhubekiyo."
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Xa ixesha lokusebenza liphela, onke amalungu avalelwa ngaphandle kwephotali ngaphandle kwabaLawuli abaPhezulu nabani na ophawulweyo ukuba agcine ukufikelela. Ukuseta ixesha lokusebenza kuphawula iNqununu neSekela-Nqununu ngokuzenzekelayo (xa ungeniso lwabo kuBantu lunxulunyaniswe nokungena kwabo). Vula kwakhona amalungu aphinde anyulwa, uze uthathise umhlala-phantsi abo bangaqhubekiyo.",
+  "Reading time in minutes (blank = worked out from the length)": "Ixesha lokufunda ngemizuzu (akukho nto = libalwa ngobude)",
+  "pass {pct}%": "ukuphumelela {pct}%",
+  "{n} attempts": "amathuba angu-{n}",
+  "unlimited attempts": "amathuba angenamda",
+  "Time allowed in minutes (0 = no limit)": "Ixesha elivunyelweyo ngemizuzu (0 = akukho mda)",
+  "Shuffle the question order for each sitting": "Xuba ulandelelwano lwemibuzo kwisihlalo ngasinye",
+  "About {n} minutes to read": "Malunga nemizuzu engu-{n} yokufunda",
+  "{n} minutes allowed": "kuvunyelwe imizuzu engu-{n}",
+  "Time left: {time}": "Ixesha eliseleyo: {time}",
+  "The time ran out before this paper was handed in, so it was marked as blank.": "Ixesha liphelile phambi kokuba eli phepha lingeniswe, ngoko liphawulwe njengelingenanto.",
+  "Link copied": "Ikhonkco likopishiwe",
+  "Copy link": "Kopa ikhonkco"
 }

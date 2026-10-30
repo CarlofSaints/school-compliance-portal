@@ -18,7 +18,7 @@ export default function MaterialEditorPage() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
   const { session, loading } = useAuth("manage_training");
-  const [form, setForm] = useState({ title: "", description: "", body: "", status: "draft", source: "manual" });
+  const [form, setForm] = useState({ title: "", description: "", body: "", status: "draft", source: "manual", estimatedMinutes: 0 as number | undefined });
   const [existingFile, setExistingFile] = useState<{ filename: string } | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState(false);
@@ -44,6 +44,7 @@ export default function MaterialEditorPage() {
     fd.append("title", form.title);
     fd.append("description", form.description);
     fd.append("body", form.body);
+    fd.append("estimatedMinutes", String(form.estimatedMinutes ?? 0));
     fd.append("status", status);
     if (file) fd.append("file", file);
     const res = await authFetch(isNew ? "/api/training/materials" : `/api/training/materials/${id}`, { method: isNew ? "POST" : "PUT", body: fd });
@@ -85,6 +86,17 @@ export default function MaterialEditorPage() {
         <label className="block">
           <span className="block text-sm font-medium text-gray-700 mb-1">{t("Short description")}</span>
           <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} maxLength={2000} className={input} />
+        </label>
+        <label className="block">
+          <span className="block text-sm font-medium text-gray-700 mb-1">{t("Reading time in minutes (blank = worked out from the length)")}</span>
+          <input
+            type="number"
+            min={0}
+            max={600}
+            value={form.estimatedMinutes || ""}
+            onChange={(e) => setForm({ ...form, estimatedMinutes: Number(e.target.value) || undefined })}
+            className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          />
         </label>
         <div>
           <div className="flex items-center justify-between mb-1">

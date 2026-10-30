@@ -96,6 +96,9 @@ export default function ManageTrainingPage() {
           </Link>
           <div className="flex items-center gap-4 shrink-0">
             <span className="text-xs text-gray-400">{r.extra}</span>
+            <Link href={`/campus/manage/${kind}/${r.id}`} className="text-xs font-medium text-primary">
+              {t("Edit")}
+            </Link>
             <button onClick={() => remove(kind, r.id, r.title)} className="text-xs text-gray-400 hover:text-red-600">
               {t("Delete")}
             </button>
@@ -196,7 +199,17 @@ export default function ManageTrainingPage() {
       {section(
         "tests",
         t("TESTS"),
-        data.tests.map((x) => ({ ...x, extra: t("{count} questions", { count: x.questionCount }) })),
+        data.tests.map((x) => ({
+          ...x,
+          extra: [
+            t("{count} questions", { count: x.questionCount }),
+            t("pass {pct}%", { pct: x.passMark }),
+            x.maxAttempts ? t("{n} attempts", { n: x.maxAttempts }) : t("unlimited attempts"),
+            x.timeLimitMinutes ? `⏱ ${t("{n} min", { n: x.timeLimitMinutes })}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })),
         t("+ New test")
       )}
     </div>
