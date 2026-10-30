@@ -7,6 +7,8 @@ import { useT } from "@/components/I18nProvider";
 import Toast from "@/components/Toast";
 import { DraftPill, type Catalogue } from "@/components/trainingUi";
 import { MODULE_COLOURS, type ModuleColour } from "@/lib/trainingTopics";
+import ShareLinksPanel from "@/components/campus/ShareLinksPanel";
+import SendsPanel from "@/components/campus/SendsPanel";
 
 interface LibraryRow { slug: string; title: string; description: string; topic: string; icon: string; colour: string; lessons: number; questions: number; added: boolean }
 
@@ -184,6 +186,8 @@ export default function ManageTrainingPage() {
           </div>
         </div>
       )}
+      <SendsPanel data={data} onToast={(message, type) => setToast({ message, type })} />
+      <ShareLinksPanel data={data} onToast={(message, type) => setToast({ message, type })} />
       {section(
         "modules",
         t("MODULES"),

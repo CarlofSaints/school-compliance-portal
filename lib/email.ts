@@ -209,6 +209,34 @@ export async function sendTermEndedEmail(to: string, name: string, endDate: stri
   return sendEmail(b.fromEmail, to, `${b.shortName}: the term has ended, members locked out`, emailShell(b, "The term has ended", body), b.replyTo, undefined, undefined, { kind: "term.ended" });
 }
 
+/**
+ * Campus: training sent to somebody (or a reminder). `path` is a page on this
+ * school's site (/campus/... for portal users, /s/<token> for people without
+ * an account). The message is the sender's own words, escaped.
+ */
+export async function sendCampusEmail(
+  to: string,
+  name: string,
+  subject: string,
+  message: string,
+  title: string,
+  path: string,
+  reminder: boolean
+): Promise<boolean> {
+  const b = await mailBranding();
+  const PRIMARY = b.colors.primary;
+  const body = `
+    <p style="color:#333;">Dear ${esc(name || "colleague")},</p>
+    ${message ? `<p style="color:#333;white-space:pre-wrap;">${esc(message)}</p>` : ""}
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
+      <p style="margin:0;color:#333;"><strong>${esc(title)}</strong></p>
+      ${reminder ? `<p style="margin:8px 0 0;color:#666;font-size:13px;">A reminder: this is not finished yet.</p>` : ""}
+    ${BOX_CLOSE}
+    ${button(`${siteOf(b)}${path}`, "Open the training", PRIMARY)}
+  `;
+  return sendEmail(b.fromEmail, to, subject, emailShell(b, reminder ? "A reminder from Campus" : "Training for you", body), b.replyTo, undefined, undefined, { kind: reminder ? "campus.reminder" : "campus.sent" });
+}
+
 // Somebody who has NEVER signed in is not resetting anything, and telling them
 // their password is being reset when they were never given one just reads as a
 // mistake. Same link, same token, different words.

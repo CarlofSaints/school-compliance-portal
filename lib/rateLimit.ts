@@ -72,6 +72,8 @@ export const LIMITS = {
   trainingGenerateUser: { scope: "training-generate-user", max: 10, windowSec: 60 * 60, message: "You have built several training modules this hour. Try again in {wait}." },
   jonoSchool: { scope: "jono-school", max: 400, windowSec: 24 * 60 * 60, message: "Your school has reached today's limit for questions to Jono. Try again in {wait}." },
   jonoUser: { scope: "jono-user", max: 40, windowSec: 60 * 60, message: "You have asked Jono a lot of questions this hour. Try again in {wait}." },
+  campusGuestIp: { scope: "campus-guest-ip", max: 30, windowSec: 60 * 60, message: "Too many sign-ups from this connection. Try again in {wait}." },
+  campusGuestUse: { scope: "campus-guest-use", max: 600, windowSec: 60 * 60, message: "Too many requests from this connection. Try again in {wait}." },
   feedbackUser: { scope: "feedback-user", max: 10, windowSec: 60 * 60, message: "You have sent a lot of reports this hour. Try again in {wait}." },
   creditApproveIp: { scope: "credit-approve-ip", max: 20, windowSec: 15 * 60, message: "Too many attempts. Try again in {wait}." },
   emailSendUser: { scope: "email-send-user", max: 60, windowSec: 60 * 60, message: "You have sent a lot of emails from the portal this hour. Try again in {wait}." },

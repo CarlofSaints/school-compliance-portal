@@ -1,5 +1,6 @@
 import { pruneSentEmails, SENT_KEEP_MONTHS } from "@/lib/sentEmails";
 import { applyTermLockIfDue } from "@/lib/governanceTermData";
+import { runCampusSends } from "@/lib/campusSends";
 import { NextRequest, NextResponse } from "next/server";
 import { getSpendById, STATUS_DISPLAY } from "@/lib/spendData";
 import {
@@ -128,6 +129,13 @@ async function runForSchool() {
     detail.push(
       "RESEND_API_KEY is not set - reminders were processed but no email left the server"
     );
+  }
+
+  // Campus: scheduled training emails and reminders to people not finished.
+  try {
+    detail.push(...(await runCampusSends()));
+  } catch (err) {
+    detail.push(`Campus sends failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   // SGB terms: lock members out the morning after a term ends, even if nobody signs in.

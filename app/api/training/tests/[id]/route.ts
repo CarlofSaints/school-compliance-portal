@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
-import { attemptsAt, cleanTestFields, deadlineFor, paperFor, submitAttempt, testProblem, TIME_GRACE_MS, type Test } from "@/lib/training";
-import { deleteItem, getProgress, getTest, recordAttempt, startSitting, updateItem } from "@/lib/trainingData";
-import { canManageTraining, trainingGate } from "@/lib/trainingAccess";
+import { cleanTestFields, testProblem, type Test } from "@/lib/training";
+import { deleteItem, getTest, updateItem } from "@/lib/trainingData";
+import { openPaper } from "@/lib/trainingLearner";
+import { canManageTraining } from "@/lib/trainingAccess";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -18,34 +19,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   if (req.nextUrl.searchParams.get("edit") === "1" && canManageTraining(session)) {
     return test ? NextResponse.json(test, { headers: { "Cache-Control": "no-store" } }) : NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  let progress = await getProgress(session.id);
-  const blocked = await trainingGate(session, test && { kind: "test", id, status: test.status }, progress);
-  if (blocked || !test) return blocked!;
-  // Timed paper: a sitting left to run out is handed in blank, then the clock
-  // starts (or carries on, after a reload) for this opening.
-  let deadline: number | null = null;
-  if (test.timeLimitMinutes) {
-    const old = deadlineFor(test, progress);
-    if (old !== null && Date.now() > old + TIME_GRACE_MS) {
-      await recordAttempt(session.id, (p) => submitAttempt(test, p, {}, new Date().toISOString()));
-      progress = await getProgress(session.id);
-    }
-    const left = test.maxAttempts === 0 || attemptsAt(progress, id).length < test.maxAttempts;
-    if (left) {
-      progress = await startSitting(session.id, id);
-      deadline = deadlineFor(test, progress);
-    }
-  }
-  const attempts = attemptsAt(progress, id).map((a) => ({
-    id: a.id,
-    submittedAt: a.submittedAt,
-    scorePct: a.scorePct,
-    passed: a.passed,
-  }));
-  return NextResponse.json(
-    { ...paperFor(test), attempts, deadline: deadline ? new Date(deadline).toISOString() : null },
-    { headers: { "Cache-Control": "no-store" } }
-  );
+  const out = await openPaper({ progressId: session.id, manager: canManageTraining(session) }, id);
+  return out.ok
+    ? NextResponse.json(out.body, { headers: { "Cache-Control": "no-store" } })
+    : NextResponse.json({ error: out.error }, { status: out.status });
 }
 
 export async function PUT(req: NextRequest, { params }: Ctx) {
