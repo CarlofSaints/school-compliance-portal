@@ -2105,5 +2105,17 @@
   "Make the change": "Yenza utshintsho",
   "Fix these in the draft": "Lungisa ezi kuyilo",
   "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Olu hlolo lolwoyilo kwaye alugcinwa. Phinda wenze uhlolo kwiphepha lomgaqo-nkqubo xa sele ukwithala lakho.",
-  "The draft has changed since this check. Run it again to see where it stands now.": "Uyilo lutshintshile ukusukela olu hlolo. Phinda uluqhube ukuze ubone apho lume khona ngoku."
+  "The draft has changed since this check. Run it again to see where it stands now.": "Uyilo lutshintshile ukusukela olu hlolo. Phinda uluqhube ukuze ubone apho lume khona ngoku.",
+  "{n} credits": "iikhredithi ezi-{n}",
+  "Your school has {n} credits": "Isikolo sakho sineekhredithi ezi-{n}",
+  "The AI is paid for in credits: a draft uses {a}, each change {b}, a compliance check {c}. Editing the text yourself and adding to the library are free.": "I-AI ihlawulelwa ngeekhredithi: uyilo lusebenzisa ezi-{a}, utshintsho ngalunye ezi-{b}, uhlolo lokuthobela ezi-{c}. Ukuhlela umbhalo ngokwakho nokongeza kwithala kusimahla.",
+  "You are not allowed to spend the school's credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Awuvumelekanga ukusebenzisa iikhredithi zesikolo. Cela umlawuli wakho ukuba akhethe \"Can spend translation credits\" kumsebenzisi wakho.",
+  "Buy credits": "Thenga iikhredithi",
+  "To buy credits, ask your administrator (Admin > Translation Credits).": "Ukuthenga iikhredithi, cela umlawuli wakho (Admin > Translation Credits).",
+  "Not a legal review.": "Ayilohlolo lwezomthetho.",
+  "A draft is a starting point. The SGB or board of governors should read it before adopting it.": "Uyilo sisiqalo. I-SGB okanye ibhodi yabalawuli kufuneka baluphonononge phambi kokuba balwamkele.",
+  "The compliance check here is not saved.": "Uhlolo lokuthobela apha alugcinwa.",
+  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "Luhlola uyilo kuphela. Xa umgaqo-nkqubo sele ukwithala lakho, phinda uhlolo kwiphepha lawo ukuze amanqaku agcinwe.",
+  "{n} credit": "ikhredithi e-{n}",
+  "Your school has {n} credit": "Isikolo sakho sinekhredithi e-{n}"
 }

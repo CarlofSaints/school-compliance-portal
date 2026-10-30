@@ -154,7 +154,7 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
 }
 
 /** Takes n credits, atomically. False when the school has fewer. */
-async function spend(n: number): Promise<boolean> {
+export async function spendCredits(n: number): Promise<boolean> {
   let ok = false;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     if (c.balance < n) return NO_CHANGE;
@@ -162,6 +162,41 @@ async function spend(n: number): Promise<boolean> {
     return { balance: c.balance - n, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
   return ok;
+}
+
+/** Ticked per user on the Users screen ("Can spend translation credits"). Read fresh, never from the session. */
+export async function maySpendCredits(userId: string): Promise<boolean> {
+  const { getUserById } = await import("./userData");
+  return !!(await getUserById(userId))?.canSpendTranslationCredits;
+}
+
+/**
+ * Charges n credits, runs a paid AI step, and gives the credits back ONCE if it
+ * throws or `failed` says the result is not worth paying for. A finished
+ * result is always returned, even when the balance cannot be read afterwards.
+ * The step must stop itself (deadline) before the platform kills the request,
+ * or the refund never runs.
+ */
+export async function withCredits<T>(
+  n: number,
+  step: () => Promise<T>,
+  failed: (result: T) => boolean = () => false
+): Promise<{ ok: true; result: T; balance: number | null } | { ok: false; balance: number | null }> {
+  const balance = () => getCredits().catch(() => null);
+  if (!(await spendCredits(n))) return { ok: false, balance: await balance() };
+  let result: T;
+  try {
+    result = await step();
+  } catch (err) {
+    await refundCredits(n);
+    throw err;
+  }
+  if (failed(result)) await refundCredits(n);
+  return { ok: true, result, balance: await balance() };
+}
+
+async function refundCredits(n: number): Promise<void> {
+  await addCredits(n).catch((e) => console.error("[credits] 🔴 REFUND FAILED, add back by hand:", n, "credits", e));
 }
 
 export type ContentKind = "policy" | "minutes";
@@ -249,7 +284,7 @@ async function translateClaimed(opts: Parameters<typeof translateContent>[0]): P
   const stored = await storedTranslation(kind, id, locale, sourceHash);
   if (stored) return stored;
 
-  if (!(await spend(opts.credits))) {
+  if (!(await spendCredits(opts.credits))) {
     return { ok: false, status: 402, error: "Your school does not have enough translation credits for this document." };
   }
 

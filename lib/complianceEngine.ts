@@ -126,7 +126,8 @@ function tryParseResult(text: string): ComplianceResult | null {
 }
 
 async function analyze(
-  content: Anthropic.ContentBlockParam[]
+  content: Anthropic.ContentBlockParam[],
+  deadline?: number
 ): Promise<ComplianceResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -147,7 +148,8 @@ async function analyze(
         format: { type: "json_schema", schema: RESULT_SCHEMA },
       },
       messages: [{ role: "user", content }],
-    });
+    // Optional: a caller that charged credits stops the call itself, so its refund still runs.
+    }, deadline ? { signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())) } : undefined);
   } catch (err) {
     if (
       err instanceof Anthropic.APIError &&
@@ -191,10 +193,11 @@ async function analyze(
 export async function runComplianceCheck(
   policyText: string,
   policyName: string,
-  mode: "policy" | "document" = "policy"
+  mode: "policy" | "document" = "policy",
+  deadline?: number
 ): Promise<ComplianceResult> {
   const truncated = truncateText(policyText, MAX_CHARS_POLICY);
-  return analyze([{ type: "text", text: buildInstruction(mode, policyName, truncated) }]);
+  return analyze([{ type: "text", text: buildInstruction(mode, policyName, truncated) }], deadline);
 }
 
 // File entry point. PDFs are sent to Claude as a native document block (no

@@ -2105,5 +2105,17 @@
   "Make the change": "Dira phetogo",
   "Fix these in the draft": "Lokiša tše ka tlhamong",
   "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Tekolo ye ke ya tlhamo gomme ga e bolokwe. Dira tekolo gape letlakaleng la pholisi ge e šetše e le bokgobapukung bja gago.",
-  "The draft has changed since this check. Run it again to see where it stands now.": "Tlhamo e fetogile go tloga ka tekolo ye. E dire gape go bona moo e emego gona bjale."
+  "The draft has changed since this check. Run it again to see where it stands now.": "Tlhamo e fetogile go tloga ka tekolo ye. E dire gape go bona moo e emego gona bjale.",
+  "{n} credits": "dikhrediti tše {n}",
+  "Your school has {n} credits": "Sekolo sa gago se na le dikhrediti tše {n}",
+  "The AI is paid for in credits: a draft uses {a}, each change {b}, a compliance check {c}. Editing the text yourself and adding to the library are free.": "AI e lefelwa ka dikhrediti: tlhamo e šomiša tše {a}, phetogo ye nngwe le ye nngwe tše {b}, tekolo ya go obamela tše {c}. Go rulaganya sengwalwa ka bowena le go oketša bokgobapukung ke mahala.",
+  "You are not allowed to spend the school's credits. Ask your administrator to tick \"Can spend translation credits\" on your user.": "Ga o dumelelwe go šomiša dikhrediti tša sekolo. Kgopela molaodi wa gago go swaya \"Can spend translation credits\" go mošomiši wa gago.",
+  "Buy credits": "Reka dikhrediti",
+  "To buy credits, ask your administrator (Admin > Translation Credits).": "Go reka dikhrediti, kgopela molaodi wa gago (Admin > Translation Credits).",
+  "Not a legal review.": "Ga se tekolo ya semolao.",
+  "A draft is a starting point. The SGB or board of governors should read it before adopting it.": "Tlhamo ke mathomo. SGB goba boto ya babuši ba swanetše go e bala pele ba e amogela.",
+  "The compliance check here is not saved.": "Tekolo ya go obamela mo ga e bolokwe.",
+  "It checks the draft only. Once the policy is in your library, run the check again on its policy page so the score is kept.": "E lekola tlhamo fela. Ge pholisi e šetše e le bokgobapukung bja gago, dira tekolo gape letlakaleng la yona gore dintlha di bolokwe.",
+  "{n} credit": "khrediti e {n}",
+  "Your school has {n} credit": "Sekolo sa gago se na le khrediti e {n}"
 }
