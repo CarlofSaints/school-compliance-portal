@@ -58,11 +58,12 @@ export interface DownloadResult {
  */
 export async function downloadWithAuth(
   url: string,
-  fallbackName: string
+  fallbackName: string,
+  init?: RequestInit
 ): Promise<DownloadResult> {
   let objectUrl: string | null = null;
   try {
-    const res = await authFetch(url);
+    const res = await authFetch(url, init);
 
     if (!res.ok) {
       // The route answers JSON on failure and bytes on success, so the error

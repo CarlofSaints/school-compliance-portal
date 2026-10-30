@@ -1829,5 +1829,12 @@
   "What is the booking for?": "Ibhukhingi ingeyantoni?",
   "Organisation (optional)": "Umbutho (ukuzikhethela)",
   "I agree that the school keeps my name, email and phone number to manage this booking and contact me about it.": "Ndiyavuma ukuba isikolo sigcine igama lam, i-imeyile nenombolo yefowuni ukuze silawule le bhukhingi kwaye siqhagamshelane nam ngayo.",
-  "Request this booking": "Cela le bhukhingi"
+  "Request this booking": "Cela le bhukhingi",
+  "Only have a paper copy? Scan it to PDF and upload it here. The compliance check reads scans, and Convert to Word on the policy page turns it into an editable Word document.": "Unekopi yephepha kuphela? Yiskena ibe yi-PDF uze uyilayishe apha. Uhlolo lokuthobela lufunda izikena, kwaye u-Guqulela kwi-Word kwiphepha lomgaqo-nkqubo uyiguqula ibe luxwebhu lwe-Word onokuluhlela.",
+  "Converted to Word and saved as a new version": "Iguqulelwe kwi-Word yagcinwa njengenguqulelo entsha",
+  "The conversion failed. Please try again.": "Ukuguqula akuphumelelanga. Nceda uzame kwakhona.",
+  "For a scanned paper policy: AI reads every page and saves an editable Word copy as the next version. The scan stays in the version history. A long document can take a few minutes.": "Kumgaqo-nkqubo wephepha oskeniweyo: i-AI ifunda onke amaphepha ize igcine ikopi ye-Word onokuyihlela njengenguqulelo elandelayo. Isikena sihlala kwimbali yeenguqulelo. Uxwebhu olude lunokuthatha imizuzu embalwa.",
+  "Converting... (this can take a few minutes)": "Iyaguqulwa... (oku kunokuthatha imizuzu embalwa)",
+  "Convert to Word": "Guqulela kwi-Word",
+  "{name} is {size} MB. Files must be under 4 MB. For a scan, scan in black and white at 150 to 200 dpi, or split it into parts.": "{name} yi-{size} MB. Iifayile kufuneka zibe ngaphantsi kwe-4 MB. Kwisikena, skena ngomnyama nomhlophe kwi-150 ukuya kwi-200 dpi, okanye uyahlule ibe ziinxalenye."
 }

@@ -1829,5 +1829,12 @@
   "What is the booking for?": "Waarvoor is die bespreking?",
   "Organisation (optional)": "Organisasie (opsioneel)",
   "I agree that the school keeps my name, email and phone number to manage this booking and contact me about it.": "Ek stem in dat die skool my naam, e-pos en telefoonnommer hou om hierdie bespreking te bestuur en my daaroor te kontak.",
-  "Request this booking": "Versoek hierdie bespreking"
+  "Request this booking": "Versoek hierdie bespreking",
+  "Only have a paper copy? Scan it to PDF and upload it here. The compliance check reads scans, and Convert to Word on the policy page turns it into an editable Word document.": "Het u net 'n papierkopie? Skandeer dit na PDF en laai dit hier op. Die nakomingskontrole lees skanderings, en Omskakel na Word op die beleidsbladsy maak dit 'n Word-dokument wat u kan wysig.",
+  "Converted to Word and saved as a new version": "Na Word omgeskakel en as 'n nuwe weergawe gestoor",
+  "The conversion failed. Please try again.": "Die omskakeling het misluk. Probeer asseblief weer.",
+  "For a scanned paper policy: AI reads every page and saves an editable Word copy as the next version. The scan stays in the version history. A long document can take a few minutes.": "Vir 'n geskandeerde papierbeleid: KI lees elke bladsy en stoor 'n wysigbare Word-kopie as die volgende weergawe. Die skandering bly in die weergawegeskiedenis. 'n Lang dokument kan 'n paar minute neem.",
+  "Converting... (this can take a few minutes)": "Skakel tans om... (dit kan 'n paar minute neem)",
+  "Convert to Word": "Omskakel na Word",
+  "{name} is {size} MB. Files must be under 4 MB. For a scan, scan in black and white at 150 to 200 dpi, or split it into parts.": "{name} is {size} MB. Lêers moet kleiner as 4 MB wees. Skandeer in swart en wit teen 150 tot 200 dpi, of verdeel dit in dele."
 }
