@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { buildLeaderboard } from "@/lib/training";
-import { allProgress, getModules, getTests } from "@/lib/trainingData";
+import { allProgress, getMaterials, getModules, getTests } from "@/lib/trainingData";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
-  const [{ users, progress }, tests, modules] = await Promise.all([allProgress(), getTests(), getModules()]);
-  const rows = buildLeaderboard(users, progress, tests, modules);
+  const [{ users, progress }, tests, modules, materials] = await Promise.all([allProgress(), getTests(), getModules(), getMaterials()]);
+  const rows = buildLeaderboard(users, progress, tests, modules, materials);
   return NextResponse.json(
     {
       rows,

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SessionPayload } from "./roles";
-import { isLocked, type ModuleItem, type Progress, type TrainingStatus } from "./training";
-import { getModules } from "./trainingData";
+import { isLocked, liveKeys, type ModuleItem, type Progress, type TrainingStatus } from "./training";
+import { getMaterials, getModules, getTests } from "./trainingData";
 
 export const canManageTraining = (s: SessionPayload) => s.permissions.includes("manage_training");
 
@@ -20,7 +20,9 @@ export async function trainingGate(
   if (!item || (item.status !== "published" && !manager)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (!manager && isLocked(progress, await getModules(), item)) {
+  if (!manager) {
+    const [modules, materials, tests] = await Promise.all([getModules(), getMaterials(), getTests()]);
+    if (!isLocked(progress, modules, item, liveKeys(materials, tests))) return null;
     return NextResponse.json({ error: "Finish the earlier steps of this module first." }, { status: 403 });
   }
   return null;

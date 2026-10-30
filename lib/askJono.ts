@@ -7,6 +7,7 @@ import { getSpendApplications } from "./spendData";
 import { resolveBranding } from "./brandingData";
 import { extractTextFromBuffer } from "./pdfParser";
 import { LOCALES, type Locale } from "./i18n/locales";
+import { tenantScope } from "./tenantContext";
 
 // ---------------------------------------------------------------------------
 // "Ask Jono": a question box on every page. Jono answers from the school's own
@@ -16,12 +17,29 @@ import { LOCALES, type Locale } from "./i18n/locales";
 // 🔴 Jono only ever sees what THE PERSON ASKING may see: minutes through
 // readableMinutes (a FINCOM-only set never reaches a non-FINCOM reader),
 // actions through visibleActionsFor, spend through the same rule as the Spend
-// page (everything with view_all_spend, otherwise only their own). Building the
+// page (everything with view_all_spend, otherwise only what they submitted). Building the
 // context once for the whole school would leak restricted minutes through a
 // question.
 // ---------------------------------------------------------------------------
 
 const MODEL = "claude-opus-5-5";
+// One conversation asks several questions in a row; the records are gathered
+// once per person and reused for a short while instead of re-reading every set
+// of minutes per question. Keyed by SCHOOL and person, never person alone.
+// shortcut: in-memory per server instance, so a permission change can take up to RECORDS_TTL_MS to reach Jono.
+const RECORDS_TTL_MS = 2 * 60 * 1000;
+const recordsCache = new Map<string, { at: number; text: string }>();
+
+async function cachedRecordsFor(session: SessionPayload): Promise<string> {
+  const key = `${(await tenantScope()).key}:${session.id}`;
+  const hit = recordsCache.get(key);
+  if (hit && Date.now() - hit.at < RECORDS_TTL_MS) return hit.text;
+  const text = await recordsFor(session);
+  if (recordsCache.size > 500) recordsCache.clear();
+  recordsCache.set(key, { at: Date.now(), text });
+  return text;
+}
+
 // The records are trimmed oldest-first to stay well inside the context window.
 const MAX_CONTEXT_CHARS = 400_000;
 const MAX_MINUTES_SETS = 24;
@@ -52,9 +70,7 @@ export async function recordsFor(session: SessionPayload): Promise<string> {
   const [minutes, actions, spend] = await Promise.all([
     listMinutes().then((all) => readableMinutes(session, all)),
     getActionItems().then((all) => visibleActionsFor(session, all)),
-    session.permissions.includes("view_all_spend") || session.permissions.includes("submit_spend")
-      ? getSpendApplications()
-      : Promise.resolve([]),
+    getSpendApplications(),
   ]);
 
   const recent = minutes
@@ -97,7 +113,7 @@ export class JonoError extends Error {}
 export async function askJono(session: SessionPayload, turns: ChatTurn[], locale: Locale): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const [records, branding] = await Promise.all([recordsFor(session), resolveBranding()]);
+  const [records, branding] = await Promise.all([cachedRecordsFor(session), resolveBranding()]);
   const language = LOCALES.find((l) => l.code === locale)?.label ?? "English";
   const today = new Date().toISOString().slice(0, 10);
 

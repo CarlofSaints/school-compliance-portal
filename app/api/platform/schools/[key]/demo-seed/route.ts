@@ -16,6 +16,7 @@ import {
   demoSpend,
   demoMinutes,
 } from "@/lib/demoData";
+import { seedDemoCampus } from "@/lib/demoCampus";
 
 // ---------------------------------------------------------------------------
 // Fills a school with fabricated data, so the standard guide can carry real
@@ -33,6 +34,9 @@ import {
 // It is not "are you sure" that protects a real school here. It is that a real
 // school is never empty.
 // ---------------------------------------------------------------------------
+
+// The Campus part writes a dozen lists and nine logins.
+export const maxDuration = 120;
 
 export async function POST(
   req: NextRequest,
@@ -129,9 +133,14 @@ export async function POST(
         });
       }
 
+      // Campus: every library course, the governing body as logins, and
+      // invented progress for the leaderboard.
+      const campus = await seedDemoCampus(people2);
+
       return {
         seeded: true as const,
         replaced: occupied,
+        campus,
         wrote: {
           people: people2.length,
           actions: actions2.length,

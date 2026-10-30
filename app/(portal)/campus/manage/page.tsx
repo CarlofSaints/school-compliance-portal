@@ -6,6 +6,9 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 import Toast from "@/components/Toast";
 import { DraftPill, type Catalogue } from "@/components/trainingUi";
+import { MODULE_COLOURS, type ModuleColour } from "@/lib/trainingTopics";
+
+interface LibraryRow { slug: string; title: string; description: string; topic: string; icon: string; colour: string; lessons: number; questions: number; added: boolean }
 
 type Kind = "modules" | "materials" | "tests";
 
@@ -13,12 +16,32 @@ export default function ManageTrainingPage() {
   const t = useT();
   const { session, loading } = useAuth("manage_training");
   const [data, setData] = useState<Catalogue | null>(null);
+  const [library, setLibrary] = useState<LibraryRow[]>([]);
+  const [adding, setAdding] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   const load = useCallback(async () => {
-    const res = await authFetch("/api/training");
+    const [res, lib] = await Promise.all([authFetch("/api/training"), authFetch("/api/training/library")]);
     if (res.ok) setData(await res.json());
+    if (lib.ok) setLibrary(await lib.json());
   }, []);
+
+  const addCourses = async (body: { slug?: string; all?: boolean }) => {
+    setAdding(body.slug ?? "all");
+    const res = await authFetch("/api/training/library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(() => ({}));
+    setToast(
+      res.ok
+        ? { message: t("{count} courses added to your Campus and published", { count: out.added ?? 0 }), type: "success" }
+        : { message: out.error || t("That could not be added."), type: "error" }
+    );
+    setAdding(null);
+    load();
+  };
 
   useEffect(() => {
     if (session) load();
@@ -84,6 +107,62 @@ export default function ManageTrainingPage() {
           {t("Build a module with AI")}
         </Link>
       </div>
+      {library.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+            <div>
+              <h2 className="text-lg font-bold text-dark">{t("Course library")}</h2>
+              <p className="text-sm text-gray-500">
+                {t("Ready-made courses with a multiple-choice test each. Adding one copies it into your Campus, published, for you to edit as you like.")}
+              </p>
+            </div>
+            {library.some((c) => !c.added) && (
+              <button
+                onClick={() => addCourses({ all: true })}
+                disabled={adding !== null}
+                className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+              >
+                {adding === "all" ? t("Adding...") : t("Add all courses")}
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {library.map((c) => {
+              const col = MODULE_COLOURS[c.colour as ModuleColour] ?? MODULE_COLOURS.violet;
+              return (
+                <div key={c.slug} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                  <div className={`${col.band} px-4 py-3 flex items-center gap-3 text-white`}>
+                    <span className="text-3xl" aria-hidden>{c.icon}</span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-white/80">{c.topic}</p>
+                      <p className="font-bold leading-snug">{c.title}</p>
+                    </div>
+                  </div>
+                  <div className="p-4 flex-1 flex flex-col">
+                    <p className="text-sm text-gray-600 flex-1">{c.description}</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs text-gray-400">
+                        {t("{lessons} lessons, {questions} questions", { lessons: c.lessons, questions: c.questions })}
+                      </span>
+                      {c.added ? (
+                        <span className="text-xs font-semibold text-emerald-600">✓ {t("Added")}</span>
+                      ) : (
+                        <button
+                          onClick={() => addCourses({ slug: c.slug })}
+                          disabled={adding !== null}
+                          className={`text-xs font-semibold ${col.text} disabled:opacity-50`}
+                        >
+                          {adding === c.slug ? t("Adding...") : t("+ Add to our Campus")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {section(
         "modules",
         t("MODULES"),

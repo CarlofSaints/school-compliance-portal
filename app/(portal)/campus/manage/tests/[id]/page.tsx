@@ -144,7 +144,7 @@ export default function TestEditorPage() {
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={form.showAnswers} onChange={(e) => setForm({ ...form, showAnswers: e.target.checked })} />
-          {t("Show the right answers and explanations after each attempt")}
+          {t("Show the right answers and explanations once a person passes, or has used their last attempt")}
         </label>
       </div>
 

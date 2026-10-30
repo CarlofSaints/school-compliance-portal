@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { markAttempt, type MarkedAnswer, type QuestionType } from "./trainingMarking";
+import { MODULE_COLOURS, type ModuleColour } from "./trainingTopics";
 
 // ---------------------------------------------------------------------------
 // Training: material, tests and modules, ported from iRam Campus onto this
@@ -17,7 +18,7 @@ import { markAttempt, type MarkedAnswer, type QuestionType } from "./trainingMar
 // ---------------------------------------------------------------------------
 
 export type TrainingStatus = "draft" | "published";
-export type TrainingSource = "manual" | "ai";
+export type TrainingSource = "manual" | "ai" | "library";
 
 interface Stamped {
   id: string;
@@ -34,6 +35,8 @@ export interface Material extends Stamped {
   /** "text" is written in the portal (or by AI); "file" is an uploaded document. */
   kind: "text" | "file";
   body: string;
+  /** One emoji, shown beside the lesson in its module. */
+  icon?: string;
   file?: { filename: string; ext: string; size: number };
 }
 
@@ -67,6 +70,11 @@ export interface TrainingModule extends Stamped {
   topic: string;
   sequential: boolean;
   items: ModuleItem[];
+  /** One emoji and a card colour, to make the catalogue friendlier. */
+  icon?: string;
+  colour?: ModuleColour;
+  /** Set when the module was added from the built-in course library. */
+  librarySlug?: string;
 }
 
 export interface Attempt {
@@ -91,8 +99,8 @@ export const emptyProgress = (userId: string): Progress => ({ userId, opened: {}
 
 // --- Cleaning what an editor (or the AI) sends ------------------------------
 
-const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const int = (v: unknown, min: number, max: number, dflt: number) => {
+export const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+export const int = (v: unknown, min: number, max: number, dflt: number) => {
   const n = Math.round(Number(v));
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
 };
@@ -146,6 +154,8 @@ export function cleanQuestion(raw: unknown): Question | null {
 /** Why a test cannot be published yet, or null. A paper nobody can pass must not go out. */
 export function testProblem(questions: Question[]): string | null {
   if (questions.length === 0) return "Add at least one question before publishing.";
+  // A paper worth nothing scores 0% for everyone, so nobody could ever pass it.
+  if (questions.every((q) => q.points <= 0)) return "Give at least one question some points.";
   for (const [i, q] of questions.entries()) {
     if (q.type === "text" ? q.acceptedAnswers.length === 0 : !q.options.some((o) => o.isCorrect)) {
       return `Question ${i + 1} has no correct answer.`;
@@ -189,6 +199,8 @@ export function cleanModuleFields(raw: Record<string, unknown>) {
     topic: str(raw.topic, 200),
     status: status(raw.status),
     sequential: raw.sequential === true,
+    icon: str(raw.icon, 16),
+    colour: (typeof raw.colour === "string" && raw.colour in MODULE_COLOURS ? raw.colour : "violet") as ModuleColour,
     items: (Array.isArray(raw.items) ? raw.items : [])
       .map((i) => (i ?? {}) as Record<string, unknown>)
       .filter((i) => (i.kind === "material" || i.kind === "test") && typeof i.id === "string")
@@ -221,31 +233,58 @@ export function itemDone(p: Progress, item: ModuleItem): boolean {
   return item.kind === "material" ? Boolean(p.opened[item.id]) : hasPassed(p, item.id);
 }
 
+/** "material:<id>" / "test:<id>" of every published piece. */
+export const liveKeys = (materials: { id: string; status: string }[], tests: { id: string; status: string }[]) =>
+  new Set([
+    ...materials.filter((m) => m.status === "published").map((m) => `material:${m.id}`),
+    ...tests.filter((t) => t.status === "published").map((t) => `test:${t.id}`),
+  ]);
+
 /**
  * Whether a piece is locked for this person: it sits in a PUBLISHED module set
- * to run in order and something before it there is not done. Any one such
- * module is enough to lock it.
+ * to run in order and a PUBLISHED step before it there is not done. Any one
+ * such module is enough to lock it. A step taken back to draft (or deleted)
+ * no longer counts: a learner cannot open it, so it must not hold the rest
+ * shut for ever.
  */
-export function isLocked(p: Progress, modules: TrainingModule[], item: ModuleItem): boolean {
+export function isLocked(p: Progress, modules: TrainingModule[], item: ModuleItem, live: Set<string>): boolean {
   return modules.some((m) => {
     if (m.status !== "published" || !m.sequential) return false;
     const at = m.items.findIndex((i) => i.kind === item.kind && i.id === item.id);
-    return at > 0 && m.items.slice(0, at).some((i) => !itemDone(p, i));
+    return at > 0 && m.items.slice(0, at).some((i) => live.has(`${i.kind}:${i.id}`) && !itemDone(p, i));
   });
 }
 
+/** Only what the paper asked, in the shape each question takes, so a hand-in cannot bloat the store. */
+export function cleanResponses(test: Test, raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const q of test.questions) {
+    const v = raw[q.id];
+    if (q.type === "text") out[q.id] = str(v, 1000);
+    else if (q.type === "multi") out[q.id] = (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === "string").slice(0, 20).map((x) => x.slice(0, 64));
+    else out[q.id] = typeof v === "string" ? v.slice(0, 64) : null;
+  }
+  return out;
+}
+
+/** Most attempts kept per test when the test itself sets no limit. */
+export const MAX_STORED_ATTEMPTS = 100;
+
 /** Marks a paper and returns the attempt to store. Refuses once attempts are used up. */
 export function submitAttempt(test: Test, p: Progress, responses: Record<string, unknown>, now: string): Attempt | "no_attempts_left" {
-  if (test.maxAttempts > 0 && attemptsAt(p, test.id).length >= test.maxAttempts) return "no_attempts_left";
-  const marked = markAttempt(test.questions, responses, test.passMark);
+  const used = attemptsAt(p, test.id).length;
+  if ((test.maxAttempts > 0 && used >= test.maxAttempts) || used >= MAX_STORED_ATTEMPTS) return "no_attempts_left";
+  const marked = markAttempt(test.questions, cleanResponses(test, responses), test.passMark);
+  // Rounded DOWN and passed decided on the same figure, so "70%" never sits beside "Not passed".
+  const scorePct = Math.floor(marked.scorePct);
   return {
     id: randomUUID(),
     testId: test.id,
     submittedAt: now,
     pointsAwarded: marked.pointsAwarded,
     pointsPossible: marked.pointsPossible,
-    scorePct: Math.round(marked.scorePct),
-    passed: marked.passed,
+    scorePct,
+    passed: scorePct >= test.passMark,
     answers: marked.answers,
   };
 }
@@ -274,10 +313,16 @@ export function buildLeaderboard(
   users: { id: string; name: string; surname: string }[],
   progress: Map<string, Progress>,
   tests: Test[],
-  modules: TrainingModule[]
+  modules: TrainingModule[],
+  materials: { id: string; status: string }[]
 ): LeaderRow[] {
   const live = new Set(tests.filter((t) => t.status === "published").map((t) => t.id));
-  const liveModules = modules.filter((m) => m.status === "published" && m.items.length > 0);
+  const steps = liveKeys(materials, tests);
+  // A module is complete when every PUBLISHED step is done (same rule as the lock).
+  const liveModules = modules
+    .filter((m) => m.status === "published")
+    .map((m) => ({ ...m, items: m.items.filter((i) => steps.has(`${i.kind}:${i.id}`)) }))
+    .filter((m) => m.items.length > 0);
   const rows = users.map((u) => {
     const p = progress.get(u.id) ?? emptyProgress(u.id);
     const best = new Map<string, number>();

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getMaterials, getModules, getProgress, getTests } from "@/lib/trainingData";
-import { attemptsAt, hasPassed, isLocked, itemDone } from "@/lib/training";
+import { attemptsAt, hasPassed, isLocked, itemDone, liveKeys } from "@/lib/training";
 import { canManageTraining } from "@/lib/trainingAccess";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     getModules(),
     getProgress(session.id),
   ]);
+  const live = liveKeys(materials, tests);
   const visible = <T extends { status: string }>(list: T[]) => (manager ? list : list.filter((x) => x.status === "published"));
 
   const materialRows = visible(materials).map((m) => ({
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
     kind: m.kind,
     updatedAt: m.updatedAt,
     done: Boolean(progress.opened[m.id]),
-    locked: !manager && isLocked(progress, modules, { kind: "material", id: m.id }),
+    locked: !manager && isLocked(progress, modules, { kind: "material", id: m.id }, live),
   }));
   const testRows = visible(tests).map((t) => {
     const mine = attemptsAt(progress, t.id);
@@ -48,10 +49,10 @@ export async function GET(req: NextRequest) {
       attempts: mine.length,
       bestPct: mine.length ? Math.max(...mine.map((a) => a.scorePct)) : null,
       done: hasPassed(progress, t.id),
-      locked: !manager && isLocked(progress, modules, { kind: "test", id: t.id }),
+      locked: !manager && isLocked(progress, modules, { kind: "test", id: t.id }, live),
     };
   });
-  const titles = new Map<string, { title: string; status: string }>([
+  const titles = new Map<string, { title: string; status: string; icon?: string }>([
     ...materials.map((m) => [`material:${m.id}`, m] as const),
     ...tests.map((t) => [`test:${t.id}`, t] as const),
   ]);
@@ -62,8 +63,9 @@ export async function GET(req: NextRequest) {
         ...i,
         title: titles.get(`${i.kind}:${i.id}`)!.title,
         status: titles.get(`${i.kind}:${i.id}`)!.status,
+        icon: titles.get(`${i.kind}:${i.id}`)!.icon ?? (i.kind === "test" ? "📝" : "📖"),
         done: itemDone(progress, i),
-        locked: !manager && isLocked(progress, modules, i),
+        locked: !manager && isLocked(progress, modules, i, live),
       }));
     return {
       id: m.id,
@@ -73,6 +75,8 @@ export async function GET(req: NextRequest) {
       status: m.status,
       source: m.source,
       sequential: m.sequential,
+      icon: m.icon || "🎓",
+      colour: m.colour || "violet",
       updatedAt: m.updatedAt,
       items,
       doneCount: items.filter((i) => i.done).length,

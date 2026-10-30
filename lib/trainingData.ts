@@ -1,9 +1,11 @@
 import { randomUUID } from "crypto";
 import {
   readJson,
+  writeJson,
   updateJson,
   NO_CHANGE,
   addToList,
+  updateInList,
   removeFromList,
   writeFile,
   readFile,
@@ -17,6 +19,7 @@ import {
   type Progress,
   type Test,
   type TrainingModule,
+  type TrainingSource,
 } from "./training";
 
 // Storage for training. Everything goes through controlData, which is already
@@ -52,7 +55,7 @@ export async function getModule(id: string) {
 type Kind = "material" | "test" | "module";
 const LISTS: Record<Kind, string> = { material: MATERIALS, test: TESTS, module: MODULES };
 
-export function stamp(by: string, source: "manual" | "ai" = "manual") {
+export function stamp(by: string, source: TrainingSource = "manual") {
   const now = new Date().toISOString();
   return { id: randomUUID(), source, createdBy: by, createdAt: now, updatedAt: now };
 }
@@ -62,22 +65,34 @@ export async function createItem<T extends { id: string }>(kind: Kind, item: T):
   return item;
 }
 
+/** Several at once, in ONE guarded write. */
+export async function createItems<T extends { id: string }>(kind: Kind, items: T[]): Promise<void> {
+  await addToList(LISTS[kind], ...items);
+}
+
+/** Publishes the listed pieces in ONE guarded write per list. */
+export async function publishItems(kind: "material" | "test", ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const now = new Date().toISOString();
+  await updateJson<{ id: string; status: string; updatedAt: string }[]>(LISTS[kind], [], (list) =>
+    list.some((x) => ids.includes(x.id) && x.status !== "published")
+      ? list.map((x) => (ids.includes(x.id) && x.status !== "published" ? { ...x, status: "published", updatedAt: now } : x))
+      : NO_CHANGE
+  );
+}
+
 /** Applies `change` to one item under the guarded write. Null when it is gone. */
 export async function updateItem<T extends { id: string; updatedAt: string }>(
   kind: Kind,
   id: string,
   change: (current: T) => Partial<T>
 ): Promise<T | null> {
-  let saved: T | null = null;
-  await updateJson<T[]>(LISTS[kind], [], (list) => {
-    const at = list.findIndex((x) => x.id === id);
-    if (at < 0) return NO_CHANGE;
-    saved = { ...list[at], ...change(list[at]), id, updatedAt: new Date().toISOString() };
-    const next = [...list];
-    next[at] = saved;
-    return next;
-  });
-  return saved;
+  return updateInList<T>(LISTS[kind], id, (current) => ({
+    ...current,
+    ...change(current),
+    id,
+    updatedAt: new Date().toISOString(),
+  }));
 }
 
 export async function deleteItem(kind: Kind, id: string): Promise<boolean> {
@@ -104,6 +119,9 @@ export const removeMaterialFile = (id: string, ext: string) => deleteFile(filePa
 export async function getProgress(userId: string): Promise<Progress> {
   return readJson<Progress>(progressPath(userId), emptyProgress(userId));
 }
+
+/** Replaces a person's whole record. Only the demo school's seed uses this. */
+export const saveProgress = (p: Progress) => writeJson(progressPath(p.userId), p);
 
 /** Records the FIRST time somebody opens a piece of material. */
 export async function markOpened(userId: string, materialId: string): Promise<void> {
