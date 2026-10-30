@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin, requirePermission } from "@/lib/rolesData";
-import { MATERIAL_EXT, cleanMaterialFields, type Material } from "@/lib/training";
+import { MATERIAL_EXT, cleanMaterialFields, readingMinutes, type Material } from "@/lib/training";
 import {
   deleteItem,
   getMaterial,
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const blocked = await trainingGate(session, material && { kind: "material", id, status: material.status }, await getProgress(session.id));
   if (blocked) return blocked;
   if (req.nextUrl.searchParams.get("edit") !== "1") await markOpened(session.id, id);
-  return NextResponse.json(material, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ...material!, minutes: readingMinutes(material!) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(req: NextRequest, { params }: Ctx) {

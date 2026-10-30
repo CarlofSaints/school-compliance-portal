@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
-import { DraftPill, stepHref, type Catalogue } from "@/components/trainingUi";
+import { CopyLinkButton, DraftPill, stepHref, type Catalogue } from "@/components/trainingUi";
 import { MODULE_COLOURS, type ModuleColour } from "@/lib/trainingTopics";
 
 export default function TrainingPage() {
@@ -66,7 +66,7 @@ export default function TrainingPage() {
           const c = MODULE_COLOURS[m.colour as ModuleColour] ?? MODULE_COLOURS.violet;
           const complete = m.items.length > 0 && m.doneCount === m.items.length;
           return (
-            <div key={m.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div key={m.id} id={`module-${m.id}`} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden scroll-mt-20">
               <div className={`${c.band} px-5 py-4 flex items-center gap-4 text-white`}>
                 <span className="text-4xl leading-none" aria-hidden>{m.icon}</span>
                 <div className="min-w-0 flex-1">
@@ -80,6 +80,14 @@ export default function TrainingPage() {
               </div>
               <div className="p-5">
                 {m.description && <p className="text-sm text-gray-600">{m.description}</p>}
+                <div className="flex gap-2 mt-3">
+                  <CopyLinkButton path={`/campus#module-${m.id}`} />
+                  {data.canManage && (
+                    <Link href={`/campus/manage/modules/${m.id}`} className="border border-gray-200 bg-white text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50">
+                      ✏️ {t("Edit")}
+                    </Link>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 mt-3">
                   <div className="h-2 flex-1 bg-gray-100 rounded-full">
                     <div className={`h-2 ${c.bar} rounded-full transition-all`} style={{ width: `${pct}%` }} />
@@ -100,6 +108,11 @@ export default function TrainingPage() {
                         <Link href={stepHref(s, m.id)} className={`flex items-center gap-3 text-sm px-3 py-2 rounded-lg ${c.hover} ${s.done ? c.soft : ""}`}>
                           <span className="text-lg w-6 text-center" aria-hidden>{s.icon}</span>
                           <span className="flex-1 text-gray-800">{i + 1}. {s.title}</span>
+                          {s.minutes ? (
+                            <span className="text-xs text-gray-400 whitespace-nowrap">
+                              {s.kind === "test" ? `⏱ ${t("{n} min", { n: s.minutes })}` : `~${t("{n} min", { n: s.minutes })}`}
+                            </span>
+                          ) : null}
                           <span className={`text-xs font-medium ${s.done ? "text-emerald-600" : "text-gray-400"}`}>
                             {s.done ? (s.kind === "test" ? t("Passed") : t("Read")) : s.kind === "test" ? t("Test") : t("Lesson")}
                           </span>

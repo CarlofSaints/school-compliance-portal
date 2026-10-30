@@ -7,7 +7,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { downloadWithAuth } from "@/lib/download";
 import { useT } from "@/components/I18nProvider";
 import LessonText from "@/components/LessonText";
-import { DraftPill, useNextStep } from "@/components/trainingUi";
+import { CopyLinkButton, DraftPill, useNextStep } from "@/components/trainingUi";
 
 interface MaterialView {
   id: string;
@@ -18,11 +18,13 @@ interface MaterialView {
   body: string;
   icon?: string;
   file?: { filename: string; size: number };
+  minutes: number;
 }
 
 export default function MaterialPage() {
   const t = useT();
   const { session, loading } = useAuth();
+  const canManage = session?.permissions.includes("manage_training");
   const { id } = useParams<{ id: string }>();
   const [m, setM] = useState<MaterialView | null>(null);
   const [error, setError] = useState("");
@@ -59,6 +61,15 @@ export default function MaterialPage() {
             {m.status !== "published" && <DraftPill />}
           </h1>
           {m.description && <p className="text-gray-500 text-sm mt-1">{m.description}</p>}
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {m.body && <span className="text-xs text-gray-500 mr-2">📖 {t("About {n} minutes to read", { n: m.minutes })}</span>}
+            <CopyLinkButton path={`/campus/material/${m.id}`} />
+            {canManage && (
+              <Link href={`/campus/manage/materials/${m.id}`} className="border border-gray-200 bg-white text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50">
+                ✏️ {t("Edit")}
+              </Link>
+            )}
+          </div>
           <div className="mt-5">
             {m.body && <LessonText body={m.body} />}
             {m.file && (

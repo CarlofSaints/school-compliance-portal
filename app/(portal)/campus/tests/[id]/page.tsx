@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
-import { DraftPill, useNextStep } from "@/components/trainingUi";
+import { CopyLinkButton, DraftPill, useNextStep } from "@/components/trainingUi";
 
 interface Paper {
   id: string;
@@ -16,6 +16,9 @@ interface Paper {
   maxAttempts: number;
   questions: { id: string; type: "single" | "multi" | "truefalse" | "text"; text: string; points: number; options: { id: string; text: string }[] }[];
   attempts: { id: string; submittedAt: string; scorePct: number; passed: boolean }[];
+  timeLimitMinutes?: number;
+  /** When this timed sitting ends (ISO), or null. */
+  deadline: string | null;
 }
 interface Result {
   scorePct: number;
@@ -24,12 +27,15 @@ interface Result {
   pointsPossible: number;
   passMark: number;
   answersShown: boolean;
+  timedOut: boolean;
   memo: { questionId: string; isCorrect: boolean; correctOptionIds: string[]; acceptedAnswers: string[]; explanation: string }[] | null;
 }
 
 export default function TestPage() {
   const t = useT();
   const { session, loading } = useAuth();
+  const canManage = session?.permissions.includes("manage_training");
+  const [now, setNow] = useState(() => Date.now());
   const { id } = useParams<{ id: string }>();
   const [paper, setPaper] = useState<Paper | null>(null);
   const [error, setError] = useState("");
@@ -53,13 +59,13 @@ export default function TestPage() {
     if (session) load();
   }, [session, load]);
 
-  const submit = async () => {
-    if (!paper) return;
+  const submit = async (auto = false) => {
+    if (!paper || submitting) return;
     const blank = paper.questions.filter((q) => {
       const a = answers[q.id];
       return a === undefined || (Array.isArray(a) ? a.length === 0 : !a.trim());
     }).length;
-    if (blank && !confirm(t("{count} questions are not answered. Hand in anyway?", { count: blank }))) return;
+    if (!auto && blank && !confirm(t("{count} questions are not answered. Hand in anyway?", { count: blank }))) return;
     setSubmitting(true);
     setError("");
     const res = await authFetch(`/api/training/tests/${id}/submit`, {
@@ -76,10 +82,25 @@ export default function TestPage() {
     setSubmitting(false);
   };
 
+  // The clock for a timed paper. At zero the paper is handed in as it stands.
+  const deadline = !result && paper?.deadline ? Date.parse(paper.deadline) : null;
+  useEffect(() => {
+    if (deadline === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [deadline]);
+  const secondsLeft = deadline === null ? null : Math.max(0, Math.round((deadline - now) / 1000));
+  useEffect(() => {
+    if (secondsLeft === 0) submit(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secondsLeft]);
+
   const retake = () => {
     setResult(null);
     setAnswers({});
     window.scrollTo({ top: 0 });
+    // A new sitting: a timed paper starts a new clock when it is opened again.
+    load();
   };
 
   if (loading || (!paper && !error)) return <div className="p-6">{t("Loading...")}</div>;
@@ -110,8 +131,23 @@ export default function TestPage() {
           {t("{count} questions", { count: paper.questions.length })} &middot; {t("Pass mark {pct}%", { pct: paper.passMark })}
           {left !== null && <> &middot; {t("{left} of {max} attempts left", { left: Math.max(0, left), max: paper.maxAttempts })}</>}
           {best !== null && <> &middot; {t("Your best: {pct}%", { pct: best })}</>}
+          {paper.timeLimitMinutes ? <> &middot; ⏱ {t("{n} minutes allowed", { n: paper.timeLimitMinutes })}</> : null}
         </p>
+        <div className="flex gap-2 mt-3">
+          <CopyLinkButton path={`/campus/tests/${paper.id}`} />
+          {canManage && (
+            <Link href={`/campus/manage/tests/${paper.id}`} className="border border-gray-200 bg-white text-gray-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-gray-50">
+              ✏️ {t("Edit")}
+            </Link>
+          )}
+        </div>
       </div>
+
+      {secondsLeft !== null && (
+        <div className={`sticky top-2 z-10 mt-4 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm border ${secondsLeft < 60 ? "bg-red-50 border-red-200 text-red-700" : "bg-white border-gray-200 text-dark"}`}>
+          ⏱ {t("Time left: {time}", { time: `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}` })}
+        </div>
+      )}
 
       {result && (
         <div className={`rounded-xl p-6 mt-4 border ${result.passed ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
@@ -120,6 +156,7 @@ export default function TestPage() {
             {result.passed ? t("Passed. Well done.") : t("Not passed. The pass mark is {pct}%.", { pct: result.passMark })}{" "}
             {t("{got} of {total} points.", { got: result.pointsAwarded, total: result.pointsPossible })}
           </p>
+          {result.timedOut && <p className="text-xs text-red-700 mt-2">{t("The time ran out before this paper was handed in, so it was marked as blank.")}</p>}
           {result.memo && !result.answersShown && (
             <p className="text-xs text-gray-600 mt-2">{t("The questions you got wrong are marked in red. The right answers are shown once you pass.")}</p>
           )}
@@ -208,7 +245,7 @@ export default function TestPage() {
           {!result && (
             <div className="flex items-center gap-3">
               <button
-                onClick={submit}
+                onClick={() => submit()}
                 disabled={submitting}
                 className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
               >

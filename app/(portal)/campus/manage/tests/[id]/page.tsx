@@ -49,6 +49,8 @@ export default function TestEditorPage() {
     passMark: 70,
     maxAttempts: 0,
     showAnswers: true,
+    timeLimitMinutes: 0,
+    shuffleQuestions: false,
     questions: [blankQuestion()] as Q[],
   });
   const [ready, setReady] = useState(isNew);
@@ -65,6 +67,14 @@ export default function TestEditorPage() {
 
   const setQ = (at: number, change: Partial<Q>) =>
     setForm((f) => ({ ...f, questions: f.questions.map((q, i) => (i === at ? { ...q, ...change } : q)) }));
+
+  const moveQ = (at: number, by: number) =>
+    setForm((f) => {
+      const questions = [...f.questions];
+      const [q] = questions.splice(at, 1);
+      questions.splice(at + by, 0, q);
+      return { ...f, questions };
+    });
 
   const changeType = (at: number, type: QType) => {
     const q = form.questions[at];
@@ -142,6 +152,16 @@ export default function TestEditorPage() {
             <input type="number" min={0} max={50} value={form.maxAttempts} onChange={(e) => setForm({ ...form, maxAttempts: Number(e.target.value) })} className={input} />
           </label>
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="block">
+            <span className="block text-sm font-medium text-gray-700 mb-1">{t("Time allowed in minutes (0 = no limit)")}</span>
+            <input type="number" min={0} max={600} value={form.timeLimitMinutes ?? 0} onChange={(e) => setForm({ ...form, timeLimitMinutes: Number(e.target.value) })} className={input} />
+          </label>
+          <label className="flex items-center gap-2 text-sm mt-6">
+            <input type="checkbox" checked={form.shuffleQuestions ?? false} onChange={(e) => setForm({ ...form, shuffleQuestions: e.target.checked })} />
+            {t("Shuffle the question order for each sitting")}
+          </label>
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={form.showAnswers} onChange={(e) => setForm({ ...form, showAnswers: e.target.checked })} />
           {t("Show the right answers and explanations once a person passes, or has used their last attempt")}
@@ -163,6 +183,8 @@ export default function TestEditorPage() {
                 {t("Points")}
                 <input type="number" min={0} max={100} value={q.points} onChange={(e) => setQ(at, { points: Number(e.target.value) })} className="w-14 px-2 py-1 border border-gray-200 rounded text-xs" />
               </label>
+              <button onClick={() => moveQ(at, -1)} disabled={at === 0} className="text-gray-400 disabled:opacity-30 text-sm" aria-label={t("Move up")}>↑</button>
+              <button onClick={() => moveQ(at, 1)} disabled={at === form.questions.length - 1} className="text-gray-400 disabled:opacity-30 text-sm" aria-label={t("Move down")}>↓</button>
               <button
                 onClick={() => setForm({ ...form, questions: form.questions.filter((_, i) => i !== at) })}
                 className="text-xs text-gray-400 hover:text-red-600"

@@ -11,6 +11,7 @@ import {
   emptyProgress,
   isLocked,
   liveKeys,
+  readingMinutes,
   paperFor,
   submitAttempt,
   testProblem,
@@ -57,6 +58,20 @@ assert.ok(a3 !== "no_attempts_left" && a3.scorePct === 66 && !a3.passed, "66% sh
 const bloated = submitAttempt(three, emptyProgress("r"), { [single.id]: "x".repeat(5000), junk: "y".repeat(10_000) }, now);
 assert.ok(bloated !== "no_attempts_left" && JSON.stringify(bloated).length < 2000, "oversized answers are trimmed and unknown keys dropped");
 assert.equal(submitAttempt(test, p, right, now), "no_attempts_left", "third attempt refused at max 2");
+
+// Timed papers: on time is marked; well past the limit (plus grace) is marked blank.
+const timed: Test = { ...test, id: "t9", maxAttempts: 0, timeLimitMinutes: 10 };
+const sitting = { ...emptyProgress("tt"), started: { t9: "2026-10-30T10:00:00.000Z" } };
+const ontime = submitAttempt(timed, sitting, right, "2026-10-30T10:11:00.000Z");
+assert.ok(ontime !== "no_attempts_left" && ontime.scorePct === 100, "inside the limit plus grace: marked");
+const late = submitAttempt(timed, sitting, right, "2026-10-30T10:13:00.000Z");
+assert.ok(late !== "no_attempts_left" && late.scorePct === 0, "well after the limit: marked blank");
+// Shuffle changes the order, never the questions.
+const many: Test = { ...test, shuffleQuestions: true, questions: Array.from({ length: 12 }, (_, i) => ({ ...single, id: `q${i}` })) };
+const ids = paperFor(many).questions.map((q) => q.id);
+assert.deepEqual([...ids].sort(), many.questions.map((q) => q.id).sort(), "every question still there once");
+assert.equal(readingMinutes({ body: "word ".repeat(1000) }), 5, "about 200 words a minute");
+assert.equal(readingMinutes({ body: "short", estimatedMinutes: 12 }), 12, "the editor's figure wins");
 
 // Module locks
 const mod: TrainingModule = { ...base, id: "m1", title: "M", topic: "", status: "published", sequential: true, items: [{ kind: "material", id: "l1" }, { kind: "test", id: "t1" }] };

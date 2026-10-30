@@ -142,9 +142,19 @@ export async function recordAttempt(
   let result: Attempt | "no_attempts_left" = "no_attempts_left";
   await updateJson<Progress>(progressPath(userId), emptyProgress(userId), (p) => {
     result = make(p);
-    return result === "no_attempts_left" ? NO_CHANGE : { ...p, attempts: [...p.attempts, result] };
+    if (result === "no_attempts_left") return NO_CHANGE;
+    // The sitting is over: the next opening of a timed paper starts a new clock.
+    const { [result.testId]: _done, ...started } = p.started ?? {};
+    return { ...p, attempts: [...p.attempts, result], started };
   });
   return result;
+}
+
+/** Starts the clock on a timed paper the FIRST time it is opened for a sitting. Reloading keeps the clock. */
+export async function startSitting(userId: string, testId: string): Promise<Progress> {
+  return updateJson<Progress>(progressPath(userId), emptyProgress(userId), (p) =>
+    p.started?.[testId] ? NO_CHANGE : { ...p, started: { ...(p.started ?? {}), [testId]: new Date().toISOString() } }
+  );
 }
 
 /** Everybody's progress, for the leaderboard. */

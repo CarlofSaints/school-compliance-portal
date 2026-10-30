@@ -2011,5 +2011,17 @@
   "Locked: term ended": "E notletšwe: paka e fedile",
   "Always ({why})": "Ka mehla ({why})",
   "Switch back on": "Bula gape",
-  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Ge paka ya go šoma e fela, leloko le lengwe le le lengwe le notlelwa ka ntle ga portala ntle le Balaodi ba Godimodimo le mang le mang yo a swailwego go boloka phihlelelo. Go bea paka go swaya Hlogo ya Sekolo le Motlatšahlogo ka bowona (ge tsenyo ya bona go Batho e kgokagantšwe le go tsena ga bona). Bula gape maloko ao a kgethilwego gape, gomme o rotše bao ba sa tšwelego pele."
+  "When the term ends, every member is locked out of the portal except Super Admins and anyone ticked to keep access. Setting the term ticks the Principal and Deputy Principal for you (when their People entry is linked to their login). Switch re-elected members back on, and retire those not continuing.": "Ge paka ya go šoma e fela, leloko le lengwe le le lengwe le notlelwa ka ntle ga portala ntle le Balaodi ba Godimodimo le mang le mang yo a swailwego go boloka phihlelelo. Go bea paka go swaya Hlogo ya Sekolo le Motlatšahlogo ka bowona (ge tsenyo ya bona go Batho e kgokagantšwe le go tsena ga bona). Bula gape maloko ao a kgethilwego gape, gomme o rotše bao ba sa tšwelego pele.",
+  "Reading time in minutes (blank = worked out from the length)": "Nako ya go bala ka metsotso (e se na selo = e balwa go tšwa botelele)",
+  "pass {pct}%": "phasa {pct}%",
+  "{n} attempts": "diteko tše {n}",
+  "unlimited attempts": "diteko tše di sa felego",
+  "Time allowed in minutes (0 = no limit)": "Nako ye e dumeletšwego ka metsotso (0 = ga go na moedi)",
+  "Shuffle the question order for each sitting": "Hlakanya tatelano ya dipotšišo go ngwalo le lengwe le le lengwe",
+  "About {n} minutes to read": "Metsotso e ka bago {n} go bala",
+  "{n} minutes allowed": "metsotso e {n} e dumeletšwe",
+  "Time left: {time}": "Nako ye e šetšego: {time}",
+  "The time ran out before this paper was handed in, so it was marked as blank.": "Nako e feletše pele pampiri ye e romelwa, ka gona e swailwe bjalo ka ye e se nago selo.",
+  "Link copied": "Kgokagano e kopilwe",
+  "Copy link": "Kopiša kgokagano"
 }
