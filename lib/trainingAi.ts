@@ -96,7 +96,7 @@ export class GenerateError extends Error {}
 // text are extracted. Capped so the request stays inside the API's size limit.
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 
-async function sourceBlocks(ids: string[]): Promise<{ blocks: Anthropic.ContentBlockParam[]; names: string[] }> {
+export async function sourceBlocks(ids: string[]): Promise<{ blocks: Anthropic.ContentBlockParam[]; names: string[] }> {
   const all = await getGuidelines();
   const blocks: Anthropic.ContentBlockParam[] = [];
   const names: string[] = [];

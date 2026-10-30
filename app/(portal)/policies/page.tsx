@@ -367,6 +367,14 @@ export default function PoliciesPage() {
           )}
           {session?.permissions.includes("upload_policies") && (
             <Link
+              href="/policies/compile"
+              className="border border-primary text-primary px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors"
+            >
+              {t("Compile a policy from scratch")}
+            </Link>
+          )}
+          {session?.permissions.includes("upload_policies") && (
+            <Link
               href="/policies/upload"
               className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >

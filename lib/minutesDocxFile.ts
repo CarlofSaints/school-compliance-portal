@@ -4,6 +4,7 @@ import { readSignatureImage } from "./minutesData";
 import type { MinutesRecord } from "./minutesData";
 import { buildMinutesDocx } from "./minutesDocx";
 import { resolveBranding, readLogo } from "./brandingData";
+import type { SchoolBranding } from "./branding";
 import { formatPeriod } from "./minutes";
 
 // ---------------------------------------------------------------------------
@@ -25,11 +26,7 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
   // needs for a meeting tonight.
   // Falls back to the built-in crest (HVPS and Jeppe ship theirs in /public,
   // never uploaded one), which next.config.ts traces into every API function.
-  const crest =
-    (await readLogo().catch(() => null)) ??
-    (branding.logo.startsWith("/") && branding.logo.endsWith(".png")
-      ? await readFile(path.join(process.cwd(), "public", branding.logo)).catch(() => null)
-      : null);
+  const crest = await schoolCrest(branding);
 
   // No People lookup for the sections: the responsible name was frozen into
   // each one when the template was copied, so the document shows who was
@@ -55,6 +52,16 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
   );
 
   return buildMinutesDocx(record, branding, crest, signatures);
+}
+
+/** The school's crest bytes for a Word file, or null. Also the policy letterhead (lib/policyCompile.ts). */
+export async function schoolCrest(branding: SchoolBranding): Promise<Buffer | null> {
+  return (
+    (await readLogo().catch(() => null)) ??
+    (branding.logo.startsWith("/") && branding.logo.endsWith(".png")
+      ? await readFile(path.join(process.cwd(), "public", branding.logo)).catch(() => null)
+      : null)
+  );
 }
 
 /** "SGB meeting 7 May September-2026.docx", the name both copies share. */
