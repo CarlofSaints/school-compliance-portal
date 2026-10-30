@@ -95,6 +95,7 @@ export default function TranslationCreditsPage() {
             <li>{t("R100 for 10 credits. Credits never expire.")}</li>
             <li>{t("1 credit translates up to 10 pages of one document into one language.")}</li>
             <li>{t("Once a document is translated, anyone at your school can read it in that language for free.")}</li>
+            <li><Link href="/billing" className="text-primary underline">{t("How billing works: every feature that uses credits")}</Link></li>
           </ul>
         </div>
 
