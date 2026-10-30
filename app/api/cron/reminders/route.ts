@@ -1,6 +1,7 @@
 import { pruneSentEmails, SENT_KEEP_MONTHS } from "@/lib/sentEmails";
 import { applyTermLockIfDue } from "@/lib/governanceTermData";
 import { runCampusSends } from "@/lib/campusSends";
+import { ensureLibraryDefaults } from "@/lib/campusLibrary";
 import { NextRequest, NextResponse } from "next/server";
 import { getSpendById, STATUS_DISPLAY } from "@/lib/spendData";
 import {
@@ -131,18 +132,27 @@ async function runForSchool() {
     );
   }
 
-  // Campus: scheduled training emails and reminders to people not finished.
-  try {
-    detail.push(...(await runCampusSends()));
-  } catch (err) {
-    detail.push(`Campus sends failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // SGB terms: lock members out the morning after a term ends, even if nobody signs in.
+  // SGB terms FIRST: lock members out the morning after a term ends, so
+  // nothing below emails somebody whose term ended yesterday.
   try {
     if ((await applyTermLockIfDue({ force: true })).size) detail.push("Term ended: members locked, Principal emailed");
   } catch (err) {
     detail.push(`Term check failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Campus: every school gets the library courses by default.
+  try {
+    const n = await ensureLibraryDefaults();
+    if (n) detail.push(`Campus: ${n} library courses added`);
+  } catch (err) {
+    detail.push(`Campus library failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Campus: scheduled training emails and reminders (time-boxed inside, the run is shared by every school).
+  try {
+    detail.push(...(await runCampusSends()));
+  } catch (err) {
+    detail.push(`Campus sends failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const reminders = await getReminders();

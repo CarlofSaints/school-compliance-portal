@@ -22,8 +22,18 @@ export default function GuestLessonPage() {
         backLabel={t("Back to the course")}
         nextHref={nextHref}
         onLoaded={() => setLoaded(true)}
-        openFile={async (url) => {
-          window.location.href = url;
+        openFile={async (url, filename) => {
+          // Fetched first, so a failure shows as a message, not a page of raw JSON.
+          const r = await guestFetch(url);
+          if (!r.ok) return ((await r.json().catch(() => ({}))) as { error?: string }).error || t("That file could not be opened.");
+          const href = URL.createObjectURL(await r.blob());
+          const a = document.createElement("a");
+          a.href = href;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(href);
           return null;
         }}
       />

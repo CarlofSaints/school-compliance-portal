@@ -5,6 +5,7 @@ import { authSigningKey } from "./signingKey";
 import { tenantScope } from "./tenantContext";
 import { getModules } from "./trainingData";
 import type { Learner } from "./trainingLearner";
+import { todaySast } from "./governanceTerm";
 
 // ---------------------------------------------------------------------------
 // Campus share links: a module, lesson or test opened by somebody WITHOUT a
@@ -78,8 +79,6 @@ export async function setShareActive(token: string, active: boolean): Promise<Sh
   return saved;
 }
 
-/** Today in South Africa, YYYY-MM-DD. */
-const todaySast = () => new Date(Date.now() + 2 * 3600_000).toISOString().slice(0, 10);
 
 /** The link if it can be used today (switched on, not past its last day). */
 export async function usableLink(token: string): Promise<ShareLink | null> {
@@ -100,19 +99,17 @@ export const getGuests = (token: string) => readJson<Guest[]>(guestsPath(token),
 
 const norm = (s: string) => s.trim().toLowerCase();
 
-/** Joins a guest to a link, or finds them again by email. */
+/**
+ * Joins a guest to a link. Always a NEW guest: typing an email already on the
+ * link must not hand over that person's progress and attempts (anyone with the
+ * link could type anyone's address). Carrying on later is by the cookie on the
+ * same device. Reports and reminders treat every guest with the same email as
+ * that one person.
+ */
 export async function joinGuest(token: string, name: string, surname: string, email: string): Promise<Guest> {
-  let guest: Guest | null = null;
-  await updateJson<Guest[]>(guestsPath(token), [], (list) => {
-    const found = list.find((g) => norm(g.email) === norm(email));
-    if (found) {
-      guest = found;
-      return NO_CHANGE;
-    }
-    guest = { id: randomUUID(), token, name, surname, email: norm(email), joinedAt: new Date().toISOString() };
-    return [...list, guest];
-  });
-  return guest!;
+  const guest: Guest = { id: randomUUID(), token, name, surname, email: norm(email), joinedAt: new Date().toISOString() };
+  await updateJson<Guest[]>(guestsPath(token), [], (list) => [...list, guest]);
+  return guest;
 }
 
 // --- The guest cookie --------------------------------------------------------
@@ -152,5 +149,10 @@ export async function guestFromRequest(req: NextRequest, token: string): Promise
 
 /** The learner a guest is on this link: their own progress, only the link's pieces. */
 export async function guestLearner(link: ShareLink, guest: Guest): Promise<Learner> {
-  return { progressId: guestProgressId(guest.id), manager: false, scope: await linkScope(link) };
+  return {
+    progressId: guestProgressId(guest.id),
+    manager: false,
+    scope: await linkScope(link),
+    lockModules: link.kind === "module" ? [link.targetId] : [],
+  };
 }

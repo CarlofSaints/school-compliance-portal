@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { getUsers } from "@/lib/userData";
-import { createSend, getSends, sendNow, todaySast } from "@/lib/campusSends";
+import { createSend, getSends, MAX_RECIPIENTS, sendNow, todaySast } from "@/lib/campusSends";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 import { getMaterials, getModules, getTests } from "@/lib/trainingData";
 import type { ShareKind } from "@/lib/campusShare";
 
@@ -48,6 +49,13 @@ export async function POST(req: NextRequest) {
   if (!everyone && userIds.length === 0 && externalEmails.length === 0) {
     return NextResponse.json({ error: "Choose who to send it to." }, { status: 400 });
   }
+  const reach = (everyone ? (await getUsers()).length : userIds.length) + externalEmails.length;
+  if (reach > MAX_RECIPIENTS) {
+    return NextResponse.json({ error: `One send can reach at most ${MAX_RECIPIENTS} people. Split it into smaller sends.` }, { status: 400 });
+  }
+  // The same cap as every other bulk email from the portal.
+  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (limited) return limited;
   const sendOn = typeof body.sendOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.sendOn) ? body.sendOn : todaySast();
   const send = await createSend({
     kind,

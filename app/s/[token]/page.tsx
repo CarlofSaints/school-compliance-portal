@@ -73,7 +73,7 @@ export default function SharePage() {
               <button disabled={busy} className="bg-primary hover:bg-primary-dark text-white px-5 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                 {busy ? t("Starting...") : t("Start")}
               </button>
-              <p className="text-xs text-gray-400">{t("Use the same email address if you come back later, to carry on where you left off.")}</p>
+              <p className="text-xs text-gray-400">{t("To carry on later where you left off, come back on this same device and browser. Use the email address the link was sent to, if it was emailed to you.")}</p>
             </form>
           ) : (
             <>

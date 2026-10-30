@@ -36,7 +36,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       icon: m?.icon ?? (kind === "test" ? "📝" : "📖"),
       minutes: m ? readingMinutes(m) : t?.timeLimitMinutes || null,
       done: itemDone(progress, { kind, id }),
-      locked: isLocked(progress, modules, { kind, id }, live),
+      // Only the link's own module's order applies to a guest.
+      locked: link.kind === "module" && isLocked(progress, modules.filter((m) => m.id === link.targetId), { kind, id }, live),
     };
   };
 

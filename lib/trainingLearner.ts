@@ -31,6 +31,12 @@ export interface Learner {
   manager: boolean;
   /** "material:<id>" / "test:<id>" this learner may open; undefined = all published training. */
   scope?: Set<string>;
+  /**
+   * For a guest: the only modules whose order applies (a module link: that
+   * module; a single-piece link: none). Without this a guest could be held
+   * behind a step outside their link, which they can never open.
+   */
+  lockModules?: string[];
 }
 
 export type Fail = { ok: false; status: number; error: string };
@@ -42,7 +48,8 @@ async function gate(learner: Learner, item: (ModuleItem & { status: TrainingStat
   if (!item || (item.status !== "published" && !learner.manager)) return fail(404, "Not found");
   if (learner.scope && !learner.scope.has(`${item.kind}:${item.id}`)) return fail(404, "Not found");
   if (learner.manager) return null;
-  const [modules, materials, tests] = await Promise.all([getModules(), getMaterials(), getTests()]);
+  const [all, materials, tests] = await Promise.all([getModules(), getMaterials(), getTests()]);
+  const modules = learner.lockModules ? all.filter((m) => learner.lockModules!.includes(m.id)) : all;
   return isLocked(progress, modules, item, liveKeys(materials, tests)) ? fail(403, "Finish the earlier steps of this module first.") : null;
 }
 
