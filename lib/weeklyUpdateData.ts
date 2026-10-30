@@ -80,7 +80,7 @@ export async function weeklyRecipients(): Promise<{
   const seen = new Set<string>();
   const recipients: WeeklyRecipient[] = [];
   const noEmail: string[] = [];
-  for (const u of users) {
+  for (const u of users.filter((x) => !x.retiredAt && !x.termLocked)) {
     const email = String(u.email || "").trim().toLowerCase();
     const name = `${u.name || ""} ${u.surname || ""}`.trim();
     if (!isPlausibleEmail(email)) {

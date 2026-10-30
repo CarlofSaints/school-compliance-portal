@@ -149,7 +149,8 @@ export async function recordAttempt(
 
 /** Everybody's progress, for the leaderboard. */
 export async function allProgress(): Promise<{ users: Awaited<ReturnType<typeof getUsers>>; progress: Map<string, Progress> }> {
-  const users = await getUsers();
+  // Retired members leave the board; a member locked by a term ending stays until decided.
+  const users = (await getUsers()).filter((u) => !u.retiredAt);
   const entries = await Promise.all(users.map(async (u) => [u.id, await getProgress(u.id)] as const));
   return { users, progress: new Map(entries) };
 }

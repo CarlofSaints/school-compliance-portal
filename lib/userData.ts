@@ -18,6 +18,12 @@ export interface User {
   // credits on a NEW document translation. Reading one already done is free
   // for everybody.
   canSpendTranslationCredits?: boolean;
+  // SGB terms (lib/governanceTerm.ts). Locked when a term ends until the
+  // Principal switches them back on; retired = not continuing, never signs in
+  // again unless un-retired; keepsAccess = staff who are not governors.
+  termLocked?: boolean;
+  retiredAt?: string;
+  keepsAccessAfterTerm?: boolean;
 }
 
 const USERS_PATH = "users.json";

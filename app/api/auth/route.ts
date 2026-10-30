@@ -230,6 +230,21 @@ export async function POST(req: NextRequest) {
     // The right password wipes the wrong-password count.
     await clear(LIMITS.loginAccount, account);
 
+    // SGB terms: the right password, but the term has ended or they were
+    // retired. Said plainly (they proved who they are), with what to do.
+    const { applyTermLockIfDue } = await import("@/lib/governanceTermData");
+    const termUser = (await applyTermLockIfDue({ force: true }).catch(() => false)) ? ((await getUserByEmail(email)) ?? user) : user;
+    if (termUser.retiredAt || termUser.termLocked) {
+      return NextResponse.json(
+        {
+          error: termUser.retiredAt
+            ? "Your access to this portal has ended. If this is a mistake, ask the Principal."
+            : "The governing body's term has ended. Ask the Principal to switch your access back on if you were re-elected.",
+        },
+        { status: 403 }
+      );
+    }
+
     // Super Admin: no cookie yet. The password earns a short-lived token that
     // only /api/auth/mfa accepts, with a code from their authenticator app.
     if (mfaRequired(user)) {

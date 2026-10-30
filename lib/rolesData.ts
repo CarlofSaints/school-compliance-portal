@@ -145,6 +145,14 @@ export async function getSessionFromRequest(
     if (!ok || !user) return null;
   }
 
+  // SGB terms: a member locked when the term ended, or retired, is refused on
+  // EVERY request, so the lock does not wait for their cookie to expire. The
+  // end-of-term check itself runs at most every few minutes (inside it).
+  // Imported here, not at the top: the term module reaches email and the log.
+  const { applyTermLockIfDue } = await import("./governanceTermData");
+  if (await applyTermLockIfDue().catch(() => false)) user = (await getUserById(user.id)) ?? user;
+  if (user.retiredAt || user.termLocked) return null;
+
   const roles = await getRoles();
   const role = roles.find((r) => r.id === user.role);
 

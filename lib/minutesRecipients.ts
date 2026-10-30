@@ -89,10 +89,17 @@ async function holdersOf(tagId: string | undefined, why: string): Promise<{
     recipients.push({ email: clean, name: name || clean, via: why });
   };
 
+  // A member locked when the term ended, or retired, is not sent the minutes,
+  // neither as a user nor through a People register entry linked to them.
+  const blocked = users.filter((u) => u.retiredAt || u.termLocked);
+  const blockedIds = new Set(blocked.map((u) => u.id));
+  const blockedEmails = new Set(blocked.map((u) => u.email.trim().toLowerCase()));
   for (const u of users) {
+    if (blockedIds.has(u.id)) continue;
     if (u.tagIds?.includes(tagId)) add(u.email, `${u.name} ${u.surname}`.trim());
   }
   for (const p of people) {
+    if ((p.userId && blockedIds.has(p.userId)) || blockedEmails.has((p.email || "").trim().toLowerCase())) continue;
     if (p.tagIds?.includes(tagId)) {
       // A Person linked to a User is the same human; the user loop already
       // added them and `seen` keeps them off the list twice.

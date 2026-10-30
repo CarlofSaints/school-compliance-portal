@@ -192,6 +192,23 @@ export async function sendWelcomeEmail(
   return sendEmail(b.fromEmail, to, `Welcome to ${branding.shortName} ${branding.portalSubtitle}`, emailShell(b, "Welcome!", body), b.replyTo, undefined, undefined, { kind: "account.welcome", secrets: [password] });
 }
 
+/** To the Principal and Deputy when a term ends: who is locked and where to switch them back on. */
+export async function sendTermEndedEmail(to: string, name: string, endDate: string, locked: string[]): Promise<boolean> {
+  const b = await mailBranding();
+  const PRIMARY = b.colors.primary;
+  const list = locked.length
+    ? `<ul style="color:#333;">${locked.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>`
+    : `<p style="color:#333;">Nobody needed locking.</p>`;
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">The governing body's term ended on ${esc(endDate)}. These members can no longer sign in to the portal:</p>
+    ${list}
+    <p style="color:#333;">If they were re-elected, switch them back on. If they are not continuing, retire them. You can also set the dates of the new term.</p>
+    ${button(`${siteOf(b)}/admin/term`, `Open the term page`, PRIMARY)}
+  `;
+  return sendEmail(b.fromEmail, to, `${b.shortName}: the term has ended, members locked out`, emailShell(b, "The term has ended", body), b.replyTo, undefined, undefined, { kind: "term.ended" });
+}
+
 // Somebody who has NEVER signed in is not resetting anything, and telling them
 // their password is being reset when they were never given one just reads as a
 // mistake. Same link, same token, different words.
