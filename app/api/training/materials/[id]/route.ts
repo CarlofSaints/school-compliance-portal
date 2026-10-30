@@ -10,7 +10,8 @@ import {
   saveMaterialFile,
   updateItem,
 } from "@/lib/trainingData";
-import { trainingGate } from "@/lib/trainingAccess";
+import { canManageTraining } from "@/lib/trainingAccess";
+import { openMaterial } from "@/lib/trainingLearner";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -22,11 +23,10 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
   const { id } = await params;
-  const material = await getMaterial(id);
-  const blocked = await trainingGate(session, material && { kind: "material", id, status: material.status }, await getProgress(session.id));
-  if (blocked) return blocked;
-  if (req.nextUrl.searchParams.get("edit") !== "1") await markOpened(session.id, id);
-  return NextResponse.json({ ...material!, minutes: readingMinutes(material!) }, { headers: { "Cache-Control": "no-store" } });
+  const out = await openMaterial({ progressId: session.id, manager: canManageTraining(session) }, id, req.nextUrl.searchParams.get("edit") !== "1");
+  return out.ok
+    ? NextResponse.json(out.body, { headers: { "Cache-Control": "no-store" } })
+    : NextResponse.json({ error: out.error }, { status: out.status });
 }
 
 export async function PUT(req: NextRequest, { params }: Ctx) {

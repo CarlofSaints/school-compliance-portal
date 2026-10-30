@@ -3,8 +3,11 @@ import { requireLogin } from "@/lib/rolesData";
 import { getMaterials, getModules, getProgress, getTests } from "@/lib/trainingData";
 import { attemptsAt, hasPassed, isLocked, itemDone, liveKeys, readingMinutes } from "@/lib/training";
 import { canManageTraining } from "@/lib/trainingAccess";
+import { ensureLibraryDefaults } from "@/lib/campusLibrary";
 
 export const dynamic = "force-dynamic";
+// The first opening adds the course library (a few dozen writes).
+export const maxDuration = 120;
 
 // The catalogue for whoever is asking: published training for everybody,
 // drafts too for the people who build it. Each piece says whether THIS person
@@ -13,6 +16,8 @@ export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
   const manager = canManageTraining(session);
+  // Library courses arrive by default the first time a school opens Campus.
+  await ensureLibraryDefaults().catch((err) => console.error("[campus] library defaults failed:", err));
 
   const [materials, tests, modules, progress] = await Promise.all([
     getMaterials(),
