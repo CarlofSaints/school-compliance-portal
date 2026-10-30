@@ -55,6 +55,9 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   // Building and publishing training (manual or AI). Taking courses and the
   // leaderboard need no key: they are for everybody in the portal.
   { key: "manage_training", name: "Manage Campus", category: "Campus" },
+  // Setting SGB term dates and switching members back on after a term ends.
+  // The Principal and Deputy may do it by their position alone (lib/governanceTerm.ts).
+  { key: "manage_sgb_term", name: "Manage SGB Term", category: "Admin" },
   { key: "view_users", name: "View Users", category: "Admin" },
   { key: "manage_users", name: "Manage Users", category: "Admin" },
   { key: "manage_roles", name: "Manage Roles & Permissions", category: "Admin" },

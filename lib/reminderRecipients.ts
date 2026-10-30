@@ -17,7 +17,8 @@ export async function resolveRecipients(
   app: SpendApplication,
   recipients: ReminderRecipient[]
 ): Promise<{ resolved: ResolvedRecipient[]; missing: string[] }> {
-  const users = await getUsers();
+  // Locked or retired members (term ended) are not chased: they cannot act.
+  const users = (await getUsers()).filter((u) => !u.retiredAt && !u.termLocked);
   const byId = new Map(users.map((u) => [u.id, u]));
   const out: ResolvedRecipient[] = [];
   const missing: string[] = [];

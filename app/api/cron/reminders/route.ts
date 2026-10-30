@@ -1,4 +1,5 @@
 import { pruneSentEmails, SENT_KEEP_MONTHS } from "@/lib/sentEmails";
+import { applyTermLockIfDue } from "@/lib/governanceTermData";
 import { NextRequest, NextResponse } from "next/server";
 import { getSpendById, STATUS_DISPLAY } from "@/lib/spendData";
 import {
@@ -127,6 +128,13 @@ async function runForSchool() {
     detail.push(
       "RESEND_API_KEY is not set - reminders were processed but no email left the server"
     );
+  }
+
+  // SGB terms: lock members out the morning after a term ends, even if nobody signs in.
+  try {
+    if ((await applyTermLockIfDue({ force: true })).size) detail.push("Term ended: members locked, Principal emailed");
+  } catch (err) {
+    detail.push(`Term check failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
   const reminders = await getReminders();

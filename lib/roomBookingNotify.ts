@@ -364,6 +364,7 @@ export async function runRoomBookingReminders(now: Date = new Date(), mail: Mail
 async function roomManagers(): Promise<{ name: string; email: string }[]> {
   const [users, roles] = await Promise.all([getUsers(), getRoles()]);
   return users
+    .filter((u) => !u.retiredAt && !u.termLocked)
     .filter((u) => u.email && resolveRolePermissions(u.role, roles.find((r) => r.id === u.role)).includes("manage_rooms"))
     .filter((u, i, all) => all.findIndex((o) => same(o.email, u.email)) === i)
     .map((u) => ({ name: displayName(u), email: u.email }));

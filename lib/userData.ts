@@ -18,6 +18,12 @@ export interface User {
   // credits on a NEW document translation. Reading one already done is free
   // for everybody.
   canSpendTranslationCredits?: boolean;
+  // SGB terms (lib/governanceTerm.ts). Locked when a term ends until the
+  // Principal switches them back on; retired = not continuing, never signs in
+  // again unless un-retired; keepsAccess = staff who are not governors.
+  termLocked?: boolean;
+  retiredAt?: string;
+  keepsAccessAfterTerm?: boolean;
 }
 
 const USERS_PATH = "users.json";
@@ -140,6 +146,29 @@ export async function createUser(
   // Guarded (updateJson): two accounts created at the same moment both stay.
   await updateJson<User[]>(USERS_PATH, [], (list) => [...list, newUser]);
   return newUser;
+}
+
+/**
+ * Changes many accounts in ONE guarded write of users.json. `change` sees each
+ * account as it is NOW and returns the fields to change, or null to leave it.
+ * Returns the ids changed. Each own copy is brought in step afterwards.
+ */
+export async function updateUsersWhere(change: (u: User) => Partial<User> | null): Promise<string[]> {
+  let changed: User[] = [];
+  await updateJson<User[]>(USERS_PATH, [], (users) => {
+    changed = [];
+    const now = new Date().toISOString();
+    const next = users.map((u) => {
+      const c = change(u);
+      if (!c) return u;
+      const updated = { ...u, ...c, updatedAt: now };
+      changed.push(updated);
+      return updated;
+    });
+    return changed.length ? next : NO_CHANGE;
+  });
+  for (const u of changed) await saveUserRecord(u).catch((err) => console.error("[users] own copy not updated:", u.id, err));
+  return changed.map((u) => u.id);
 }
 
 export async function updateUser(

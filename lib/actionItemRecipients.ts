@@ -137,7 +137,8 @@ export async function loadActionRecipientContext(withAccess = true): Promise<Act
     getRoles(),
     withAccess ? loadAccess() : undefined,
   ]);
-  return { people, users, roles, access, minutes: new Map() };
+  // Locked or retired members (term ended) are left out of action emails.
+  return { people, users: users.filter((u) => !u.retiredAt && !u.termLocked), roles, access, minutes: new Map() };
 }
 
 // The register's own view of a person's name, used when an item is written or
