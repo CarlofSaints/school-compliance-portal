@@ -11,12 +11,11 @@ export const librarySlugsAdded = async () =>
   new Set((await getModules()).map((m) => m.librarySlug).filter((s): s is string => Boolean(s)));
 
 /**
- * Copies a library course into THIS school's Campus, published: lessons, the
- * test, then the module (in order). A copy, so the school can edit its own
- * without touching anybody else's. Refuses a course the school already has.
+ * A library course as the lessons and test a school gets. ONE place, because
+ * the shipped translations (lib/campusLibrary/translations) are keyed on a
+ * hash of exactly these words: a copy built any other way would not find them.
  */
-export async function addLibraryCourse(course: LibraryCourse, by: string): Promise<TrainingModule | "already_added"> {
-  if ((await librarySlugsAdded()).has(course.slug)) return "already_added";
+export function libraryPieces(course: LibraryCourse, by: string): { lessons: Material[]; test: Test; module: Pick<TrainingModule, "title" | "description"> } {
   const lessons: Material[] = course.lessons.map((l) => ({
     ...stamp(by, "library"),
     title: l.title,
@@ -38,6 +37,17 @@ export async function addLibraryCourse(course: LibraryCourse, by: string): Promi
       .map((q) => cleanQuestion({ type: "single", points: 1, ...q }))
       .filter((q): q is Question => q !== null),
   };
+  return { lessons, test, module: { title: course.title, description: course.description } };
+}
+
+/**
+ * Copies a library course into THIS school's Campus, published: lessons, the
+ * test, then the module (in order). A copy, so the school can edit its own
+ * without touching anybody else's. Refuses a course the school already has.
+ */
+export async function addLibraryCourse(course: LibraryCourse, by: string): Promise<TrainingModule | "already_added"> {
+  if ((await librarySlugsAdded()).has(course.slug)) return "already_added";
+  const { lessons, test } = libraryPieces(course, by);
   await createItems("material", lessons);
   await createItem("test", test);
   try {

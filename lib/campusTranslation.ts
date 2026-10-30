@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "crypto";
 import { readJson, updateJson, NO_CHANGE } from "./controlData";
 import { LOCALES, type Locale } from "./i18n/locales";
 import type { Material, Test, TrainingModule, TrainingSource } from "./training";
+import { SHIPPED } from "./campusLibrary/translations";
 
 // ---------------------------------------------------------------------------
 // Campus in the reader's language.
@@ -112,8 +113,14 @@ export function applyUnit<T extends Item>(kind: CampusKind, item: T, u: Unit): T
 /** Free when the AI wrote it; manual content is paid for. Module headings are always free (see top). */
 export const isFree = (kind: CampusKind, source: TrainingSource | undefined) => kind === "module" || source === "ai" || source === "library";
 
+// Which language a store read was for, so storedFor can fall back to the shipped library translations.
+const storeLocale = new WeakMap<Store, Locale>();
+
 export async function translationsFor(locale: Locale): Promise<Store> {
-  return locale === "en" ? {} : readJson<Store>(storePath(locale), {});
+  if (locale === "en") return {};
+  const store = await readJson<Store>(storePath(locale), {});
+  storeLocale.set(store, locale);
+  return store;
 }
 
 export type TranslationState =
@@ -124,8 +131,14 @@ export type TranslationState =
 
 /** The translation stored for exactly this English, or null. */
 export function storedFor(store: Store, kind: CampusKind, item: Item): Unit | null {
+  const english = unitOf(kind, item);
+  const hash = unitHash(english);
   const entry = store[keyOf(kind, item.id)];
-  return entry && entry.hash === unitHash(unitOf(kind, item)) && sameShape(unitOf(kind, item), entry.unit) ? entry.unit : null;
+  if (entry && entry.hash === hash && sameShape(english, entry.unit)) return entry.unit;
+  // The same words as a library course: the translation shipped with the portal, shared by every school.
+  const locale = storeLocale.get(store);
+  const shipped = locale ? SHIPPED[locale]?.[hash] : undefined;
+  return shipped && sameShape(english, shipped) ? shipped : null;
 }
 
 export async function saveTranslation(locale: Locale, kind: CampusKind, item: Item, unit: Unit, paid = false): Promise<void> {
