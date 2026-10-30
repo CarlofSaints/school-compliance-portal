@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import PlatformSignedOut from "@/components/PlatformSignedOut";
 import PlatformTranslationAddon from "@/components/PlatformTranslationAddon";
 import PlatformSchoolStatus from "@/components/PlatformSchoolStatus";
+import PlatformDemoSeed from "@/components/PlatformDemoSeed";
 import { deletionDueOn } from "@/lib/schoolRetention";
 import { NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
@@ -85,6 +86,7 @@ export default async function PlatformSchoolPage({
           dueOn={deletionDueOn(tenant)?.toISOString()}
         />
         <PlatformTranslationAddon schoolKey={key} />
+        {key === "demo" && <PlatformDemoSeed schoolKey={key} />}
         <div className="mb-4 flex gap-2 text-xs">
           <Link
             href={`/platform/${key}?month=${page.month}`}
