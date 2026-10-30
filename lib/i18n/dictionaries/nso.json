@@ -1913,7 +1913,6 @@
   "New test": "Teko ye mpsha",
   "Pass mark (%)": "Ntlha ya go phasa (%)",
   "Attempts allowed (0 = no limit)": "Maiteko a a dumeletšwego (0 = ga go na selekanyo)",
-  "Show the right answers and explanations after each attempt": "Bontšha dikarabo tše di nepagetšego le ditlhalošo ka morago ga leiteko le lengwe le le lengwe",
   "Question {n}": "Potšišo ya {n}",
   "One right answer": "Karabo ye tee ye e nepagetšego",
   "Several right answers": "Dikarabo tše mmalwa tše di nepagetšego",
@@ -1974,5 +1973,7 @@
   "Ask a question...": "Botšiša potšišo...",
   "Ask": "Botšiša",
   "Jono only sees what you may see in the portal. Your question goes to Anthropic's AI in the United States. Answers can be wrong: check before acting, and this is not legal advice.": "Jono o bona fela seo o dumeletšwego go se bona portaleng. Potšišo ya gago e ya go AI ya Anthropic kua United States. Dikarabo di ka fošagala: lekola pele o tšea kgato, gomme se ga se keletšo ya molao.",
-  "Courses": "Dikhoso"
+  "Courses": "Dikhoso",
+  "Show the right answers and explanations once a person passes, or has used their last attempt": "Bontšha dikarabo tše di nepagetšego le ditlhalošo ge motho a phasitše, goba a šomišitše teko ya gagwe ya mafelelo",
+  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Dipotšišo tšeo o di fošitšego di swaiwa ka bohwibidu. Dikarabo tše di nepagetšego di bontšhwa ge o phasitše."
 }

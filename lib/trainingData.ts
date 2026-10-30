@@ -4,6 +4,7 @@ import {
   updateJson,
   NO_CHANGE,
   addToList,
+  updateInList,
   removeFromList,
   writeFile,
   readFile,
@@ -62,22 +63,34 @@ export async function createItem<T extends { id: string }>(kind: Kind, item: T):
   return item;
 }
 
+/** Several at once, in ONE guarded write. */
+export async function createItems<T extends { id: string }>(kind: Kind, items: T[]): Promise<void> {
+  await addToList(LISTS[kind], ...items);
+}
+
+/** Publishes the listed pieces in ONE guarded write per list. */
+export async function publishItems(kind: "material" | "test", ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const now = new Date().toISOString();
+  await updateJson<{ id: string; status: string; updatedAt: string }[]>(LISTS[kind], [], (list) =>
+    list.some((x) => ids.includes(x.id) && x.status !== "published")
+      ? list.map((x) => (ids.includes(x.id) && x.status !== "published" ? { ...x, status: "published", updatedAt: now } : x))
+      : NO_CHANGE
+  );
+}
+
 /** Applies `change` to one item under the guarded write. Null when it is gone. */
 export async function updateItem<T extends { id: string; updatedAt: string }>(
   kind: Kind,
   id: string,
   change: (current: T) => Partial<T>
 ): Promise<T | null> {
-  let saved: T | null = null;
-  await updateJson<T[]>(LISTS[kind], [], (list) => {
-    const at = list.findIndex((x) => x.id === id);
-    if (at < 0) return NO_CHANGE;
-    saved = { ...list[at], ...change(list[at]), id, updatedAt: new Date().toISOString() };
-    const next = [...list];
-    next[at] = saved;
-    return next;
-  });
-  return saved;
+  return updateInList<T>(LISTS[kind], id, (current) => ({
+    ...current,
+    ...change(current),
+    id,
+    updatedAt: new Date().toISOString(),
+  }));
 }
 
 export async function deleteItem(kind: Kind, id: string): Promise<boolean> {

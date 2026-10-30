@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
-import { DraftPill } from "@/components/trainingUi";
+import { DraftPill, useNextStep } from "@/components/trainingUi";
 
 interface Paper {
   id: string;
@@ -23,6 +23,7 @@ interface Result {
   pointsAwarded: number;
   pointsPossible: number;
   passMark: number;
+  answersShown: boolean;
   memo: { questionId: string; isCorrect: boolean; correctOptionIds: string[]; acceptedAnswers: string[]; explanation: string }[] | null;
 }
 
@@ -35,6 +36,11 @@ export default function TestPage() {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [result, setResult] = useState<Result | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [moduleId, setModuleId] = useState("");
+  useEffect(() => {
+    setModuleId(new URLSearchParams(window.location.search).get("module") || "");
+  }, []);
+  const nextHref = useNextStep(result?.passed ? moduleId : "", "test", id, result);
 
   const load = useCallback(async () => {
     const res = await authFetch(`/api/training/tests/${id}`);
@@ -114,6 +120,9 @@ export default function TestPage() {
             {result.passed ? t("Passed. Well done.") : t("Not passed. The pass mark is {pct}%.", { pct: result.passMark })}{" "}
             {t("{got} of {total} points.", { got: result.pointsAwarded, total: result.pointsPossible })}
           </p>
+          {result.memo && !result.answersShown && (
+            <p className="text-xs text-gray-600 mt-2">{t("The questions you got wrong are marked in red. The right answers are shown once you pass.")}</p>
+          )}
           <div className="flex gap-2 mt-4">
             {(left === null || left > 0) && (
               <button onClick={retake} className="border border-gray-300 bg-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
@@ -123,6 +132,11 @@ export default function TestPage() {
             <Link href="/campus/leaderboard" className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium">
               {t("See the leaderboard")}
             </Link>
+            {result.passed && nextHref !== "/campus" && (
+              <Link href={nextHref} className="border border-gray-300 bg-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">
+                {t("Next step")} &rarr;
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -162,7 +176,7 @@ export default function TestPage() {
                         <label
                           key={o.id}
                           className={`flex items-center gap-3 text-sm px-3 py-2 rounded-lg border ${
-                            memo && right ? "bg-emerald-50 border-emerald-200" : memo && chosen ? "bg-red-50 border-red-200" : "border-gray-100"
+                            result?.answersShown && right ? "bg-emerald-50 border-emerald-200" : result?.answersShown && chosen ? "bg-red-50 border-red-200" : "border-gray-100"
                           }`}
                         >
                           <input
@@ -184,7 +198,7 @@ export default function TestPage() {
                 )}
                 {memo && (
                   <div className="mt-3 text-xs text-gray-600">
-                    {q.type === "text" && !memo.isCorrect && <p>{t("Accepted answer:")} {memo.acceptedAnswers.join(" / ")}</p>}
+                    {q.type === "text" && !memo.isCorrect && memo.acceptedAnswers.length > 0 && <p>{t("Accepted answer:")} {memo.acceptedAnswers.join(" / ")}</p>}
                     {memo.explanation && <p className="mt-1">{memo.explanation}</p>}
                   </div>
                 )}

@@ -1913,7 +1913,6 @@
   "New test": "Uvavanyo olutsha",
   "Pass mark (%)": "Amanqaku okuphumelela (%)",
   "Attempts allowed (0 = no limit)": "Amalinge avumelekileyo (0 = akukho mda)",
-  "Show the right answers and explanations after each attempt": "Bonisa iimpendulo ezichanekileyo neenkcazo emva kwelinge ngalinye",
   "Question {n}": "Umbuzo {n}",
   "One right answer": "Impendulo enye echanekileyo",
   "Several right answers": "Iimpendulo ezininzi ezichanekileyo",
@@ -1974,5 +1973,7 @@
   "Ask a question...": "Buza umbuzo...",
   "Ask": "Buza",
   "Jono only sees what you may see in the portal. Your question goes to Anthropic's AI in the United States. Answers can be wrong: check before acting, and this is not legal advice.": "UJono ubona kuphela oko uvumelekileyo ukukubona kwiphotali. Umbuzo wakho uya kwi-AI ye-Anthropic eUnited States. Iimpendulo zinokuba ziphosakele: jonga phambi kokuthatha inyathelo, kwaye oku asicebiso somthetho.",
-  "Courses": "Iikhosi"
+  "Courses": "Iikhosi",
+  "Show the right answers and explanations once a person passes, or has used their last attempt": "Bonisa iimpendulo ezichanekileyo neenkcazelo xa umntu ephumelele, okanye esebenzise ithuba lakhe lokugqibela",
+  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Imibuzo oyiphendule ngempazamo iphawulwe ngombala obomvu. Iimpendulo ezichanekileyo ziboniswa xa uphumelele."
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
-import { cleanModuleFields, testProblem, type Material, type Test, type TrainingModule } from "@/lib/training";
-import { deleteItem, getMaterials, getModule, getTests, updateItem } from "@/lib/trainingData";
+import { cleanModuleFields, testProblem, type TrainingModule } from "@/lib/training";
+import { deleteItem, getModule, getTests, publishItems, updateItem } from "@/lib/trainingData";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -25,18 +25,17 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   // Publishing a module publishes its draft pieces with it (Campus rule), or
   // people land in a module with steps missing. A test that is not ready
   // stops the whole publish instead.
+  if (!(await getModule(id))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (fields.status === "published") {
-    const [materials, tests] = await Promise.all([getMaterials(), getTests()]);
+    const tests = await getTests();
     for (const item of fields.items) {
       if (item.kind !== "test") continue;
       const t = tests.find((x) => x.id === item.id);
       const problem = t && t.status !== "published" ? testProblem(t.questions) : null;
       if (problem) return NextResponse.json({ error: `"${t!.title}": ${problem}` }, { status: 400 });
     }
-    for (const item of fields.items) {
-      const draft = (item.kind === "material" ? materials : tests).find((x: Material | Test) => x.id === item.id && x.status !== "published");
-      if (draft) await updateItem<Material | Test>(item.kind, item.id, () => ({ status: "published" }));
-    }
+    const ids = (kind: "material" | "test") => fields.items.filter((i) => i.kind === kind).map((i) => i.id);
+    await Promise.all([publishItems("material", ids("material")), publishItems("test", ids("test"))]);
   }
 
   const saved = await updateItem<TrainingModule>("module", id, () => fields);

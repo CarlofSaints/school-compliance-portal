@@ -7,7 +7,7 @@ import { useAuth, authFetch } from "@/lib/useAuth";
 import { downloadWithAuth } from "@/lib/download";
 import { useT } from "@/components/I18nProvider";
 import LessonText from "@/components/LessonText";
-import { DraftPill } from "@/components/trainingUi";
+import { DraftPill, useNextStep } from "@/components/trainingUi";
 
 interface MaterialView {
   id: string;
@@ -30,6 +30,8 @@ export default function MaterialPage() {
   useEffect(() => {
     setModuleId(new URLSearchParams(window.location.search).get("module") || "");
   }, []);
+  // Asked once the material has loaded: that load is what marks it read and unlocks the next step.
+  const nextHref = useNextStep(m ? moduleId : "", "material", id);
 
   useEffect(() => {
     if (!session) return;
@@ -72,8 +74,8 @@ export default function MaterialPage() {
           </div>
           <div className="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
             <span className="text-xs text-emerald-600">{t("Marked as read")}</span>
-            <Link href="/campus" className="text-sm font-medium text-primary">
-              {moduleId ? t("Next step") : t("Back to Campus")} &rarr;
+            <Link href={nextHref} className="text-sm font-medium text-primary">
+              {nextHref !== "/campus" ? t("Next step") : t("Back to Campus")} &rarr;
             </Link>
           </div>
         </div>

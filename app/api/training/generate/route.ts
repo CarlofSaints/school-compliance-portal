@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
-import { cleanQuestion, type Material, type Question, type Test, type TrainingModule } from "@/lib/training";
-import { createItem, stamp } from "@/lib/trainingData";
+import { cleanQuestion, int, str, type Material, type Question, type Test, type TrainingModule } from "@/lib/training";
+import { createItem, createItems, deleteItem, stamp } from "@/lib/trainingData";
 import { GenerateError, PROVINCES, TRAINING_TOPICS, generateModule } from "@/lib/trainingAi";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -10,11 +10,6 @@ import { actorFrom } from "@/lib/activityActor";
 // A whole module (lessons + test) takes a few minutes to write.
 export const maxDuration = 800;
 
-const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
-const int = (v: unknown, min: number, max: number, dflt: number) => {
-  const n = Math.round(Number(v));
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
-};
 
 // Builds a module with AI and saves every piece as a DRAFT, in order: the
 // lessons, then the test. Nothing reaches a learner until somebody has read it
@@ -66,8 +61,9 @@ export async function POST(req: NextRequest) {
       showAnswers: true,
       questions,
     };
-    // Lessons and test first: a module saved before its pieces would point at nothing.
-    for (const l of lessons) await createItem("material", l);
+    // Lessons and test first: a module saved before its pieces would point at
+    // nothing. If the module then fails, its pieces are taken back out.
+    await createItems("material", lessons);
     await createItem("test", test);
     const mod = await createItem<TrainingModule>("module", {
       ...stamp(session.id, "ai"),
@@ -77,6 +73,9 @@ export async function POST(req: NextRequest) {
       status: "draft",
       sequential: true,
       items: [...lessons.map((l) => ({ kind: "material" as const, id: l.id })), { kind: "test" as const, id: test.id }],
+    }).catch(async (err) => {
+      await Promise.all([...lessons.map((l) => deleteItem("material", l.id)), deleteItem("test", test.id)]).catch(() => {});
+      throw err;
     });
 
     await recordActivity({

@@ -1913,7 +1913,6 @@
   "New test": "Teko e ntjha",
   "Pass mark (%)": "Dintlha tsa ho feta (%)",
   "Attempts allowed (0 = no limit)": "Diteko tse dumelletsweng (0 = ha ho moedi)",
-  "Show the right answers and explanations after each attempt": "Bontsha dikarabo tse nepahetseng le ditlhaloso kamora boiteko bo bong le bo bong",
   "Question {n}": "Potso ya {n}",
   "One right answer": "Karabo e le nngwe e nepahetseng",
   "Several right answers": "Dikarabo tse mmalwa tse nepahetseng",
@@ -1974,5 +1973,7 @@
   "Ask a question...": "Botsa potso...",
   "Ask": "Botsa",
   "Jono only sees what you may see in the portal. Your question goes to Anthropic's AI in the United States. Answers can be wrong: check before acting, and this is not legal advice.": "Jono o bona feela seo o dumelletsweng ho se bona portaleng. Potso ya hao e ya ho AI ya Anthropic United States. Dikarabo di ka fosahala: hlahloba pele o nka kgato, mme sena hase keletso ya molao.",
-  "Courses": "Dikhoso"
+  "Courses": "Dikhoso",
+  "Show the right answers and explanations once a person passes, or has used their last attempt": "Bontsha dikarabo tse nepahetseng le ditlhaloso hang ha motho a fetile, kapa a sebedisitse teko ya hae ya ho qetela",
+  "The questions you got wrong are marked in red. The right answers are shown once you pass.": "Dipotso tseo o di fositseng di tshwailwe ka bofubedu. Dikarabo tse nepahetseng di bontshwa hang ha o fetile."
 }

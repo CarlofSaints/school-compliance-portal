@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
-import { submitAttempt } from "@/lib/training";
+import { attemptsAt, submitAttempt } from "@/lib/training";
 import { getProgress, getTest, recordAttempt } from "@/lib/trainingData";
 import { trainingGate } from "@/lib/trainingAccess";
 import { recordActivity } from "@/lib/activityLog";
@@ -18,7 +18,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const body = await req.json().catch(() => ({}));
   const responses = body && typeof body.responses === "object" && body.responses ? (body.responses as Record<string, unknown>) : {};
-  const attempt = await recordAttempt(session.id, (p) => submitAttempt(test, p, responses, new Date().toISOString()));
+  let usedBefore = 0;
+  const attempt = await recordAttempt(session.id, (p) => {
+    usedBefore = attemptsAt(p, id).length;
+    return submitAttempt(test, p, responses, new Date().toISOString());
+  });
   if (attempt === "no_attempts_left") {
     return NextResponse.json({ error: "You have used all your attempts at this test." }, { status: 409 });
   }
@@ -31,15 +35,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     summary: `Sat "${test.title}": ${attempt.scorePct}% (${attempt.passed ? "passed" : "not passed"})`,
   });
 
+  // The right answers only once they can no longer be copied into another
+  // attempt: after a pass, or after the last attempt. Before that the person
+  // learns WHICH questions were wrong, not what the right answer was, or every
+  // test (and the leaderboard) could be won by handing in a blank paper first.
+  const lastAttempt = test.maxAttempts > 0 && usedBefore + 1 >= test.maxAttempts;
+  const reveal = test.showAnswers && (attempt.passed || lastAttempt);
   const memo = test.showAnswers
     ? test.questions.map((q) => {
         const mine = attempt.answers.find((a) => a.questionId === q.id);
         return {
           questionId: q.id,
           isCorrect: mine?.isCorrect ?? false,
-          correctOptionIds: q.options.filter((o) => o.isCorrect).map((o) => o.id),
-          acceptedAnswers: q.acceptedAnswers,
-          explanation: q.explanation,
+          correctOptionIds: reveal ? q.options.filter((o) => o.isCorrect).map((o) => o.id) : [],
+          acceptedAnswers: reveal ? q.acceptedAnswers : [],
+          explanation: reveal ? q.explanation : "",
         };
       })
     : null;
@@ -49,6 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     pointsAwarded: attempt.pointsAwarded,
     pointsPossible: attempt.pointsPossible,
     passMark: test.passMark,
+    answersShown: reveal,
     memo,
   });
 }

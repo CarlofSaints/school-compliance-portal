@@ -12,11 +12,11 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
-  const limited = await enforce([[LIMITS.jonoUser, session.id], [LIMITS.jonoSchool, "school"]]);
-  if (limited) return limited;
-
+  // Checked before the limits, so a malformed call never uses up the school's questions.
   const turns = cleanTurns((await req.json().catch(() => ({}))).messages);
   if (!turns) return NextResponse.json({ error: "Type a question first." }, { status: 400 });
+  const limited = await enforce([[LIMITS.jonoUser, session.id], [LIMITS.jonoSchool, "school"]]);
+  if (limited) return limited;
 
   try {
     return NextResponse.json({ answer: await askJono(session, turns, await getLocale()) });
