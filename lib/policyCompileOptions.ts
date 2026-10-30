@@ -15,4 +15,6 @@ export const COMPLY_WITH = [
 export const MAX_NAME = 150;
 export const MAX_DESCRIPTION = 4000;
 export const MAX_INSTRUCTION = 3000;
+/** What "Fix these in the draft" may send: every issue the check found, never cut. */
+export const MAX_CHANGE = 20_000;
 export const MAX_DRAFT = 150_000;

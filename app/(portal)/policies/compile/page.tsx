@@ -10,7 +10,8 @@ import { DEFAULT_POLICY_CATEGORIES, REQUIRED_POLICY_CATEGORY } from "@/lib/polic
 import { COMPLY_WITH, MAX_DESCRIPTION, MAX_INSTRUCTION, MAX_NAME } from "@/lib/policyCompileOptions";
 import { PROVINCES } from "@/lib/trainingTopics";
 import SchoolCrest from "@/components/SchoolCrest";
-import LessonText from "@/components/LessonText";
+import { parseTranscript } from "@/lib/policyText";
+import { policyDraftKey } from "@/lib/minutesBackupKeys";
 import ComplianceScore from "@/components/ComplianceScore";
 import RiskBadge from "@/components/RiskBadge";
 import Toast from "@/components/Toast";
@@ -21,8 +22,9 @@ const solid = "bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg 
 
 // The draft lives only in this browser until it is added to the register, so
 // it is kept here too: a refresh or a dropped connection must not lose a
-// policy somebody has spent half an hour shaping.
-const BACKUP = "policy-compile-draft";
+// policy somebody has spent half an hour shaping. Per site and per person,
+// and cleared on sign-out (lib/minutesBackupKeys.ts), so the next person on a
+// shared computer never finds it.
 
 interface Form {
   name: string;
@@ -50,16 +52,19 @@ export default function CompilePolicyPage() {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [change, setChange] = useState("");
-  const [check, setCheck] = useState<Check | null>(null);
+  const [check, setCheck] = useState<(Check & { of: string }) | null>(null);
   const [busy, setBusy] = useState<Busy>("");
   const [restored, setRestored] = useState(false);
   const [guidelines, setGuidelines] = useState<{ id: string; name: string }[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_POLICY_CATEGORIES);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
+  const backup = session ? policyDraftKey(window.location.host, session.id) : "";
+
   useEffect(() => {
+    if (!backup) return;
     try {
-      const saved = JSON.parse(localStorage.getItem(BACKUP) || "null") as { form: Form; draft: string } | null;
+      const saved = JSON.parse(localStorage.getItem(backup) || "null") as { form: Form; draft: string } | null;
       if (saved?.form) {
         setForm({ ...EMPTY, ...saved.form });
         setDraft(saved.draft || "");
@@ -68,11 +73,16 @@ export default function CompilePolicyPage() {
       // A damaged backup is simply not restored.
     }
     setRestored(true);
-  }, []);
+  }, [backup]);
 
   useEffect(() => {
-    if (restored) localStorage.setItem(BACKUP, JSON.stringify({ form, draft }));
-  }, [form, draft, restored]);
+    if (!restored || !backup) return;
+    try {
+      localStorage.setItem(backup, JSON.stringify({ form, draft }));
+    } catch {
+      // Storage full or blocked: the draft is still on screen.
+    }
+  }, [form, draft, restored, backup]);
 
   useEffect(() => {
     if (!session) return;
@@ -130,13 +140,13 @@ export default function CompilePolicyPage() {
 
   const runCheck = async () => {
     const body = await call("check");
-    if (body) setCheck(body);
+    if (body) setCheck({ ...body, of: draft });
   };
 
   const save = async () => {
     const body = await call("save");
     if (body?.id) {
-      localStorage.removeItem(BACKUP);
+      localStorage.removeItem(backup);
       router.push(`/policies/${body.id}`);
     }
   };
@@ -157,6 +167,7 @@ export default function CompilePolicyPage() {
         check.risks.map((r) => `- ${r.section}: ${r.description} (${r.guideline_reference}). ${r.suggestion}`).join("\n")
     );
 
+  const stale = check !== null && check.of !== draft;
   if (loading || !restored) return <div className="p-6">{t("Loading...")}</div>;
   const working = busy !== "";
 
@@ -264,15 +275,26 @@ export default function CompilePolicyPage() {
                   </div>
                 </div>
                 {editing ? (
-                  <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={30} className="w-full p-6 font-mono text-xs outline-none resize-y" aria-label={t("Policy text")} />
+                  <textarea value={draft} readOnly={working} onChange={(e) => setDraft(e.target.value)} rows={30} className="w-full p-6 font-mono text-xs outline-none resize-y" aria-label={t("Policy text")} />
                 ) : (
                   <div className="p-8">
                     <div className="flex flex-col items-center gap-2 mb-6 border-b border-gray-100 pb-6">
                       <SchoolCrest width={72} height={72} />
                       <p className="font-bold text-dark">{branding.fullName}</p>
                     </div>
-                    <div className="prose-sm text-sm text-gray-800 leading-relaxed">
-                      <LessonText body={draft} />
+                    {/* The same parser as the Word file, so clause numbers and headings read exactly as they will be saved. */}
+                    <div className="text-sm text-gray-800 leading-relaxed">
+                      {parseTranscript(draft).map((l, i) =>
+                        l.kind === "h1" ? (
+                          <h2 key={i} className="text-lg font-semibold text-dark mt-5 mb-2">{l.text}</h2>
+                        ) : l.kind === "h2" ? (
+                          <h3 key={i} className="text-base font-semibold text-dark mt-4 mb-1.5">{l.text}</h3>
+                        ) : l.kind === "bullet" ? (
+                          <p key={i} className="my-1 pl-5 relative before:content-['•'] before:absolute before:left-1">{l.text}</p>
+                        ) : (
+                          <p key={i} className="my-2">{l.text}</p>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
@@ -313,7 +335,8 @@ export default function CompilePolicyPage() {
                     ))}
                     {check.risks.length === 0 && <p className="text-sm text-emerald-600">{t("No compliance risks found.")}</p>}
                   </div>
-                  {check.risks.length > 0 && (
+                  {stale && <p className="text-xs text-amber-600 mt-3">{t("The draft has changed since this check. Run it again to see where it stands now.")}</p>}
+                  {check.risks.length > 0 && !stale && (
                     <button type="button" onClick={fixIssues} disabled={working} className={`${solid} mt-4`}>
                       {busy === "revise" ? t("Rewriting the draft...") : t("Fix these in the draft")}
                     </button>

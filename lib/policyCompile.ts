@@ -1,13 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { AlignmentType, Document, Footer, HeadingLevel, ImageRun, Packer, PageNumber, Paragraph, TextRun } from "docx";
+import { AlignmentType, Document, Footer, ImageRun, Packer, PageNumber, Paragraph, TextRun } from "docx";
 import { MAX_WORD_FOOTER_LINES, cleanWordFooter, docxText, type SchoolBranding } from "./branding";
 import { crestImage } from "./minutesDocx";
-import { parseTranscript } from "./policyToWord";
+import { transcriptParagraphs } from "./policyToWord";
 import { sourceBlocks } from "./trainingAi";
 import { PROVINCES } from "./trainingTopics";
 import { COMPLY_WITH, MAX_DESCRIPTION, MAX_NAME } from "./policyCompileOptions";
 
-export { COMPLY_WITH, MAX_DESCRIPTION, MAX_DRAFT, MAX_INSTRUCTION, MAX_NAME } from "./policyCompileOptions";
+export { COMPLY_WITH, MAX_CHANGE, MAX_DESCRIPTION, MAX_DRAFT, MAX_INSTRUCTION, MAX_NAME } from "./policyCompileOptions";
 
 // ---------------------------------------------------------------------------
 // A policy the school does not have yet, drafted from scratch: the school says
@@ -80,30 +80,43 @@ async function write(content: Anthropic.ContentBlockParam[], deadline: number): 
   return text;
 }
 
-export async function compilePolicy(req: CompileRequest, school: SchoolBranding, deadline: number): Promise<string> {
+/** The laws and uploaded documents the policy must follow, sent with the first draft AND every revision. */
+async function sources(req: CompileRequest): Promise<{ blocks: Anthropic.ContentBlockParam[]; text: string }> {
   const { blocks, names } = await sourceBlocks(req.guidelineIds);
   const laws = COMPLY_WITH.filter((c) => req.comply.includes(c.key)).map((c) =>
     c.key === "provincial" ? `${req.province} provincial education department guidelines` : c.label
   );
-  const instruction = [
-    `Draft the policy "${req.name}" for ${school.fullName}, a ${school.schoolType === "private" ? "independent school with a board of governors" : "public school with an SGB"}.`,
-    `What the school needs: ${req.description}`,
+  const text = [
     laws.length ? `It must comply with: ${laws.join("; ")}.` : "",
     names.length ? `It must also comply with the attached documents the school uploaded (${names.join(", ")}).` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
-  return write([...blocks, { type: "text", text: instruction }], deadline);
+  return { blocks, text };
+}
+
+export async function compilePolicy(req: CompileRequest, school: SchoolBranding, deadline: number): Promise<string> {
+  const src = await sources(req);
+  const instruction = [
+    `Draft the policy "${req.name}" for ${school.fullName}, a ${school.schoolType === "private" ? "independent school with a board of governors" : "public school with an SGB"}.`,
+    `What the school needs: ${req.description}`,
+    src.text,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  return write([...src.blocks, { type: "text", text: instruction }], deadline);
 }
 
 /** The whole draft again with the change made, so what is reviewed is always one complete policy. */
-export async function revisePolicy(name: string, draft: string, change: string, deadline: number): Promise<string> {
+export async function revisePolicy(req: CompileRequest, draft: string, change: string, deadline: number): Promise<string> {
+  const src = await sources(req);
   return write(
     [
+      ...src.blocks,
       {
         type: "text",
         text:
-          `Here is the draft policy "${name}":\n\n<draft>\n${draft}\n</draft>\n\n` +
+          `Here is the draft policy "${req.name}". What the school asked for: ${req.description}\n\n${src.text}\n\n<draft>\n${draft}\n</draft>\n\n` +
           `Make this change and return the complete revised policy, keeping everything else as it is:\n\n<change>\n${change}\n</change>`,
       },
     ],
@@ -118,12 +131,17 @@ export async function policyDocx(name: string, text: string, school: SchoolBrand
   const top: Paragraph[] = [];
   const info = crest ? crestImage(crest) : null;
   if (crest && info) {
-    top.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new ImageRun({ data: crest, type: info.type, transformation: { width: Math.min(200, Math.round((96 * info.width) / info.height)), height: 96 } })],
-      })
-    );
+    try {
+      top.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [new ImageRun({ data: crest, type: info.type, transformation: { width: Math.min(200, Math.round((96 * info.width) / info.height)), height: 96 } })],
+        })
+      );
+    } catch {
+      // A crest that cannot be decoded must not lose the policy. The words matter; the picture does not.
+      console.warn("[policy compile] Could not embed the crest.");
+    }
   }
   top.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 360 }, children: [new TextRun({ text: fullName, bold: true, size: 28 })] }));
 
@@ -160,15 +178,7 @@ export async function policyDocx(name: string, text: string, school: SchoolBrand
         },
         children: [
           ...top,
-          ...parseTranscript(text).map((l) =>
-            l.kind === "h1"
-              ? new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 120 }, children: [new TextRun(l.text)] })
-              : l.kind === "h2"
-                ? new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 200, after: 100 }, children: [new TextRun(l.text)] })
-                : l.kind === "bullet"
-                  ? new Paragraph({ bullet: { level: 0 }, children: [new TextRun(l.text)] })
-                  : new Paragraph({ spacing: { after: 120 }, children: [new TextRun(l.text)] })
-          ),
+          ...transcriptParagraphs(text),
         ],
       },
     ],

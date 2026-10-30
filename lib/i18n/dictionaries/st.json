@@ -2104,5 +2104,6 @@
   "Rewriting the draft...": "Moralo o ngolwa bocha...",
   "Make the change": "Etsa phetoho",
   "Fix these in the draft": "Lokisa tsena moralong",
-  "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Tlhahlobo ena ke ya moralo mme ha e bolokwe. Etsa tlhahlobo hape leqepheng la leano hang ha le se le le laeboraring ya hao."
+  "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Tlhahlobo ena ke ya moralo mme ha e bolokwe. Etsa tlhahlobo hape leqepheng la leano hang ha le se le le laeboraring ya hao.",
+  "The draft has changed since this check. Run it again to see where it stands now.": "Moralo o fetohile ho tloha tlhahlobong ena. E etse hape ho bona moo o emeng teng hona jwale."
 }

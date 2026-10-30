@@ -2104,5 +2104,6 @@
   "Rewriting the draft...": "Kubhalwa kwakhona uyilo...",
   "Make the change": "Yenza utshintsho",
   "Fix these in the draft": "Lungisa ezi kuyilo",
-  "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Olu hlolo lolwoyilo kwaye alugcinwa. Phinda wenze uhlolo kwiphepha lomgaqo-nkqubo xa sele ukwithala lakho."
+  "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Olu hlolo lolwoyilo kwaye alugcinwa. Phinda wenze uhlolo kwiphepha lomgaqo-nkqubo xa sele ukwithala lakho.",
+  "The draft has changed since this check. Run it again to see where it stands now.": "Uyilo lutshintshile ukusukela olu hlolo. Phinda uluqhube ukuze ubone apho lume khona ngoku."
 }

@@ -2104,5 +2104,6 @@
   "Rewriting the draft...": "Tlhamo e ngwalwa lefsa...",
   "Make the change": "Dira phetogo",
   "Fix these in the draft": "Lokiša tše ka tlhamong",
-  "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Tekolo ye ke ya tlhamo gomme ga e bolokwe. Dira tekolo gape letlakaleng la pholisi ge e šetše e le bokgobapukung bja gago."
+  "This check is of the draft and is not saved. Run the check again on the policy page once it is in your library.": "Tekolo ye ke ya tlhamo gomme ga e bolokwe. Dira tekolo gape letlakaleng la pholisi ge e šetše e le bokgobapukung bja gago.",
+  "The draft has changed since this check. Run it again to see where it stands now.": "Tlhamo e fetogile go tloga ka tekolo ye. E dire gape go bona moo e emego gona bjale."
 }

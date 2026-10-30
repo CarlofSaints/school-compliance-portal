@@ -10,7 +10,8 @@ import { runComplianceCheck } from "@/lib/complianceEngine";
 import {
   CompileError,
   MAX_DRAFT,
-  MAX_INSTRUCTION,
+  MAX_CHANGE,
+  MAX_DESCRIPTION,
   MAX_NAME,
   cleanCompileRequest,
   compilePolicy,
@@ -41,53 +42,55 @@ export async function POST(req: NextRequest) {
   if (action !== "draft" && (!name || !draft)) return NextResponse.json({ error: "There is no draft to work on." }, { status: 400 });
   if (draft.length > MAX_DRAFT) return NextResponse.json({ error: "The draft is too long." }, { status: 400 });
 
-  if (action === "save") {
-    const school = await resolveBranding();
-    const docx = await policyDocx(name, draft, school, await schoolCrest(school));
-    const policyId = uuidv4();
-    const now = new Date().toISOString();
-    const filename = policyFilename(name);
-    await uploadPolicyFile(policyId, 1, "docx", docx);
-    await savePolicyVersions(policyId, [{ version: 1, filename, ext: "docx", uploadedBy: session.id, uploadedAt: now, size: docx.length }]);
-    await createPolicy({
-      id: policyId,
-      name,
-      description: str(body.description, 1000),
-      category: str(body.category, 100) || REQUIRED_POLICY_CATEGORY,
-      currentVersion: 1,
-      createdBy: session.id,
-      createdAt: now,
-      updatedAt: now,
-      lastCheckScore: null,
-      lastCheckDate: null,
-    });
-    return NextResponse.json({ id: policyId }, { status: 201 });
-  }
+  if (!["draft", "revise", "check", "save"].includes(action as string)) return NextResponse.json({ error: "Unknown step." }, { status: 400 });
 
-  if (!["draft", "revise", "check"].includes(action as string)) return NextResponse.json({ error: "Unknown step." }, { status: 400 });
-  // Paid AI calls: the same per-person and per-school limits as the compliance check.
-  const limited = await enforce([
-    [LIMITS.aiUser, session.id],
-    [LIMITS.aiSchool, "school"],
-  ]);
-  if (limited) return limited;
+  // Everything checked before any paid AI call, so a refused request costs nothing.
+  const request = action === "draft" || action === "revise" ? cleanCompileRequest(body) : null;
+  if (typeof request === "string") return NextResponse.json({ error: request }, { status: 400 });
+  const change = typeof body.change === "string" ? body.change.trim() : "";
+  if (action === "revise" && !change) return NextResponse.json({ error: "Say what to change." }, { status: 400 });
+  if (change.length > MAX_CHANGE) return NextResponse.json({ error: "That change is too long. Ask for it in smaller parts." }, { status: 400 });
   const deadline = Date.now() + 280_000;
 
   try {
+    if (action === "save") {
+      const school = await resolveBranding();
+      const docx = await policyDocx(name, draft, school, await schoolCrest(school));
+      const policyId = uuidv4();
+      const now = new Date().toISOString();
+      const filename = policyFilename(name);
+      await uploadPolicyFile(policyId, 1, "docx", docx);
+      await savePolicyVersions(policyId, [{ version: 1, filename, ext: "docx", uploadedBy: session.id, uploadedAt: now, size: docx.length }]);
+      await createPolicy({
+        id: policyId,
+        name,
+        description: str(body.description, MAX_DESCRIPTION),
+        category: str(body.category, 100) || REQUIRED_POLICY_CATEGORY,
+        currentVersion: 1,
+        createdBy: session.id,
+        createdAt: now,
+        updatedAt: now,
+        lastCheckScore: null,
+        lastCheckDate: null,
+      });
+      return NextResponse.json({ id: policyId }, { status: 201 });
+    }
+
+    // Paid AI calls: the compliance check keeps its own limits; drafting has its own per-person limit and shares the school's daily one.
+    const limited = await enforce([
+      [action === "check" ? LIMITS.aiUser : LIMITS.policyAiUser, session.id],
+      [LIMITS.aiSchool, "school"],
+    ]);
+    if (limited) return limited;
+
     if (action === "check") {
       return NextResponse.json(await runComplianceCheck(draft, name, "policy"), { headers: { "Cache-Control": "no-store" } });
     }
-    if (action === "revise") {
-      const change = str(body.change, MAX_INSTRUCTION);
-      if (!change) return NextResponse.json({ error: "Say what to change." }, { status: 400 });
-      return NextResponse.json({ draft: await revisePolicy(name, draft, change, deadline) });
-    }
-    const request = cleanCompileRequest(body);
-    if (typeof request === "string") return NextResponse.json({ error: request }, { status: 400 });
-    return NextResponse.json({ draft: await compilePolicy(request, await resolveBranding(), deadline) });
+    if (action === "revise") return NextResponse.json({ draft: await revisePolicy(request!, draft, change, deadline) });
+    return NextResponse.json({ draft: await compilePolicy(request!, await resolveBranding(), deadline) });
   } catch (err) {
     if (err instanceof CompileError) return NextResponse.json({ error: err.message }, { status: 422 });
-    console.error("[policy compile] Failed:", err);
+    console.error(`[policy compile] ${String(action)} failed:`, err);
     const timedOut = err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError" || /abort/i.test(err.message));
     return NextResponse.json(
       { error: timedOut ? "This took too long. Please try again, or ask for a shorter policy." : "Something went wrong. Please try again." },

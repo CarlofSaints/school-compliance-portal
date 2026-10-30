@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import JSZip from "jszip";
 import { branding } from "../lib/branding";
 import { cleanCompileRequest, policyDocx, policyFilename } from "../lib/policyCompile";
+import { clearUserBackups, policyDraftKey } from "../lib/minutesBackupKeys";
 
 (async () => {
   const ok = { name: "Cellphone Policy", description: "Phones in class", comply: ["sasa", "bela", "nonsense"], province: "", guidelineIds: [] };
@@ -35,5 +36,14 @@ import { cleanCompileRequest, policyDocx, policyFilename } from "../lib/policyCo
   const footer = await Promise.all(Object.keys(zip.files).filter((f) => /word\/footer\d*\.xml/.test(f)).map((f) => zip.file(f)!.async("string")));
   assert.ok(footer.join("").includes("12 Main Road") && footer.join("").includes("PAGE"), "school footer and page numbers");
   assert.ok((await policyDocx("No crest", text, school, null)).length > 0, "a school without a crest still gets its Word file");
+
+  // The browser backup of a draft goes when its owner signs out, and only theirs.
+  const store = new Map<string, string>();
+  const ls = { get length() { return store.size; }, key: (i: number) => [...store.keys()][i] ?? null, getItem: (k: string) => store.get(k) ?? null, removeItem: (k: string) => void store.delete(k) };
+  store.set(policyDraftKey("hvps.test", "u1"), "{}");
+  store.set(policyDraftKey("hvps.test", "u2"), "{}");
+  store.set(policyDraftKey("hvps.test", "u10"), "{}");
+  clearUserBackups(ls, "hvps.test", "u1");
+  assert.deepEqual([...store.keys()], [policyDraftKey("hvps.test", "u2"), policyDraftKey("hvps.test", "u10")], "sign-out clears that person's policy draft only");
   console.log("policy compile: all checks passed");
 })();
