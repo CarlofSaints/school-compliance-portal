@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
-import { createMovedSchool, copyBatch, pruneRemoved, compare, setHostnames, MoveError } from "@/lib/tenantMove";
+import { createMovedSchool, copyBatch, pruneRemoved, compare, setHostnames, isMovableKey, MoveError } from "@/lib/tenantMove";
 import { getTenantByKey } from "@/lib/tenantRegistry";
 
 export const maxDuration = 120;
@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}));
   const key = String(b.key ?? "").trim().toLowerCase();
   const sourceToken = String(b.sourceToken ?? "").trim();
-  if (!/^[a-z0-9-]{2,40}$/.test(key)) return NextResponse.json({ error: "Give the school's key, e.g. jeppe." }, { status: 400 });
+  // 🔴 Only HVPS and Jeppe (their own deployments), never a self-serve school.
+  if (!/^[a-z0-9-]{2,40}$/.test(key) || !isMovableKey(key)) {
+    return NextResponse.json({ error: "Only a school with its own deployment (jeppe, hvps) can be moved." }, { status: 400 });
+  }
   if (["copy", "prune", "compare"].includes(b.action) && !sourceToken.startsWith("vercel_blob_rw_")) {
     return NextResponse.json({ error: "Paste the old app's Blob read-write token (vercel_blob_rw_...)." }, { status: 400 });
   }

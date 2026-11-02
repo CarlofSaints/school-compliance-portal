@@ -1,5 +1,5 @@
 import { readJson, writeJson, readFile, writeFile, deleteFile, updateJson } from "./controlData";
-import { branding as codeBranding, type SchoolBranding } from "./branding";
+import { branding as codeBranding, SCHOOLS, type SchoolBranding } from "./branding";
 import { derivePalette, normaliseHex } from "./brandingColors";
 import { buildFromAddress, buildReplyTo } from "./emailIdentity";
 import { isMultiTenant, getTenantByKey } from "./tenantRegistry";
@@ -19,8 +19,9 @@ async function schoolBase(): Promise<SchoolBranding> {
   const { key } = await tenantScope();
   const hit = baseCache.get(key);
   if (hit && Date.now() - hit.at < 60_000) return hit.base;
-  const own = (await getTenantByKey(key))?.branding;
-  const base = own ? { ...codeBranding, ...own, colors: { ...codeBranding.colors, ...(own.colors ?? {}) } } : codeBranding;
+  const look = (await getTenantByKey(key))?.builtInLook;
+  // Only a MOVED school has one; every self-serve school keeps the generic base.
+  const base = look && Object.hasOwn(SCHOOLS, look) ? SCHOOLS[look] : codeBranding;
   baseCache.set(key, { at: Date.now(), base });
   return base;
 }
@@ -132,16 +133,17 @@ export async function resolveBranding(): Promise<SchoolBranding> {
   // throws on a real read error). Never SAVE from this - the Branding admin
   // page reads getStoredBranding directly, so a failed load there is an error,
   // not a set of defaults that could be saved over the school's real ones.
-  let stored: StoredBranding = {};
-  try {
-    stored = await getStoredBranding();
-  } catch (err) {
-    console.error("[branding] could not read stored branding, using built-in:", err);
-  }
-  const base = await schoolBase().catch((err) => {
-    console.error("[branding] could not read the school record, using built-in:", err);
-    return codeBranding;
-  });
+  // Both reads at once: this runs on every page and every email.
+  const [stored, base] = await Promise.all([
+    getStoredBranding().catch((err): StoredBranding => {
+      console.error("[branding] could not read stored branding, using built-in:", err);
+      return {};
+    }),
+    schoolBase().catch((err) => {
+      console.error("[branding] could not read the school record, using built-in:", err);
+      return codeBranding;
+    }),
+  ]);
   return applyStoredBranding(base, stored);
 }
 

@@ -27,6 +27,13 @@ export interface Tenant {
   /** Overrides on top of the branding defaults. A school can be onboarded with
    *  none of this and still work, just looking generic. */
   branding?: Partial<SchoolBranding>;
+  /** A school moved off its own deployment (lib/tenantMove.ts): the key of
+   *  its built-in look in SCHOOLS (lib/branding.ts), read live so a later
+   *  fix to that look reaches it. Absent on every self-serve school. */
+  builtInLook?: string;
+  /** When the moved school started answering on its real address. From then
+   *  on the move tool refuses to copy or prune: the new side is the live one. */
+  switchedAt?: string;
   status: "active" | "suspended";
   /** When it was last suspended: the 90-day deletion clock (lib/schoolRetention.ts). */
   suspendedAt?: string;

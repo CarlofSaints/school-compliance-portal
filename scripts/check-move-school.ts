@@ -12,7 +12,7 @@ import { seal } from "../lib/secretBox";
 import { runInScope } from "../lib/tenantContext";
 import { resolveBranding } from "../lib/brandingData";
 import { SCHOOLS } from "../lib/branding";
-import { copyBatch, pruneRemoved, compare, setHostnames } from "../lib/tenantMove";
+import { copyBatch, pruneRemoved, compare, setHostnames, isMovableKey } from "../lib/tenantMove";
 
 const OLD = { token: "old" };
 const NEW = { token: "new" };
@@ -47,7 +47,12 @@ async function main() {
   await write("jeppe/users/u1/mfa.json", Buffer.from('{"secret":"v1.old-key"}'), OLD);
 
   // Step 1 as createMovedSchool does it (minus creating a real Vercel store).
-  await createTenant({ key: "jeppe", name: SCHOOLS.jeppe.fullName, hostnames: ["jeppe-new.example"], blobTokenSealed: seal("new"), status: "active", createdAt: "", branding: SCHOOLS.jeppe } as never);
+  await createTenant({ key: "jeppe", name: SCHOOLS.jeppe.fullName, hostnames: ["jeppe-new.example"], blobTokenSealed: seal("new"), status: "active", createdAt: "", builtInLook: "jeppe" } as never);
+
+  // 🔴 Only HVPS and Jeppe: never a self-serve school, never an object-prototype key.
+  for (const k of ["st-bothians", "constructor", "generic", "__proto__"]) assert.equal(isMovableKey(k), false, k);
+  assert.equal(isMovableKey("jeppe"), true);
+  await assert.rejects(pruneRemoved("old", "st-bothians"), /own deployment/);
 
   // Copy: byte for byte, same paths, old side untouched, MFA left behind.
   assert.equal((await fullCopy()).copied, 5);
@@ -87,10 +92,28 @@ async function main() {
   // Compare notices a file that differs.
   await write("jeppe/policies/p1/file.pdf", Buffer.from("changed and longer"), OLD);
   assert.deepEqual((await compare("old", "jeppe")).differentSize, ["policies/p1/file.pdf"]);
+  await fullCopy();
+  // ...and an edit that keeps the same length (newer on the old side).
+  await new Promise((r) => setTimeout(r, 5));
+  await write("jeppe/users.json", Buffer.from('[{"id":"u2"}]'), OLD);
+  const edited = await compare("old", "jeppe");
+  assert.deepEqual(edited.changedSince, ["users.json"]);
+  assert.equal(edited.same, false);
+  await fullCopy();
+  assert.equal((await compare("old", "jeppe")).same, true);
+
+  // 🔴 A wrong token (an empty old side) never empties the new side.
+  await assert.rejects(pruneRemoved("wrong-store", "jeppe"), /Nothing was removed/);
+  assert.ok(await read("jeppe/users.json", NEW), "nothing was deleted");
 
   // The real address.
-  await setHostnames("jeppe", ["jeppe-new.example", "jeppe.example"]);
-  assert.deepEqual((await getTenantByKey("jeppe"))?.hostnames, ["jeppe-new.example", "jeppe.example"]);
+  await setHostnames("jeppe", ["jeppe-new.example", "jeppe.schoolcompliance.co.za"]);
+  const live = await getTenantByKey("jeppe");
+  assert.deepEqual(live?.hostnames, ["jeppe-new.example", "jeppe.schoolcompliance.co.za"]);
+  assert.ok(live?.switchedAt, "switched over");
+  // 🔴 Once live there, copying or pruning would overwrite or delete real work: refused.
+  await assert.rejects(copyBatch("old", "jeppe"), /already runs on the shared app/);
+  await assert.rejects(pruneRemoved("old", "jeppe"), /already runs on the shared app/);
   assert.equal((await list({ prefix: "jeppe/", token: "control" })).blobs.length, 0, "nothing of the school's lands in the registry store");
   console.log("check-move-school: all passed");
 }

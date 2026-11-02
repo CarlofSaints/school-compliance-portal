@@ -1,5 +1,6 @@
 import { list, get, put, del } from "@vercel/blob";
 import { createBlobStore, deleteBlobStore } from "./vercelApi";
+import type { ListBlobResultBlob } from "@vercel/blob";
 import { createTenant, getTenantByKey, updateTenant, isTenantKeyAvailable, isHostnameAvailable } from "./tenantRegistry";
 import { seal, open } from "./secretBox";
 import { SCHOOLS } from "./branding";
@@ -38,6 +39,22 @@ const isMfa = (rel: string) => /^users\/[^/]+\/mfa\.json$/.test(rel);
 
 export class MoveError extends Error {}
 
+/** 🔴 Only a school with its OWN deployment can be moved: never a self-serve
+ *  school (a prune there would empty its store), never "generic", never a key
+ *  like "constructor" that a plain object lookup would accept. */
+export function isMovableKey(key: string): boolean {
+  return Object.hasOwn(SCHOOLS, key) && key !== "generic";
+}
+
+/** The new side, refusing once the school has gone live there: from then on a
+ *  copy would overwrite live work and a prune would delete it. */
+async function targetBeforeSwitch(key: string): Promise<string> {
+  if (!isMovableKey(key)) throw new MoveError(`"${key}" is not a school with its own deployment.`);
+  const t = await getTenantByKey(key);
+  if (t?.switchedAt) throw new MoveError("This school already runs on the shared app. Copying now would overwrite what people have done there since, so it is refused.");
+  return tenantToken(t);
+}
+
 function tenantToken(t: Tenant | null): string {
   if (!t?.blobTokenSealed) throw new MoveError("That school has no store yet. Create it first.");
   return open(t.blobTokenSealed);
@@ -45,8 +62,8 @@ function tenantToken(t: Tenant | null): string {
 
 /** Step 1: the empty school, its own store, answering on a TEST address only. */
 export async function createMovedSchool(key: string, testHostname: string): Promise<Tenant> {
+  if (!isMovableKey(key)) throw new MoveError(`"${key}" is not a school with its own deployment.`);
   const look = SCHOOLS[key];
-  if (!look) throw new MoveError(`"${key}" is not a school with its own deployment.`);
   if (!(await isTenantKeyAvailable(key))) throw new MoveError(`A school with the key "${key}" already exists.`);
   if (!(await isHostnameAvailable(testHostname))) throw new MoveError(`${testHostname} is already taken.`);
   const store = await createBlobStore(`school-${key}`);
@@ -58,9 +75,10 @@ export async function createMovedSchool(key: string, testHostname: string): Prom
     blobTokenSealed: seal(store.token),
     status: "active",
     createdAt: new Date().toISOString(),
-    // Its exact built-in look (colours, words, crest), the base every page and
-    // email starts from (lib/brandingData.ts). Copying files never touches it.
-    branding: look,
+    // Its exact built-in look (colours, words, crest) is the base every page
+    // and email starts from (lib/brandingData.ts), named here and read live
+    // from SCHOOLS so later fixes reach it. Copying files never touches it.
+    builtInLook: key,
   };
   try {
     await createTenant(tenant);
@@ -76,7 +94,7 @@ export async function createMovedSchool(key: string, testHostname: string): Prom
  * store under the same path. Overwrites, so it can be run again.
  */
 export async function copyBatch(sourceToken: string, key: string, cursor?: string) {
-  const target = tenantToken(await getTenantByKey(key));
+  const target = await targetBeforeSwitch(key);
   const prefix = `${key}/`;
   const page = await list({ prefix, limit: BATCH, cursor, token: sourceToken });
   let copied = 0;
@@ -104,11 +122,11 @@ export async function copyBatch(sourceToken: string, key: string, cursor?: strin
 }
 
 async function listAll(token: string, prefix: string) {
-  const out = new Map<string, number>();
+  const out = new Map<string, ListBlobResultBlob>();
   let cursor: string | undefined;
   do {
     const page = await list({ prefix, limit: 1000, cursor, token });
-    for (const b of page.blobs) out.set(b.pathname, b.size);
+    for (const b of page.blobs) out.set(b.pathname, b);
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
   return out;
@@ -120,21 +138,22 @@ async function listAll(token: string, prefix: string) {
  * Never the new side's own two-step sign-in set-ups.
  */
 export async function pruneRemoved(sourceToken: string, key: string): Promise<number> {
-  const target = tenantToken(await getTenantByKey(key));
+  const target = await targetBeforeSwitch(key);
   const prefix = `${key}/`;
   const [source, moved] = await Promise.all([listAll(sourceToken, prefix), listAll(target, prefix)]);
-  let removed = 0;
-  for (const p of moved.keys()) {
-    if (source.has(p) || isMfa(p.slice(prefix.length))) continue;
-    await del(p, { token: target });
-    removed++;
-  }
-  return removed;
+  // 🔴 An empty old side means the wrong token or the wrong school, never
+  // "delete everything": refused.
+  if (source.size === 0) throw new MoveError(`The old store has nothing under ${prefix}. Is that the right token for this school? Nothing was removed.`);
+  const gone = [...moved.keys()].filter((p) => !source.has(p) && !isMfa(p.slice(prefix.length)));
+  // In chunks: one request, not hundreds, so a big prune finishes in time.
+  for (let i = 0; i < gone.length; i += 100) await del(gone.slice(i, i + 100), { token: target });
+  return gone.length;
 }
 
 /** Step 3: old and new compared file by file (path and size), and anything in
  *  the old store OUTSIDE its folder, so nothing is silently left behind. */
 export async function compare(sourceToken: string, key: string) {
+  if (!isMovableKey(key)) throw new MoveError(`"${key}" is not a school with its own deployment.`);
   const target = tenantToken(await getTenantByKey(key));
   const prefix = `${key}/`;
   const [everything, moved] = await Promise.all([listAll(sourceToken, ""), listAll(target, prefix)]);
@@ -143,34 +162,44 @@ export async function compare(sourceToken: string, key: string) {
   let outsidePrefix = 0;
   const missing: string[] = [];
   const differentSize: string[] = [];
-  for (const [p, size] of everything) {
+  const changedSince: string[] = [];
+  for (const [p, blob] of everything) {
     if (!p.startsWith(prefix)) {
       outsidePrefix++;
       continue;
     }
     if (isMfa(p.slice(prefix.length))) continue;
     files++;
-    bytes += size;
-    if (!moved.has(p)) missing.push(p.slice(prefix.length));
-    else if (moved.get(p) !== size) differentSize.push(p.slice(prefix.length));
+    bytes += blob.size;
+    const copy = moved.get(p);
+    if (!copy) missing.push(p.slice(prefix.length));
+    else if (copy.size !== blob.size) differentSize.push(p.slice(prefix.length));
+    // Same size is not the same file: an edit after the copy (newer on the old side).
+    else if (new Date(blob.uploadedAt).getTime() > new Date(copy.uploadedAt).getTime()) changedSince.push(p.slice(prefix.length));
   }
+  const movedKept = [...moved.entries()].filter(([p]) => !isMfa(p.slice(prefix.length)));
   const extra = [...moved.keys()].filter((p) => !everything.has(p) && !isMfa(p.slice(prefix.length))).map((p) => p.slice(prefix.length));
   return {
     source: { files, bytes },
-    moved: { files: moved.size, bytes: [...moved.values()].reduce((a, b) => a + b, 0) },
+    // Totals without two-step set-ups on either side, so identical reads identical.
+    moved: { files: movedKept.length, bytes: movedKept.reduce((a, [, b]) => a + b.size, 0) },
     outsidePrefix,
     missing: missing.slice(0, 20),
     missingCount: missing.length,
     differentSize: differentSize.slice(0, 20),
+    changedSince: changedSince.slice(0, 20),
     extra: extra.slice(0, 20),
-    same: missing.length === 0 && differentSize.length === 0 && extra.length === 0,
+    same: missing.length === 0 && differentSize.length === 0 && changedSince.length === 0 && extra.length === 0,
   };
 }
 
 /** Step 5: the school answers on an extra address (the real one), or stops answering on one. */
 export async function setHostnames(key: string, hostnames: string[]) {
+  if (!isMovableKey(key)) throw new MoveError(`"${key}" is not a school with its own deployment.`);
   const t = await getTenantByKey(key);
   if (!t) throw new MoveError("No such school.");
-  await updateTenant({ ...t, hostnames });
+  // Answering on its real address = live: no copy or prune ever again.
+  const live = hostnames.includes(`${key}.schoolcompliance.co.za`);
+  await updateTenant({ ...t, hostnames, ...(live && !t.switchedAt ? { switchedAt: new Date().toISOString() } : {}) });
   return hostnames;
 }

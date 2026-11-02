@@ -47,9 +47,10 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
 
   const copy = run(async () => {
     let at = cursor;
+    const resumed = !!at;
     let files = 0;
     let bytes = 0;
-    if (at) say("Carrying on from where the last copy stopped...");
+    if (resumed) say("Carrying on from where the last copy stopped...");
     do {
       const d = await step("copy", { cursor: at });
       files += d.copied;
@@ -60,6 +61,8 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
     } while (at);
     const p = await step("prune");
     say(`✅ Copy finished: ${files} files.${p.removed ? ` Removed ${p.removed} file(s) the old app no longer has.` : ""}`);
+    // Files before the resume point were not refreshed this time.
+    if (resumed) say("⚠️ That copy carried on part way, so files copied earlier were not refreshed. Run 2 once more for a full copy before switching.");
   });
 
   const check = run(async () => {
@@ -69,6 +72,7 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
       `${d.same ? "✅ Identical" : "⚠️ Different"}. Old: ${d.source.files} files (${mb(d.source.bytes)} MB). New: ${d.moved.files} files (${mb(d.moved.bytes)} MB).` +
         (d.missingCount ? ` Missing on the new side (${d.missingCount}): ${d.missing.join(", ")}.` : "") +
         (d.differentSize.length ? ` Different size: ${d.differentSize.join(", ")}.` : "") +
+        (d.changedSince.length ? ` Changed on the old app since the copy: ${d.changedSince.join(", ")}.` : "") +
         (d.extra.length ? ` Only on the new side: ${d.extra.join(", ")}.` : "") +
         (d.outsidePrefix ? ` ${d.outsidePrefix} file(s) in the old store sit OUTSIDE ${key}/: look at those before switching.` : "")
     );
@@ -106,7 +110,7 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
           Old app&apos;s folder: <span className="font-medium text-dark">{key}/</span>
         </div>
         <label className="text-xs text-gray-500 sm:col-span-2">Old app&apos;s Blob read-write token (vercel_blob_rw_...). Used for each step, never saved.
-          <input type="password" autoComplete="off" className={input} value={token} onChange={(e) => setToken(e.target.value.trim())} />
+          <input type="password" autoComplete="off" className={input} value={token} onChange={(e) => { setToken(e.target.value.trim()); setCursor(undefined); }} />
         </label>
       </section>
 
