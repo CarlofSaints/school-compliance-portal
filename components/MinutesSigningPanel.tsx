@@ -12,6 +12,7 @@ import {
   canOpenSigning,
   signatureMatchesDocument,
   signingProgress,
+  paperTickerRole,
   SIGNATORY_ROLE_LABELS,
   type MinutesStatus,
   type Signatory,
@@ -161,7 +162,11 @@ export default function MinutesSigningPanel({
     setPaperStep(signedCopy ? "" : "ask");
   }
 
-  const unsigned = signatories.filter((s) => !s.signedAt);
+  // Same rule as the server: an admin or the Principal ticks anyone unsigned,
+  // anyone else on the list only themselves.
+  const role = paperTickerRole(canManage, signatories, myEmail);
+  const ticksOthers = role === "minutes admin" || role === "principal";
+  const unsigned = signatories.filter((s) => !s.signedAt && (ticksOthers || s.email === mine?.email));
   const mayRecordPaper = open && (canManage || !!mine) && unsigned.length > 0;
   const anyOnPaper = signatories.some((s) => s.onPaper);
 

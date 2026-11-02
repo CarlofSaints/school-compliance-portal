@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes, updateMinutes, MinutesChangeRefused } from "@/lib/minutesData";
-import { signingProgress } from "@/lib/minutes";
+import { signingProgress, paperTickerRole } from "@/lib/minutes";
 import { documentHash, minutesForClient } from "@/lib/minutesSigning";
 import { distributeOnFinalSignature } from "@/lib/minutesDistribution";
 import { sendPaperSignatureNoticeEmail } from "@/lib/email";
@@ -59,10 +59,6 @@ export async function POST(
     );
   }
 
-  // It sends email, so it shares the per-user email budget.
-  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
-  if (limited) return limited;
-
   const body = await req.json().catch(() => ({}));
   const emails: string[] = Array.isArray(body.emails)
     ? [...new Set((body.emails as unknown[]).filter((e): e is string => typeof e === "string").map(norm))]
@@ -70,6 +66,35 @@ export async function POST(
   if (emails.length === 0) {
     return NextResponse.json({ error: "Tick at least one person who signed the paper copy." }, { status: 400 });
   }
+
+  // 🔴 Carl: only a minutes admin or the Principal may record OTHER people as
+  // signing. Anyone else on the list records only themselves, or one member
+  // could close and send the minutes on everybody's behalf.
+  const byRole = paperTickerRole(manages, record.signatories, session.email);
+  if (emails.some((e) => e !== me) && byRole === "signatory") {
+    await recordActivity({
+      ...actorFrom(req, session),
+      action: "minutes.paper_signatures_refused",
+      entity: "minutes",
+      entityId: id,
+      summary: `Tried to record other people as signing "${record.title}" on paper, refused (not a minutes admin or the Principal)`,
+      // Only addresses really on the list, and at most a handful: whatever the
+      // browser sent must not be able to fill the activity log.
+      detail: {
+        emails: emails.filter((e) => record.signatories.some((s) => norm(s.email) === e)).slice(0, 20),
+        sent: emails.length,
+      },
+    });
+    return NextResponse.json(
+      { error: "Only a minutes admin or the Principal can record other people as signing on paper. You can record your own paper signature." },
+      { status: 403 }
+    );
+  }
+
+  // It sends email, so it shares the per-user email budget. After the refusal
+  // above, so a refused attempt does not use it up.
+  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (limited) return limited;
 
   const hash = documentHash(record);
   const now = new Date().toISOString();
@@ -83,6 +108,12 @@ export async function POST(
     updated = await updateMinutes(id, (current) => {
       if (current.status !== "awaiting_signatures") {
         throw new MinutesChangeRefused("These minutes are no longer out for signing.");
+      }
+      // The role again, on the list as saved now: a list rebuilt since the read
+      // above must not leave somebody with power they no longer hold.
+      const roleNow = paperTickerRole(manages, current.signatories, session.email);
+      if (emails.some((e) => e !== me) && roleNow !== "minutes admin" && roleNow !== "principal") {
+        throw new MinutesChangeRefused("Only a minutes admin or the Principal can record other people as signing on paper.");
       }
       const unknown = emails.filter((e) => !current.signatories.some((s) => norm(s.email) === e));
       if (unknown.length) {
@@ -125,8 +156,8 @@ export async function POST(
     action: "minutes.paper_signatures_recorded",
     entity: "minutes",
     entityId: id,
-    summary: `Recorded ${marked.map((m) => m.name).join(", ")} as signing "${record.title}" on paper (${progress.signed} of ${progress.total})`,
-    detail: { emails: marked.map((m) => m.email), documentHash: hash, complete: progress.complete },
+    summary: `Recorded ${marked.map((m) => m.name).join(", ")} as signing "${record.title}" on paper, as ${byRole} (${progress.signed} of ${progress.total})`,
+    detail: { emails: marked.map((m) => m.email), names: marked.map((m) => m.name), byRole, documentHash: hash, complete: progress.complete },
   });
 
   // Each person ticked hears about it, so a wrong tick is caught. Not the one

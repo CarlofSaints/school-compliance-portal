@@ -4,7 +4,7 @@
 //
 //   npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-paper-signatures.ts
 import assert from "node:assert/strict";
-import { signingProgress, mayUploadSignedCopy, type Signatory } from "../lib/minutes";
+import { signingProgress, mayUploadSignedCopy, paperTickerRole, type Signatory } from "../lib/minutes";
 import { createMinutes, updateMinutes, saveSignedCopy, getMinutes } from "../lib/minutesData";
 
 const s = (email: string, extra: Partial<Signatory> = {}): Signatory =>
@@ -22,6 +22,13 @@ async function main() {
   assert.equal(mayUploadSignedCopy({ status: "signed" }), true);
   assert.equal(mayUploadSignedCopy({ status: "signed", signedCopy: {} }), false);
   assert.equal(mayUploadSignedCopy({ status: "archived" }), false);
+
+  // Who may tick other people: admin or the Principal; others only themselves.
+  const list = [s("p@x", { role: "principal" }), s("Chair@X", { role: "sgb_chair" })];
+  assert.equal(paperTickerRole(true, list, "anyone@x"), "minutes admin");
+  assert.equal(paperTickerRole(false, list, " P@x "), "principal");
+  assert.equal(paperTickerRole(false, list, "chair@x"), "signatory");
+  assert.equal(paperTickerRole(false, list, "stranger@x"), null);
 
   const base = { title: "Check", body: "sgb", period: { kind: "term", year: 2026, term: 4 }, sections: [] } as unknown as Parameters<typeof createMinutes>[0];
   const bytes = Buffer.from("scan");

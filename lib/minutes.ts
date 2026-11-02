@@ -597,6 +597,24 @@ export interface Signatory {
   };
 }
 
+/**
+ * Who is recording paper signatures, which decides WHOSE they may record.
+ * 🔴 Carl: only a minutes admin or the Principal on this signing list may tick
+ * other people; any other signatory ticks only themselves. One rule for the
+ * screen and the server.
+ */
+export function paperTickerRole(
+  manages: boolean,
+  signatories: Pick<Signatory, "email" | "role">[],
+  email: string
+): "minutes admin" | "principal" | "signatory" | null {
+  if (manages) return "minutes admin";
+  const me = email.trim().toLowerCase();
+  const mine = signatories.find((s) => s.email.trim().toLowerCase() === me);
+  if (!mine) return null;
+  return mine.role === "principal" ? "principal" : "signatory";
+}
+
 /** Signing is sequential in the sense that everyone must sign before the
  *  minutes close, but NOT in a fixed order: waiting for the Chair while the
  *  Principal is available just delays the record. */
