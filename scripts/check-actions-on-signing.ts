@@ -3,7 +3,7 @@
 //   npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-actions-on-signing.ts
 import assert from "node:assert/strict";
 import { createMinutes, updateMinutes, getMinutes } from "../lib/minutesData";
-import { createActionItem, getActionItemById } from "../lib/actionItemData";
+import { createActionItem, getActionItemById, updateActionItem } from "../lib/actionItemData";
 import { savePeople } from "../lib/peopleData";
 import { heldForSigning, notifyAssignees, notifyRemoved } from "../lib/actionItemNotify";
 import { tellAssigneesAtSigning } from "../lib/minutesDistribution";
@@ -37,7 +37,16 @@ async function main() {
   assert.equal(await heldForSigning(a1), true);
   assert.equal(await notifyAssignees(a1), 0);
   assert.equal(sent.length, 0);
-  assert.equal((await getActionItemById(a1.id))?.notifiedIds, undefined);
+  assert.deepEqual((await getActionItemById(a1.id))?.notifiedIds, [], "a new action starts with nobody told");
+
+  // A scan with only some signatures does NOT release the hold.
+  await updateMinutes(m.id, { signedCopy: { filename: "s.pdf", contentType: "application/pdf", size: 1, uploadedAt: "", uploadedBy: "", documentHash: "" } } as never);
+  assert.equal(await heldForSigning(a1), true);
+
+  // An action from BEFORE this change (no notifiedIds) was emailed at assignment:
+  // its assignees count as told, so signing does not email them again.
+  const legacy = await createActionItem({ ...base("Old one", ["p-graham"]) });
+  await updateActionItem(legacy.id, () => ({ notifiedIds: undefined }));
 
   // Deleting a held action tells nobody (nobody was told it existed).
   assert.equal(await notifyRemoved((await getActionItemById(a1.id))!, "Carl"), 0);

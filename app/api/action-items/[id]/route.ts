@@ -94,15 +94,14 @@ export async function DELETE(
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
-  // As it was, for the "removed" email to the people who had been told.
-  const before = await getActionItemById(id);
-  const ok = await deleteActionItem(id);
-  if (!ok) {
+  // The item as the delete removed it, for the "removed" email.
+  const before = await deleteActionItem(id);
+  if (!before) {
     return NextResponse.json({ error: "Action not found" }, { status: 404 });
   }
   // Carl: if adding it sent an email, deleting it sends a follow-up. Only to
   // those actually told; never fails the delete that has already happened.
   const by = `${session.name} ${session.surname}`.trim() || session.email;
-  const told = before ? await notifyRemoved(before, by).catch(() => 0) : 0;
+  const told = await notifyRemoved(before, by).catch(() => 0);
   return NextResponse.json({ success: true, told });
 }

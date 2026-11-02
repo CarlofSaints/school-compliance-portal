@@ -2,7 +2,7 @@ import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
 import { canDistribute, formatPeriod, meetingWhen } from "./minutes";
 import { getActionItems } from "./actionItemData";
-import { isClosed, type ActionItem } from "./actionItems";
+import { isClosed, toldIds, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
 import { getUsers } from "./userData";
 import { documentHash, shortHash } from "./minutesSigning";
@@ -212,7 +212,7 @@ export async function tellAssigneesAtSigning(record: MinutesRecord, reached: Set
   const pending = new Map<string, ActionItem[]>();
   for (const item of open) {
     for (const pid of item.assigneeIds) {
-      if (item.notifiedIds?.includes(pid)) continue;
+      if (toldIds(item).includes(pid)) continue;
       pending.set(pid, [...(pending.get(pid) ?? []), item]);
     }
   }
@@ -237,7 +237,7 @@ export async function tellAssigneesAtSigning(record: MinutesRecord, reached: Set
     await updateActionItems(
       [...told].map(([id, ids]) => ({
         id,
-        updates: (cur: ActionItem) => ({ notifiedIds: [...new Set([...(cur.notifiedIds ?? []), ...ids])] }),
+        updates: (cur: ActionItem) => ({ notifiedIds: [...new Set([...toldIds(cur), ...ids])] }),
       }))
     );
   }
@@ -296,6 +296,7 @@ export async function distributeSignedMinutes(
     try {
       const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
       return {
+        listed: true,
         byEmail: openActionsByEmail(id, items, people, users),
         // Any address of someone WITH a login: their login email, or the
         // register email of a People entry linked to one.
@@ -307,7 +308,7 @@ export async function distributeSignedMinutes(
       };
     } catch (err) {
       console.error("[minutes distribution] Could not read action items, sending without them:", err);
-      return { byEmail: new Map<string, SignedEmailAction[]>(), logins: new Set<string>() };
+      return { listed: false, byEmail: new Map<string, SignedEmailAction[]>(), logins: new Set<string>() };
     }
   })();
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
@@ -316,7 +317,7 @@ export async function distributeSignedMinutes(
 
   // Built once for the whole list, alongside the action lists. Null means it
   // could not be built, and the minutes go out with their link regardless.
-  const [attachment, { byEmail: actionsByEmail, logins }] = await Promise.all([
+  const [attachment, { byEmail: actionsByEmail, logins, listed }] = await Promise.all([
     signedMinutesAttachment(record),
     actionLists,
   ]);
@@ -366,7 +367,11 @@ export async function distributeSignedMinutes(
 
   // The people with actions from this meeting who were NOT on that list get
   // all their actions in one email of their own. Never fails the send.
-  const reached = new Set([...preview.to, ...preview.cc].map((p) => p.email.trim().toLowerCase()).filter((e) => !failed.includes(e)));
+  const failedSet = new Set(failed.map((e) => e.trim().toLowerCase()));
+  // Only counts as told when the signed email really carried their actions.
+  const reached = listed
+    ? new Set([...preview.to, ...preview.cc].map((p) => p.email.trim().toLowerCase()).filter((e) => !failedSet.has(e)))
+    : new Set<string>();
   await tellAssigneesAtSigning(record, reached).catch((err) =>
     console.error("[minutes] could not tell assignees their actions:", id, err)
   );

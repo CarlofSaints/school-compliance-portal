@@ -191,6 +191,12 @@ export interface ActionUpdate {
  * still says which meeting agreed it. The link is checked when it is drawn, so
  * a dead one becomes plain text rather than a 404.
  */
+/** Who has been told about an action. Absent = an action from before this was
+ *  recorded, when every assignee was emailed the moment they were assigned. */
+export function toldIds(item: Pick<ActionItem, "notifiedIds" | "assigneeIds">): string[] {
+  return item.notifiedIds ?? item.assigneeIds;
+}
+
 export interface FromMinutes {
   minutesId: string;
   minutesTitle: string;

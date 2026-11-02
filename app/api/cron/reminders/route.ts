@@ -245,10 +245,14 @@ async function runForSchool() {
   // Filtered BEFORE the claim, so their schedule is untouched until then.
   const heldCache = new Map<string, boolean>();
   const dueActions: typeof actions = [];
+  let waiting = 0;
   for (const item of actionsDueForChase(actions, now)) {
-    if (await heldForSigning(item, heldCache)) detail.push(`Action ${item.ref}: waiting for the minutes to be signed`);
+    // A failed read must not stop the run: that action waits for the next one.
+    const held = await heldForSigning(item, heldCache).catch(() => true);
+    if (held) waiting++;
     else dueActions.push(item);
   }
+  if (waiting) detail.push(`${waiting} action${waiting === 1 ? "" : "s"} waiting for their minutes to be signed`);
   // Read once for the run. If it fails, each action reads its own and fails
   // (and is retried) on its own below.
   // Minutes access is NOT loaded here: only a meeting action needs it, and it

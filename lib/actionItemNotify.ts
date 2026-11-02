@@ -8,10 +8,10 @@ import {
   updateActionItem,
 } from "./actionItemData";
 import type { ActionItem } from "./actionItemData";
+import { toldIds } from "./actionItems";
 import { resolveActionRecipients, type ActionRecipientContext } from "./actionItemRecipients";
 import { sendActionAssignedEmail, sendActionReminderEmail, sendActionRemovedEmail } from "./email";
 import { getMinutes } from "./minutesData";
-import { canDistribute } from "./minutes";
 
 /**
  * Carl: action emails for a meeting go out only once its minutes are SIGNED,
@@ -24,7 +24,7 @@ export async function heldForSigning(item: Pick<ActionItem, "fromMinutes">, cach
   if (!id) return false;
   if (cache?.has(id)) return cache.get(id)!;
   const rec = await getMinutes(id);
-  const held = !!rec && !canDistribute(rec.status, !!rec.signedCopy);
+  const held = !!rec && rec.status !== "signed" && rec.status !== "archived";
   cache?.set(id, held);
   return held;
 }
@@ -74,12 +74,15 @@ export async function notifyAssignees(
     : item;
   if (scoped.assigneeIds.length === 0) return 0;
   // From minutes not yet signed: told in one email per person at signing.
-  if (await heldForSigning(item)) return 0;
+  // A read that fails holds it too (it is told at signing), never a 500 for
+  // an action that has already been saved.
+  if (await heldForSigning(item).catch(() => true)) return 0;
 
   const { resolved } = await resolveActionRecipients(scoped, ["assignees"]);
   const facts = factsFor(item);
 
   let sent = 0;
+  const told: string[] = [];
   for (const person of resolved) {
     const ok = await sendActionAssignedEmail(
       person.email,
@@ -87,12 +90,15 @@ export async function notifyAssignees(
       item.raisedByName,
       facts
     );
-    if (ok) sent++;
+    if (ok) {
+      sent++;
+      if (person.personId) told.push(person.personId);
+    }
     await pause();
   }
-  if (sent > 0) {
+  if (told.length) {
     await updateActionItem(item.id, (cur) => ({
-      notifiedIds: [...new Set([...(cur.notifiedIds ?? []), ...scoped.assigneeIds])],
+      notifiedIds: [...new Set([...toldIds(cur), ...told])],
     })).catch((err) => console.error("[action-items] told, but could not record it:", item.id, err));
   }
   return sent;
@@ -104,7 +110,7 @@ export async function notifyAssignees(
  * a "removed" email for an action that is still there.
  */
 export async function notifyRemoved(item: ActionItem, removedBy: string): Promise<number> {
-  const told = item.notifiedIds ?? [];
+  const told = toldIds(item);
   if (told.length === 0 || isClosed(item)) return 0;
   const { resolved } = await resolveActionRecipients({ ...item, assigneeIds: told, assigneeNames: [] }, ["assignees"]);
   let sent = 0;
