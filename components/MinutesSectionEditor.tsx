@@ -296,6 +296,7 @@ export default function MinutesSectionEditor({
                       : t("What was discussed and decided")
                 }
                 onChange={(doc, body) => update(s.id, { doc, body })}
+                names={people?.map((p) => p.name)}
                 onReady={(ed) => {
                   if (ed) editors.current.set(s.id, ed);
                   else editors.current.delete(s.id);

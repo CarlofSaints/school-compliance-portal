@@ -8,6 +8,7 @@ import Highlight from "@tiptap/extension-highlight";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import Image from "@tiptap/extension-image";
 import { Placeholder } from "@tiptap/extensions";
+import { NameSpellcheck, nameSpellcheckKey, nameWords } from "@/lib/nameSpellcheck";
 import { authFetch } from "@/lib/useAuth";
 import { imageSize } from "@/lib/minutesPaste";
 import { cleanDoc, docToText, stableDoc, textToDoc, imageSrc, FONTS, FONT_SIZES, type RichNode } from "@/lib/richDoc";
@@ -42,6 +43,7 @@ export default function RichTextEditor({
   placeholder,
   onChange,
   onReady,
+  names,
 }: {
   minutesId: string;
   doc?: RichNode;
@@ -50,6 +52,8 @@ export default function RichTextEditor({
   onChange: (doc: RichNode, body: string) => void;
   /** Hands the editor up, so "+ Add to action items" can read the cursor. */
   onReady?: (editor: Editor | null) => void;
+  /** Names on the People register: never marked as misspelt. */
+  names?: string[];
 }) {
   const t = useT();
   const [note, setNote] = useState("");
@@ -61,6 +65,9 @@ export default function RichTextEditor({
   useEffect(() => {
     onChangeRef.current = onChange;
   });
+
+  // The register's name words, read by the spell-check extension on each rebuild.
+  const words = useRef<Set<string>>(new Set());
 
   // The editor, for the paste and drop handlers (set once it exists).
   const editorRef = useRef<Editor | null>(null);
@@ -118,6 +125,8 @@ export default function RichTextEditor({
         },
       }).configure({ inline: false, allowBase64: false }),
       Placeholder.configure({ placeholder: placeholder ?? "" }),
+      // eslint-disable-next-line react-hooks/refs -- read inside the plugin later, never during render
+      NameSpellcheck(() => words.current),
     ],
     content: doc ?? textToDoc(body, minutesId),
     editorProps: {
@@ -162,6 +171,13 @@ export default function RichTextEditor({
     return () => onReady?.(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
+
+  // The names usually arrive after the editor: re-mark the text when they do.
+  const namesKey = (names ?? []).join("|");
+  useEffect(() => {
+    words.current = nameWords(namesKey ? namesKey.split("|") : []);
+    if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(nameSpellcheckKey, true));
+  }, [namesKey, editor]);
 
   // A change from outside (a backup restored, the newer copy loaded after a
   // save conflict) is put into the editor; its own typing coming back is not.
