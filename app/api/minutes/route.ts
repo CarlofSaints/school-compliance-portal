@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isMeetingTypeId } from "@/lib/meetingTypesData";
 import { readableMinutes } from "@/lib/minutesAccess";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import {
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const title = String(form.get("title") || "").trim();
     const body = String(form.get("body") || "sgb") as MinutesRecord["body"];
+    if (!(await isMeetingTypeId(body))) return NextResponse.json({ error: "Choose a meeting type from the list." }, { status: 400 });
 
     let period: MeetingPeriod;
     try {

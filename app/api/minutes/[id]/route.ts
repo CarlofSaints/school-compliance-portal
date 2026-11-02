@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isMeetingTypeId } from "@/lib/meetingTypesData";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import {
@@ -103,7 +104,10 @@ export async function PATCH(
       }
       updates.title = title;
     }
-    if (body.body !== undefined) updates.body = body.body;
+    if (body.body !== undefined) {
+      if (!(await isMeetingTypeId(body.body))) return NextResponse.json({ error: "Choose a meeting type from the list." }, { status: 400 });
+      updates.body = body.body;
+    }
     if (body.period !== undefined) {
       const problem = checkPeriod(body.period);
       if (problem) return NextResponse.json({ error: problem }, { status: 400 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMeetingTypes } from "@/lib/useMeetingTypes";
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -18,7 +19,6 @@ import {
   sectionNumbers,
   signingProgress,
   signatureMatchesDocument,
-  MEETING_BODY_LABELS,
   SIGNATORY_ROLE_LABELS,
   type MeetingBody,
   type MeetingPeriod,
@@ -65,6 +65,7 @@ function when(iso: string): string {
 
 export default function SignMinutesPage() {
   const t = useT();
+  const mt = useMeetingTypes();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { session, loading } = useAuth();
@@ -152,7 +153,7 @@ export default function SignMinutesPage() {
             {branding.fullName}
           </h1>
           <p className="text-gray-600 mt-2 font-medium">
-            {t("Minutes of the {body} meeting", { body: t(MEETING_BODY_LABELS[record.body]) })}
+            {t("Minutes of the {body} meeting", { body: t(mt.label(record.body)) })}
           </p>
           {/* 🔴 The date is part of what is signed, so the signer must see it. */}
           <p className="text-gray-500 text-sm">

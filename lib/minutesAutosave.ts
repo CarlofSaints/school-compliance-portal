@@ -245,7 +245,8 @@ export function plainText(d: MinutesText, tr: (s: string) => string): string {
     return lines.filter(Boolean).join("\n");
   });
   const held = typeof d.meetingDate === "string" && d.meetingDate ? formatMeetingDate(d.meetingDate) : "";
-  const heading = [meeting ? tr(meeting) : d.body, held, period].filter(Boolean).join(" · ");
+  // A school's own meeting type has no built-in name here; its id means nothing to a reader.
+  const heading = [meeting ? tr(meeting) : "", held, period].filter(Boolean).join(" · ");
   return [d.title, heading, "", sections.join("\n\n")].join("\n");
 }
 

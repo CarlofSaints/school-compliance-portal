@@ -4,9 +4,13 @@ import { tk } from "./i18n/translate";
 // No storage, no @vercel/blob, no next/headers, so a client component can
 // import it. Same split as lib/actionItems.ts vs lib/actionItemData.ts.
 
-export type MeetingBody = "sgb" | "fincom" | "other";
+/** A meeting type id: "sgb", "fincom", "other" or one the school added
+ *  (lib/meetingTypes.ts). The school names them; this is never shown. */
+export type MeetingBody = string;
 
-export const MEETING_BODY_LABELS: Record<MeetingBody, string> = {
+/** The BUILT-IN names only. A screen shows the school's own name through
+ *  meetingTypeLabel, since the school may have renamed one or added its own. */
+export const MEETING_BODY_LABELS: Record<string, string> = {
   sgb: tk("SGB / Board"),
   fincom: tk("FINCOM"),
   other: tk("Other"),

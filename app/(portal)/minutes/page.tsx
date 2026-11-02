@@ -1,5 +1,6 @@
 "use client";
 
+import { useMeetingTypes } from "@/lib/useMeetingTypes";
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -17,7 +18,6 @@ import {
   meetingDateOutsidePeriod,
   isLocked,
   periodSortKey,
-  MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
   type MeetingBody,
   type MeetingPeriod,
@@ -49,6 +49,7 @@ const STATUS_TONE: Record<MinutesStatus, string> = {
 
 export default function MinutesPage() {
   const t = useT();
+  const mt = useMeetingTypes();
   const { session, loading } = useAuth();
   const router = useRouter();
   const canManage =
@@ -185,7 +186,7 @@ export default function MinutesPage() {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-600">
-                  {t(MEETING_BODY_LABELS[m.body])}
+                  {t(mt.label(m.body))}
                 </td>
                 <td className="px-4 py-3 text-gray-600">
                   {m.meetingDate ? (
@@ -277,6 +278,7 @@ function AddMinutes({
   onError: (msg: string) => void;
 }) {
   const t = useT();
+  const mt = useMeetingTypes();
   const now = new Date();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState<MeetingBody>("sgb");
@@ -341,7 +343,7 @@ function AddMinutes({
             onChange={(e) => setBody(e.target.value as MeetingBody)}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
           >
-            {Object.entries(MEETING_BODY_LABELS).map(([k, v]) => (
+            {mt.types.map(({ id: k, label: v }) => (
               <option key={k} value={k}>
                 {t(v)}
               </option>

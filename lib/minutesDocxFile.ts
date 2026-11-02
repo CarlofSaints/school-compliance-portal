@@ -1,6 +1,8 @@
 import { readFile } from "fs/promises";
 import path from "path";
 import { readSignatureImage } from "./minutesData";
+import { getMeetingTypes } from "./meetingTypesData";
+import { meetingTypeLabel } from "./meetingTypes";
 import type { MinutesRecord } from "./minutesData";
 import { buildMinutesDocx } from "./minutesDocx";
 import { resolveBranding, readLogo } from "./brandingData";
@@ -51,7 +53,8 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
     marks.filter((m): m is NonNullable<typeof m> => m !== null)
   );
 
-  return buildMinutesDocx(record, branding, crest, signatures);
+  const types = await getMeetingTypes();
+  return buildMinutesDocx(record, branding, crest, signatures, meetingTypeLabel(types, record.body));
 }
 
 /** The school's crest bytes for a Word file, or null. Also the policy letterhead (lib/policyCompile.ts). */
