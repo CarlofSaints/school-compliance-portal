@@ -1951,9 +1951,7 @@
   "Could not reach Jono. Check your connection and try again.": "Ga go a kgonega go fihlelela Jono. Lekola kgokagano ya gago gomme o leke gape.",
   "Where are we with the school hall project?": "Re kae ka protšeke ya holo ya sekolo?",
   "Can I suspend a learner for hitting another child?": "Na nka emiša moithuti ka go betha ngwana yo mongwe?",
-  "What did the last SGB or board meeting decide?": "Kopano ya mafelelo ya SGB goba ya boto e phethile eng?",
   "Ask Jono": "Botšiša Jono",
-  "About your minutes, actions and projects, or school law": "Mabapi le metsotso ya gago, ditiro le diprotšeke, goba molao wa sekolo",
   "New chat": "Poledišano ye mpsha",
   "Hi, I'm Jono. Ask me anything about your school's meetings, actions and projects, or about the rules schools must follow. For example:": "Thobela, ke nna Jono. Mpotšiše selo le ge e le sefe mabapi le dikopano tša sekolo sa gago, ditiro le diprotšeke, goba mabapi le melao yeo dikolo di swanetšego go e latela. Mohlala:",
   "Jono is reading your records...": "Jono o bala direkhoto tša gago...",
@@ -2226,5 +2224,7 @@
   "Tag person": "Swaya motho",
   "nobody tagged": "ga go yo a swailwego",
   "Select the words first, then pick the person.": "Kgetha mantšu pele, ke moka o kgethe motho.",
-  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e šetše e swailwe ka {name}. Tloša leswao leo pele."
+  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e šetše e swailwe ka {name}. Tloša leswao leo pele.",
+  "How do I create a new minutes template?": "Ke dira bjang thempleite ye mpsha ya metsotso?",
+  "About your minutes, actions and projects, school law, or how to use the portal": "Mabapi le metsotso ya gago, ditiro le diprojeke, molao wa sekolo, goba ka mokgwa wa go šomiša portal"
 }

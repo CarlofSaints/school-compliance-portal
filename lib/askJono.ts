@@ -111,6 +111,8 @@ export async function recordsFor(session: SessionPayload): Promise<string> {
   return parts.join("\n\n");
 }
 
+import { portalHowTo } from "./jonoHowTo";
+
 export class JonoError extends Error {}
 
 export async function askJono(session: SessionPayload, turns: ChatTurn[], locale: Locale): Promise<string> {
@@ -133,8 +135,16 @@ export async function askJono(session: SessionPayload, turns: ChatTurn[], locale
           "Two kinds of question come to you:\n" +
           "1. About this school's own business (meetings, decisions, projects, actions, spending). Answer ONLY from the school records below. Say which meeting and date, or which action reference (e.g. A-014), your answer comes from. Pull together everything the records say on a topic in date order, newest last, and say clearly what is still open. If the records do not cover it, say so plainly; never guess or invent a decision.\n" +
           "2. About the law and rules for South African schools (discipline, suspension and expulsion, admissions, fees, SGB or board of governors powers, safety, employment). Answer from the South African Schools Act 84 of 1996 as amended by the BELA Act 32 of 2024, the Children's Act, the Employment of Educators Act, the Guidelines for the Consideration of Governing Bodies in Adopting a Code of Conduct for Learners, and provincial regulations, citing the Act and section. Give the practical steps the school must follow (e.g. a fair hearing before a suspension). Where the answer depends on a provincial regulation or circular you are not sure of, say so and tell them to check with the district office. For a serious or urgent matter (a child hurt, abuse, a criminal act), give the immediate duties first (e.g. the duty to report abuse under s110 of the Children's Act) and add that this is guidance, not legal advice.\n" +
+          "3. How to do something in this portal (\"How do I tag users?\", \"How do I create a minutes template?\"). Answer from the PORTAL GUIDE below: numbered steps naming the exact menu, tab and button, the same words the screen shows. Where the guide gives a video for that page, end with the link as a Markdown link, e.g. [Watch how](/tutorials/tags.mp4). If a step needs a permission they may not have, say an administrator can grant it under Admin, Roles. If the guide does not cover it, say so and suggest the Feedback page; never invent a button.\n" +
           "Public schools have an SGB; independent schools have a board of governors, so say 'SGB or board of governors' when speaking generally. Be concise: short paragraphs, '- ' bullets, '## ' for a heading only in a long answer. No em dashes. " +
           `Reply in ${language} unless the person writes in another language, then use theirs.`,
+      },
+      {
+        type: "text",
+        // The same for every school and question: cached with the instructions.
+        text: `PORTAL GUIDE (how the portal works):
+
+${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "SGB", "")}`,
       },
       {
         type: "text",
