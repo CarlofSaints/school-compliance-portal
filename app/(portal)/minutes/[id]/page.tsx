@@ -978,8 +978,21 @@ export default function MinutesDetailPage() {
       )}
 
       {/* Carl asked for this note above the sections while they can be edited. */}
+      {/* Carl: the send buttons sit below every section, easy to miss. */}
       {textEditable && (
-        <p className="mt-6 mb-2 text-sm text-gray-500">
+        <p className="mt-6 text-sm font-bold text-dark">
+          {t("Scroll to the bottom to send out for checking or send out for signing.")}{" "}
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" })}
+            className="font-bold text-primary underline"
+          >
+            {t("Take me there")}
+          </button>
+        </p>
+      )}
+      {textEditable && (
+        <p className="mt-2 mb-2 text-sm text-gray-500">
           {t("Minutes save as you type so you don't lose anything. Just make sure you have internet access.")}
         </p>
       )}

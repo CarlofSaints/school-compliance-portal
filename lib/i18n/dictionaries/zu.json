@@ -1951,9 +1951,7 @@
   "Could not reach Jono. Check your connection and try again.": "Akukwazekanga ukufinyelela kuJono. Hlola ukuxhumana kwakho bese uzama futhi.",
   "Where are we with the school hall project?": "Sikuphi ngephrojekthi yehholo lesikole?",
   "Can I suspend a learner for hitting another child?": "Ngingamisa yini umfundi ngokushaya enye ingane?",
-  "What did the last SGB or board meeting decide?": "Unqumeni umhlangano wokugcina we-SGB noma webhodi?",
   "Ask Jono": "Buza uJono",
-  "About your minutes, actions and projects, or school law": "Mayelana nemizuzu yakho, imisebenzi namaphrojekthi, noma umthetho wesikole",
   "New chat": "Ingxoxo entsha",
   "Hi, I'm Jono. Ask me anything about your school's meetings, actions and projects, or about the rules schools must follow. For example:": "Sawubona, nginguJono. Ngibuze noma yini mayelana nemihlangano yesikole sakho, imisebenzi namaphrojekthi, noma mayelana nemithetho okufanele izikole ziyilandele. Isibonelo:",
   "Jono is reading your records...": "UJono ufunda amarekhodi akho...",
@@ -2228,5 +2226,9 @@
   "Select the words first, then pick the person.": "Khetha amagama kuqala, bese ukhetha umuntu.",
   "Part of this is already tagged with {name}. Untag that first.": "Ingxenye yalokhu isivele ithegiwe ngo-{name}. Qala ususe leyo thegi.",
   "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "UJono akakwazi ukuphendula manje: isevisi ye-AI esetshenziswa yileli portal iphelelwe yikhredithi. Lokhu akuwona amakhredithi esikole sakho, ngakho ukuthenga amakhredithi ngeke kukulungise.",
-  "Tell us about it": "Sitshele ngakho"
+  "Tell us about it": "Sitshele ngakho",
+  "How do I create a new minutes template?": "Ngiyenza kanjani ithempulethi entsha yamaminithi?",
+  "About your minutes, actions and projects, school law, or how to use the portal": "Mayelana namaminithi akho, izenzo namaphrojekthi, umthetho wesikole, noma indlela yokusebenzisa iportal",
+  "Scroll to the bottom to send out for checking or send out for signing.": "Skrolela phansi ukuze uthumele ukuze kuhlolwe noma kusayinwe.",
+  "Take me there": "Ngiyise lapho"
 }

@@ -60,7 +60,7 @@ export default function AskJono() {
     setBusy(false);
   };
 
-  const examples = [t("Where are we with the school hall project?"), t("Can I suspend a learner for hitting another child?"), t("What did the last SGB or board meeting decide?")];
+  const examples = [t("Where are we with the school hall project?"), t("Can I suspend a learner for hitting another child?"), t("How do I create a new minutes template?")];
 
   if (!open) {
     return (
@@ -93,7 +93,7 @@ export default function AskJono() {
               i
             </button>
           </p>
-          <p className="text-xs text-gray-400">{t("About your minutes, actions and projects, or school law")}</p>
+          <p className="text-xs text-gray-400">{t("About your minutes, actions and projects, school law, or how to use the portal")}</p>
         </div>
         <div className="flex items-center gap-3">
           {turns.length > 0 && (
