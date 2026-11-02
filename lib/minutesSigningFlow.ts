@@ -3,7 +3,7 @@ import type { MinutesRecord } from "./minutesData";
 import type { Signatory } from "./minutes";
 import { minutesWhenLabel } from "./minutes";
 import { signatoryRoleForPosition } from "./positions";
-import { resolveAudience } from "./minutesRecipients";
+import { resolveStage } from "./minutesRecipients";
 import { getPeople } from "./peopleData";
 import { mintSigningCode, hashSigningCode } from "./minutesSigning";
 import { sendMinutesSigningCodeEmail } from "./email";
@@ -44,10 +44,10 @@ export async function openSigning(
   const record = await getMinutes(id);
   if (!record) throw new SigningSetupError("Minutes not found.");
 
-  const audience = await resolveAudience("signing");
+  const audience = await resolveStage("signing", record.body);
   if (audience.empty) {
     throw new SigningSetupError(
-      'Nobody is set up to sign minutes. Set the tag for "Ready to sign" under Admin, Minutes Admin, and try again.'
+      'Nobody is set up to sign this kind of minutes. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set "Ready to sign", then try again.'
     );
   }
 

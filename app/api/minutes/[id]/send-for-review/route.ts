@@ -8,7 +8,7 @@ import {
   MINUTES_STATUS_LABELS,
   type MinutesReviewer,
 } from "@/lib/minutes";
-import { resolveAudience } from "@/lib/minutesRecipients";
+import { resolveStage } from "@/lib/minutesRecipients";
 import { sendMinutesForReviewEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
@@ -59,12 +59,12 @@ export async function POST(
 
   // Resolved at send time, never stored: somebody added to the tag this morning
   // should be asked this afternoon without anybody maintaining a second list.
-  const audience = await resolveAudience("draft");
+  const audience = await resolveStage("draft", record.body);
   if (audience.empty) {
     return NextResponse.json(
       {
         error:
-          "Nobody is set up to check draft minutes. Set the tag for \"Draft, out for checking\" under Admin, Minutes Admin, and try again.",
+          "Nobody is set up to check this kind of minutes. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set \"Draft, out for checking\", then try again.",
       },
       { status: 400 }
     );

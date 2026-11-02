@@ -485,6 +485,51 @@ export const AUDIENCE_HELP: Record<MinutesAudience, string> = {
   fincom: "Everyone who should receive signed FINCOM minutes.",
 };
 
+// ---------------------------------------------------------------------------
+// WHO RECEIVES WHAT, PER MEETING TYPE (Admin, Minutes Admin, Who receives minutes).
+//
+// Carl: "select the meeting type and then Draft out for checking, Ready to
+// sign, signed and final... i dont know how each meeting type differs".
+// Three stages per type. A type nobody has set up yet follows the old
+// school-wide lists (draft / signing, and SGB or FINCOM for the final copy),
+// so nothing that sends today changes until somebody saves a type.
+// ---------------------------------------------------------------------------
+
+export type MinutesStage = "draft" | "signing" | "final";
+
+export const MINUTES_STAGES: { key: MinutesStage; label: string; help: string; hasCc: boolean }[] = [
+  { key: "draft", label: tk("Draft, out for checking"), help: tk("Who checks a draft before it goes for signing. Usually the Principal and the Chairperson."), hasCc: true },
+  // Signing codes go to the To list only: a copied person cannot sign.
+  { key: "signing", label: tk("Ready to sign"), help: tk("Who signs. Each person gets their own code by email and a signature space."), hasCc: false },
+  { key: "final", label: tk("Signed and final"), help: tk("Who receives the signed minutes, with the Word file attached, once everyone has signed."), hasCc: true },
+];
+
+export interface StageTags {
+  to?: string;
+  cc?: string;
+}
+
+/** What is stored in minutes-recipients.json. `to`/`cc` are the old
+ *  school-wide lists; `byType` is what a school saves per meeting type. */
+export interface MinutesRecipientSettings {
+  to: Partial<Record<MinutesAudience, string>>;
+  cc: Partial<Record<MinutesAudience, string>>;
+  byType?: Record<string, Partial<Record<MinutesStage, StageTags>>>;
+}
+
+/** The tags in force for one type at one stage, and whether they are the
+ *  type's own or still the old school-wide setting. */
+export function stageTags(
+  s: MinutesRecipientSettings,
+  body: MeetingBody,
+  stage: MinutesStage
+): StageTags & { own: boolean } {
+  const own = s.byType?.[body]?.[stage];
+  if (own) return { to: own.to || undefined, cc: stage === "signing" ? undefined : own.cc || undefined, own: true };
+  const legacy: MinutesAudience = stage === "final" ? audienceForBody(body) : stage;
+  return { to: s.to?.[legacy], cc: stage === "signing" ? undefined : s.cc?.[legacy], own: false };
+}
+
 /**
  * The distribution audience for a meeting body.
  *

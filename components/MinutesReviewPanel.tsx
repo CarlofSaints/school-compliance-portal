@@ -25,6 +25,8 @@ import {
 
 interface Props {
   id: string;
+  /** The meeting type, which decides who each list is. */
+  body: string;
   status: MinutesStatus;
   draftNumber: number;
   reviewers?: MinutesReviewer[];
@@ -41,6 +43,7 @@ interface Props {
 
 export default function MinutesReviewPanel({
   id,
+  body,
   status,
   draftNumber,
   reviewers = [],
@@ -139,7 +142,7 @@ export default function MinutesReviewPanel({
               ? t("Somebody asked for changes. Once you have made them, send it out again as the next draft.")
               : t("Send this to the people who check minutes. They can approve it, or send it back with a note.")}
           </p>
-          {canManage && <AudiencePreview audience="draft" />}
+          {canManage && <AudiencePreview stage="draft" body={body} />}
           {canManage && (
             <button
               onClick={send}

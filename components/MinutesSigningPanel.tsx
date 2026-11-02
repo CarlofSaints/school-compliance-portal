@@ -27,6 +27,8 @@ import {
 
 interface Props {
   id: string;
+  /** The meeting type, which decides who each list is. */
+  body: string;
   status: MinutesStatus;
   signatories: Signatory[];
   /** A scan of a page signed by hand, where the school went that route. */
@@ -56,6 +58,7 @@ function when(iso: string): string {
 
 export default function MinutesSigningPanel({
   id,
+  body,
   status,
   signatories,
   signedCopy,
@@ -182,7 +185,7 @@ export default function MinutesSigningPanel({
             {t("Each signatory is emailed their own code. Typing it is what signs the minutes, so nobody can sign on somebody else's behalf.")}
           </p>
           {/* Signing codes go to the To list only, so no "Copied" line. */}
-          {canManage && <AudiencePreview audience="signing" showCc={false} />}
+          {canManage && <AudiencePreview stage="signing" body={body} showCc={false} />}
           {canManage && (
             <button
               onClick={openSigning}
