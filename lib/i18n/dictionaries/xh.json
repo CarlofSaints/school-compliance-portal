@@ -2160,5 +2160,20 @@
   "Ask someone who may spend the school's credits to translate it.": "Cela umntu ovumelekileyo ukusebenzisa iikhredithi zesikolo ukuba akuguqulele.",
   "Translating a Campus lesson or test written by someone at your school": "Ukuguqulela isifundo okanye uvavanyo lwe-Campus olubhalwe ngumntu esikolweni sakho",
   "Campus courses from the library or built with AI, in every language": "Iikhosi ze-Campus ezivela kwithala okanye ezakhiwe nge-AI, ngazo zonke iilwimi",
-  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Izifundo novavanyo ezi-{n} zisaguqulelwa kulwimi lwakho. Zivela ngesiNgesi de zigqitywe, kwaye eli phepha lizihlaziya ngokwalo."
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Izifundo novavanyo ezi-{n} zisaguqulelwa kulwimi lwakho. Zivela ngesiNgesi de zigqitywe, kwaye eli phepha lizihlaziya ngokwalo.",
+  "Signed copy kept with the minutes.": "Ikopi esayiniweyo igcinwe nemizuzu.",
+  "Recorded. Everyone has signed, so these minutes are closed and on their way to the governing body.": "Kurekhodiwe. Wonke umntu utyikityile, ngoko le mizuzu ivaliwe kwaye isendleleni eya kwibhunga elilawulayo.",
+  "Recorded. Still waiting on {names}.": "Kurekhodiwe. Kusalindwe u-{names}.",
+  "Have the signed paper copy? Upload it here to keep it with the minutes. Use Signed on paper above to record who signed it.": "Unayo ikopi yephepha esayiniweyo? Yilayishe apha ukuze igcinwe nemizuzu. Sebenzisa u-Isayinwe ephepheni ngasentla ukurekhoda ukuba ngubani oyityikitileyo.",
+  "Signed on paper, recorded by {name} {when}": "Isayinwe ephepheni, irekhodwe ngu-{name} {when}",
+  "No signed paper copy uploaded yet, so the paper signatures rest on the word of whoever ticked them.": "Akukalayishwa kopi yephepha esayiniweyo, ngoko imityikityo yephepha ixhomekeke kwilizwi lalowo uyiphawuleyo.",
+  "Upload it now": "Yilayishe ngoku",
+  "Signed on paper": "Isayinwe ephepheni",
+  "Who signed the paper copy?": "Ngubani otyikitye ikopi yephepha?",
+  "Each person ticked is emailed to say they were recorded as signing, so a wrong tick gets caught.": "Umntu ngamnye ophawulweyo uthunyelelwa i-imeyile ethi urekhodwe njengotyikitileyo, ukuze uphawu olungalunganga lubonwe.",
+  "Record paper signatures": "Rekhoda imityikityo yephepha",
+  "Would you like to upload the signed minutes to keep them with the record?": "Ungathanda ukulayisha imizuzu esayiniweyo ukuze igcinwe nerekhodi?",
+  "Yes, upload": "Ewe, layisha",
+  "Not now": "Hayi ngoku",
+  "The signed minutes: a scan, a PDF or a photo of the signed pages": "Imizuzu esayiniweyo: iskena, i-PDF okanye ifoto yamaphepha asayiniweyo"
 }

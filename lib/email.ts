@@ -209,6 +209,24 @@ export async function sendTermEndedEmail(to: string, name: string, endDate: stri
   return sendEmail(b.fromEmail, to, `${b.shortName}: the term has ended, members locked out`, emailShell(b, "The term has ended", body), b.replyTo, undefined, undefined, { kind: "term.ended" });
 }
 
+/** To a signatory somebody else recorded as signing the PRINTED minutes, so a wrong tick is caught. */
+export async function sendPaperSignatureNoticeEmail(
+  to: string,
+  name: string,
+  minutesTitle: string,
+  minutesId: string,
+  markedBy: string
+): Promise<boolean> {
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${esc(markedBy)} recorded that you signed the printed copy of <strong>${esc(minutesTitle)}</strong>. You do not need to sign them in the portal as well.</p>
+    <p style="color:#333;">If you did not sign them, reply to this email or tell the secretary, so the record can be put right.</p>
+    ${button(`${siteOf(b)}/minutes/${encodeURIComponent(minutesId)}`, `Open the minutes`, b.colors.primary)}
+  `;
+  return sendEmail(b.fromEmail, to, `${b.shortName}: you were recorded as signing "${minutesTitle}" on paper`, emailShell(b, "Signed on paper", body), b.replyTo, undefined, undefined, { kind: "minutes.signed_on_paper" });
+}
+
 /**
  * Campus: training sent to somebody (or a reminder). `path` is a page on this
  * school's site (/campus/... for portal users, /s/<token> for people without

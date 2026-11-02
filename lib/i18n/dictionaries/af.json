@@ -2160,5 +2160,20 @@
   "Ask someone who may spend the school's credits to translate it.": "Vra iemand wat die skool se krediete mag spandeer om dit te vertaal.",
   "Translating a Campus lesson or test written by someone at your school": "Om 'n Campus-les of -toets te vertaal wat deur iemand by u skool geskryf is",
   "Campus courses from the library or built with AI, in every language": "Campus-kursusse uit die biblioteek of met KI gebou, in elke taal",
-  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "{n} lesse en toetse word nog in u taal vertaal. Hulle verskyn in Engels totdat hulle klaar is, en hierdie bladsy werk self by."
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "{n} lesse en toetse word nog in u taal vertaal. Hulle verskyn in Engels totdat hulle klaar is, en hierdie bladsy werk self by.",
+  "Signed copy kept with the minutes.": "Ondertekende afskrif saam met die notule bewaar.",
+  "Recorded. Everyone has signed, so these minutes are closed and on their way to the governing body.": "Aangeteken. Almal het onderteken, dus is hierdie notule gesluit en op pad na die beheerliggaam.",
+  "Recorded. Still waiting on {names}.": "Aangeteken. Wag nog op {names}.",
+  "Have the signed paper copy? Upload it here to keep it with the minutes. Use Signed on paper above to record who signed it.": "Het u die ondertekende papierafskrif? Laai dit hier op om dit saam met die notule te bewaar. Gebruik Op papier onderteken hierbo om aan te teken wie dit onderteken het.",
+  "Signed on paper, recorded by {name} {when}": "Op papier onderteken, aangeteken deur {name} {when}",
+  "No signed paper copy uploaded yet, so the paper signatures rest on the word of whoever ticked them.": "Nog geen ondertekende papierafskrif opgelaai nie, dus berus die papierhandtekeninge op die woord van wie hulle afgemerk het.",
+  "Upload it now": "Laai dit nou op",
+  "Signed on paper": "Op papier onderteken",
+  "Who signed the paper copy?": "Wie het die papierafskrif onderteken?",
+  "Each person ticked is emailed to say they were recorded as signing, so a wrong tick gets caught.": "Elke persoon wat afgemerk word, kry 'n e-pos dat hulle as ondertekenaar aangeteken is, sodat 'n verkeerde merkie raakgesien word.",
+  "Record paper signatures": "Teken papierhandtekeninge aan",
+  "Would you like to upload the signed minutes to keep them with the record?": "Wil u die ondertekende notule oplaai om dit saam met die rekord te bewaar?",
+  "Yes, upload": "Ja, laai op",
+  "Not now": "Nie nou nie",
+  "The signed minutes: a scan, a PDF or a photo of the signed pages": "Die ondertekende notule: 'n skandering, 'n PDF of 'n foto van die ondertekende bladsye"
 }

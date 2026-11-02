@@ -2160,5 +2160,20 @@
   "Ask someone who may spend the school's credits to translate it.": "Kopa mongwe yo o letleletsweng go dirisa dikhrediti tsa sekolo gore a se ranole.",
   "Translating a Campus lesson or test written by someone at your school": "Go ranola thuto kgotsa teko ya Campus e e kwadilweng ke mongwe kwa sekolong sa gago",
   "Campus courses from the library or built with AI, in every language": "Dithuto tsa Campus go tswa mo bobolokelong kgotsa tse di agilweng ka AI, ka dipuo tsotlhe",
-  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Dithuto le diteko di le {n} di sa ntse di ranolwa go puo ya gago. Di bonala ka Seesimane go fitlha di fela, mme tsebe e e a itšhwafatsa."
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Dithuto le diteko di le {n} di sa ntse di ranolwa go puo ya gago. Di bonala ka Seesimane go fitlha di fela, mme tsebe e e a itšhwafatsa.",
+  "Signed copy kept with the minutes.": "Khopi e e saenilweng e bolokilwe le metsotso.",
+  "Recorded. Everyone has signed, so these minutes are closed and on their way to the governing body.": "Go kwadilwe. Botlhe ba saenile, ka jalo metsotso e e tswetswe mme e mo tseleng ya go ya kwa lekgotleng la taolo.",
+  "Recorded. Still waiting on {names}.": "Go kwadilwe. Go sa ntse go emetswe {names}.",
+  "Have the signed paper copy? Upload it here to keep it with the minutes. Use Signed on paper above to record who signed it.": "A o na le khopi ya pampiri e e saenilweng? E tsenye fano go e boloka le metsotso. Dirisa E saenilwe mo pampiring fa godimo go kwala gore ke mang yo o e saenileng.",
+  "Signed on paper, recorded by {name} {when}": "E saenilwe mo pampiring, e kwadilwe ke {name} {when}",
+  "No signed paper copy uploaded yet, so the paper signatures rest on the word of whoever ticked them.": "Ga go ise go tsenngwe khopi ya pampiri e e saenilweng, ka jalo disaeno tsa pampiri di ikaegile ka lefoko la yo o di tshwaileng.",
+  "Upload it now": "E tsenye jaanong",
+  "Signed on paper": "E saenilwe mo pampiring",
+  "Who signed the paper copy?": "Ke mang yo o saenileng khopi ya pampiri?",
+  "Each person ticked is emailed to say they were recorded as signing, so a wrong tick gets caught.": "Motho mongwe le mongwe yo o tshwailweng o romelwa imeile ya gore o kwadilwe jaaka yo o saenileng, gore letshwao le le phoso le bonwe.",
+  "Record paper signatures": "Kwala disaeno tsa pampiri",
+  "Would you like to upload the signed minutes to keep them with the record?": "A o ka rata go tsenya metsotso e e saenilweng go e boloka le rekoto?",
+  "Yes, upload": "Ee, tsenya",
+  "Not now": "Nnyaa jaanong",
+  "The signed minutes: a scan, a PDF or a photo of the signed pages": "Metsotso e e saenilweng: sekene, PDF kgotsa setshwantsho sa ditsebe tse di saenilweng"
 }
