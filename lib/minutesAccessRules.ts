@@ -1,4 +1,4 @@
-import type { MeetingBody, MinutesAudience } from "./minutes";
+import { stageTags, type MeetingBody, type MinutesRecipientSettings } from "./minutes";
 
 // ---------------------------------------------------------------------------
 // Who may READ a set of minutes. PURE, so the admin screen (a client
@@ -41,14 +41,16 @@ export const MINUTES_MANAGE_PERMISSIONS = ["manage_minutes", "manage_users"];
 export function effectiveAccess(
   body: MeetingBody,
   settings: MinutesAccessSettings,
-  distribution: { to: Partial<Record<MinutesAudience, string>>; cc: Partial<Record<MinutesAudience, string>> }
+  distribution: MinutesRecipientSettings
 ): BodyAccess & { isDefault: boolean } {
   const saved = settings[body];
   if (saved && (saved.mode === "everyone" || saved.mode === "tags")) {
     return { mode: saved.mode, tagIds: [...new Set(saved.tagIds || [])], isDefault: false };
   }
   if (body === "fincom") {
-    const tagIds = [distribution.to.fincom, distribution.cc.fincom].filter((t): t is string => !!t);
+    // FINCOM minutes default to whoever receives the signed FINCOM minutes.
+    const f = stageTags(distribution, "fincom", "final");
+    const tagIds = [f.to, f.cc].filter((t): t is string => !!t);
     return { mode: "tags", tagIds: [...new Set(tagIds)], isDefault: true };
   }
   return { mode: "everyone", tagIds: [], isDefault: true };

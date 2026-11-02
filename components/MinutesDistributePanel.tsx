@@ -28,6 +28,7 @@ interface Recipient {
 
 interface Preview {
   audienceLabel: string;
+  typeLabel: string;
   to: Recipient[];
   cc: Recipient[];
   withoutEmail: string[];
@@ -155,24 +156,22 @@ export default function MinutesDistributePanel({
            silently reaches nobody - the same rule the review round and
            signing follow. */
         <p className="text-sm text-gray-500">
-          {t("Nobody is set up to receive {audience}. Set that tag under", {
-            audience: t(preview.audienceLabel).toLowerCase(),
-          })}{" "}
-          <span className="font-medium">{t("Admin, Minutes Admin")}</span>
-          {t(", and this becomes available.")}
+          {t("Nobody is set up to receive the signed {name} minutes. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set Signed and final.", {
+            name: t(preview.typeLabel),
+          })}
         </p>
       ) : (
         <>
           <p className="text-sm text-gray-500 mb-1">
             {preview.cc.length > 0
               ? t("{audience}: {count} — {names}, copying {cc}.", {
-                  audience: t(preview.audienceLabel),
+                  audience: t("{name} minutes", { name: t(preview.typeLabel) }),
                   count,
                   names: nameList(preview.to, t),
                   cc: nameList(preview.cc, t, 2),
                 })
               : t("{audience}: {count} — {names}.", {
-                  audience: t(preview.audienceLabel),
+                  audience: t("{name} minutes", { name: t(preview.typeLabel) }),
                   count,
                   names: nameList(preview.to, t),
                 })}
