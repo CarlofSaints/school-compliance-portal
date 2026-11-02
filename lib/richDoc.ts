@@ -75,6 +75,9 @@ export function cleanFontSize(v: unknown): string | undefined {
 export const imageSrc = (minutesId: string, imageId: string) =>
   `/api/minutes/${encodeURIComponent(minutesId)}/images/${imageId}`;
 
+/** The picture id at the end of an image address. */
+export const imageIdOf = (src: unknown): string | undefined => /([0-9a-f]{64})$/.exec(String(src ?? ""))?.[1];
+
 function imageIdFromSrc(minutesId: string, src: unknown): string | null {
   const m = /^\/api\/minutes\/([^/]+)\/images\/([0-9a-f]{64})$/.exec(String(src ?? ""));
   return m && decodeURIComponent(m[1]) === minutesId ? m[2] : null;
@@ -110,15 +113,25 @@ function cleanMarks(raw: unknown): RichMark[] | undefined {
 export function cleanDoc(raw: unknown, minutesId: string): RichNode | null {
   let nodes = 0;
   let textLen = 0;
+  // 🔴 Over a limit, the WHOLE document is refused rather than saved cut short.
+  let tooBig = false;
   const walk = (n: unknown, depth: number): RichNode | null => {
-    if (!n || typeof n !== "object" || depth > 25 || ++nodes > LIMIT_NODES) return null;
+    if (!n || typeof n !== "object") return null;
+    if (depth > 25 || ++nodes > LIMIT_NODES) {
+      tooBig = true;
+      return null;
+    }
     const node = n as RichNode;
     const kids = () =>
       Array.isArray(node.content) ? node.content.map((c) => walk(c, depth + 1)).filter((c): c is RichNode => !!c) : [];
     switch (node.type) {
       case "text": {
-        const text = String(node.text ?? "").slice(0, LIMIT_TEXT);
-        if (!text || (textLen += text.length) > LIMIT_TEXT) return null;
+        const text = String(node.text ?? "");
+        if (!text) return null;
+        if ((textLen += text.length) > LIMIT_TEXT) {
+          tooBig = true;
+          return null;
+        }
         const marks = cleanMarks(node.marks);
         return marks ? { type: "text", text, marks } : { type: "text", text };
       }
@@ -149,12 +162,16 @@ export function cleanDoc(raw: unknown, minutesId: string): RichNode | null {
     }
   };
   const doc = walk(raw, 0);
-  if (!doc || doc.type !== "doc" || nodes > LIMIT_NODES) return null;
+  if (!doc || doc.type !== "doc" || tooBig) return null;
   return doc;
 }
 
 const textOf = (n: RichNode): string =>
-  n.type === "text" ? n.text ?? "" : n.type === "hardBreak" ? "\n" : (n.content ?? []).map(textOf).join("");
+  n.type === "text"
+    ? n.text ?? ""
+    : n.type === "hardBreak"
+      ? "\n"
+      : (n.content ?? []).map(textOf).join((n.content ?? []).some((c) => BLOCKS.has(c.type)) ? "\n" : "");
 
 /**
  * The plain text of a document, in the format every older reader understands
@@ -183,7 +200,7 @@ export function docToText(doc: RichNode | null | undefined): string {
         for (const row of n.content ?? []) lines.push(`| ${(row.content ?? []).map((c) => cellText(textOf(c))).join(" | ")} |`);
         return;
       case "image": {
-        const id = /([0-9a-f]{64})$/.exec(String(n.attrs?.src ?? ""))?.[1];
+        const id = imageIdOf(n.attrs?.src);
         if (id) lines.push(imageLine(id, Number(n.attrs?.width) || 800, Number(n.attrs?.height) || 600));
         return;
       }
@@ -231,7 +248,7 @@ export function docImageIds(doc: RichNode | null | undefined): string[] {
   const out: string[] = [];
   const walk = (n: RichNode) => {
     if (n.type === "image") {
-      const id = /([0-9a-f]{64})$/.exec(String(n.attrs?.src ?? ""))?.[1];
+      const id = imageIdOf(n.attrs?.src);
       if (id) out.push(id);
     }
     (n.content ?? []).forEach(walk);
@@ -240,4 +257,3 @@ export function docImageIds(doc: RichNode | null | undefined): string[] {
   return out;
 }
 
-export const isRichBlock = (t: string) => BLOCKS.has(t);

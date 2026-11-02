@@ -25,6 +25,13 @@ import { actorFrom } from "@/lib/activityActor";
 
 const CAN_MANAGE = ["manage_minutes", "manage_users"];
 
+/** A formatted section over the size limits: refused whole, never saved cut short. */
+class SectionTooBig extends Error {
+  constructor(title: string) {
+    super(`The section "${title || "untitled"}" is too long to save. Split it into two sections.`);
+  }
+}
+
 // One "Edited minutes" log line per person per set of minutes per 5 minutes.
 const EDIT_LOG_WINDOW_MS = 5 * 60_000;
 
@@ -150,7 +157,8 @@ export async function PATCH(
         ) => {
           // 🔴 Formatting from the browser is rebuilt, and the plain text is
           // worked out from it here, never taken from the request alongside it.
-          const doc = s.doc === undefined ? null : cleanDoc(s.doc, id);
+          const doc = s.doc === undefined || s.doc === null ? null : cleanDoc(s.doc, id);
+          if (s.doc && !doc) throw new SectionTooBig(String(s.title || ""));
           return {
           id: String(s.id || crypto.randomUUID()),
           title: String(s.title || "").trim(),
@@ -212,6 +220,9 @@ export async function PATCH(
     const hash = documentHash(saved);
     return NextResponse.json({ ...minutesForClient(saved), documentHash: hash, documentRef: shortHash(hash) });
   } catch (err) {
+    if (err instanceof SectionTooBig) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     if (err instanceof MinutesLockedError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }

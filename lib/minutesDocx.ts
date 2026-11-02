@@ -31,7 +31,7 @@ import {
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
 import { bodyBlocks } from "./minutesBody";
-import type { RichMark, RichNode } from "./richDoc";
+import { imageIdOf, type RichMark, type RichNode } from "./richDoc";
 
 /** Pictures used by the sections, by id, read before the document is built. */
 export type SectionImages = Map<string, Buffer>;
@@ -191,7 +191,7 @@ function richContent(doc: RichNode, width: number, images: SectionImages, size?:
         );
         into.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
       } else if (n.type === "image") {
-        const id = /([0-9a-f]{64})$/.exec(String(n.attrs?.src ?? ""))?.[1];
+        const id = imageIdOf(n.attrs?.src);
         into.push(picture(id ? images.get(id) : undefined, w - indent));
       }
     }

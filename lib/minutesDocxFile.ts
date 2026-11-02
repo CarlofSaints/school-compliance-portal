@@ -4,6 +4,7 @@ import { readSignatureImage } from "./minutesData";
 import { getMeetingTypes } from "./meetingTypesData";
 import { meetingTypeLabel } from "./meetingTypes";
 import { imageIds } from "./minutesBody";
+import { docImageIds } from "./richDoc";
 import { readMinutesImage } from "./minutesImages";
 import type { MinutesRecord } from "./minutesData";
 import { buildMinutesDocx } from "./minutesDocx";
@@ -58,7 +59,8 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
   const types = await getMeetingTypes();
   // Pictures in the sections. One unreadable picture must not lose the file:
   // it prints as "[picture unavailable]" instead.
-  const ids = [...new Set(record.sections.flatMap((s) => imageIds(s.body || "")))];
+  // From the formatted version too: a picture inside a table cell is not in the plain text.
+  const ids = [...new Set(record.sections.flatMap((s) => [...imageIds(s.body || ""), ...docImageIds(s.doc)]))];
   const images = new Map<string, Buffer>();
   await Promise.all(
     ids.map(async (img) => {
