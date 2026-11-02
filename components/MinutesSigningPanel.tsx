@@ -164,7 +164,8 @@ export default function MinutesSigningPanel({
 
   // Same rule as the server: an admin or the Principal ticks anyone unsigned,
   // anyone else on the list only themselves.
-  const ticksOthers = paperTickerRole(canManage, signatories, myEmail) !== "signatory";
+  const role = paperTickerRole(canManage, signatories, myEmail);
+  const ticksOthers = role === "minutes admin" || role === "principal";
   const unsigned = signatories.filter((s) => !s.signedAt && (ticksOthers || s.email === mine?.email));
   const mayRecordPaper = open && (canManage || !!mine) && unsigned.length > 0;
   const anyOnPaper = signatories.some((s) => s.onPaper);

@@ -59,10 +59,6 @@ export async function POST(
     );
   }
 
-  // It sends email, so it shares the per-user email budget.
-  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
-  if (limited) return limited;
-
   const body = await req.json().catch(() => ({}));
   const emails: string[] = Array.isArray(body.emails)
     ? [...new Set((body.emails as unknown[]).filter((e): e is string => typeof e === "string").map(norm))]
@@ -82,13 +78,23 @@ export async function POST(
       entity: "minutes",
       entityId: id,
       summary: `Tried to record other people as signing "${record.title}" on paper, refused (not a minutes admin or the Principal)`,
-      detail: { emails },
+      // Only addresses really on the list, and at most a handful: whatever the
+      // browser sent must not be able to fill the activity log.
+      detail: {
+        emails: emails.filter((e) => record.signatories.some((s) => norm(s.email) === e)).slice(0, 20),
+        sent: emails.length,
+      },
     });
     return NextResponse.json(
       { error: "Only a minutes admin or the Principal can record other people as signing on paper. You can record your own paper signature." },
       { status: 403 }
     );
   }
+
+  // It sends email, so it shares the per-user email budget. After the refusal
+  // above, so a refused attempt does not use it up.
+  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (limited) return limited;
 
   const hash = documentHash(record);
   const now = new Date().toISOString();
@@ -102,6 +108,12 @@ export async function POST(
     updated = await updateMinutes(id, (current) => {
       if (current.status !== "awaiting_signatures") {
         throw new MinutesChangeRefused("These minutes are no longer out for signing.");
+      }
+      // The role again, on the list as saved now: a list rebuilt since the read
+      // above must not leave somebody with power they no longer hold.
+      const roleNow = paperTickerRole(manages, current.signatories, session.email);
+      if (emails.some((e) => e !== me) && roleNow !== "minutes admin" && roleNow !== "principal") {
+        throw new MinutesChangeRefused("Only a minutes admin or the Principal can record other people as signing on paper.");
       }
       const unknown = emails.filter((e) => !current.signatories.some((s) => norm(s.email) === e));
       if (unknown.length) {
