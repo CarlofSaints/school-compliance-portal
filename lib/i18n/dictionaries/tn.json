@@ -2226,5 +2226,7 @@
   "Tag person": "Tshwaya motho",
   "nobody tagged": "ga go ope yo o tshwailweng",
   "Select the words first, then pick the person.": "Tlhopha mafoko pele, morago o tlhophe motho.",
-  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e setse e tshwailwe ka {name}. Tlosa letshwao leo pele."
+  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e setse e tshwailwe ka {name}. Tlosa letshwao leo pele.",
+  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono ga a kgone go araba jaanong: tirelo ya AI e portal e e dirisang e feletswe ke madi. Se ga se dikhrediti tsa sekolo sa gago, ka jalo go reka dikhrediti ga go kitla go se baakanya.",
+  "Tell us about it": "Re bolelele ka yone"
 }

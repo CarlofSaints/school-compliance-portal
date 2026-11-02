@@ -2226,5 +2226,7 @@
   "Tag person": "Thegi umuntu",
   "nobody tagged": "akekho othegiwe",
   "Select the words first, then pick the person.": "Khetha amagama kuqala, bese ukhetha umuntu.",
-  "Part of this is already tagged with {name}. Untag that first.": "Ingxenye yalokhu isivele ithegiwe ngo-{name}. Qala ususe leyo thegi."
+  "Part of this is already tagged with {name}. Untag that first.": "Ingxenye yalokhu isivele ithegiwe ngo-{name}. Qala ususe leyo thegi.",
+  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "UJono akakwazi ukuphendula manje: isevisi ye-AI esetshenziswa yileli portal iphelelwe yikhredithi. Lokhu akuwona amakhredithi esikole sakho, ngakho ukuthenga amakhredithi ngeke kukulungise.",
+  "Tell us about it": "Sitshele ngakho"
 }

@@ -2226,5 +2226,7 @@
   "Tag person": "Swaya motho",
   "nobody tagged": "ga go yo a swailwego",
   "Select the words first, then pick the person.": "Kgetha mantšu pele, ke moka o kgethe motho.",
-  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e šetše e swailwe ka {name}. Tloša leswao leo pele."
+  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e šetše e swailwe ka {name}. Tloša leswao leo pele.",
+  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono a ka se arabe gona bjale: tirelo ya AI yeo portal ye e e šomišago e feletšwe ke tšhelete. Se ga se dikhrediti tša sekolo sa gago, ka gona go reka dikhrediti go ka se se lokiše.",
+  "Tell us about it": "Re botše ka yona"
 }
