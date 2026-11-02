@@ -386,8 +386,11 @@ export async function buildMinutesDocx(
    * signature image could not be read. A missing one falls back to the
    * wording, which still records that they signed.
    */
-  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map()
+  signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map(),
+  /** The school's name for the meeting type (it may have renamed one or added its own). */
+  meetingLabel?: string
 ): Promise<Buffer> {
+  const meeting = meetingLabel ?? MEETING_BODY_LABELS[record.body] ?? record.body;
   // No people lookup: the responsible name was resolved and FROZEN when the
   // template was copied, so this renders the record rather than today's
   // office holders.
@@ -435,7 +438,7 @@ export async function buildMinutesDocx(
       spacing: { after: 320 },
       children: [
         new TextRun({
-          text: `${MEETING_BODY_LABELS[record.body]} meeting minutes`,
+          text: `${meeting} meeting minutes`,
           size: 22,
           color: "666666",
         }),
@@ -627,7 +630,7 @@ export async function buildMinutesDocx(
   const doc = new Document({
     creator: branding.fullName,
     title: record.title,
-    description: `${MEETING_BODY_LABELS[record.body]} minutes, ${formatPeriod(record.period)}`,
+    description: `${meeting} minutes, ${formatPeriod(record.period)}`,
     sections: [
       {
         // Set, not left to docx's default, because DEFAULT_CONTENT_WIDTH is
@@ -660,7 +663,7 @@ export async function buildMinutesDocx(
                 children: [
                   new TextRun({
                     ...FOOTER_RUN,
-                    text: `${branding.fullName}  |  ${MEETING_BODY_LABELS[record.body]} minutes  |  ${minutesWhenLabel(record)}  |  Page `,
+                    text: `${branding.fullName}  |  ${meeting} minutes  |  ${minutesWhenLabel(record)}  |  Page `,
                   }),
                   new TextRun({ ...FOOTER_RUN, children: [PageNumber.CURRENT] }),
                   new TextRun({ ...FOOTER_RUN, text: " of " }),

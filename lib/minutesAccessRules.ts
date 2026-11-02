@@ -36,13 +36,6 @@ export type MinutesAccessSettings = Partial<Record<MeetingBody, BodyAccess>>;
 /** The permissions that manage minutes. Same list as the minutes routes. */
 export const MINUTES_MANAGE_PERMISSIONS = ["manage_minutes", "manage_users"];
 
-export const ACCESS_BODIES: MeetingBody[] = ["sgb", "fincom", "other"];
-
-export const ACCESS_BODY_LABELS: Record<MeetingBody, string> = {
-  sgb: "SGB / Board minutes",
-  fincom: "FINCOM minutes",
-  other: "Other minutes",
-};
 
 /** The access in force for a body: what the school saved, else the default. */
 export function effectiveAccess(

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMeetingTypes } from "@/lib/useMeetingTypes";
 import TranslateContentButton from "@/components/TranslateContentButton";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -57,7 +58,6 @@ import {
   meetingDateOutsidePeriod,
   checkMeetingDate,
   isLocked,
-  MEETING_BODY_LABELS,
   MINUTES_STATUS_LABELS,
   type MeetingBody,
   type MeetingPeriod,
@@ -132,6 +132,7 @@ interface OfferedItem {
 
 export default function MinutesDetailPage() {
   const t = useT();
+  const mt = useMeetingTypes();
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { session, loading } = useAuth();
@@ -749,7 +750,7 @@ export default function MinutesDetailPage() {
         <div>
           <h1 className="text-2xl font-bold text-dark">{record.title}</h1>
           <p className="text-gray-500 mt-1">
-            {t(MEETING_BODY_LABELS[record.body])} ·{" "}
+            {t(mt.label(record.body))} ·{" "}
             {record.meetingDate ? `${formatMeetingDate(record.meetingDate)} · ` : ""}
             {formatPeriod(record.period)} ·{" "}
             {t(MINUTES_STATUS_LABELS[record.status])}
@@ -933,7 +934,7 @@ export default function MinutesDetailPage() {
                 onChange={(e) => patch({ body: e.target.value as MeetingBody })}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
               >
-                {Object.entries(MEETING_BODY_LABELS).map(([k, v]) => (
+                {mt.types.map(({ id: k, label: v }) => (
                   <option key={k} value={k}>
                     {t(v)}
                   </option>

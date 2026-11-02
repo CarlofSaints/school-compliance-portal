@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { authFetch, apiErrorMessage } from "@/lib/useAuth";
-import { ACCESS_BODIES, ACCESS_BODY_LABELS, type BodyAccess } from "@/lib/minutesAccessRules";
+import type { BodyAccess } from "@/lib/minutesAccessRules";
 import type { MeetingBody } from "@/lib/minutes";
+import { BUILT_IN_MEETING_TYPES, type MeetingType } from "@/lib/meetingTypes";
 import { tk } from "@/lib/i18n/translate";
 import { useT } from "@/components/I18nProvider";
 
@@ -20,11 +21,11 @@ interface Shown extends BodyAccess {
   readers: string[];
 }
 
-const DEFAULT_NOTE: Record<MeetingBody, string> = {
-  sgb: tk("Everyone signed in, until you choose otherwise."),
-  fincom: tk("The people on the FINCOM minutes list (Who receives minutes), until you choose otherwise."),
-  other: tk("Everyone signed in, until you choose otherwise."),
-};
+// FINCOM defaults to its own list; every other type, the school's own included, to everyone.
+const defaultNote = (body: MeetingBody) =>
+  body === "fincom"
+    ? tk("The people on the FINCOM minutes list (Who receives minutes), until you choose otherwise.")
+    : tk("Everyone signed in, until you choose otherwise.");
 
 export default function MinutesAccessSettings({
   onSaved,
@@ -35,6 +36,7 @@ export default function MinutesAccessSettings({
 }) {
   const t = useT();
   const [tags, setTags] = useState<{ id: string; name: string }[]>([]);
+  const [types, setTypes] = useState<MeetingType[]>(BUILT_IN_MEETING_TYPES);
   const [access, setAccess] = useState<Partial<Record<MeetingBody, Shown>>>({});
   const [draft, setDraft] = useState<Partial<Record<MeetingBody, BodyAccess>>>({});
   // Only bodies somebody changed are saved; "default" puts one back on its
@@ -66,10 +68,12 @@ export default function MinutesAccessSettings({
       }
       const data = await res.json();
       setTags(data.tags || []);
+      const list: MeetingType[] = data.types || BUILT_IN_MEETING_TYPES;
+      setTypes(list);
       setAccess(data.access || {});
       setDraft(
         Object.fromEntries(
-          ACCESS_BODIES.map((b) => [b, { mode: data.access?.[b]?.mode ?? "everyone", tagIds: data.access?.[b]?.tagIds ?? [] }])
+          list.map(({ id: b }) => [b, { mode: data.access?.[b]?.mode ?? "everyone", tagIds: data.access?.[b]?.tagIds ?? [] }])
         )
       );
       setTouched({});
@@ -136,18 +140,18 @@ export default function MinutesAccessSettings({
         {t("Choose who can read each kind of minutes. Minutes admins can always read everything, and anyone asked to check or sign a set of minutes can always read that set.")}
       </p>
 
-      {ACCESS_BODIES.map((body) => {
+      {types.map(({ id: body, label }) => {
         const d = draft[body] ?? { mode: "everyone", tagIds: [] };
         const shown = access[body];
         const noTags = d.mode === "tags" && d.tagIds.length === 0;
         return (
           <div key={body} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-semibold text-dark">{t(ACCESS_BODY_LABELS[body])}</h3>
+              <h3 className="font-semibold text-dark">{t("{name} minutes", { name: t(label) })}</h3>
               {touched[body] === "default" ? (
                 <span className="text-xs text-amber-700">{t("Goes back to the default when you save.")}</span>
               ) : shown?.isDefault && !touched[body] ? (
-                <span className="text-xs text-gray-400">{t("Default: {note}", { note: t(DEFAULT_NOTE[body]) })}</span>
+                <span className="text-xs text-gray-400">{t("Default: {note}", { note: t(defaultNote(body)) })}</span>
               ) : (
                 <button
                   type="button"

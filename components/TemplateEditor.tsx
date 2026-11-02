@@ -1,11 +1,11 @@
 "use client";
 
+import { useMeetingTypes } from "@/lib/useMeetingTypes";
 import { useState } from "react";
 import { POSITIONS } from "@/lib/positions";
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
 import { useT } from "@/components/I18nProvider";
 import {
-  MEETING_BODY_LABELS,
   isApologies,
   isAttendance,
   rowsFromText,
@@ -64,6 +64,7 @@ export default function TemplateEditor({
   onDelete?: () => void;
 }) {
   const t = useT();
+  const mt = useMeetingTypes();
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Computed from the same helper the Word export uses, so the numbers on
@@ -138,7 +139,7 @@ export default function TemplateEditor({
               className={inputClass}
             >
               <option value="">{t("Any meeting")}</option>
-              {Object.entries(MEETING_BODY_LABELS).map(([k, v]) => (
+              {mt.types.map(({ id: k, label: v }) => (
                 <option key={k} value={k}>
                   {t(v)}
                 </option>

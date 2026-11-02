@@ -31,7 +31,8 @@ const AUDIENCES = [
     label: tk("Signed and final"),
     help: tk("Who is told when a set of minutes has been fully signed."),
   },
-  { key: "sgb", label: tk("All SGB / Board minutes"), help: tk("Everyone who should receive signed SGB / Board minutes.") },
+  // Every meeting type except FINCOM goes to this list, the school's own (AGM...) included.
+  { key: "sgb", label: tk("All SGB / Board minutes"), help: tk("Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.") },
   {
     key: "fincom",
     label: tk("All FINCOM minutes"),

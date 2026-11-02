@@ -7,8 +7,8 @@ import {
   loadRecipientResolver,
 } from "@/lib/minutesAccess";
 import { tagChoices } from "@/lib/minutesRecipients";
+import { getMeetingTypes } from "@/lib/meetingTypesData";
 import {
-  ACCESS_BODIES,
   MINUTES_MANAGE_PERMISSIONS,
   effectiveAccess,
   type MinutesAccessSettings,
@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
   const session = await requireAnyPermission(req, MINUTES_MANAGE_PERMISSIONS);
   if (session instanceof NextResponse) return session;
 
-  const [ctx, tags] = await Promise.all([loadMinutesAccessContext(), tagChoices()]);
+  const [ctx, tags, types] = await Promise.all([loadMinutesAccessContext(), tagChoices(), getMeetingTypes()]);
+  // One card per meeting type the school has, including its own (AGM...).
+  const ACCESS_BODIES = types.map((t) => t.id);
   const resolver = await loadRecipientResolver(ctx);
 
   // Worked out with the SAME rule as the real check, so this list cannot say
@@ -58,7 +60,7 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  return NextResponse.json({ access, tags }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ access, tags, types }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(req: NextRequest) {
@@ -81,6 +83,7 @@ export async function PUT(req: NextRequest) {
   // touched, so changing SGB never freezes FINCOM's default (which follows
   // the FINCOM distribution list) into a fixed copy of today's tags.
   const known = new Set((await tagChoices()).map((t) => t.id));
+  const ACCESS_BODIES = (await getMeetingTypes()).map((t) => t.id);
   const input = (body ?? {}) as Record<string, { mode?: unknown; tagIds?: unknown }>;
   const saved: MinutesAccessSettings = { ...(await getMinutesAccessSettings()) };
   const changed: Record<string, string> = {};

@@ -1,14 +1,15 @@
 "use client";
 
+import { useMeetingTypes } from "@/lib/useMeetingTypes";
 import { useState, useEffect, useCallback } from "react";
 import { useAuth, authFetch } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import TemplateEditor from "@/components/TemplateEditor";
 import MinutesRecipientSettings from "@/components/MinutesRecipientSettings";
 import MinutesAccessSettings from "@/components/MinutesAccessSettings";
+import MeetingTypesSettings from "@/components/MeetingTypesSettings";
 import { useT } from "@/components/I18nProvider";
 import {
-  MEETING_BODY_LABELS,
   STARTER_TEMPLATE,
   templateWithApologies,
   type MinutesTemplate,
@@ -30,6 +31,7 @@ function newId(): string {
 
 export default function MinutesAdminPage() {
   const t = useT();
+  const mt = useMeetingTypes();
   const { session, loading } = useAuth(["manage_minutes", "manage_users"]);
 
   const [templates, setTemplates] = useState<MinutesTemplate[]>([]);
@@ -38,7 +40,7 @@ export default function MinutesAdminPage() {
   // which case the editor falls back to the built-in list.
   const [positions, setPositions] = useState<string[]>([]);
   const [editing, setEditing] = useState<MinutesTemplate | null>(null);
-  const [tab, setTab] = useState<"templates" | "recipients" | "access">("templates");
+  const [tab, setTab] = useState<"templates" | "types" | "recipients" | "access">("templates");
   const [busy, setBusy] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -148,6 +150,7 @@ export default function MinutesAdminPage() {
         <div className="flex gap-2 mb-5">
           {([
             ["templates", t("Templates")],
+            ["types", t("Meeting types")],
             ["recipients", t("Who receives minutes")],
             ["access", t("Who can read minutes")],
           ] as const).map(([k, label]) => (
@@ -168,6 +171,13 @@ export default function MinutesAdminPage() {
 
       {!editing && tab === "recipients" && (
         <MinutesRecipientSettings
+          onSaved={(message) => setToast({ message, type: "success" })}
+          onError={(message) => setToast({ message, type: "error" })}
+        />
+      )}
+
+      {!editing && tab === "types" && (
+        <MeetingTypesSettings
           onSaved={(message) => setToast({ message, type: "success" })}
           onError={(message) => setToast({ message, type: "error" })}
         />
@@ -232,7 +242,7 @@ export default function MinutesAdminPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">
-                      {tpl.body ? t(MEETING_BODY_LABELS[tpl.body]) : t("Any")}
+                      {tpl.body ? t(mt.label(tpl.body)) : t("Any")}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{tpl.sections.length}</td>
                     <td className="px-4 py-3 text-right">

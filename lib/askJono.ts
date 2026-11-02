@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { SessionPayload } from "./roles";
-import { listMinutes, readOriginalFile, formatPeriod, MEETING_BODY_LABELS, type MinutesRecord } from "./minutesData";
+import { listMinutes, readOriginalFile, formatPeriod, type MinutesRecord } from "./minutesData";
+import { getMeetingTypes } from "./meetingTypesData";
+import { meetingTypeLabel, type MeetingType } from "./meetingTypes";
 import { readableMinutes, visibleActionsFor } from "./minutesAccess";
 import { getActionItems } from "./actionItemData";
 import { getSpendApplications } from "./spendData";
@@ -49,8 +51,8 @@ export interface ChatTurn {
   content: string;
 }
 
-async function minutesText(m: MinutesRecord): Promise<string> {
-  const head = `=== MINUTES: ${m.title} | ${MEETING_BODY_LABELS[m.body] ?? m.body} | meeting ${m.meetingDate ?? formatPeriod(m.period)} | ${m.status}${m.signedAt ? ", signed" : ""} ===`;
+async function minutesText(m: MinutesRecord, types: MeetingType[]): Promise<string> {
+  const head = `=== MINUTES: ${m.title} | ${meetingTypeLabel(types, m.body)} | meeting ${m.meetingDate ?? formatPeriod(m.period)} | ${m.status}${m.signedAt ? ", signed" : ""} ===`;
   let body = [...m.sections]
     .sort((a, b) => a.order - b.order)
     .filter((s) => s.body.trim())
@@ -76,7 +78,8 @@ export async function recordsFor(session: SessionPayload): Promise<string> {
   const recent = minutes
     .sort((a, b) => (b.meetingDate ?? b.createdAt).localeCompare(a.meetingDate ?? a.createdAt))
     .slice(0, MAX_MINUTES_SETS);
-  const minuteBlocks = await Promise.all(recent.map(minutesText));
+  const types = await getMeetingTypes();
+  const minuteBlocks = await Promise.all(recent.map((m) => minutesText(m, types)));
 
   const actionLines = actions.map((a) => {
     const last = a.updates?.at(-1);

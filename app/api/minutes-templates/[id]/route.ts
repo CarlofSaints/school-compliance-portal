@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isMeetingTypeId } from "@/lib/meetingTypesData";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { getTemplate, updateTemplate, deleteTemplate } from "@/lib/minutesTemplates";
 import { recordActivity } from "@/lib/activityLog";
@@ -33,6 +34,7 @@ export async function PATCH(
     if (body.name !== undefined && !String(body.name).trim()) {
       return NextResponse.json({ error: "Give the template a name." }, { status: 400 });
     }
+    if (body.body !== undefined && body.body !== null && body.body !== "" && !(await isMeetingTypeId(body.body))) return NextResponse.json({ error: "Choose a meeting type from the list." }, { status: 400 });
     if (body.sections !== undefined && (!Array.isArray(body.sections) || body.sections.length === 0)) {
       return NextResponse.json(
         { error: "A template needs at least one section." },
