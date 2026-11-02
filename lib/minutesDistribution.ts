@@ -2,7 +2,7 @@ import { recordDistribution, readSignedCopy } from "./minutesData";
 import type { MinutesRecord, MinutesDistributionNote } from "./minutesData";
 import { canDistribute, formatPeriod, meetingWhen } from "./minutes";
 import { getActionItems } from "./actionItemData";
-import { isClosed, type ActionItem } from "./actionItems";
+import { isClosed, toldIds, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
 import { getUsers } from "./userData";
 import { documentHash, shortHash } from "./minutesSigning";
@@ -10,7 +10,8 @@ import { resolveStage, audienceForBody } from "./minutesRecipients";
 import { getMeetingTypes } from "./meetingTypesData";
 import { meetingTypeLabel } from "./meetingTypes";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
-import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
+import { sendMinutesSignedEmail, sendMinutesActionsEmail, type EmailAttachment, type SignedEmailAction } from "./email";
+import { updateActionItems } from "./actionItemData";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
 import { recordActivity } from "./activityLog";
 import type { Actor } from "./activityActor";
@@ -42,6 +43,9 @@ export async function distributeOnFinalSignature(record: MinutesRecord, actor: A
       },
     });
   } catch (err) {
+    // The minutes did not go out, but the minutes ARE signed: the people with
+    // actions from them are still told, in their own email.
+    await tellAssigneesAtSigning(record, new Set()).catch((e) => console.error("[minutes] could not tell assignees:", record.id, e));
     await recordActivity({
       ...actor,
       action: "minutes.distribution_failed",
@@ -190,6 +194,57 @@ export function openActionsByEmail(
 }
 
 /**
+ * Carl: action emails for a meeting go out when its minutes are signed, one
+ * per person with all their actions. Somebody on the distribution list was
+ * just sent them inside the signed-minutes email; everybody else gets
+ * sendMinutesActionsEmail. Each action then records who has been told
+ * (notifiedIds), so a second send never tells anyone twice and a delete
+ * tells exactly them.
+ */
+export async function tellAssigneesAtSigning(record: MinutesRecord, reached: Set<string>): Promise<number> {
+  const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
+  const norm = (e?: string) => (e || "").trim().toLowerCase();
+  const userById = new Map(users.map((u) => [u.id, u]));
+  const open = items.filter((i) => i.fromMinutes?.minutesId === record.id && !isClosed(i) && i.assigneeIds.length);
+  if (!open.length) return 0;
+
+  // Person -> the actions they have not been told about yet.
+  const pending = new Map<string, ActionItem[]>();
+  for (const item of open) {
+    for (const pid of item.assigneeIds) {
+      if (toldIds(item).includes(pid)) continue;
+      pending.set(pid, [...(pending.get(pid) ?? []), item]);
+    }
+  }
+
+  const told = new Map<string, Set<string>>(); // action id -> people told
+  let sent = 0;
+  for (const [pid, list] of pending) {
+    const person = people.find((p) => p.id === pid);
+    const login = person?.userId ? userById.get(person.userId) : undefined;
+    const emails = [norm(login?.email), norm(person?.email)].filter(Boolean);
+    const name = login ? `${login.name} ${login.surname}`.trim() : person?.name || "";
+    let ok = emails.some((e) => reached.has(e)); // already in the signed-minutes email
+    if (!ok && emails[0]) {
+      ok = await sendMinutesActionsEmail(emails[0], name || emails[0], record.id, record.title,
+        list.map((a) => ({ ref: a.ref, title: a.title, dueDate: a.dueDate || undefined })));
+      if (ok) sent++;
+      await pause();
+    }
+    if (ok) for (const a of list) told.set(a.id, (told.get(a.id) ?? new Set()).add(pid));
+  }
+  if (told.size) {
+    await updateActionItems(
+      [...told].map(([id, ids]) => ({
+        id,
+        updates: (cur: ActionItem) => ({ notifiedIds: [...new Set([...toldIds(cur), ...ids])] }),
+      }))
+    );
+  }
+  return sent;
+}
+
+/**
  * Emails the signed minutes to the distribution list for that body.
  *
  * The audience is resolved at SEND time, never frozen: a governor elected
@@ -241,6 +296,7 @@ export async function distributeSignedMinutes(
     try {
       const [items, people, users] = await Promise.all([getActionItems(), getPeople(), getUsers()]);
       return {
+        listed: true,
         byEmail: openActionsByEmail(id, items, people, users),
         // Any address of someone WITH a login: their login email, or the
         // register email of a People entry linked to one.
@@ -252,7 +308,7 @@ export async function distributeSignedMinutes(
       };
     } catch (err) {
       console.error("[minutes distribution] Could not read action items, sending without them:", err);
-      return { byEmail: new Map<string, SignedEmailAction[]>(), logins: new Set<string>() };
+      return { listed: false, byEmail: new Map<string, SignedEmailAction[]>(), logins: new Set<string>() };
     }
   })();
   const signedBy = record.signatories.filter((s) => s.signedAt).map((s) => s.name);
@@ -261,7 +317,7 @@ export async function distributeSignedMinutes(
 
   // Built once for the whole list, alongside the action lists. Null means it
   // could not be built, and the minutes go out with their link regardless.
-  const [attachment, { byEmail: actionsByEmail, logins }] = await Promise.all([
+  const [attachment, { byEmail: actionsByEmail, logins, listed }] = await Promise.all([
     signedMinutesAttachment(record),
     actionLists,
   ]);
@@ -308,6 +364,17 @@ export async function distributeSignedMinutes(
     ...(preview.heldBack.length ? { heldBack: preview.heldBack } : {}),
   };
   await recordDistribution(record, note);
+
+  // The people with actions from this meeting who were NOT on that list get
+  // all their actions in one email of their own. Never fails the send.
+  const failedSet = new Set(failed.map((e) => e.trim().toLowerCase()));
+  // Only counts as told when the signed email really carried their actions.
+  const reached = listed
+    ? new Set([...preview.to, ...preview.cc].map((p) => p.email.trim().toLowerCase()).filter((e) => !failedSet.has(e)))
+    : new Set<string>();
+  await tellAssigneesAtSigning(record, reached).catch((err) =>
+    console.error("[minutes] could not tell assignees their actions:", id, err)
+  );
 
   return {
     sent,
