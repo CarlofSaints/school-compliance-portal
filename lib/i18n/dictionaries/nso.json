@@ -2219,5 +2219,6 @@
   "Deleted {ref}. {n} told it was removed.": "{ref} e phumotšwe. Ba {n} ba boditšwe gore e tlošitšwe.",
   "Deleted {ref}.": "{ref} e phumotšwe.",
   "Delete {ref}?": "Phumola {ref}?",
-  "Yes, delete": "Ee, phumola"
+  "Yes, delete": "Ee, phumola",
+  "Everyone": "Bohle"
 }

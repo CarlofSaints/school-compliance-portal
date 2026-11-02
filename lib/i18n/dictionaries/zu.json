@@ -2219,5 +2219,6 @@
   "Deleted {ref}. {n} told it was removed.": "Kususiwe u-{ref}. Abangu-{n} batsheliwe ukuthi kususiwe.",
   "Deleted {ref}.": "Kususiwe u-{ref}.",
   "Delete {ref}?": "Susa u-{ref}?",
-  "Yes, delete": "Yebo, susa"
+  "Yes, delete": "Yebo, susa",
+  "Everyone": "Wonke umuntu"
 }

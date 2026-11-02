@@ -136,6 +136,8 @@ export default function ActionItemsPage() {
   const [filter, setFilter] = useState("open");
   const [statusFilter, setStatusFilter] = useState<ActionStatus | "any">("any");
   const [search, setSearch] = useState("");
+  // "" = everyone, "none" = nobody assigned, else a People register id.
+  const [person, setPerson] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ActionItem | null>(null);
   const [progressFor, setProgressFor] = useState<ActionItem | null>(null);
@@ -216,10 +218,21 @@ export default function ActionItemsPage() {
   // counted against what you are actually looking at, rather than against the
   // whole register - a chip reading "In progress 4" when the view holds one is
   // worse than no count.
+  // The people who carry at least one action, for the People filter.
+  const assignees = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const item of items)
+      item.assigneeIds.forEach((id, i) => names.set(id, directory.find((p) => p.id === id)?.name || item.assigneeNames[i] || id));
+    return [...names].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [items, directory]);
+
   const searched = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter((item) =>
+    const byPerson = person
+      ? items.filter((item) => (person === "none" ? item.assigneeIds.length === 0 : item.assigneeIds.includes(person)))
+      : items;
+    if (!needle) return byPerson;
+    return byPerson.filter((item) =>
       [
         item.ref,
         item.title,
@@ -231,7 +244,7 @@ export default function ActionItemsPage() {
         .toLowerCase()
         .includes(needle)
     );
-  }, [items, search]);
+  }, [items, search, person]);
 
   const viewFiltered = useMemo(() => {
     const today = todayIso();
@@ -561,6 +574,20 @@ export default function ActionItemsPage() {
           placeholder={t("Search actions")}
           className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
         />
+        <select
+          value={person}
+          onChange={(e) => setPerson(e.target.value)}
+          aria-label={t("Person")}
+          className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:ring-2 focus:ring-primary outline-none"
+        >
+          <option value="">{t("Everyone")}</option>
+          {assignees.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+          <option value="none">{t("Nobody assigned")}</option>
+        </select>
         <button
           onClick={reset}
           className="ml-auto text-xs text-gray-400 hover:text-gray-600"

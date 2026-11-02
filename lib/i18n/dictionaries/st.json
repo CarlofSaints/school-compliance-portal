@@ -2219,5 +2219,6 @@
   "Deleted {ref}. {n} told it was removed.": "{ref} e hlakotswe. Ba {n} ba boleletswe hore e tlositswe.",
   "Deleted {ref}.": "{ref} e hlakotswe.",
   "Delete {ref}?": "Hlakola {ref}?",
-  "Yes, delete": "E, hlakola"
+  "Yes, delete": "E, hlakola",
+  "Everyone": "Bohle"
 }

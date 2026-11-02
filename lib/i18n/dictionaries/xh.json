@@ -2219,5 +2219,6 @@
   "Deleted {ref}. {n} told it was removed.": "Icinyiwe i-{ref}. Aba-{n} baxelelwe ukuba isusiwe.",
   "Deleted {ref}.": "Icinyiwe i-{ref}.",
   "Delete {ref}?": "Cima i-{ref}?",
-  "Yes, delete": "Ewe, cima"
+  "Yes, delete": "Ewe, cima",
+  "Everyone": "Wonke umntu"
 }

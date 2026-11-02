@@ -2219,5 +2219,6 @@
   "Deleted {ref}. {n} told it was removed.": "{ref} geskrap. {n} is laat weet dit is verwyder.",
   "Deleted {ref}.": "{ref} geskrap.",
   "Delete {ref}?": "Skrap {ref}?",
-  "Yes, delete": "Ja, skrap"
+  "Yes, delete": "Ja, skrap",
+  "Everyone": "Almal"
 }
