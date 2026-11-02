@@ -2190,6 +2190,7 @@
   "Add meeting type": "Engeza uhlobo lomhlangano",
   "{name} minutes": "Amaminithi e-{name}",
   "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umuntu okufanele athole amaminithi asayiniwe e-SGB / Bhodi, kanye namaminithi azo zonke ezinye izinhlobo zemihlangano ngaphandle kwe-FINCOM.",
+  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Amaminithi azigcina njengoba uthayipha ukuze ungalahlekelwa yilutho. Vele uqiniseke ukuthi unokufinyelela ku-inthanethi.",
   "Add a PNG or JPEG picture (a screenshot is usually PNG).": "Engeza isithombe se-PNG noma se-JPEG (isithombe-skrini ngokuvamile siyi-PNG).",
   "Could not add that picture.": "Ayikwazanga ukwengeza leso sithombe.",
   "Pasted as a table. Check it in the preview below.": "Kunamathiselwe njengethebula. Lihlole ekubukeni kuqala ngezansi.",

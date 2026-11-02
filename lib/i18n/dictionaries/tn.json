@@ -2190,6 +2190,7 @@
   "Add meeting type": "Oketsa mofuta wa kopano",
   "{name} minutes": "Metsotso ya {name}",
   "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Botlhe ba ba tshwanetseng go amogela metsotso e e saenilweng ya SGB / Boto, le metsotso ya mefuta yotlhe e mengwe ya dikopano kwa ntle ga FINCOM.",
+  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Metsotso e bolokiwa fa o ntse o kwala gore o se latlhegelwe ke sepe. Fela netefatsa gore o na le phitlhelelo ya inthanete.",
   "Add a PNG or JPEG picture (a screenshot is usually PNG).": "Oketsa setshwantsho sa PNG kgotsa JPEG (setshwantsho sa sekirini gantsi ke PNG).",
   "Could not add that picture.": "Ga e kgone go oketsa setshwantsho seo.",
   "Pasted as a table. Check it in the preview below.": "Se kgomareditswe jaaka tafole. Se tlhatlhobe mo ponelopeleng fa tlase.",
