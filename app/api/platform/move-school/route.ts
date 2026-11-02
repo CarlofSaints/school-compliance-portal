@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePlatformAdmin } from "@/lib/platformAdmin";
-import { createMovedSchool, copyBatch, pruneRemoved, compare, setHostnames, isMovableKey, MoveError } from "@/lib/tenantMove";
-import { getTenantByKey } from "@/lib/tenantRegistry";
+import { createMovedSchool, copyBatch, pruneRemoved, compare, setHostnames, moveStatus, isMovableKey, MoveError } from "@/lib/tenantMove";
 
 export const maxDuration = 120;
 
@@ -23,10 +22,8 @@ export async function POST(req: NextRequest) {
   }
   try {
     switch (b.action) {
-      case "status": {
-        const t = await getTenantByKey(key);
-        return NextResponse.json({ exists: !!t, hostnames: t?.hostnames ?? [], name: t?.name });
-      }
+      case "status":
+        return NextResponse.json(await moveStatus(key));
       case "create": {
         const { blobTokenSealed: _sealed, ...tenant } = await createMovedSchool(key, String(b.testHostname ?? "").trim().toLowerCase());
         return NextResponse.json({ tenant });

@@ -12,7 +12,7 @@ import { seal } from "../lib/secretBox";
 import { runInScope } from "../lib/tenantContext";
 import { resolveBranding } from "../lib/brandingData";
 import { SCHOOLS } from "../lib/branding";
-import { copyBatch, pruneRemoved, compare, setHostnames, isMovableKey } from "../lib/tenantMove";
+import { copyBatch, pruneRemoved, compare, setHostnames, isMovableKey, isLive, moveStatus } from "../lib/tenantMove";
 
 const OLD = { token: "old" };
 const NEW = { token: "new" };
@@ -110,10 +110,33 @@ async function main() {
   await setHostnames("jeppe", ["jeppe-new.example", "jeppe.schoolcompliance.co.za"]);
   const live = await getTenantByKey("jeppe");
   assert.deepEqual(live?.hostnames, ["jeppe-new.example", "jeppe.schoolcompliance.co.za"]);
-  assert.ok(live?.switchedAt, "switched over");
+  assert.equal(isLive(live!), true, "switched over");
   // 🔴 Once live there, copying or pruning would overwrite or delete real work: refused.
   await assert.rejects(copyBatch("old", "jeppe"), /already runs on the shared app/);
   await assert.rejects(pruneRemoved("old", "jeppe"), /already runs on the shared app/);
+
+  // Rollback: off the real address again unlocks copying.
+  await setHostnames("jeppe", ["jeppe-new.example"]);
+  assert.ok((await copyBatch("old", "jeppe")).copied > 0, "copying works again after a rollback");
+  // A lookalike spelling of the real address still counts as live.
+  await setHostnames("jeppe", ["Jeppe.SchoolCompliance.co.za."]);
+  assert.deepEqual((await getTenantByKey("jeppe"))?.hostnames, ["jeppe.schoolcompliance.co.za"]);
+  await assert.rejects(copyBatch("old", "jeppe"), /already runs on the shared app/);
+  await setHostnames("jeppe", ["jeppe-new.example"]);
+
+  // 🔴 A self-serve school that took the key "hvps" is never touched.
+  await createTenant({ key: "hvps", name: "Hurlyvale Primary", hostnames: ["hurlyvale.example"], blobTokenSealed: seal("selfserve"), status: "active", createdAt: "", branding: { fullName: "Hurlyvale Primary" } } as never);
+  await write("hvps/users.json", Buffer.from("[]"), { token: "selfserve" });
+  await assert.rejects(copyBatch("old", "hvps"), /not made by this tool/);
+  await assert.rejects(pruneRemoved("old", "hvps"), /not made by this tool/);
+  await assert.rejects(setHostnames("hvps", ["x.example"]), /not made by this tool/);
+  assert.ok(await read("hvps/users.json", { token: "selfserve" }), "its files are untouched");
+  assert.equal((await moveStatus("hvps")).ours, false);
+
+  // 🔴 A stale store with only a few of the files: prune refuses a big wipe.
+  await write("jeppe/users.json", Buffer.from("[]"), { token: "stale" });
+  for (let i = 0; i < 10; i++) await write(`jeppe/minutes/x${i}/record.json`, Buffer.from("{}"), NEW);
+  await assert.rejects(pruneRemoved("stale", "jeppe"), /wrong token/);
   assert.equal((await list({ prefix: "jeppe/", token: "control" })).blobs.length, 0, "nothing of the school's lands in the registry store");
   console.log("check-move-school: all passed");
 }
