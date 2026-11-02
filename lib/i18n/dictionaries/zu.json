@@ -2189,5 +2189,12 @@
   "New meeting type, e.g. AGM": "Uhlobo olusha lomhlangano, isb. i-AGM",
   "Add meeting type": "Engeza uhlobo lomhlangano",
   "{name} minutes": "Amaminithi e-{name}",
-  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umuntu okufanele athole amaminithi asayiniwe e-SGB / Bhodi, kanye namaminithi azo zonke ezinye izinhlobo zemihlangano ngaphandle kwe-FINCOM."
+  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umuntu okufanele athole amaminithi asayiniwe e-SGB / Bhodi, kanye namaminithi azo zonke ezinye izinhlobo zemihlangano ngaphandle kwe-FINCOM.",
+  "Add a PNG or JPEG picture (a screenshot is usually PNG).": "Engeza isithombe se-PNG noma se-JPEG (isithombe-skrini ngokuvamile siyi-PNG).",
+  "Could not add that picture.": "Ayikwazanga ukwengeza leso sithombe.",
+  "Pasted as a table. Check it in the preview below.": "Kunamathiselwe njengethebula. Lihlole ekubukeni kuqala ngezansi.",
+  "Adding the picture...": "Kwengezwa isithombe...",
+  "+ Add a picture": "+ Engeza isithombe",
+  "Paste a table from Word or a screenshot straight into the box.": "Namathisela ithebula elivela ku-Word noma isithombe-skrini ngqo ebhokisini.",
+  "How it will look": "Kuzobukeka kanjani"
 }

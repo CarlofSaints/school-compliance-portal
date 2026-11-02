@@ -2189,5 +2189,12 @@
   "New meeting type, e.g. AGM": "Uhlobo olutsha lwentlanganiso, umz. i-AGM",
   "Add meeting type": "Yongeza uhlobo lwentlanganiso",
   "{name} minutes": "Imizuzu ye-{name}",
-  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umntu ofanele ukufumana imizuzu esayiniweyo ye-SGB / iBhodi, kunye nemizuzu yazo zonke ezinye iintlobo zeentlanganiso ngaphandle kwe-FINCOM."
+  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umntu ofanele ukufumana imizuzu esayiniweyo ye-SGB / iBhodi, kunye nemizuzu yazo zonke ezinye iintlobo zeentlanganiso ngaphandle kwe-FINCOM.",
+  "Add a PNG or JPEG picture (a screenshot is usually PNG).": "Yongeza umfanekiso we-PNG okanye we-JPEG (umfanekiso wesikrini uhlala uyi-PNG).",
+  "Could not add that picture.": "Ayikwazanga ukongeza loo mfanekiso.",
+  "Pasted as a table. Check it in the preview below.": "Incanyathiselwe njengetafile. Yijonge kumboniso ongezantsi.",
+  "Adding the picture...": "Kongezwa umfanekiso...",
+  "+ Add a picture": "+ Yongeza umfanekiso",
+  "Paste a table from Word or a screenshot straight into the box.": "Ncamathisela itafile esuka ku-Word okanye umfanekiso wesikrini ngqo ebhokisini.",
+  "How it will look": "Iza kujongeka njani"
 }

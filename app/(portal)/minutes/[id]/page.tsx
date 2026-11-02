@@ -978,6 +978,7 @@ export default function MinutesDetailPage() {
       )}
 
       <MinutesSectionEditor
+        minutesId={record.id}
         sections={record.sections}
         editable={textEditable}
         onChange={(sections) => patch({ sections })}

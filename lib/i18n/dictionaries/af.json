@@ -2189,5 +2189,12 @@
   "New meeting type, e.g. AGM": "Nuwe vergadertipe, bv. AJV",
   "Add meeting type": "Voeg vergadertipe by",
   "{name} minutes": "{name}-notule",
-  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Almal wat ondertekende SBL / Raad-notule moet ontvang, en die notule van elke ander vergadertipe behalwe FINCOM."
+  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Almal wat ondertekende SBL / Raad-notule moet ontvang, en die notule van elke ander vergadertipe behalwe FINCOM.",
+  "Add a PNG or JPEG picture (a screenshot is usually PNG).": "Voeg 'n PNG- of JPEG-prent by ('n skermskoot is gewoonlik PNG).",
+  "Could not add that picture.": "Kon nie daardie prent byvoeg nie.",
+  "Pasted as a table. Check it in the preview below.": "As 'n tabel geplak. Kontroleer dit in die voorskou hieronder.",
+  "Adding the picture...": "Voeg die prent by...",
+  "+ Add a picture": "+ Voeg 'n prent by",
+  "Paste a table from Word or a screenshot straight into the box.": "Plak 'n tabel uit Word of 'n skermskoot reguit in die blokkie.",
+  "How it will look": "Hoe dit gaan lyk"
 }
