@@ -10,6 +10,8 @@ export interface ResolvedActionRecipient {
   name: string;
   // Why this person is being written to, shown in the email so nobody wonders.
   role: string;
+  /** The register entry, for an assignee: who exactly was told. */
+  personId?: string;
 }
 
 // Who counts as an action-item administrator.
@@ -43,12 +45,12 @@ export async function resolveActionRecipients(
   const out: ResolvedActionRecipient[] = [];
   const missing: string[] = [];
 
-  const push = (email: string | undefined, name: string, role: string) => {
+  const push = (email: string | undefined, name: string, role: string, personId?: string) => {
     if (!email) {
       missing.push(name || role);
       return;
     }
-    out.push({ email, name: name || email, role });
+    out.push({ email, name: name || email, role, ...(personId ? { personId } : {}) });
   };
 
   for (const recipient of recipients) {
@@ -60,7 +62,7 @@ export async function resolveActionRecipients(
         const name = linked
           ? `${linked.name} ${linked.surname}`.trim()
           : person?.name || item.assigneeNames[i] || "Assignee";
-        push(linked?.email || person?.email, name, "Assigned to you");
+        push(linked?.email || person?.email, name, "Assigned to you", personId);
       });
     } else if (recipient === "raiser") {
       const u = userById.get(item.raisedById);

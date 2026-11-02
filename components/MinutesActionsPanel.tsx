@@ -68,6 +68,32 @@ export default function MinutesActionsPanel({
   const [directory, setDirectory] = useState<DirectoryPerson[]>([]);
   // The section being raised from, or "" for the meeting as a whole.
   const [raisingFrom, setRaisingFrom] = useState<string | null>(null);
+  // The action waiting for "Yes, delete" (asked inline, no browser pop-up).
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const remove = async (a: RaisedAction) => {
+    setDeleting(true);
+    try {
+      const res = await authFetch(`/api/action-items/${a.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        onToast(data.error || t("Could not delete that action."), "error");
+        return;
+      }
+      // Off the list straight away: a re-read just after a delete can still show it.
+      setActions((xs) => (xs ? xs.filter((x) => x.id !== a.id) : xs));
+      onToast(
+        data.told > 0
+          ? t("Deleted {ref}. {n} told it was removed.", { ref: a.ref, n: data.told })
+          : t("Deleted {ref}.", { ref: a.ref }),
+        "success"
+      );
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(null);
+    }
+  };
 
   const load = useCallback(async () => {
     const res = await authFetch(`/api/minutes/${id}/actions`);
@@ -186,6 +212,22 @@ export default function MinutesActionsPanel({
                 {n != null && (
                   <span className="text-xs text-gray-400">{t("from item {n}", { n })}</span>
                 )}
+                {canRaise &&
+                  (confirmDelete === a.id ? (
+                    <span className="text-xs">
+                      <span className="text-gray-600">{t("Delete {ref}?", { ref: a.ref })} </span>
+                      <button type="button" disabled={deleting} onClick={() => remove(a)} className="font-medium text-red-600 hover:underline disabled:opacity-50">
+                        {deleting ? t("Deleting...") : t("Yes, delete")}
+                      </button>{" "}
+                      <button type="button" onClick={() => setConfirmDelete(null)} className="text-gray-500 hover:underline">
+                        {t("Cancel")}
+                      </button>
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmDelete(a.id)} className="text-xs text-red-600 hover:underline">
+                      {t("Delete")}
+                    </button>
+                  ))}
               </li>
             );
           })}

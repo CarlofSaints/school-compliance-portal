@@ -89,7 +89,7 @@ export async function createActionItem(
   item: Omit<ActionItem, "ref">
 ): Promise<ActionItem> {
   return changeStore((store) => {
-    const created = normalise({ ...item, ref: formatRef(store.nextRef) });
+    const created = normalise({ notifiedIds: [], ...item, ref: formatRef(store.nextRef) });
     store.items.push(created);
     store.nextRef += 1;
     return { result: created, write: true };
@@ -104,7 +104,7 @@ export async function createActionItems(
 ): Promise<ActionItem[]> {
   return changeStore((store) => {
     const created = items.map((item, i) =>
-      normalise({ ...item, ref: formatRef(store.nextRef + i) })
+      normalise({ notifiedIds: [], ...item, ref: formatRef(store.nextRef + i) })
     );
     store.items.push(...created);
     store.nextRef += created.length;
@@ -148,13 +148,15 @@ export async function updateActionItems(
   });
 }
 
-export async function deleteActionItem(id: string): Promise<boolean> {
+/** The item that was removed (as it was, inside the guarded write), or null. */
+export async function deleteActionItem(id: string): Promise<ActionItem | null> {
   return changeStore((store) => {
+    const gone = store.items.find((i) => i.id === id) ?? null;
     const next = store.items.filter((i) => i.id !== id);
-    if (next.length === store.items.length) return { result: false, write: false };
+    if (!gone) return { result: null, write: false };
     // nextRef is deliberately NOT rolled back: the deleted reference stays spent.
     store.items = next;
-    return { result: true, write: true };
+    return { result: gone, write: true };
   });
 }
 
