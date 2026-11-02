@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes, updateMinutes, MinutesChangeRefused } from "@/lib/minutesData";
-import { signingProgress } from "@/lib/minutes";
+import { signingProgress, paperTickerRole } from "@/lib/minutes";
 import { documentHash, minutesForClient } from "@/lib/minutesSigning";
 import { distributeOnFinalSignature } from "@/lib/minutesDistribution";
 import { sendPaperSignatureNoticeEmail } from "@/lib/email";
@@ -71,6 +71,25 @@ export async function POST(
     return NextResponse.json({ error: "Tick at least one person who signed the paper copy." }, { status: 400 });
   }
 
+  // 🔴 Carl: only a minutes admin or the Principal may record OTHER people as
+  // signing. Anyone else on the list records only themselves, or one member
+  // could close and send the minutes on everybody's behalf.
+  const byRole = paperTickerRole(manages, record.signatories, session.email);
+  if (emails.some((e) => e !== me) && byRole === "signatory") {
+    await recordActivity({
+      ...actorFrom(req, session),
+      action: "minutes.paper_signatures_refused",
+      entity: "minutes",
+      entityId: id,
+      summary: `Tried to record other people as signing "${record.title}" on paper, refused (not a minutes admin or the Principal)`,
+      detail: { emails },
+    });
+    return NextResponse.json(
+      { error: "Only a minutes admin or the Principal can record other people as signing on paper. You can record your own paper signature." },
+      { status: 403 }
+    );
+  }
+
   const hash = documentHash(record);
   const now = new Date().toISOString();
   const markedBy = `${session.name} ${session.surname}`.trim() || session.email;
@@ -125,8 +144,8 @@ export async function POST(
     action: "minutes.paper_signatures_recorded",
     entity: "minutes",
     entityId: id,
-    summary: `Recorded ${marked.map((m) => m.name).join(", ")} as signing "${record.title}" on paper (${progress.signed} of ${progress.total})`,
-    detail: { emails: marked.map((m) => m.email), documentHash: hash, complete: progress.complete },
+    summary: `Recorded ${marked.map((m) => m.name).join(", ")} as signing "${record.title}" on paper, as ${byRole} (${progress.signed} of ${progress.total})`,
+    detail: { emails: marked.map((m) => m.email), names: marked.map((m) => m.name), byRole, documentHash: hash, complete: progress.complete },
   });
 
   // Each person ticked hears about it, so a wrong tick is caught. Not the one
