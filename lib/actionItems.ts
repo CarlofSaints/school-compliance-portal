@@ -253,6 +253,10 @@ export interface ActionItem {
   meetingDate?: string;
   // The minute it was raised from, where it was. See FromMinutes.
   fromMinutes?: FromMinutes;
+  /** People (register ids) who have been TOLD about this action, by the
+   *  assignment email or the signed-minutes email. Deleting it emails exactly
+   *  them, so nobody hears about removing an action they never heard of. */
+  notifiedIds?: string[];
   raisedById: string;
   raisedByName: string;
   createdAt: string;

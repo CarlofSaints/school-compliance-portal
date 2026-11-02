@@ -1155,6 +1155,45 @@ export async function sendActionAssignedEmail(
   , b.replyTo, undefined, undefined, { kind: "action.assigned", ...(facts.minutesId ? { minutesId: facts.minutesId } : { personal: true }) });
 }
 
+/** The action was deleted: to the people who had been told about it. */
+export async function sendActionRemovedEmail(
+  to: string,
+  recipientName: string,
+  removedBy: string,
+  facts: ActionEmailFacts
+): Promise<boolean> {
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
+    <p style="color:#333;">${esc(removedBy)} has removed this action item, so there is nothing more to do on it and no more reminders will come.</p>
+    ${actionFactsBlock(facts, b.colors.primary)}
+  `;
+  return sendEmail(b.fromEmail, to, `Removed: action ${facts.ref}: ${facts.title}`, emailShell(b, "An action item was removed", body), b.replyTo, undefined, undefined, { kind: "action.removed", ...(facts.minutesId ? { minutesId: facts.minutesId } : { personal: true }) });
+}
+
+/** At signing, to somebody with actions from these minutes who is NOT on the
+ *  list the signed minutes went to: ALL their actions from the meeting in one email. */
+export async function sendMinutesActionsEmail(
+  to: string,
+  recipientName: string,
+  minutesId: string,
+  minutesTitle: string,
+  actions: { ref: string; title: string; dueDate?: string }[]
+): Promise<boolean> {
+  const b = await mailBranding();
+  const rows = actions
+    .map((a) => `<li style="margin:0 0 6px;color:#333;"><strong>${esc(a.ref)}:</strong> ${esc(a.title)}${a.dueDate ? ` <span style="color:#666;">(due ${esc(a.dueDate)})</span>` : ""}</li>`)
+    .join("");
+  const body = `
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
+    <p style="color:#333;">The minutes of <strong>${esc(minutesTitle)}</strong> have been signed. These action${actions.length === 1 ? " is" : "s are"} yours:</p>
+    <ul style="padding-left:20px;">${rows}</ul>
+    <p style="color:#333;">Please update your progress in the portal as the work moves along. Reminders come separately before each is due.</p>
+    ${button(`${siteOf(b)}/action-items`, "Open my actions", b.colors.primary)}
+  `;
+  return sendEmail(b.fromEmail, to, `${actions.length === 1 ? "Your action" : `Your ${actions.length} actions`} from ${minutesTitle}`, emailShell(b, "Your action items", body), b.replyTo, undefined, undefined, { kind: "action.assigned", minutesId });
+}
+
 // The scheduled chase. `why` states plainly which of the three it is (heads-up,
 // due today, or overdue) so the same mail is never mistaken for a duplicate.
 export async function sendActionReminderEmail(

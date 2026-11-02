@@ -2214,5 +2214,10 @@
   "Picture": "Prent",
   "Clear formatting": "Verwyder formatering",
   "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Prente binne geplakte Word-teks kom nie saam nie. Plak elke prent apart, of gebruik Prent.",
-  "This section is too long to save. Split it into two sections.": "Hierdie afdeling is te lank om te stoor. Verdeel dit in twee afdelings."
+  "This section is too long to save. Split it into two sections.": "Hierdie afdeling is te lank om te stoor. Verdeel dit in twee afdelings.",
+  "Could not delete that action.": "Kon nie daardie aksie skrap nie.",
+  "Deleted {ref}. {n} told it was removed.": "{ref} geskrap. {n} is laat weet dit is verwyder.",
+  "Deleted {ref}.": "{ref} geskrap.",
+  "Delete {ref}?": "Skrap {ref}?",
+  "Yes, delete": "Ja, skrap"
 }

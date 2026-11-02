@@ -13,7 +13,7 @@ import {
 } from "@/lib/reminderData";
 import { resolveRecipients } from "@/lib/reminderRecipients";
 import { getActionItems, claimActionChase, updateActionItem, todayIso } from "@/lib/actionItemData";
-import { actionsDueForChase, chaseActionItem } from "@/lib/actionItemNotify";
+import { actionsDueForChase, chaseActionItem, heldForSigning } from "@/lib/actionItemNotify";
 import { loadActionRecipientContext } from "@/lib/actionItemRecipients";
 import { sendSpendReminderEmail, isEmailConfigured, sendSchoolsDueForDeletionEmail } from "@/lib/email";
 import { weeklyUpdateDue } from "@/lib/weeklyUpdate";
@@ -241,7 +241,14 @@ async function runForSchool() {
   // go stale.
   const now = new Date();
   const actions = await getActionItems();
-  const dueActions = actionsDueForChase(actions, now);
+  // Actions from minutes not yet signed wait (Carl: emails only once signed).
+  // Filtered BEFORE the claim, so their schedule is untouched until then.
+  const heldCache = new Map<string, boolean>();
+  const dueActions: typeof actions = [];
+  for (const item of actionsDueForChase(actions, now)) {
+    if (await heldForSigning(item, heldCache)) detail.push(`Action ${item.ref}: waiting for the minutes to be signed`);
+    else dueActions.push(item);
+  }
   // Read once for the run. If it fails, each action reads its own and fails
   // (and is retried) on its own below.
   // Minutes access is NOT loaded here: only a meeting action needs it, and it

@@ -9,7 +9,25 @@ import {
 } from "./actionItemData";
 import type { ActionItem } from "./actionItemData";
 import { resolveActionRecipients, type ActionRecipientContext } from "./actionItemRecipients";
-import { sendActionAssignedEmail, sendActionReminderEmail } from "./email";
+import { sendActionAssignedEmail, sendActionReminderEmail, sendActionRemovedEmail } from "./email";
+import { getMinutes } from "./minutesData";
+import { canDistribute } from "./minutes";
+
+/**
+ * Carl: action emails for a meeting go out only once its minutes are SIGNED,
+ * batched per person. Until then an action raised from those minutes is
+ * HELD: no assignment email, no reminder. Minutes since deleted do not hold
+ * anything back (the action lives on in the register).
+ */
+export async function heldForSigning(item: Pick<ActionItem, "fromMinutes">, cache?: Map<string, boolean>): Promise<boolean> {
+  const id = item.fromMinutes?.minutesId;
+  if (!id) return false;
+  if (cache?.has(id)) return cache.get(id)!;
+  const rec = await getMinutes(id);
+  const held = !!rec && !canDistribute(rec.status, !!rec.signedCopy);
+  cache?.set(id, held);
+  return held;
+}
 
 // Resend accepts roughly two messages a second, and a burst comes back as 429s
 // that read like bad addresses rather than like rate limiting. Everything here
@@ -55,6 +73,8 @@ export async function notifyAssignees(
       }
     : item;
   if (scoped.assigneeIds.length === 0) return 0;
+  // From minutes not yet signed: told in one email per person at signing.
+  if (await heldForSigning(item)) return 0;
 
   const { resolved } = await resolveActionRecipients(scoped, ["assignees"]);
   const facts = factsFor(item);
@@ -68,6 +88,28 @@ export async function notifyAssignees(
       facts
     );
     if (ok) sent++;
+    await pause();
+  }
+  if (sent > 0) {
+    await updateActionItem(item.id, (cur) => ({
+      notifiedIds: [...new Set([...(cur.notifiedIds ?? []), ...scoped.assigneeIds])],
+    })).catch((err) => console.error("[action-items] told, but could not record it:", item.id, err));
+  }
+  return sent;
+}
+
+/**
+ * The action is gone: tell the people who were told about it. Called with the
+ * item as it was, AFTER the delete has landed, so a failed delete never sends
+ * a "removed" email for an action that is still there.
+ */
+export async function notifyRemoved(item: ActionItem, removedBy: string): Promise<number> {
+  const told = item.notifiedIds ?? [];
+  if (told.length === 0 || isClosed(item)) return 0;
+  const { resolved } = await resolveActionRecipients({ ...item, assigneeIds: told, assigneeNames: [] }, ["assignees"]);
+  let sent = 0;
+  for (const person of resolved) {
+    if (await sendActionRemovedEmail(person.email, person.name, removedBy, factsFor(item))) sent++;
     await pause();
   }
   return sent;
@@ -108,6 +150,10 @@ export async function chaseActionItem(
   note = "",
   shared?: ActionRecipientContext
 ): Promise<ActionChaseResult> {
+  // Not stamped: the first reminder must still come once the minutes are signed.
+  if (await heldForSigning(item)) {
+    return { sent: 0, failed: 0, result: "waiting for the minutes to be signed", item };
+  }
   const { resolved, missing, notAllowed = 0 } = await resolveActionRecipients(
     item,
     item.reminder.recipients,
