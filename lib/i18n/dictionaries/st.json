@@ -2225,5 +2225,7 @@
   "Untag {name}": "Tlosa letshwao ho {name}",
   "Tag person": "Tshwaya motho",
   "nobody tagged": "ha ho motho ya tshwailweng",
-  "Select the words first, then pick the person.": "Kgetha mantswe pele, ebe o kgetha motho."
+  "Select the words first, then pick the person.": "Kgetha mantswe pele, ebe o kgetha motho.",
+  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono a ke ke a araba hona jwale: tshebeletso ya AI eo portal ena e e sebedisang e felletswe ke tjhelete. Sena hase dikhrediti tsa sekolo sa hao, kahoo ho reka dikhrediti ho ke ke ha se lokisa.",
+  "Tell us about it": "Re bolelle ka yona"
 }
