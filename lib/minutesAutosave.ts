@@ -6,7 +6,6 @@
 // saving, and lost all of it to the reload afterwards.
 
 import { stableDoc, type RichNode } from "./richDoc";
-import { cleanTags } from "./minutes";
 import {
   ATTENDANCE_STATUS_LABELS,
   cleanAttendees,
@@ -19,6 +18,8 @@ import {
   type MeetingBody,
   type MeetingPeriod,
   type MinutesStatus,
+  cleanTags,
+  responsibleText,
 } from "./minutes";
 
 /** Given to the panels that act on the SAVED copy (send, review, sign,
@@ -245,7 +246,7 @@ export function plainText(d: MinutesText, tr: (s: string) => string, meetingLabe
       const status = a.status ? ` (${tr(ATTENDANCE_STATUS_LABELS[a.status as AttendanceStatus])})` : "";
       lines.push(`${[a.position, a.name].filter(Boolean).join(": ")}${status}`);
     }
-    const responsible = String(s.responsible ?? "").trim();
+    const responsible = responsibleText(s as Parameters<typeof responsibleText>[0]);
     if (responsible) lines.push(`${tr("Responsible")}: ${responsible}`);
     return lines.filter(Boolean).join("\n");
   });

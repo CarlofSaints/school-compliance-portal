@@ -320,8 +320,18 @@ export default function RichTextEditor({
               onChange={(e) => {
                 const p = people.find((x) => x.id === e.target.value);
                 if (!p) return;
-                if (editor.state.selection.empty) {
+                const { from, to, empty } = editor.state.selection;
+                if (empty) {
                   setNote(t("Select the words first, then pick the person."));
+                  return;
+                }
+                let other = "";
+                editor.state.doc.nodesBetween(from, to, (n) => {
+                  const m = n.marks.find((x) => x.type.name === "personTag" && x.attrs.id !== p.id);
+                  if (m) other ||= String(m.attrs.name);
+                });
+                if (other) {
+                  setNote(t("Part of this is already tagged with {name}. Untag that first.", { name: other }));
                   return;
                 }
                 setNote("");
@@ -338,7 +348,10 @@ export default function RichTextEditor({
             </select>
           )
         )}
-        <button type="button" onMouseDown={keep} onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} className={btn(false)} title={t("Clear formatting")}>
+        <button type="button" onMouseDown={keep} onClick={() =>
+            // Formatting only: who reported it (the person tags) stays.
+            editor.chain().focus().unsetMark("bold").unsetMark("italic").unsetMark("underline").unsetMark("strike").unsetMark("textStyle").unsetMark("highlight").clearNodes().run()
+          } className={btn(false)} title={t("Clear formatting")}>
           {t("Clear formatting")}
         </button>
       </div>

@@ -70,6 +70,18 @@ export default function MinutesSectionEditor({
     };
   }, [editable]);
 
+  // People to tag: one per name (a person holding two seats appears once),
+  // nobody without a name.
+  const taggable = (() => {
+    const seen = new Set<string>();
+    return (people ?? []).filter((p) => {
+      const key = p.name.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).map((p) => ({ id: p.id, name: p.name.trim() }));
+  })();
+
   const capture = async (s: MinutesSection) => {
     const ed = editors.current.get(s.id);
     // The selected text, else the paragraph (or table cell, list item) the cursor is in.
@@ -214,18 +226,18 @@ export default function MinutesSectionEditor({
                     )}
                   </span>
                 ))}
-                {editable && !!people?.length && (
+                {editable && taggable.length > 0 && (
                   <select
                     value=""
                     aria-label={t("Tag person")}
                     onChange={(e) => {
-                      const p = people.find((x) => x.id === e.target.value);
+                      const p = taggable.find((x) => x.id === e.target.value);
                       if (p) update(s.id, { tags: [...(s.tags ?? []), { id: p.id, name: p.name }] });
                     }}
                     className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-xs"
                   >
                     <option value="">+ {t("Tag person")}</option>
-                    {people
+                    {taggable
                       .filter((p) => !(s.tags ?? []).some((x) => x.id === p.id))
                       .map((p) => (
                         <option key={p.id} value={p.id}>
@@ -341,7 +353,7 @@ export default function MinutesSectionEditor({
                 }
                 onChange={(doc, body) => update(s.id, { doc, body })}
                 names={people?.map((p) => p.name)}
-                people={people?.map((p) => ({ id: p.id, name: p.name }))}
+                people={taggable}
                 onReady={(ed) => {
                   if (ed) editors.current.set(s.id, ed);
                   else editors.current.delete(s.id);
