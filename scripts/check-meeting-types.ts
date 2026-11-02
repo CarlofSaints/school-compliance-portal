@@ -33,6 +33,7 @@ async function main() {
 
   // Built-ins can never be removed.
   await assert.rejects(removeMeetingType("fincom"));
+  await assert.rejects(removeMeetingType("mt-nope"), /no longer exists/);
 
   // AGM minutes go to the SGB list, and renaming a type leaves the signed
   // wording (what a signature is bound to) exactly as it was.

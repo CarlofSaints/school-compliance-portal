@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id : "";
   try {
-    const before = (await getMeetingTypes()).find((t) => t.id === id);
+    const before = body.action === "add" ? undefined : (await getMeetingTypes()).find((t) => t.id === id);
     const label = String(body.label ?? "").trim();
     let summary: string;
     let types;

@@ -30,10 +30,10 @@ function cleanLabel(raw: unknown): string {
 
 // Each change is ONE read-modify-write through updateJson, so two admins
 // adding a type in the same moment cannot lose one.
-async function change(mutate: (types: MeetingType[]) => MeetingType[]): Promise<MeetingType[]> {
+async function change(mutate: (types: MeetingType[]) => MeetingType[] | Promise<MeetingType[]>): Promise<MeetingType[]> {
   let out: MeetingType[] = [];
-  await updateJson<unknown>(PATH, null, (current) => {
-    out = mutate(withBuiltIns(current));
+  await updateJson<unknown>(PATH, null, async (current) => {
+    out = await mutate(withBuiltIns(current));
     return out;
   });
   return out;
@@ -71,15 +71,21 @@ export async function removeMeetingType(id: string): Promise<MeetingType[]> {
   if (isBuiltInMeetingType(id)) {
     throw new MeetingTypeError("The three built-in meeting types can be renamed but not removed.");
   }
-  const used = (await meetingTypeUsage())[id];
-  if (used && (used.minutes.length || used.templates.length)) {
-    const parts = [
-      used.minutes.length ? `minutes (${used.minutes.slice(0, 3).join(", ")}${used.minutes.length > 3 ? "..." : ""})` : "",
-      used.templates.length ? `templates (${used.templates.slice(0, 3).join(", ")})` : "",
-    ].filter(Boolean);
-    throw new MeetingTypeError(`It is still used by ${parts.join(" and ")}. Move those to another type first.`);
-  }
-  return change((types) => types.filter((t) => t.id !== id));
+  return change(async (types) => {
+    if (!types.some((t) => t.id === id)) throw new MeetingTypeError("That meeting type no longer exists.");
+    // Inside the write, so it is checked again on every retry. shortcut: minutes
+    // created in the same instant can still slip past (two files, no shared
+    // lock); such a record shows its type id until it is moved to a real type.
+    const used = (await meetingTypeUsage())[id];
+    if (used && (used.minutes.length || used.templates.length)) {
+      const parts = [
+        used.minutes.length ? `minutes (${used.minutes.slice(0, 3).join(", ")}${used.minutes.length > 3 ? "..." : ""})` : "",
+        used.templates.length ? `templates (${used.templates.slice(0, 3).join(", ")})` : "",
+      ].filter(Boolean);
+      throw new MeetingTypeError(`It is still used by ${parts.join(" and ")}. Move those to another type first.`);
+    }
+    return types.filter((t) => t.id !== id);
+  });
 }
 
 /** For the routes that take a type from a request: only a type the school has. */
