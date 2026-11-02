@@ -12,7 +12,7 @@ import { CHAPTER_VIDEOS } from "./defaultGuide";
 // (or a Guide chapter), or Jono will not know it exists.
 // ---------------------------------------------------------------------------
 
-const NEWER_THAN_GUIDE = `
+export const NEWER_THAN_GUIDE = `
 - Tag people on a minutes section: under the section heading, "People:" row, "+ Tag person". Tag who said something: select the words, then "Tag person" in the text toolbar; "Untag" removes it. Tagged people's initials print in the Word file's Responsible column.
 - Format minutes like Word: each section has a toolbar (bold, italic, underline, strikethrough, font, size, text colour, highlight, bullets, numbering, heading, table with add/remove rows and columns, picture, clear formatting). Tables and screenshots can be pasted straight in from Word. Minutes save as you type.
 - Meeting types (SGB / Board, FINCOM, Other, or your own such as AGM): Admin, Minutes Admin, "Meeting types" tab. Add a type at the bottom; rename any type and press "Save name"; types you added can be removed while no minutes or templates use them.
@@ -31,7 +31,7 @@ const NEWER_THAN_GUIDE = `
 - Something missing from the menu is a permission: an administrator grants it under Admin, Roles.
 `;
 
-const strip = (html: string) =>
+export const stripGuideHtml = (html: string) =>
   html
     .replace(/<li>/g, "\n- ")
     .replace(/<\/(p|div|h\d|ol|ul)>/g, "\n")
@@ -49,7 +49,7 @@ export function portalHowTo(schoolName: string, body: "SGB" | "Board", origin: s
   const parts = chapters.map((c, i) => {
     const clips = CHAPTER_VIDEOS[i]?.[1] ?? [];
     const videos = clips.length ? `\nVideos: ${clips.map(([id, label]) => `${label}: ${origin}/tutorials/${id}.mp4`).join("; ")}` : "";
-    return `## ${c.title}\n${strip(c.html)}${videos}`;
+    return `## ${c.title}\n${stripGuideHtml(c.html)}${videos}`;
   });
   return `${parts.join("\n\n")}\n\n## Newer features (not yet in the Guide)\n${NEWER_THAN_GUIDE.trim()}`;
 }

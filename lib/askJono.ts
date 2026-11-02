@@ -115,17 +115,28 @@ import { portalHowTo } from "./jonoHowTo";
 
 export class JonoError extends Error {}
 
-export async function askJono(session: SessionPayload, turns: ChatTurn[], locale: Locale): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+/** How the model marks a question about USING the portal (kind 3). */
+const PORTAL_MARK = "[[portal]]";
+
+/** The model's mark taken off: whether it was a portal question, and the answer people see. */
+export function splitPortalMark(text: string): { portalQuestion: boolean; answer: string } {
+  const portalQuestion = text.startsWith(PORTAL_MARK);
+  return { portalQuestion, answer: portalQuestion ? text.slice(PORTAL_MARK.length).trim() : text };
+}
+
+/** The longest answer allowed: also what a quote assumes. */
+export const JONO_MAX_OUTPUT = 4000;
+
+/** The request exactly as it will be sent: built ONCE per call, so the quote
+ *  prices exactly what runs. */
+export type JonoRequest = Awaited<ReturnType<typeof jonoRequest>>;
+export async function jonoRequest(session: SessionPayload, turns: ChatTurn[], locale: Locale) {
   const [records, branding] = await Promise.all([cachedRecordsFor(session), resolveBranding()]);
   const language = LOCALES.find((l) => l.code === locale)?.label ?? "English";
   const today = new Date().toISOString().slice(0, 10);
-
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
-  const message = await client.messages.create({
+  return {
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: JONO_MAX_OUTPUT,
     output_config: { effort: "low" },
     system: [
       {
@@ -135,7 +146,7 @@ export async function askJono(session: SessionPayload, turns: ChatTurn[], locale
           "Two kinds of question come to you:\n" +
           "1. About this school's own business (meetings, decisions, projects, actions, spending). Answer ONLY from the school records below. Say which meeting and date, or which action reference (e.g. A-014), your answer comes from. Pull together everything the records say on a topic in date order, newest last, and say clearly what is still open. If the records do not cover it, say so plainly; never guess or invent a decision.\n" +
           "2. About the law and rules for South African schools (discipline, suspension and expulsion, admissions, fees, SGB or board of governors powers, safety, employment). Answer from the South African Schools Act 84 of 1996 as amended by the BELA Act 32 of 2024, the Children's Act, the Employment of Educators Act, the Guidelines for the Consideration of Governing Bodies in Adopting a Code of Conduct for Learners, and provincial regulations, citing the Act and section. Give the practical steps the school must follow (e.g. a fair hearing before a suspension). Where the answer depends on a provincial regulation or circular you are not sure of, say so and tell them to check with the district office. For a serious or urgent matter (a child hurt, abuse, a criminal act), give the immediate duties first (e.g. the duty to report abuse under s110 of the Children's Act) and add that this is guidance, not legal advice.\n" +
-          "3. How to do something in this portal (\"How do I tag users?\", \"How do I create a minutes template?\"). Answer from the PORTAL GUIDE below: numbered steps naming the exact menu, tab and button, the same words the screen shows. Where the guide gives a video for that page, end with the link as a Markdown link, e.g. [Watch how](/tutorials/tags.mp4). If a step needs a permission they may not have, say an administrator can grant it under Admin, Roles. If the guide does not cover it, say so and suggest the Feedback page; never invent a button.\n" +
+          "3. How to do something in this portal (\"How do I tag users?\", \"How do I create a minutes template?\"). Answer from the PORTAL GUIDE below: numbered steps naming the exact menu, tab and button, the same words the screen shows. Where the guide gives a video for that page, end with the link as a Markdown link, e.g. [Watch how](/tutorials/tags.mp4). If a step needs a permission they may not have, say an administrator can grant it under Admin, Roles. If the guide does not cover it, say so and suggest the Feedback page; never invent a button. For THIS kind only, begin your reply with the exact text " + PORTAL_MARK + " on its own line; never for kinds 1 or 2.\n" +
           "Public schools have an SGB; independent schools have a board of governors, so say 'SGB or board of governors' when speaking generally. Be concise: short paragraphs, '- ' bullets, '## ' for a heading only in a long answer. No em dashes. " +
           `Reply in ${language} unless the person writes in another language, then use theirs.`,
       },
@@ -154,7 +165,30 @@ ${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "
       },
     ],
     messages: turns,
-  });
+  } satisfies Anthropic.MessageCreateParamsNonStreaming;
+}
+
+/**
+ * How many tokens the question will read, for the quote. Counted by the API
+ * (no charge); a rough count from the length if that fails, rounded up.
+ */
+export async function countJonoTokens(req: JonoRequest): Promise<number> {
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
+    const { input_tokens } = await client.messages.countTokens({ model: req.model, system: req.system, messages: req.messages });
+    return input_tokens;
+  } catch {
+    return Math.ceil(JSON.stringify([req.system, req.messages]).length / 3);
+  }
+}
+
+export async function askJono(req: JonoRequest): Promise<{ text: string; usage: Anthropic.Usage; portalQuestion: boolean }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  // 🔴 Well inside the route's 120s: credits held for a paid answer are only
+  // given back if this returns or throws, never if the platform kills it.
+  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 45_000 });
+  const message = await client.messages.create(req);
 
   if (message.stop_reason === "refusal") throw new JonoError("Jono cannot answer that one.");
   const text = message.content
@@ -162,8 +196,11 @@ ${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "
     .map((b) => b.text)
     .join("")
     .trim();
-  if (!text) throw new JonoError("Jono had nothing to say. Try asking another way.");
-  return text;
+  // Kind 3 (how to use the portal) is marked by the model, and only those are
+  // ever kept for review (lib/jonoQuestions.ts). The mark never reaches anyone.
+  const { portalQuestion, answer } = splitPortalMark(text);
+  if (!answer) throw new JonoError("Jono had nothing to say. Try asking another way.");
+  return { text: answer, usage: message.usage, portalQuestion };
 }
 
 /** The conversation as it may be sent on: alternating, starting and ending with the person, capped. */

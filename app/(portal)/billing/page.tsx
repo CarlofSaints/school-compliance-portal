@@ -55,6 +55,10 @@ export default function BillingPage() {
               <td className="py-2 pr-4">{t("Compile a policy: each change the AI makes, including \"Fix these in the draft\"")}</td>
               <td className="py-2">{t("{n} credits", { n: POLICY_AI_CREDITS.revise })}</td>
             </tr>
+            <tr className="border-b border-gray-50">
+              <td className="py-2 pr-4">{t("Ask Jono, when the answer needs the AI (from {date})", { date: "16 November 2026" })}</td>
+              <td className="py-2">{t("What the answer actually costs, in tenths of a credit. You see the most it can cost before you ask.")}</td>
+            </tr>
             <tr>
               <td className="py-2 pr-4">{t("Compile a policy: compliance check of the draft")}</td>
               <td className="py-2">{POLICY_AI_CREDITS.check === 1 ? t("{n} credit", { n: 1 }) : t("{n} credits", { n: POLICY_AI_CREDITS.check })}</td>
@@ -65,6 +69,7 @@ export default function BillingPage() {
           <li>{t("A translation is priced before it runs. You see the number of credits and confirm it, and nothing is taken until you do.")}</li>
           <li>{t("Once a document is translated, anyone at your school can read it in that language for free. A new version of the document is a new translation.")}</li>
           <li>{t("On Compile a policy, every button shows its cost. Editing the text yourself and adding the policy to your library are free.")}</li>
+          <li>{t("Ask Jono shows the most a question can cost and asks before it uses any credits. You pay what the answer actually cost the AI service, plus a margin, never more than shown. Most answers cost a fraction of a credit.")}</li>
         </ul>
       </section>
 
@@ -74,7 +79,8 @@ export default function BillingPage() {
           <li>{t("Compliance checks on the Compliance, Policies and Documents pages")}</li>
           <li>{t("Convert a scanned PDF policy to Word")}</li>
           <li>{t("Campus courses from the library or built with AI, in every language")}</li>
-          <li>{t("Ask Jono")}</li>
+          <li>{t("Ask Jono: \"how do I...\" questions answered from the portal guide")}</li>
+          <li>{t("Ask Jono: every answer until {date}", { date: "15 November 2026" })}</li>
           <li>{t("Switching the portal's own screens to another language")}</li>
         </ul>
         <p className="text-sm text-gray-500 mt-3">
