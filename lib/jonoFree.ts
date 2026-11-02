@@ -65,6 +65,9 @@ function indexed(locale: Locale) {
   return list;
 }
 
+/** A question about USING the portal ("How do I...?"), as opposed to records or law. */
+export const looksLikeHowTo = (question: string) => HOW.test(question);
+
 /** The free answer, or null when the question is not a clear "how do I" the Guide covers. */
 export function freeHowTo(question: string, locale: Locale): string | null {
   if (!HOW.test(question)) return null;

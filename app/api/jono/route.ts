@@ -5,6 +5,9 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import { JonoError, askJono, cleanTurns, jonoRequest, countJonoTokens, JONO_MAX_OUTPUT } from "@/lib/askJono";
 import { getLocale } from "@/lib/i18n/server";
 import { freeHowTo } from "@/lib/jonoFree";
+import { keepJonoQuestion } from "@/lib/jonoQuestions";
+import { resolveBranding } from "@/lib/brandingData";
+import { after } from "next/server";
 import { jonoCharging, quoteCredits, creditsForUsd, usdCost, tenth } from "@/lib/jonoBilling";
 import { getCredits, spendCredits, addCredits, maySpendCredits } from "@/lib/contentTranslation";
 
@@ -31,10 +34,24 @@ export async function POST(req: NextRequest) {
   const locale = await getLocale();
 
   // 1. Free from the Guide (the latest question only; "Ask the AI instead" skips it).
+  const question = String(turns[turns.length - 1].content);
   if (body.forceAi !== true) {
-    const free = freeHowTo(String(turns[turns.length - 1].content), locale);
+    const free = freeHowTo(question, locale);
     if (free) return NextResponse.json({ answer: free, free: true });
   }
+
+  // A question about USING the portal that the guide missed - as Jono itself
+  // judged it (portalQuestion), never a records or law question - is kept for
+  // Carl's monthly review so the free library grows (lib/jonoQuestions.ts):
+  // school + date + language, no name. After the reply, never slowing it.
+  const keepIfPortal = (portalQuestion: boolean) => {
+    if (!portalQuestion) return;
+    const outcome = body.forceAi === true && body.accepted === undefined ? "missed" : "ai";
+    after(async () => {
+      const school = (await resolveBranding().catch(() => null))?.fullName ?? "Unknown school";
+      await keepJonoQuestion({ at: new Date().toISOString(), school, locale, question: question.slice(0, 500), outcome });
+    });
+  };
 
   const buyUrl = session.permissions.includes("manage_users") ? "/admin/translation-credits" : "/billing";
   const accepted = typeof body.accepted === "number" && body.accepted > 0 ? body.accepted : null;
@@ -58,25 +75,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ needsCredits: true, quote, balance: await getCredits(), canSpend, buyUrl });
       }
       held = quote;
-      const { text, usage } = await askJono(request);
+      const { text, usage, portalQuestion } = await askJono(request);
+      keepIfPortal(portalQuestion);
       const charged = Math.min(quote, creditsForUsd(usdCost(usage)));
       held = 0;
       // The difference back. The answer stands even if this hiccups.
       const back = tenth(quote - charged);
-      let after: number | null = null;
+      let left: number | null = null;
       if (back > 0) {
-        after = await addCredits(back).then((r) => r.balance).catch((e) => {
+        left = await addCredits(back).then((r) => r.balance).catch((e) => {
           console.error(`[jono] 🔴 REFUND FAILED: add ${back} credits back by hand.`, e);
           return null;
         });
-      } else after = await getCredits().catch(() => null);
-      return NextResponse.json({ answer: text, charged, balance: after });
+      } else left = await getCredits().catch(() => null);
+      return NextResponse.json({ answer: text, charged, balance: left });
     }
 
     // 2. Not charging yet: free, as it always has been.
     const limited = await enforce([[LIMITS.jonoUser, session.id], [LIMITS.jonoSchool, "school"]]);
     if (limited) return limited;
-    const { text } = await askJono(request);
+    const { text, portalQuestion } = await askJono(request);
+    keepIfPortal(portalQuestion);
     return NextResponse.json({ answer: text });
   } catch (err) {
     if (held > 0) {

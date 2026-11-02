@@ -166,6 +166,9 @@ export default function AskJono() {
               <p>
                 <span className="font-semibold text-amber-700">{jonoCharging() ? t("Uses credits:") : t("Uses credits from 16 November:")}</span> {t("questions about your school's minutes, actions, projects or the law. Jono always shows the cost first and asks.")}
               </p>
+              <p className="text-gray-400">
+                {t("\"How do I\" questions the guide cannot answer are kept for 12 months, without your name, so we can add them to the guide.")}
+              </p>
             </div>
             {examples.map(([e, free]) => (
               <button key={e} onClick={() => ask(e)} className="flex w-full items-center justify-between gap-2 text-left text-sm border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50">

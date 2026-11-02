@@ -36,7 +36,11 @@ export default async function PlatformPage() {
             <h1 className="text-lg font-bold">School Compliance</h1>
             <p className="text-xs text-white/60">Platform administration</p>
           </div>
-          <span className="text-xs text-white/60">{admin.email}</span>
+          <div className="flex items-center gap-4 text-xs text-white/60">
+            <Link href="/platform/jono-questions" className="underline hover:text-white">Jono questions</Link>
+            <Link href="/platform/codes" className="underline hover:text-white">Discount codes</Link>
+            <span>{admin.email}</span>
+          </div>
         </div>
       </header>
 
