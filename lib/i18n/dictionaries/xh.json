@@ -2225,5 +2225,6 @@
   "Untag {name}": "Susa ithegi ku-{name}",
   "Tag person": "Thegi umntu",
   "nobody tagged": "akukho mntu uthegiweyo",
-  "Select the words first, then pick the person.": "Khetha amagama kuqala, emva koko ukhethe umntu."
+  "Select the words first, then pick the person.": "Khetha amagama kuqala, emva koko ukhethe umntu.",
+  "Part of this is already tagged with {name}. Untag that first.": "Inxalenye yoku sele ithegiwe ngo-{name}. Qala ususe loo thegi."
 }

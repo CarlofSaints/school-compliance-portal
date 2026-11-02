@@ -7,7 +7,7 @@ import { getPolicyById, getPolicyVersions, downloadPolicyFile } from "@/lib/poli
 import { getMinutes } from "@/lib/minutesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { documentHash } from "@/lib/minutesSigning";
-import { ATTENDANCE_STATUS_LABELS } from "@/lib/minutes";
+import { ATTENDANCE_STATUS_LABELS, responsibleText } from "@/lib/minutes";
 import { extractTextFromBuffer } from "@/lib/pdfParser";
 import {
   creditsFor,
@@ -92,7 +92,7 @@ async function resolveDoc(session: Session, kind: unknown, id: unknown): Promise
           const rows = (s.attendees || [])
             .map((r) => `- ${r.position}: ${r.name}${r.status ? ` (${ATTENDANCE_STATUS_LABELS[r.status]})` : ""}`)
             .join("\n");
-          return `# ${s.title}\n${[s.body, rows, s.responsible ? `Responsible: ${s.responsible}` : ""].filter(Boolean).join("\n")}`;
+          return `# ${s.title}\n${[s.body, rows, responsibleText(s) ? `Responsible: ${responsibleText(s)}` : ""].filter(Boolean).join("\n")}`;
         })
         .join("\n\n");
       return { content: [{ type: "text", text }], pages: textPages(text) };

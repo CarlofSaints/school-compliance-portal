@@ -2225,5 +2225,6 @@
   "Untag {name}": "Tlosa letshwao mo go {name}",
   "Tag person": "Tshwaya motho",
   "nobody tagged": "ga go ope yo o tshwailweng",
-  "Select the words first, then pick the person.": "Tlhopha mafoko pele, morago o tlhophe motho."
+  "Select the words first, then pick the person.": "Tlhopha mafoko pele, morago o tlhophe motho.",
+  "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e setse e tshwailwe ka {name}. Tlosa letshwao leo pele."
 }

@@ -17,6 +17,9 @@ const doc = cleanDoc({ type: "doc", content: [{ type: "paragraph", content: [
 ] }] }, "m")!;
 assert.equal(JSON.stringify(doc).includes("nobody"), false, "a tag without an id is dropped");
 
+// Two people with the same initials both print.
+assert.equal(responsibleText({ tags: [{ id: "a", name: "Nomsa Khumalo" }, { id: "b", name: "Nandi Khoza" }] }), "NK, NK");
+
 // Section tags + text tags, typed text first, each person once.
 assert.equal(responsibleText({ tags: [{ id: "a", name: "Nomsa Khumalo" }, { id: "g", name: "Graham Cuerden" }], doc }), "NK, GC");
 assert.equal(responsibleText({ responsible: "Finance committee", tags: [{ id: "a", name: "Nomsa Khumalo" }] }), "Finance committee, NK");
