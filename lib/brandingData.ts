@@ -2,6 +2,28 @@ import { readJson, writeJson, readFile, writeFile, deleteFile, updateJson } from
 import { branding as codeBranding, type SchoolBranding } from "./branding";
 import { derivePalette, normaliseHex } from "./brandingColors";
 import { buildFromAddress, buildReplyTo } from "./emailIdentity";
+import { isMultiTenant, getTenantByKey } from "./tenantRegistry";
+import { tenantScope } from "./tenantContext";
+
+/**
+ * The look a school STARTS from. On the shared app that is the generic one,
+ * unless the school's registry record carries its own: a school moved off its
+ * own deployment (lib/tenantMove.ts) keeps its exact built-in look that way,
+ * colours, words and crest, which a saved branding.json could only approximate.
+ * Read per school (the scope, so the daily job's emails get it too) and
+ * cached for a minute: this runs on every page and every email.
+ */
+const baseCache = new Map<string, { at: number; base: SchoolBranding }>();
+async function schoolBase(): Promise<SchoolBranding> {
+  if (!isMultiTenant()) return codeBranding;
+  const { key } = await tenantScope();
+  const hit = baseCache.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.base;
+  const own = (await getTenantByKey(key))?.branding;
+  const base = own ? { ...codeBranding, ...own, colors: { ...codeBranding.colors, ...(own.colors ?? {}) } } : codeBranding;
+  baseCache.set(key, { at: Date.now(), base });
+  return base;
+}
 
 // ---------------------------------------------------------------------------
 // Branding a school can change ITSELF, stored in that school's own blob store.
@@ -116,7 +138,11 @@ export async function resolveBranding(): Promise<SchoolBranding> {
   } catch (err) {
     console.error("[branding] could not read stored branding, using built-in:", err);
   }
-  return applyStoredBranding(codeBranding, stored);
+  const base = await schoolBase().catch((err) => {
+    console.error("[branding] could not read the school record, using built-in:", err);
+    return codeBranding;
+  });
+  return applyStoredBranding(base, stored);
 }
 
 /** Pure merge, so it can be checked without a store. */

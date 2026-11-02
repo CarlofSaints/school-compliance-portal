@@ -7,6 +7,17 @@
 // moved etag and allowOverwrite:false on an existing file both throw.
 
 const store = new Map(); // pathname -> { bytes, etag, contentType, uploadedAt }
+
+// FAKE_BLOB_PER_TOKEN=1: every token is its own store, like real Blob stores
+// (a test that copies between two schools needs the two kept apart). Off by
+// default, so every existing check behaves exactly as before.
+const perToken = new Map();
+function storeFor(opts) {
+  if (process.env.FAKE_BLOB_PER_TOKEN !== "1") return store;
+  const t = (opts && opts.token) || "default";
+  if (!perToken.has(t)) perToken.set(t, new Map());
+  return perToken.get(t);
+}
 let etagSeq = 0;
 const BASE = "https://fake-blob.test/";
 
@@ -36,6 +47,7 @@ async function put(pathname, body, opts = {}) {
   // Read the body BEFORE the checks: an await between the check and the set
   // let two racing creates both pass, which the real store never allows.
   const bytes = await toBytes(body);
+  const store = storeFor(opts);
   const existing = store.get(pathname);
   if (opts.ifMatch && (!existing || existing.etag !== opts.ifMatch)) {
     throw new BlobPreconditionFailedError("fake blob: precondition failed");
@@ -52,17 +64,17 @@ async function put(pathname, body, opts = {}) {
 
 let getCalls = 0;
 
-async function get(urlOrPath) {
+async function get(urlOrPath, opts) {
   getCalls++;
   const p = pathOf(urlOrPath);
-  const f = store.get(p);
+  const f = storeFor(opts).get(p);
   if (!f) return null;
   return { statusCode: 200, stream: new Response(f.bytes).body, headers: new Headers({ etag: f.etag }), blob: meta(p, f) };
 }
 
-async function head(urlOrPath) {
+async function head(urlOrPath, opts) {
   const p = pathOf(urlOrPath);
-  const f = store.get(p);
+  const f = storeFor(opts).get(p);
   if (!f) throw new BlobNotFoundError("fake blob: not found");
   return meta(p, f);
 }
@@ -72,6 +84,7 @@ let foldedCalls = 0;
 
 async function list(opts = {}) {
   const prefix = opts.prefix || "";
+  const store = storeFor(opts);
   if (opts.mode === "folded") {
     foldedCalls++;
     const blobs = [];
@@ -92,7 +105,8 @@ async function list(opts = {}) {
   return { blobs: page.map((k) => meta(k, store.get(k))), hasMore, cursor: hasMore ? String(start + limit) : undefined, folders: [] };
 }
 
-async function del(urls) {
+async function del(urls, opts) {
+  const store = storeFor(opts);
   for (const u of Array.isArray(urls) ? urls : [urls]) store.delete(pathOf(u));
 }
 
