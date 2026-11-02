@@ -110,7 +110,7 @@ export default function MinutesSectionEditor({
   useEffect(() => {
     latest.current = ordered;
   });
-  const [uploading, setUploading] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<string[]>([]);
   const [pasteNote, setPasteNote] = useState<{ id: string; text: string } | null>(null);
 
   /** Puts text on its own lines at the cursor (or at the end), in the latest copy. */
@@ -128,11 +128,14 @@ export default function MinutesSectionEditor({
   };
 
   const addPicture = async (id: string, file: File, at: number) => {
+    // Where the cursor was, as the text before it: typing elsewhere during
+    // the upload must not shift the picture into the middle of a word.
+    const before = (latest.current.find((x) => x.id === id)?.body ?? "").slice(0, at);
     if (!/^image\/(png|jpeg)$/.test(file.type)) {
       setPasteNote({ id, text: t("Add a PNG or JPEG picture (a screenshot is usually PNG).") });
       return;
     }
-    setUploading(id);
+    setUploading((u) => [...u, id]);
     setPasteNote(null);
     try {
       const size = await imageSize(file).catch(() => ({ width: 800, height: 600 }));
@@ -144,11 +147,15 @@ export default function MinutesSectionEditor({
         setPasteNote({ id, text: data.error || t("Could not add that picture.") });
         return;
       }
-      insertAt(id, at, imageLine(data.id, size.width, size.height));
+      const now = latest.current.find((x) => x.id === id)?.body ?? "";
+      insertAt(id, now.startsWith(before) ? before.length : now.length, imageLine(data.id, size.width, size.height));
     } catch {
       setPasteNote({ id, text: t("Could not add that picture.") });
     } finally {
-      setUploading(null);
+      setUploading((u) => {
+        const i = u.indexOf(id);
+        return i < 0 ? u : [...u.slice(0, i), ...u.slice(i + 1)];
+      });
     }
   };
 
@@ -161,7 +168,7 @@ export default function MinutesSectionEditor({
       e.preventDefault();
       insertAt(s.id, box.selectionStart, table, box.selectionEnd);
       setPasteNote({ id: s.id, text: t("Pasted as a table. Check it in the preview below.") });
-    } else if (picture) {
+    } else if (picture && !e.clipboardData.getData("text/plain").trim()) {
       e.preventDefault();
       addPicture(s.id, picture, box.selectionStart);
     }
@@ -367,7 +374,7 @@ export default function MinutesSectionEditor({
                     type="file"
                     accept="image/png,image/jpeg"
                     className="hidden"
-                    disabled={uploading === s.id}
+                    disabled={uploading.includes(s.id)}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       e.target.value = "";
@@ -375,7 +382,7 @@ export default function MinutesSectionEditor({
                       if (file) addPicture(s.id, file, box ? box.selectionStart : s.body.length);
                     }}
                   />
-                  {uploading === s.id ? t("Adding the picture...") : t("+ Add a picture")}
+                  {uploading.includes(s.id) ? t("Adding the picture...") : t("+ Add a picture")}
                 </label>
                 <span className="text-xs text-gray-400">
                   {t("Paste a table from Word or a screenshot straight into the box.")}

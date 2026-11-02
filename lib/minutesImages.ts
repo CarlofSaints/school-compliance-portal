@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { readFile, writeFile } from "./controlData";
+import { crestImage } from "./minutesDocx";
 
 // Pictures pasted into a minutes section (lib/minutesBody.ts has the format).
 // Stored by the SHA-256 of their bytes, beside the minutes they belong to, so
@@ -8,10 +9,10 @@ import { readFile, writeFile } from "./controlData";
 export const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // the request limit is ~4.5 MB
 
 /** PNG or JPEG by their first bytes, never by a name or a type the browser claims. */
-export function imageKind(bytes: Uint8Array): "png" | "jpg" | null {
-  if (bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
-  if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
-  return null;
+// One reader of image headers for the whole app (the crest uses it too).
+export function imageKind(bytes: Buffer): "png" | "jpg" | null {
+  const t = crestImage(bytes)?.type;
+  return t === "png" || t === "jpg" ? t : null;
 }
 
 const path = (minutesId: string, imageId: string) => `minutes/${minutesId}/images/${imageId}`;

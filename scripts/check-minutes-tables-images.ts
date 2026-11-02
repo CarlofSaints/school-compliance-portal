@@ -24,6 +24,9 @@ async function main() {
   assert.deepEqual(blocks.map((b) => b.kind), ["text", "table", "text"]);
   assert.deepEqual((blocks[1] as { rows: string[][] }).rows, [["Item", "Cost"], ["Paint", "R 1/200"], ["Hall", ""]]);
 
+  // "-" meaning nil is a real row; only 3+ dashes per cell is a divider.
+  assert.deepEqual((bodyBlocks(["| a | b |", "| - | - |", "|:---|---:|"].join("\n"))[0] as { rows: string[][] }).rows, [["a", "b"], ["-", "-"]]);
+
   // Pictures: only a real 64-hex id is a picture; anything else stays text.
   const id = "a".repeat(64);
   assert.deepEqual(bodyBlocks(imageLine(id, 800, 600)), [{ kind: "image", id, width: 800, height: 600 }]);
@@ -43,7 +46,7 @@ async function main() {
   } as unknown as Parameters<typeof createMinutes>[0]);
   const imgId = await saveMinutesImage(m.id, PNG);
   await updateMinutes(m.id, {
-    sections: [{ id: "s1", title: "Finance", order: 1, body: `Quotes:\n${table}\n${imageLine(imgId, 1, 1)}` }],
+    sections: [{ id: "s1", title: "Finance", order: 1, body: `Quotes:\n${table}\n${imageLine(imgId, 1, 99999)}` }],
   });
   const docx = await buildMinutesDocxFile((await getMinutes(m.id))!);
   const zip = await JSZip.loadAsync(docx);
@@ -51,6 +54,9 @@ async function main() {
   assert.ok((xml.match(/<w:tbl>/g) || []).length >= 2, "the section table holds a nested table");
   assert.ok(xml.includes("Paint") && xml.includes("R 1/200"));
   assert.ok(Object.keys(zip.files).some((n) => n.startsWith("word/media/")), "picture embedded");
+  // Its size comes from the file (1x1), not the 1x99999 the text claims.
+  // 1 px = 9525 EMU, so the picture is 9525 tall, not 99999 px.
+  assert.ok(xml.includes("cy=\"9525\""), "picture sized from the text, not the file");
   // Every table cell ends with a paragraph (Word reports anything else as corrupt).
   assert.ok(!/<\/w:tbl><\/w:tc>/.test(xml), "a cell ends on a table");
 

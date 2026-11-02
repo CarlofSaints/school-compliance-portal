@@ -31,7 +31,6 @@ import {
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
 import { bodyBlocks } from "./minutesBody";
-import { imageKind } from "./minutesImages";
 
 /** Pictures used by the sections, by id, read before the document is built. */
 export type SectionImages = Map<string, Buffer>;
@@ -78,17 +77,18 @@ function bodyContent(body: string, width: number, images: SectionImages, opts: {
       out.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
     } else {
       const bytes = images.get(b.id);
-      const kind = bytes && imageKind(bytes);
-      if (!bytes || !kind) {
+      const real = bytes ? crestImage(bytes) : null;
+      if (!bytes || !real || (real.type !== "png" && real.type !== "jpg")) {
         out.push(new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] }));
         continue;
       }
       // 1 px = 15 twips at 96 dpi. Never wider than the column, never upscaled.
       const maxPx = Math.floor(width / 15);
-      const w = Math.min(b.width, maxPx);
-      const h = Math.max(1, Math.round((b.height / b.width) * w));
+      // Size from the file itself: the "WxH" in the text is written by a browser.
+      const w = Math.min(real.width, maxPx);
+      const h = Math.max(1, Math.min(Math.round((real.height / real.width) * w), 1200));
       try {
-        out.push(new Paragraph({ spacing: { before: 60, after: 60 }, children: [new ImageRun({ type: kind, data: bytes, transformation: { width: w, height: h } })] }));
+        out.push(new Paragraph({ spacing: { before: 60, after: 60 }, children: [new ImageRun({ type: real.type, data: bytes, transformation: { width: w, height: h } })] }));
       } catch {
         out.push(new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] }));
       }

@@ -14,22 +14,40 @@ export function tableAwarePaste(html: string): string | null {
   if (!html || !/<table/i.test(html)) return null;
   const doc = new DOMParser().parseFromString(html, "text/html");
   const parts: string[] = [];
-  const blocks = doc.body.querySelectorAll("table, p, li, h1, h2, h3, h4, h5, h6");
-  for (const el of Array.from(blocks)) {
-    // A paragraph INSIDE a table cell is part of that cell, not its own line.
-    if (el.tagName !== "TABLE" && el.closest("table")) continue;
-    // A table inside a table: its outer one already carries the text.
-    if (el.tagName === "TABLE" && el.parentElement?.closest("table")) continue;
-    if (el.tagName === "TABLE") {
-      const rows = Array.from((el as HTMLTableElement).rows)
+  let line = "";
+  const flush = () => {
+    const text = line.replace(/\s+/g, " ").trim();
+    if (text) parts.push(text);
+    line = "";
+  };
+  const BLOCK = /^(P|DIV|LI|UL|OL|H[1-6]|BLOCKQUOTE|SECTION|ARTICLE|PRE|TR)$/;
+  // Walks the pasted page once, in order: every piece of text lands exactly
+  // once, block elements break lines, and an outermost table becomes rows.
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      line += node.textContent || "";
+      return;
+    }
+    if (!(node instanceof Element)) return;
+    if (/^(STYLE|SCRIPT|HEAD|META|TITLE)$/.test(node.tagName)) return;
+    if (node.tagName === "TABLE") {
+      flush();
+      const rows = Array.from((node as HTMLTableElement).rows)
+        // Cells of THIS table only, not of a table nested inside one.
+        .filter((tr) => tr.closest("table") === node)
         .map((tr) => Array.from(tr.cells).map((td) => cellText(td.textContent || "")))
         .filter((r) => r.some((c) => c));
       if (rows.length) parts.push(tableLines(rows));
-    } else {
-      const text = (el.textContent || "").replace(/\s+/g, " ").trim();
-      if (text) parts.push(text);
+      return;
     }
-  }
+    if (node.tagName === "BR") return flush();
+    const block = BLOCK.test(node.tagName);
+    if (block) flush();
+    node.childNodes.forEach(walk);
+    if (block) flush();
+  };
+  walk(doc.body);
+  flush();
   return parts.length ? parts.join("\n") : null;
 }
 

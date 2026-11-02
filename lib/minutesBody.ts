@@ -4,9 +4,10 @@
 // Carl: "we need to allow for screenshots and tables. when i am adding in a
 // table from Word it scrambled it and pasted it as text."
 //
-// 🔴 A section body stays PLAIN TEXT. Every existing set of minutes, the
-// signing hash, autosave, Ask Jono and the Word file all read it as text, so
-// nothing already written changes. A table is lines of "| a | b |"; a picture
+// 🔴 A section body stays PLAIN TEXT. The signing hash, autosave and Ask Jono
+// read it exactly as before, so no stored word changes and no signature
+// breaks. Only the DRAWING changes: an older line that already began and ended
+// with "|" now shows as a table row. A table is lines of "| a | b |"; a picture
 // is one line "[image:<sha256>:<w>x<h>]". The picture is named by the SHA-256
 // of its bytes, so the signing hash (which covers the body) also covers the
 // picture: swapping the file changes its name and breaks the signature.
@@ -20,7 +21,10 @@ export type BodyBlock =
 const IMAGE_LINE = /^\[image:([0-9a-f]{64}):(\d{1,5})x(\d{1,5})\]$/;
 const isTableLine = (l: string) => /^\|.*\|$/.test(l.trim());
 // A markdown-style "|---|---|" divider carries no data.
-const isDivider = (l: string) => /^\|[\s:|-]+\|$/.test(l.trim()) && l.includes("-");
+const isDivider = (l: string) => {
+  const cells = l.trim().slice(1, -1).split("|").map((c) => c.trim());
+  return cells.length > 0 && cells.every((c) => /^:?-{3,}:?$/.test(c));
+};
 
 export function imageLine(id: string, width: number, height: number): string {
   return `[image:${id}:${Math.round(width)}x${Math.round(height)}]`;
