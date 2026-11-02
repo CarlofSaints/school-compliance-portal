@@ -36,3 +36,19 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #aaa;
 }
+
+/* The minutes text editor (components/RichTextEditor). Tailwind's reset strips
+   list bullets and table borders, so the editor puts them back to look like
+   the printed minutes. */
+.rich-minutes p { margin: 0 0 0.25rem; }
+.rich-minutes ul { list-style: disc; padding-left: 1.5rem; }
+.rich-minutes ol { list-style: decimal; padding-left: 1.5rem; }
+.rich-minutes h1 { font-size: 1.125rem; font-weight: 700; }
+.rich-minutes h2, .rich-minutes h3 { font-weight: 700; }
+.rich-minutes table { border-collapse: collapse; margin: 0.5rem 0; }
+.rich-minutes td, .rich-minutes th { border: 1px solid #d1d5db; padding: 0.25rem 0.5rem; vertical-align: top; min-width: 3rem; }
+.rich-minutes th { background: #f9fafb; font-weight: 500; text-align: left; }
+.rich-minutes img { max-width: 100%; height: auto; border-radius: 0.25rem; }
+.rich-minutes img.ProseMirror-selectednode { outline: 2px solid var(--color-primary, #2563eb); }
+.rich-minutes mark { padding: 0 0.1em; border-radius: 0.1em; }
+.rich-minutes .selectedCell { background: rgba(37, 99, 235, 0.08); }

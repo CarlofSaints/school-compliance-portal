@@ -12,12 +12,11 @@ import {
   type MinutesSection,
 } from "@/lib/minutes";
 import AttendeeRowsEditor from "@/components/AttendeeRowsEditor";
-import { captureText } from "@/lib/minutesCapture";
 import { AttendanceGroups } from "@/components/AttendanceList";
 import { useT } from "@/components/I18nProvider";
 import MinutesBody from "@/components/MinutesBody";
-import { tableAwarePaste, imageSize } from "@/lib/minutesPaste";
-import { bodyBlocks, imageLine } from "@/lib/minutesBody";
+import RichTextEditor from "@/components/RichTextEditor";
+import type { Editor } from "@tiptap/react";
 
 // The minute-taking surface: sections a school defines for itself.
 //
@@ -50,8 +49,8 @@ export default function MinutesSectionEditor({
 }) {
   const t = useT();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  // The text boxes, so the capture button can read where the cursor is.
-  const boxes = useRef(new Map<string, HTMLTextAreaElement>());
+  // The editors, so the capture button can read where the cursor is.
+  const editors = useRef(new Map<string, Editor>());
   const [capturing, setCapturing] = useState<string | null>(null);
   const [captureHint, setCaptureHint] = useState<{ id: string; text: string } | null>(null);
   // The People register, for "Fill from People register" on an attendance
@@ -72,8 +71,13 @@ export default function MinutesSectionEditor({
   }, [editable]);
 
   const capture = async (s: MinutesSection) => {
-    const box = boxes.current.get(s.id);
-    const text = box ? captureText(s.body, box.selectionStart, box.selectionEnd) : "";
+    const ed = editors.current.get(s.id);
+    // The selected text, else the paragraph (or table cell, list item) the cursor is in.
+    let text = "";
+    if (ed) {
+      const { from, to, $from } = ed.state.selection;
+      text = (to > from ? ed.state.doc.textBetween(from, to, "\n") : $from.parent.textContent).trim();
+    }
     if (!text) {
       setCaptureHint({ id: s.id, text: t("Click into the point you want, or select its text, then press the button.") });
       return;
@@ -103,76 +107,6 @@ export default function MinutesSectionEditor({
   const update = (id: string, patch: Partial<MinutesSection>) =>
     commit(ordered.map((s) => (s.id === id ? { ...s, ...patch } : s)));
 
-  // 🔴 The sections AS THEY ARE NOW. A picture upload takes a moment, and
-  // typing carries on meanwhile: inserting into the copy from before the
-  // upload would throw that typing away.
-  const latest = useRef(ordered);
-  useEffect(() => {
-    latest.current = ordered;
-  });
-  const [uploading, setUploading] = useState<string[]>([]);
-  const [pasteNote, setPasteNote] = useState<{ id: string; text: string } | null>(null);
-
-  /** Puts text on its own lines at the cursor (or at the end), in the latest copy. */
-  const insertAt = (id: string, at: number, text: string, end = at) => {
-    const now = latest.current;
-    const cur = now.find((x) => x.id === id);
-    if (!cur) return;
-    const pos = Math.min(Math.max(at, 0), cur.body.length);
-    const before = cur.body.slice(0, pos);
-    // A selection is replaced, the same as an ordinary paste.
-    const after = cur.body.slice(Math.min(Math.max(end, pos), cur.body.length));
-    const lead = before && !before.endsWith("\n") ? "\n" : "";
-    const tail = after && !after.startsWith("\n") ? "\n" : "";
-    commit(now.map((x) => (x.id === id ? { ...x, body: before + lead + text + tail + after } : x)));
-  };
-
-  const addPicture = async (id: string, file: File, at: number) => {
-    // Where the cursor was, as the text before it: typing elsewhere during
-    // the upload must not shift the picture into the middle of a word.
-    const before = (latest.current.find((x) => x.id === id)?.body ?? "").slice(0, at);
-    if (!/^image\/(png|jpeg)$/.test(file.type)) {
-      setPasteNote({ id, text: t("Add a PNG or JPEG picture (a screenshot is usually PNG).") });
-      return;
-    }
-    setUploading((u) => [...u, id]);
-    setPasteNote(null);
-    try {
-      const size = await imageSize(file).catch(() => ({ width: 800, height: 600 }));
-      const form = new FormData();
-      form.append("file", file);
-      const res = await authFetch(`/api/minutes/${minutesId}/images`, { method: "POST", body: form });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setPasteNote({ id, text: data.error || t("Could not add that picture.") });
-        return;
-      }
-      const now = latest.current.find((x) => x.id === id)?.body ?? "";
-      insertAt(id, now.startsWith(before) ? before.length : now.length, imageLine(data.id, size.width, size.height));
-    } catch {
-      setPasteNote({ id, text: t("Could not add that picture.") });
-    } finally {
-      setUploading((u) => {
-        const i = u.indexOf(id);
-        return i < 0 ? u : [...u.slice(0, i), ...u.slice(i + 1)];
-      });
-    }
-  };
-
-  const onPaste = (s: MinutesSection, e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const box = e.currentTarget;
-    const picture = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
-    const table = tableAwarePaste(e.clipboardData.getData("text/html"));
-    if (table) {
-      // A table from Word: kept as a table, with any text around it.
-      e.preventDefault();
-      insertAt(s.id, box.selectionStart, table, box.selectionEnd);
-      setPasteNote({ id: s.id, text: t("Pasted as a table. Check it in the preview below.") });
-    } else if (picture && !e.clipboardData.getData("text/plain").trim()) {
-      e.preventDefault();
-      addPicture(s.id, picture, box.selectionStart);
-    }
-  };
 
   const move = (id: string, dir: -1 | 1) => {
     const i = ordered.findIndex((s) => s.id === id);
@@ -350,15 +284,10 @@ export default function MinutesSectionEditor({
 
             {editable ? (
               <>
-              <textarea
-                ref={(el) => {
-                  if (el) boxes.current.set(s.id, el);
-                  else boxes.current.delete(s.id);
-                }}
-                value={s.body}
-                onChange={(e) => update(s.id, { body: e.target.value })}
-                onPaste={(e) => onPaste(s, e)}
-                rows={isAttendance(s) || isApologies(s) ? 2 : 5}
+              <RichTextEditor
+                minutesId={minutesId}
+                doc={s.doc}
+                body={s.body}
                 placeholder={
                   isApologies(s)
                     ? t("Anything else to record about apologies (optional)")
@@ -366,35 +295,15 @@ export default function MinutesSectionEditor({
                       ? t("Wording under the list (optional)")
                       : t("What was discussed and decided")
                 }
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                onChange={(doc, body) => update(s.id, { doc, body })}
+                onReady={(ed) => {
+                  if (ed) editors.current.set(s.id, ed);
+                  else editors.current.delete(s.id);
+                }}
               />
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <label className="text-xs font-medium text-primary hover:underline cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    disabled={uploading.includes(s.id)}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      e.target.value = "";
-                      const box = boxes.current.get(s.id);
-                      if (file) addPicture(s.id, file, box ? box.selectionStart : s.body.length);
-                    }}
-                  />
-                  {uploading.includes(s.id) ? t("Adding the picture...") : t("+ Add a picture")}
-                </label>
-                <span className="text-xs text-gray-400">
-                  {t("Paste a table from Word or a screenshot straight into the box.")}
-                </span>
-                {pasteNote?.id === s.id && <span className="text-xs text-gray-600">{pasteNote.text}</span>}
-              </div>
-              {bodyBlocks(s.body).some((b) => b.kind !== "text") && (
-                <div className="mt-2 rounded-lg border border-dashed border-gray-200 p-3">
-                  <p className="text-xs text-gray-400 mb-1">{t("How it will look")}</p>
-                  <MinutesBody minutesId={minutesId} body={s.body} />
-                </div>
-              )}
+              <p className="mt-1 text-xs text-gray-400">
+                {t("Format it like Word, paste tables and screenshots straight in.")}
+              </p>
               {onCaptureAction && !isApologies(s) && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <button
@@ -417,7 +326,7 @@ export default function MinutesSectionEditor({
               </>
             ) : s.body || groups.length === 0 ? (
               s.body ? (
-                <MinutesBody minutesId={minutesId} body={s.body} />
+                <MinutesBody minutesId={minutesId} body={s.body} doc={s.doc} />
               ) : (
                 <p className="text-sm text-gray-400">{t("Nothing recorded.")}</p>
               )

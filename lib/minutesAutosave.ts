@@ -5,6 +5,7 @@
 // Carl typed a whole set of minutes, pressed "Send for checking" without
 // saving, and lost all of it to the reload afterwards.
 
+import { stableDoc, type RichNode } from "./richDoc";
 import {
   ATTENDANCE_STATUS_LABELS,
   cleanAttendees,
@@ -108,6 +109,8 @@ function normalText(t: MinutesText): string {
             responsible: String(s?.responsible ?? "").trim() || undefined,
             kind,
             attendees: kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
+            // A formatting-only change (making a word bold) is a change to save.
+            doc: s?.doc ? stableDoc(s.doc as RichNode) : undefined,
           };
         })
     : t.sections;
