@@ -2189,5 +2189,6 @@
   "New meeting type, e.g. AGM": "Uhlobo olutsha lwentlanganiso, umz. i-AGM",
   "Add meeting type": "Yongeza uhlobo lwentlanganiso",
   "{name} minutes": "Imizuzu ye-{name}",
-  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umntu ofanele ukufumana imizuzu esayiniweyo ye-SGB / iBhodi, kunye nemizuzu yazo zonke ezinye iintlobo zeentlanganiso ngaphandle kwe-FINCOM."
+  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Wonke umntu ofanele ukufumana imizuzu esayiniweyo ye-SGB / iBhodi, kunye nemizuzu yazo zonke ezinye iintlobo zeentlanganiso ngaphandle kwe-FINCOM.",
+  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Imizuzu igcinwa njengoko uchwetheza ukuze ungaphulukani nanto. Qinisekisa nje ukuba unofikelelo kwi-intanethi."
 }
