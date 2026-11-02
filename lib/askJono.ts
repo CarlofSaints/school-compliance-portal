@@ -118,8 +118,10 @@ export class JonoError extends Error {}
 /** The longest answer allowed: also what a quote assumes. */
 export const JONO_MAX_OUTPUT = 4000;
 
-/** The request exactly as it will be sent, so a quote prices what really runs. */
-async function jonoRequest(session: SessionPayload, turns: ChatTurn[], locale: Locale) {
+/** The request exactly as it will be sent: built ONCE per call, so the quote
+ *  prices exactly what runs. */
+export type JonoRequest = Awaited<ReturnType<typeof jonoRequest>>;
+export async function jonoRequest(session: SessionPayload, turns: ChatTurn[], locale: Locale) {
   const [records, branding] = await Promise.all([cachedRecordsFor(session), resolveBranding()]);
   const language = LOCALES.find((l) => l.code === locale)?.label ?? "English";
   const today = new Date().toISOString().slice(0, 10);
@@ -161,8 +163,7 @@ ${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "
  * How many tokens the question will read, for the quote. Counted by the API
  * (no charge); a rough count from the length if that fails, rounded up.
  */
-export async function estimateJonoTokens(session: SessionPayload, turns: ChatTurn[], locale: Locale): Promise<number> {
-  const req = await jonoRequest(session, turns, locale);
+export async function countJonoTokens(req: JonoRequest): Promise<number> {
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
     const { input_tokens } = await client.messages.countTokens({ model: req.model, system: req.system, messages: req.messages });
@@ -172,15 +173,13 @@ export async function estimateJonoTokens(session: SessionPayload, turns: ChatTur
   }
 }
 
-export async function askJono(
-  session: SessionPayload,
-  turns: ChatTurn[],
-  locale: Locale
-): Promise<{ text: string; usage: Anthropic.Usage }> {
+export async function askJono(req: JonoRequest): Promise<{ text: string; usage: Anthropic.Usage }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
-  const message = await client.messages.create(await jonoRequest(session, turns, locale));
+  // 🔴 Well inside the route's 120s: credits held for a paid answer are only
+  // given back if this returns or throws, never if the platform kills it.
+  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 45_000 });
+  const message = await client.messages.create(req);
 
   if (message.stop_reason === "refusal") throw new JonoError("Jono cannot answer that one.");
   const text = message.content

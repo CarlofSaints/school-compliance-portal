@@ -2244,5 +2244,11 @@
   "This question requires up to {n} credits and you have {b} left.": "Hierdie vraag vereis tot {n} krediete en u het {b} oor.",
   "Buy more credits here": "Koop meer krediete hier",
   "This question is going to require credits to answer: up to {n} (you have {b}). You are charged what it actually costs, never more than this.": "Hierdie vraag gaan krediete vereis om te beantwoord: tot {n} (u het {b}). U betaal wat dit werklik kos, nooit meer as dit nie.",
-  "Use up to {n} credits": "Gebruik tot {n} krediete"
+  "Use up to {n} credits": "Gebruik tot {n} krediete",
+  "Free:": "Gratis:",
+  "how to use the portal (\"How do I...?\"), answered from the portal guide.": "hoe om die portaal te gebruik (\"Hoe doen ek...?\"), beantwoord uit die portaalgids.",
+  "Uses credits:": "Gebruik krediete:",
+  "Uses credits from 16 November:": "Gebruik krediete vanaf 16 November:",
+  "questions about your school's minutes, actions, projects or the law. Jono always shows the cost first and asks.": "vrae oor u skool se notule, aksies, projekte of die wet. Jono wys altyd eers die koste en vra.",
+  "Free": "Gratis"
 }

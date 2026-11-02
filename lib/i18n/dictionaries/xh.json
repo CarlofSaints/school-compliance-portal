@@ -2244,5 +2244,11 @@
   "This question requires up to {n} credits and you have {b} left.": "Lo mbuzo ufuna ukuya kutsho kwiikhredithi ezi-{n} kwaye unezi-{b} eziseleyo.",
   "Buy more credits here": "Thenga iikhredithi ezongezelelweyo apha",
   "This question is going to require credits to answer: up to {n} (you have {b}). You are charged what it actually costs, never more than this.": "Lo mbuzo uza kufuna iikhredithi ukuze uphendulwe: ukuya kutsho kwezi-{n} (unezi-{b}). Uhlawula oko kuxabisa ngokwenene, akunjalo ngaphezu koku.",
-  "Use up to {n} credits": "Sebenzisa ukuya kutsho kwiikhredithi ezi-{n}"
+  "Use up to {n} credits": "Sebenzisa ukuya kutsho kwiikhredithi ezi-{n}",
+  "Free:": "Simahla:",
+  "how to use the portal (\"How do I...?\"), answered from the portal guide.": "indlela yokusebenzisa iportal (\"Ndenza njani...?\"), iphendulwa kwisikhokelo seportal.",
+  "Uses credits:": "Isebenzisa iikhredithi:",
+  "Uses credits from 16 November:": "Isebenzisa iikhredithi ukusukela nge-16 kaNovemba:",
+  "questions about your school's minutes, actions, projects or the law. Jono always shows the cost first and asks.": "imibuzo malunga nemizuzu yesikolo sakho, izenzo, iiprojekthi okanye umthetho. UJono uhlala ebonisa iindleko kuqala kwaye abuze.",
+  "Free": "Simahla"
 }

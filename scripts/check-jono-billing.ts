@@ -20,6 +20,7 @@ assert.equal(jonoCharging(new Date("2026-11-15T22:00:00Z")), true, "midnight SAS
 // Free: clear "how do I" questions the Guide covers; everything else goes to the AI.
 assert.ok(freeHowTo("How do I create a new minutes template?", "en")?.includes("Minutes templates"));
 assert.ok(freeHowTo("how do i create a new user", "en")?.includes("Create User"));
+assert.ok(freeHowTo("How do I add a meeting type?", "en")?.startsWith("**Meeting types"), "singular finds its section");
 assert.equal(freeHowTo("Where are we with the school hall project?", "en"), null);
 assert.equal(freeHowTo("Can I suspend a learner for hitting another child?", "en"), null);
 assert.equal(freeHowTo("How do I make the hall project go faster?", "en"), null);

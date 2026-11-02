@@ -58,12 +58,12 @@ export function creditsForUsd(usd: number): number {
 }
 
 /**
- * The most an answer can cost, quoted BEFORE it runs: every input token at
- * the full price (as if nothing were cached) and the longest answer allowed.
- * The charge is the actual cost, never more than this.
+ * The most an answer can cost, quoted BEFORE it runs: every input token at the
+ * dearest input price (a cache WRITE, which a first question pays) and the
+ * longest answer allowed. The charge is the actual cost, never more than this.
  */
 export function quoteCredits(inputTokens: number, maxOutputTokens: number): number {
-  return creditsForUsd(usdCost({ input_tokens: inputTokens, output_tokens: maxOutputTokens }));
+  return creditsForUsd(usdCost({ input_tokens: 0, cache_creation_input_tokens: inputTokens, output_tokens: maxOutputTokens }));
 }
 
 /** Credits are kept to one decimal, so repeated tenths never drift. */

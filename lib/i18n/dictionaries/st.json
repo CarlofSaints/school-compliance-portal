@@ -2244,5 +2244,11 @@
   "This question requires up to {n} credits and you have {b} left.": "Potso ena e hloka ho fihla ho dikhrediti tse {n} mme o setse le tse {b}.",
   "Buy more credits here": "Reka dikhrediti tse ding mona",
   "This question is going to require credits to answer: up to {n} (you have {b}). You are charged what it actually costs, never more than this.": "Potso ena e tla hloka dikhrediti hore e arabjwe: ho fihla ho tse {n} (o na le tse {b}). O lefa seo e se jang ka nnete, eseng ho feta sena.",
-  "Use up to {n} credits": "Sebedisa ho fihla ho dikhrediti tse {n}"
+  "Use up to {n} credits": "Sebedisa ho fihla ho dikhrediti tse {n}",
+  "Free:": "Mahala:",
+  "how to use the portal (\"How do I...?\"), answered from the portal guide.": "tsela ya ho sebedisa portal (\"Ke etsa jwang...?\"), e arabjwa ho tswa tataisong ya portal.",
+  "Uses credits:": "E sebedisa dikhrediti:",
+  "Uses credits from 16 November:": "E sebedisa dikhrediti ho tloha ka la 16 Pudungwana:",
+  "questions about your school's minutes, actions, projects or the law. Jono always shows the cost first and asks.": "dipotso mabapi le metsotso ya sekolo sa hao, diketso, diprojeke kapa molao. Jono o dula a bontsha ditjeho pele mme a botsa.",
+  "Free": "Mahala"
 }

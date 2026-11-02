@@ -2244,5 +2244,11 @@
   "This question requires up to {n} credits and you have {b} left.": "Potšišo ye e nyaka go fihla go dikhrediti tše {n} gomme o šetše le tše {b}.",
   "Buy more credits here": "Reka dikhrediti tše dingwe mo",
   "This question is going to require credits to answer: up to {n} (you have {b}). You are charged what it actually costs, never more than this.": "Potšišo ye e tla nyaka dikhrediti gore e arabje: go fihla go tše {n} (o na le tše {b}). O lefela seo e se bitšago ka nnete, e sego go feta se.",
-  "Use up to {n} credits": "Šomiša go fihla go dikhrediti tše {n}"
+  "Use up to {n} credits": "Šomiša go fihla go dikhrediti tše {n}",
+  "Free:": "Mahala:",
+  "how to use the portal (\"How do I...?\"), answered from the portal guide.": "ka mokgwa wa go šomiša portal (\"Ke dira bjang...?\"), e arabja go tšwa tlhahlong ya portal.",
+  "Uses credits:": "E šomiša dikhrediti:",
+  "Uses credits from 16 November:": "E šomiša dikhrediti go tloga ka la 16 Nofemere:",
+  "questions about your school's minutes, actions, projects or the law. Jono always shows the cost first and asks.": "dipotšišo mabapi le metsotso ya sekolo sa gago, ditiro, diprojeke goba molao. Jono o dula a bontšha ditshenyagalelo pele gomme a botšiša.",
+  "Free": "Mahala"
 }

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
 import LessonText from "@/components/LessonText";
+import { jonoCharging } from "@/lib/jonoBilling";
 
 interface Turn {
   role: "user" | "assistant";
@@ -45,12 +46,13 @@ export default function AskJono() {
     const q = question.trim();
     if (!q || busy) return;
     setDraft("");
-    send(turns, q);
+    // A question still waiting on credits is set aside, never sent twice in a row.
+    send(pending ? pending.next : turns, q);
   };
 
   // One sender for a new question, "Use credits" and "Ask the AI instead".
   // `before` is the conversation without this question.
-  const send = async (before: Turn[], q: string, opts: { confirm?: boolean; forceAi?: boolean } = {}) => {
+  const send = async (before: Turn[], q: string, opts: { accepted?: number; forceAi?: boolean } = {}) => {
     const next: Turn[] = [...before, { role: "user", content: q }];
     setTurns(next);
     setBusy(true);
@@ -86,7 +88,12 @@ export default function AskJono() {
     setBusy(false);
   };
 
-  const examples = [t("Where are we with the school hall project?"), t("Can I suspend a learner for hitting another child?"), t("How do I create a new minutes template?")];
+  // Each example says whether it is free (answered from the guide) or uses credits.
+  const examples: [string, boolean][] = [
+    [t("How do I create a new minutes template?"), true],
+    [t("Where are we with the school hall project?"), false],
+    [t("Can I suspend a learner for hitting another child?"), false],
+  ];
 
   if (!open) {
     return (
@@ -152,9 +159,20 @@ export default function AskJono() {
         {turns.length === 0 && (
           <div className="space-y-2">
             <p className="text-sm text-gray-600">{t("Hi, I'm Jono. Ask me anything about your school's meetings, actions and projects, or about the rules schools must follow. For example:")}</p>
-            {examples.map((e) => (
-              <button key={e} onClick={() => ask(e)} className="block w-full text-left text-sm border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50">
-                {e}
+            <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 space-y-1">
+              <p>
+                <span className="font-semibold text-emerald-700">{t("Free:")}</span> {t("how to use the portal (\"How do I...?\"), answered from the portal guide.")}
+              </p>
+              <p>
+                <span className="font-semibold text-amber-700">{jonoCharging() ? t("Uses credits:") : t("Uses credits from 16 November:")}</span> {t("questions about your school's minutes, actions, projects or the law. Jono always shows the cost first and asks.")}
+              </p>
+            </div>
+            {examples.map(([e, free]) => (
+              <button key={e} onClick={() => ask(e)} className="flex w-full items-center justify-between gap-2 text-left text-sm border border-gray-200 rounded-lg px-3 py-2 hover:bg-gray-50">
+                <span>{e}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${free ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                  {free ? t("Free") : t("Credits")}
+                </span>
               </button>
             ))}
           </div>
@@ -199,7 +217,7 @@ export default function AskJono() {
                   {t("This question is going to require credits to answer: up to {n} (you have {b}). You are charged what it actually costs, never more than this.", { n: pending.quote, b: pending.balance })}
                 </p>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => send(pending.next, pending.q, { confirm: true, forceAi: true })} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark">
+                  <button type="button" onClick={() => send(pending.next, pending.q, { accepted: pending.quote, forceAi: true })} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark">
                     {t("Use up to {n} credits", { n: pending.quote })}
                   </button>
                   <button type="button" onClick={() => { setPending(null); setTurns(pending.next); setDraft(pending.q); }} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs">
