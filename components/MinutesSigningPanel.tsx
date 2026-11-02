@@ -5,6 +5,7 @@ import Link from "next/link";
 import { authFetch } from "@/lib/useAuth";
 import type { SaveFirst } from "@/lib/minutesAutosave";
 import DownloadLink from "@/components/DownloadLink";
+import FileUpload from "@/components/FileUpload";
 import { useT } from "@/components/I18nProvider";
 import AudiencePreview from "@/components/AudiencePreview";
 import {
@@ -67,6 +68,10 @@ export default function MinutesSigningPanel({
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
+  // Signed on paper: "pick" = choosing who signed, "ask" = offer the upload,
+  // "upload" = the drop box is showing.
+  const [paperStep, setPaperStep] = useState<"" | "pick" | "ask" | "upload">("");
+  const [ticked, setTicked] = useState<string[]>([]);
 
   const me = myEmail.trim().toLowerCase();
   const mine = signatories.find((s) => s.email.trim().toLowerCase() === me);
@@ -129,12 +134,36 @@ export default function MinutesSigningPanel({
         onToast(data.error || t("Could not upload that file."), "error");
         return;
       }
-      onToast(t("Signed copy uploaded. These minutes are now closed."), "success");
+      onToast(
+        data.record?.status === "signed" && status !== "signed"
+          ? t("Signed copy uploaded. These minutes are now closed.")
+          : t("Signed copy kept with the minutes."),
+        "success"
+      );
+      setPaperStep("");
       onChanged();
     } finally {
       setBusy(false);
     }
   }
+
+  async function savePaper() {
+    const data = await post("paper-signatures", { emails: ticked });
+    if (!data) return;
+    setTicked([]);
+    onToast(
+      data.progress?.complete
+        ? t("Recorded. Everyone has signed, so these minutes are closed and on their way to the governing body.")
+        : t("Recorded. Still waiting on {names}.", { names: (data.progress?.waitingOn || []).join(", ") }),
+      "success"
+    );
+    // Offered straight away, while the paper copy is in their hand.
+    setPaperStep(signedCopy ? "" : "ask");
+  }
+
+  const unsigned = signatories.filter((s) => !s.signedAt);
+  const mayRecordPaper = open && (canManage || !!mine) && unsigned.length > 0;
+  const anyOnPaper = signatories.some((s) => s.onPaper);
 
   if (!open && status !== "signed" && !canOpenSigning(status)) return null;
 
@@ -168,7 +197,9 @@ export default function MinutesSigningPanel({
       {canManage && status !== "signed" && (
         <div className={canOpenSigning(status) ? "mt-5 pt-5 border-t border-gray-100" : ""}>
           <p className="text-sm text-gray-500 mb-2">
-            {t("Signed on paper instead? Download the Word file above, sign it, then upload the signed page here. That closes the minutes the same way.")}
+            {open && signatories.length > 0
+              ? t("Have the signed paper copy? Upload it here to keep it with the minutes. Use Signed on paper above to record who signed it.")
+              : t("Signed on paper instead? Download the Word file above, sign it, then upload the signed page here. That closes the minutes the same way.")}
           </p>
           <label className="inline-block">
             <input
@@ -223,7 +254,11 @@ export default function MinutesSigningPanel({
                 >
                   <span className="text-dark font-medium">{s.name}</span>
                   <span className="text-gray-400 text-xs">{t(SIGNATORY_ROLE_LABELS[s.role])}</span>
-                  {s.signedAt ? (
+                  {s.signedAt && s.onPaper ? (
+                    <span className="text-emerald-700 text-xs">
+                      {t("Signed on paper, recorded by {name} {when}", { name: s.onPaper.markedBy, when: when(s.signedAt) })}
+                    </span>
+                  ) : s.signedAt ? (
                     <span className="text-emerald-700 text-xs">{t("Signed {when}", { when: when(s.signedAt) })}</span>
                   ) : (
                     <span className="text-gray-400 text-xs">
@@ -242,6 +277,105 @@ export default function MinutesSigningPanel({
               <li className="text-sm text-gray-400">{t("Nobody has been asked to sign yet.")}</li>
             )}
           </ul>
+
+          {anyOnPaper && !signedCopy && paperStep === "" && (
+            <p className="text-xs text-amber-700 mb-4">
+              {t("No signed paper copy uploaded yet, so the paper signatures rest on the word of whoever ticked them.")}{" "}
+              {(canManage || !!mine) && (
+                <button onClick={() => setPaperStep("upload")} className="underline font-medium">
+                  {t("Upload it now")}
+                </button>
+              )}
+            </p>
+          )}
+
+          {mayRecordPaper && paperStep === "" && (
+            <button
+              onClick={() => setPaperStep("pick")}
+              disabled={busy}
+              className="mb-4 px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors"
+            >
+              {t("Signed on paper")}
+            </button>
+          )}
+
+          {paperStep === "pick" && mayRecordPaper && (
+            <div className="rounded-lg border border-gray-200 p-4 mb-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">{t("Who signed the paper copy?")}</p>
+              <div className="space-y-1.5 mb-3">
+                {unsigned.map((s) => (
+                  <label key={s.email} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={ticked.includes(s.email)}
+                      onChange={(e) =>
+                        setTicked((xs) => (e.target.checked ? [...xs, s.email] : xs.filter((x) => x !== s.email)))
+                      }
+                    />
+                    <span className="text-dark">{s.name}</span>
+                    <span className="text-gray-400 text-xs">{t(SIGNATORY_ROLE_LABELS[s.role])}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                {t("Each person ticked is emailed to say they were recorded as signing, so a wrong tick gets caught.")}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={savePaper}
+                  disabled={busy || ticked.length === 0}
+                  className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  {busy ? t("Saving...") : t("Record paper signatures")}
+                </button>
+                <button
+                  onClick={() => {
+                    setPaperStep("");
+                    setTicked([]);
+                  }}
+                  className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
+                >
+                  {t("Cancel")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {paperStep === "ask" && (
+            <div className="rounded-lg border border-gray-200 p-4 mb-4">
+              <p className="text-sm text-gray-700 mb-3">
+                {t("Would you like to upload the signed minutes to keep them with the record?")}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPaperStep("upload")}
+                  className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium"
+                >
+                  {t("Yes, upload")}
+                </button>
+                <button
+                  onClick={() => setPaperStep("")}
+                  className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm"
+                >
+                  {t("Not now")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {paperStep === "upload" && (
+            <div className="mb-4">
+              <FileUpload
+                accept=".pdf,.doc,.docx,image/*"
+                label={t("The signed minutes: a scan, a PDF or a photo of the signed pages")}
+                onChange={(file) => uploadSigned(file)}
+              />
+              {busy && <p className="text-xs text-gray-500 mt-2">{t("Uploading...")}</p>}
+              <button onClick={() => setPaperStep("")} className="mt-2 text-xs text-gray-500 underline">
+                {t("Cancel")}
+              </button>
+            </div>
+          )}
 
           {open && mine && !mine.signedAt && (
             <div className="rounded-lg border border-gray-200 p-4">

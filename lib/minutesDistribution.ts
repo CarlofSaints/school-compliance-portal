@@ -10,6 +10,46 @@ import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesReci
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
 import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
+import { recordActivity } from "./activityLog";
+import type { Actor } from "./activityActor";
+
+/**
+ * Everybody has now signed (in the app, on paper, or both), so the whole
+ * governing body gets the final record. Shared by the code signature and the
+ * paper ticks, so both routes close the minutes the same way.
+ *
+ * 🔴 A send that fails must NOT undo the signatures: it is logged and left for
+ * the "send" button on the minutes page.
+ */
+export async function distributeOnFinalSignature(record: MinutesRecord, actor: Actor): Promise<void> {
+  try {
+    // `record` is what the caller just SAVED. Re-reading would race that write.
+    const result = await distributeSignedMinutes(record);
+    await recordActivity({
+      ...actor,
+      action: "minutes.distributed",
+      entity: "minutes",
+      entityId: record.id,
+      summary: `Sent the signed "${record.title}" to ${result.sent} people`,
+      detail: {
+        to: result.to,
+        cc: result.cc,
+        failed: result.failed,
+        withoutEmail: result.withoutEmail,
+        trigger: "final signature",
+      },
+    });
+  } catch (err) {
+    await recordActivity({
+      ...actor,
+      action: "minutes.distribution_failed",
+      entity: "minutes",
+      entityId: record.id,
+      summary: `Could not send the signed "${record.title}" to the governing body`,
+      detail: { reason: err instanceof Error ? err.message : String(err) },
+    });
+  }
+}
 
 /**
  * The file that travels with the signed minutes.

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
+import { requireLogin } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import { getMinutes, saveSignedCopy, readSignedCopy } from "@/lib/minutesData";
-import { isLocked, MINUTES_STATUS_LABELS } from "@/lib/minutes";
+import { MINUTES_STATUS_LABELS, mayUploadSignedCopy } from "@/lib/minutes";
 import { documentHash, shortHash, minutesForClient } from "@/lib/minutesSigning";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { recordActivity } from "@/lib/activityLog";
@@ -37,18 +37,27 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireAnyPermission(req, CAN_MANAGE);
+  const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
   const record = await getMinutes(id);
-  if (!record) {
+  if (!record || !(await sessionMayReadMinutes(session, record))) {
     return NextResponse.json({ error: "Minutes not found" }, { status: 404 });
   }
-  if (isLocked(record.status)) {
+  // A minutes admin, or somebody on the signing list (the person who just
+  // ticked who signed on paper is offered this upload straight after).
+  const me = session.email.trim().toLowerCase();
+  const onList = record.signatories.some((s) => s.email.trim().toLowerCase() === me);
+  if (!session.permissions.some((p) => CAN_MANAGE.includes(p)) && !onList) {
+    return NextResponse.json({ error: "Only a minutes admin or somebody on the signing list can upload the signed copy." }, { status: 403 });
+  }
+  if (!mayUploadSignedCopy(record)) {
     return NextResponse.json(
       {
-        error: `These minutes are ${MINUTES_STATUS_LABELS[record.status].toLowerCase()} and cannot be signed again.`,
+        error: record.signedCopy
+          ? "A signed copy is already kept with these minutes."
+          : `These minutes are ${MINUTES_STATUS_LABELS[record.status].toLowerCase()} and cannot be signed again.`,
       },
       { status: 409 }
     );
@@ -78,7 +87,7 @@ export async function POST(
     action: "minutes.signed_on_paper",
     entity: "minutes",
     entityId: id,
-    summary: `Uploaded a signed copy of "${record.title}", closing it`,
+    summary: `Uploaded a signed copy of "${record.title}"${saved?.status === "signed" && record.status !== "signed" ? ", closing it" : ""}`,
     detail: { filename: file.name, size: bytes.length, documentHash: hash },
   });
 

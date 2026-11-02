@@ -2160,5 +2160,20 @@
   "Ask someone who may spend the school's credits to translate it.": "Kgopela motho yo a dumeletšwego go šomiša dikhrediti tša sekolo gore a se fetolele.",
   "Translating a Campus lesson or test written by someone at your school": "Go fetolela thuto goba teko ya Campus yeo e ngwadilwego ke motho sekolong sa gago",
   "Campus courses from the library or built with AI, in every language": "Dithuto tša Campus go tšwa bokgobapukung goba tšeo di agilwego ka AI, ka dipolelo ka moka",
-  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Dithuto le diteko tše {n} di sa fetolelwa polelong ya gago. Di tšwelela ka Seisemane go fihlela di fela, gomme letlakala le le a itlhabolla."
+  "{n} lessons and tests are still being translated into your language. They appear in English until they are done, and this page updates by itself.": "Dithuto le diteko tše {n} di sa fetolelwa polelong ya gago. Di tšwelela ka Seisemane go fihlela di fela, gomme letlakala le le a itlhabolla.",
+  "Signed copy kept with the minutes.": "Kopi ye e saennwego e bolokilwe le metsotso.",
+  "Recorded. Everyone has signed, so these minutes are closed and on their way to the governing body.": "Go rekotilwe. Bohle ba saenne, ka gona metsotso ye e tswaletšwe gomme e tseleng ya go ya lekgotla-taolo.",
+  "Recorded. Still waiting on {names}.": "Go rekotilwe. Go sa letetšwe {names}.",
+  "Have the signed paper copy? Upload it here to keep it with the minutes. Use Signed on paper above to record who signed it.": "O na le kopi ya pampiri ye e saennwego? E laiše mo go e boloka le metsotso. Šomiša E saennwe pampiring ka godimo go rekota gore ke mang a e saennego.",
+  "Signed on paper, recorded by {name} {when}": "E saennwe pampiring, e rekotilwe ke {name} {when}",
+  "No signed paper copy uploaded yet, so the paper signatures rest on the word of whoever ticked them.": "Ga go kopi ya pampiri ye e saennwego ye e laišitšwego, ka gona mesaeno ya pampiri e ithekgile ka lentšu la yo a e swaileng.",
+  "Upload it now": "E laiše bjale",
+  "Signed on paper": "E saennwe pampiring",
+  "Who signed the paper copy?": "Ke mang a saennego kopi ya pampiri?",
+  "Each person ticked is emailed to say they were recorded as signing, so a wrong tick gets caught.": "Motho yo mongwe le yo mongwe yo a swailwego o romelwa imeile ya gore o rekotilwe bjalo ka yo a saennego, gore leswao le le fošagetšego le bonwe.",
+  "Record paper signatures": "Rekota mesaeno ya pampiri",
+  "Would you like to upload the signed minutes to keep them with the record?": "O ka rata go laiša metsotso ye e saennwego go e boloka le rekoto?",
+  "Yes, upload": "Ee, laiša",
+  "Not now": "Aowa bjale",
+  "The signed minutes: a scan, a PDF or a photo of the signed pages": "Metsotso ye e saennwego: skene, PDF goba seswantšho sa matlakala a a saennwego"
 }

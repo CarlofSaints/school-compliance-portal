@@ -10,7 +10,7 @@ import type {
   MinutesDistributionNote,
   Signatory,
 } from "./minutes";
-import { isLocked, MINUTES_TEXT_FIELDS } from "./minutes";
+import { isLocked, mayUploadSignedCopy, MINUTES_TEXT_FIELDS } from "./minutes";
 import { sameText, textBase } from "./minutesAutosave";
 
 // ---------------------------------------------------------------------------
@@ -450,22 +450,17 @@ export async function saveSignedCopy(
 ): Promise<MinutesRecord | null> {
   const existing = await getMinutes(id);
   if (!existing) return null;
-  if (isLocked(existing.status)) throw new MinutesLockedError(id);
+  if (!mayUploadSignedCopy(existing)) throw new MinutesLockedError(id);
 
   await writeFile(`${DIR}/${id}/signed${extensionOf(filename)}`, bytes);
   const now = new Date().toISOString();
-  return updateMinutes(id, {
-    signedCopy: {
-      filename,
-      contentType,
-      size: bytes.length,
-      uploadedAt: now,
-      uploadedBy,
-      documentHash,
-    },
-    status: "signed",
-    signedAt: now,
-  });
+  const signedCopy = { filename, contentType, size: bytes.length, uploadedAt: now, uploadedBy, documentHash };
+  // 🔴 With a signing list, the ticks decide when the minutes are complete:
+  // a scan carrying 2 of 3 signatures must not close them. Without a list
+  // (signed on paper before anyone was sent a code) the upload closes them,
+  // as it always has.
+  const closes = existing.status !== "signed" && existing.signatories.length === 0;
+  return updateMinutes(id, closes ? { signedCopy, status: "signed", signedAt: now } : { signedCopy });
 }
 
 export async function readSignedCopy(id: string): Promise<Buffer | null> {

@@ -11,7 +11,7 @@ import {
   decodeSignature,
   SignatureError,
 } from "@/lib/minutesSigning";
-import { distributeSignedMinutes } from "@/lib/minutesDistribution";
+import { distributeOnFinalSignature } from "@/lib/minutesDistribution";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom, clientIp } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
@@ -181,37 +181,7 @@ export async function POST(
   // calls too. Two copies of "who receives the signed minutes" would drift,
   // and the copy that drifted would be the one nobody noticed.
   if (progress.complete && updated) {
-    try {
-      // `updated` is what updateMinutes just SAVED, passed straight through.
-      // Re-reading the record here would race the write above.
-      const result = await distributeSignedMinutes(updated);
-      await recordActivity({
-        ...actorFrom(req, session),
-        action: "minutes.distributed",
-        entity: "minutes",
-        entityId: id,
-        summary: `Sent the signed "${record.title}" to ${result.sent} people`,
-        detail: {
-          to: result.to,
-          cc: result.cc,
-          failed: result.failed,
-          withoutEmail: result.withoutEmail,
-          trigger: "final signature",
-        },
-      });
-    } catch (err) {
-      // 🔴 A distribution that cannot go out must NOT undo the signature. The
-      // failure is recorded and left for the button on the minutes page, which
-      // is exactly the situation that button is there for.
-      await recordActivity({
-        ...actorFrom(req, session),
-        action: "minutes.distribution_failed",
-        entity: "minutes",
-        entityId: id,
-        summary: `Could not send the signed "${record.title}" to the governing body`,
-        detail: { reason: err instanceof Error ? err.message : String(err) },
-      });
-    }
+    await distributeOnFinalSignature(updated, actorFrom(req, session));
   }
 
   return NextResponse.json({ record: minutesForClient(updated), progress });

@@ -585,7 +585,7 @@ export async function buildMinutesDocx(
                 color: "666666",
               }),
               new TextRun({
-                text: `\n        Signed electronically on ${new Date(
+                text: `\n        ${s.onPaper ? "Signed in hard copy, recorded" : "Signed electronically"} on ${new Date(
                   s.signedAt
                 ).toLocaleDateString("en-ZA", {
                   day: "2-digit",

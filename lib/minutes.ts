@@ -48,6 +48,14 @@ export function isLocked(status: MinutesStatus): boolean {
   return status === "signed" || status === "archived";
 }
 
+/** Open minutes take a scan at any point; signed ones only if none is kept
+ *  yet (signed by ticks, scan added after). A kept signed copy is the record. */
+export function mayUploadSignedCopy(record: { status: MinutesStatus; signedCopy?: unknown }): boolean {
+  if (record.status === "signed") return !record.signedCopy;
+  return !isLocked(record.status);
+}
+
+
 const MONTHS = [
   tk("January"), tk("February"), tk("March"), tk("April"), tk("May"), tk("June"),
   tk("July"), tk("August"), tk("September"), tk("October"), tk("November"), tk("December"),
@@ -546,6 +554,11 @@ export interface Signatory {
   role: SignatoryRole;
   /** Set when they sign. Absent means still waiting. */
   signedAt?: string;
+  /** Set when they signed the PRINTED copy and somebody recorded it in the
+   *  app. signedAt is set too, so every count of "who has signed" includes
+   *  them. 🔴 A tick is somebody's word, not proof: who ticked is recorded,
+   *  and the person ticked is emailed so a wrong tick is caught. */
+  onPaper?: { markedBy: string; markedByEmail: string };
   /** 🔴 The document's SHA-256 AT THE MOMENT THEY SIGNED. This is what makes a
    *  homegrown signature defensible: it proves the thing signed is the thing
    *  being held now. Without it a signature is only a claim. */
