@@ -1,4 +1,4 @@
-import { readJson, writeJson, updateJson } from "./controlData";
+import { readJson, updateJson } from "./controlData";
 import { getTags } from "./tagData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
@@ -50,12 +50,6 @@ export async function saveRecipientSettingsFor(
   }));
 }
 
-export async function saveRecipientSettings(
-  next: MinutesRecipientSettings
-): Promise<MinutesRecipientSettings> {
-  await writeJson(PATH, next);
-  return next;
-}
 
 export interface MinutesRecipient {
   email: string;

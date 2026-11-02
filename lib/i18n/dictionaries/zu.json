@@ -1223,9 +1223,6 @@
   "{total} person": "umuntu ongu-{total}",
   "{total} people": "abantu abangu-{total}",
   "Send to the governing body": "Thumela endikimbeni ebusayo",
-  "Nobody is set up to receive {audience}. Set that tag under": "Akekho osethelwe ukuthola i-{audience}. Setha leyo thegi ngaphansi kuka-",
-  "Admin, Minutes Admin": "Admin, Minutes Admin",
-  ", and this becomes available.": ", bese lokhu kuyatholakala.",
   "{audience}: {count} — {names}, copying {cc}.": "{audience}: {count}, {names}, kuthunyelwa ikhophi ku-{cc}.",
   "{audience}: {count} — {names}.": "{audience}: {count}, {names}.",
   "Not sent to {names}: they are on the list but not allowed to read these minutes (Admin, Minutes Admin, Who can read minutes).": "Akuthunyelwanga ku-{names}: basohlwini kodwa abavunyelwe ukufunda lawa maminithi (Admin, Minutes Admin, Who can read minutes).",
@@ -2198,5 +2195,7 @@
   "Save for {name}": "Londoloza ku-{name}",
   "Who checks a draft before it goes for signing. Usually the Principal and the Chairperson.": "Ubani ohlola uhlaka ngaphambi kokuba luyosayinwa. Ngokuvamile uThishanhloko noSihlalo.",
   "Who signs. Each person gets their own code by email and a signature space.": "Ubani osayinayo. Umuntu ngamunye uthola ikhodi yakhe nge-imeyili nendawo yesiginesha.",
-  "Who receives the signed minutes, with the Word file attached, once everyone has signed.": "Ubani othola amaminithi asayiniwe, kunamathiselwe ifayela le-Word, uma wonke umuntu esesayinile."
+  "Who receives the signed minutes, with the Word file attached, once everyone has signed.": "Ubani othola amaminithi asayiniwe, kunamathiselwe ifayela le-Word, uma wonke umuntu esesayinile.",
+  "Nobody is set up to receive the signed {name} minutes. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set Signed and final.": "Akekho osethelwe ukuthola amaminithi asayiniwe e-{name}. Ngaphansi kwe-Admin, Minutes Admin, Ngubani othola amaminithi, khetha lolu hlobo lomhlangano bese usetha Kusayiniwe futhi kuphelele.",
+  "For FINCOM this list also decides who can read FINCOM minutes, unless you set that under Who can read minutes.": "Ku-FINCOM lolu hlu luphinde lunqume ukuthi ubani ongafunda amaminithi e-FINCOM, ngaphandle uma ukusetha ngaphansi kokuthi Ngubani ongafunda amaminithi."
 }

@@ -32,20 +32,19 @@ export async function GET(req: NextRequest) {
   const session = await requireAnyPermission(req, CAN_MANAGE);
   if (session instanceof NextResponse) return session;
 
-  const settings = await getRecipientSettings();
   const body = req.nextUrl.searchParams.get("body");
   const stage = req.nextUrl.searchParams.get("stage") as MinutesStage | null;
   if (body && stage && MINUTES_STAGES.some((s) => s.key === stage)) {
-    return NextResponse.json({ preview: names(await resolveStage(stage, body, settings)) });
+    return NextResponse.json({ preview: names(await resolveStage(stage, body)) });
   }
 
-  const [types, tags, dir] = await Promise.all([getMeetingTypes(), tagChoices(), loadDirectory()]);
+  const [settings, types, tags, dir] = await Promise.all([getRecipientSettings(), getMeetingTypes(), tagChoices(), loadDirectory()]);
   const byType: Record<string, Record<string, StageTags & { own: boolean; to_names: string[]; cc_names: string[]; withoutEmail: string[] }>> = {};
   for (const t of types) {
     byType[t.id] = {};
     for (const s of MINUTES_STAGES) {
-      const r = await resolveStage(s.key, t.id, settings, dir);
-      byType[t.id][s.key] = { ...stageTags(settings, t.id, s.key), to_names: r.to.map((x) => x.name), cc_names: r.cc.map((x) => x.name), withoutEmail: r.withoutEmail };
+      const n = names(await resolveStage(s.key, t.id, settings, dir));
+      byType[t.id][s.key] = { ...stageTags(settings, t.id, s.key), to_names: n.to, cc_names: n.cc, withoutEmail: n.withoutEmail };
     }
   }
   return NextResponse.json({ types, tags, byType }, { headers: { "Cache-Control": "no-store" } });
@@ -71,13 +70,19 @@ export async function PUT(req: NextRequest) {
     stages[s.key] = { to: tag(v.to), ...(s.hasCc ? { cc: tag(v.cc) } : {}) };
   }
 
-  await saveRecipientSettingsFor(type.id, stages);
+  try {
+    await saveRecipientSettingsFor(type.id, stages);
+  } catch (err) {
+    console.error("[minutes recipients] Save failed:", err);
+    return NextResponse.json({ error: "Could not save." }, { status: 500 });
+  }
+  // The save landed: a failed audit write must not report it as failed.
   await recordActivity({
     ...actorFrom(req, session),
     action: "minutes.recipients.updated",
     entity: "minutes",
     summary: `Changed who receives ${meetingTypeLabel(types, type.id)} minutes`,
     detail: { meetingType: type.id, stages: Object.keys(stages) },
-  });
+  }).catch((err) => console.error("[minutes recipients] Activity log failed:", err));
   return NextResponse.json({ ok: true });
 }

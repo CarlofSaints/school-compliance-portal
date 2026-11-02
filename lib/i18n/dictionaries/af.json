@@ -1223,9 +1223,6 @@
   "{total} person": "{total} persoon",
   "{total} people": "{total} mense",
   "Send to the governing body": "Stuur aan die beheerliggaam",
-  "Nobody is set up to receive {audience}. Set that tag under": "Niemand is opgestel om {audience} te ontvang nie. Stel daardie etiket onder",
-  "Admin, Minutes Admin": "Admin, Notule-admin",
-  ", and this becomes available.": ", en dit word beskikbaar.",
   "{audience}: {count} — {names}, copying {cc}.": "{audience}: {count} ({names}), met ’n afskrif aan {cc}.",
   "{audience}: {count} — {names}.": "{audience}: {count} ({names}).",
   "Not sent to {names}: they are on the list but not allowed to read these minutes (Admin, Minutes Admin, Who can read minutes).": "Nie aan {names} gestuur nie: hulle is op die lys maar mag nie hierdie notule lees nie (Admin, Notule-admin, Wie kan notules lees).",
@@ -2198,5 +2195,7 @@
   "Save for {name}": "Stoor vir {name}",
   "Who checks a draft before it goes for signing. Usually the Principal and the Chairperson.": "Wie 'n konsep nagaan voordat dit vir ondertekening gaan. Gewoonlik die Skoolhoof en die Voorsitter.",
   "Who signs. Each person gets their own code by email and a signature space.": "Wie onderteken. Elke persoon kry hul eie kode per e-pos en 'n handtekeningspasie.",
-  "Who receives the signed minutes, with the Word file attached, once everyone has signed.": "Wie die ondertekende notule, met die Word-lêer aangeheg, ontvang sodra almal onderteken het."
+  "Who receives the signed minutes, with the Word file attached, once everyone has signed.": "Wie die ondertekende notule, met die Word-lêer aangeheg, ontvang sodra almal onderteken het.",
+  "Nobody is set up to receive the signed {name} minutes. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set Signed and final.": "Niemand is opgestel om die ondertekende {name}-notule te ontvang nie. Kies hierdie vergadertipe onder Admin, Notule-admin, Wie ontvang notule, en stel Ondertekend en finaal.",
+  "For FINCOM this list also decides who can read FINCOM minutes, unless you set that under Who can read minutes.": "Vir FINCOM bepaal hierdie lys ook wie FINCOM-notule kan lees, tensy u dit onder Wie kan notule lees stel."
 }

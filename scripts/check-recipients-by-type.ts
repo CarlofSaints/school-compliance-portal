@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { stageTags, type MinutesRecipientSettings } from "../lib/minutes";
 import { effectiveAccess } from "../lib/minutesAccessRules";
-import { saveRecipientSettings, saveRecipientSettingsFor, getRecipientSettings, resolveStage } from "../lib/minutesRecipients";
+import { writeJson } from "../lib/controlData";
+import { saveRecipientSettingsFor, getRecipientSettings, resolveStage } from "../lib/minutesRecipients";
 import { createTag } from "../lib/tagData";
 import { savePeople } from "../lib/peopleData";
 
@@ -38,7 +39,7 @@ async function main() {
     { id: "p1", position: "Chairperson", userId: null, name: "Chair", email: "chair@x.example", phone: "", profilePic: "", tagIds: ["t-sign"] },
     { id: "p2", position: "Parent", userId: null, name: "Parent Rep", email: "rep@x.example", phone: "", profilePic: "", tagIds: ["t-agm"] },
   ]);
-  await saveRecipientSettings({ to: { signing: "t-sign" }, cc: {} });
+  await writeJson("minutes-recipients.json", { to: { signing: "t-sign" }, cc: {} });
   await saveRecipientSettingsFor("mt-agm", { signing: { to: "t-agm" } });
   const saved = await getRecipientSettings();
   assert.equal(saved.to.signing, "t-sign", "old list kept");

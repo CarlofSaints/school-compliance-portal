@@ -141,6 +141,8 @@ export async function previewDistribution(record: MinutesRecord) {
   return {
     audience,
     audienceLabel: `${meetingTypeLabel(types, record.body)} minutes`,
+    /** The meeting type's own name, for the screen to translate and word. */
+    typeLabel: meetingTypeLabel(types, record.body),
     to,
     cc,
     withoutEmail: resolved.withoutEmail,

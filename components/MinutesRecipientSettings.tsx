@@ -53,7 +53,7 @@ export default function MinutesRecipientSettings({
         setTypes(d.types);
         setTags(d.tags);
         setByType(d.byType);
-        setType((cur) => cur || d.types[0]?.id || "");
+        setType((cur) => (d.types.some((x: MeetingType) => x.id === cur) ? cur : d.types[0]?.id || ""));
       })
       .catch((e: Error) => live && setLoadError(e.message));
     return () => {
@@ -154,6 +154,11 @@ export default function MinutesRecipientSettings({
               )}
             </div>
             <p className="text-xs text-gray-500 mt-1 mb-3">{t(s.help)}</p>
+            {type === "fincom" && s.key === "final" && (
+              <p className="text-xs text-amber-700 -mt-2 mb-3">
+                {t("For FINCOM this list also decides who can read FINCOM minutes, unless you set that under Who can read minutes.")}
+              </p>
+            )}
 
             <div className={`grid grid-cols-1 gap-3 ${s.hasCc ? "sm:grid-cols-2" : ""}`}>
               <div>

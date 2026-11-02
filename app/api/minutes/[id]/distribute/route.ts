@@ -36,6 +36,7 @@ export async function GET(
   return NextResponse.json(
     {
       audienceLabel: preview.audienceLabel,
+      typeLabel: preview.typeLabel,
       to: preview.to,
       cc: preview.cc,
       withoutEmail: preview.withoutEmail,

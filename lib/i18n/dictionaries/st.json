@@ -1223,9 +1223,6 @@
   "{total} person": "motho a {total}",
   "{total} people": "batho ba {total}",
   "Send to the governing body": "Romela ho lekgotla la taolo",
-  "Nobody is set up to receive {audience}. Set that tag under": "Ha ho motho ya hlophisetsweng ho fumana {audience}. Beha letshwao leo tlasa",
-  "Admin, Minutes Admin": "Admin, Admin ya Metsotso",
-  ", and this becomes available.": ", mme sena se tla fumaneha.",
   "{audience}: {count} — {names}, copying {cc}.": "{audience}: {count} — {names}, kopi ho {cc}.",
   "{audience}: {count} — {names}.": "{audience}: {count} — {names}.",
   "Not sent to {names}: they are on the list but not allowed to read these minutes (Admin, Minutes Admin, Who can read minutes).": "Ha e a romelwa ho {names}: ba lenaneng empa ha ba dumellwe ho bala metsotso ena (Admin, Admin ya Metsotso, Ke mang ya ka balang metsotso).",
@@ -2198,5 +2195,7 @@
   "Save for {name}": "Boloka bakeng sa {name}",
   "Who checks a draft before it goes for signing. Usually the Principal and the Chairperson.": "Ke mang ya hlahlobang moralo pele o ya ho saennwa. Hangata ke Mosuwehlooho le Modulasetulo.",
   "Who signs. Each person gets their own code by email and a signature space.": "Ke mang ya saenang. Motho e mong le e mong o fumana khoutu ya hae ka imeile le sebaka sa ho saena.",
-  "Who receives the signed minutes, with the Word file attached, once everyone has signed.": "Ke mang ya amohelang metsotso e saennweng, le faele ya Word e kgomareditswe, ha bohle ba saennwe."
+  "Who receives the signed minutes, with the Word file attached, once everyone has signed.": "Ke mang ya amohelang metsotso e saennweng, le faele ya Word e kgomareditswe, ha bohle ba saennwe.",
+  "Nobody is set up to receive the signed {name} minutes. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set Signed and final.": "Ha ho motho ya behilweng ho amohela metsotso e saennweng ya {name}. Tlasa Admin, Minutes Admin, Ke mang ya amohelang metsotso, kgetha mofuta ona wa kopano mme o behe E saennwe ebile ke ya ho qetela.",
+  "For FINCOM this list also decides who can read FINCOM minutes, unless you set that under Who can read minutes.": "Bakeng sa FINCOM lenane lena le boetse le etsa qeto ya hore na ke mang ya ka balang metsotso ya FINCOM, ntle le haeba o e behile tlasa Ke mang ya ka balang metsotso."
 }
