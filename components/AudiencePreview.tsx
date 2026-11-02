@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { authFetch } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
-import type { MinutesAudience } from "@/lib/minutes";
+import type { MinutesStage } from "@/lib/minutes";
 
 export interface AudienceNames {
   to: string[];
@@ -44,20 +44,21 @@ export function AudienceLine({ p, showCc = true }: { p: AudienceNames; showCc?: 
  * the minutes who the minutes will go to". Read from the same settings the
  * send resolves, so it cannot name different people.
  */
-export default function AudiencePreview({ audience, showCc = true }: { audience: MinutesAudience; showCc?: boolean }) {
+export default function AudiencePreview({ stage, body, showCc = true }: { stage: MinutesStage; body: string; showCc?: boolean }) {
   const [p, setP] = useState<AudienceNames | null>(null);
   useEffect(() => {
     let live = true;
-    authFetch("/api/minutes-recipients")
+    // This meeting type's list at this stage: the same resolver the send uses.
+    authFetch(`/api/minutes-recipients?body=${encodeURIComponent(body)}&stage=${stage}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (live && d?.preview?.[audience]) setP(d.preview[audience]);
+        if (live && d?.preview) setP(d.preview);
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [audience]);
+  }, [stage, body]);
   if (!p) return null;
   return (
     <div className="mb-4 -mt-1">

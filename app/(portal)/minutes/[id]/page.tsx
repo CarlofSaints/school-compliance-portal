@@ -992,6 +992,7 @@ export default function MinutesDetailPage() {
 
       <MinutesSigningPanel
         id={record.id}
+        body={record.body}
         status={record.status}
         signatories={record.signatories}
         signedCopy={record.signedCopy}
@@ -1027,6 +1028,7 @@ export default function MinutesDetailPage() {
 
       <MinutesReviewPanel
         id={record.id}
+        body={record.body}
         status={record.status}
         draftNumber={record.draftNumber}
         reviewers={record.reviewers}

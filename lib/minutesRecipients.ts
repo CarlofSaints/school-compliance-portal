@@ -1,9 +1,9 @@
-import { readJson, writeJson } from "./controlData";
+import { readJson, writeJson, updateJson } from "./controlData";
 import { getTags } from "./tagData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
-import type { MinutesAudience } from "./minutes";
-import { AUDIENCE_LABELS } from "./minutes";
+import type { MinutesRecipientSettings, MinutesStage, MeetingBody } from "./minutes";
+import { stageTags, MINUTES_STAGES } from "./minutes";
 
 // ---------------------------------------------------------------------------
 // Who gets which minutes email.
@@ -30,17 +30,24 @@ import { AUDIENCE_LABELS } from "./minutes";
 export type { MinutesAudience } from "./minutes";
 export { AUDIENCE_LABELS, AUDIENCE_HELP } from "./minutes";
 
-export interface MinutesRecipientSettings {
-  /** audience -> the tag whose holders are the To list. */
-  to: Partial<Record<MinutesAudience, string>>;
-  /** audience -> the tag whose holders are copied in. */
-  cc: Partial<Record<MinutesAudience, string>>;
-}
+export type { MinutesRecipientSettings } from "./minutes";
 
 const PATH = "minutes-recipients.json";
 
 export async function getRecipientSettings(): Promise<MinutesRecipientSettings> {
   return readJson<MinutesRecipientSettings>(PATH, { to: {}, cc: {} });
+}
+
+/** Saves ONE meeting type's lists, in one read-modify-write, leaving every
+ *  other type (and the old school-wide lists they may still follow) alone. */
+export async function saveRecipientSettingsFor(
+  body: MeetingBody,
+  stages: Partial<Record<MinutesStage, { to?: string; cc?: string }>>
+): Promise<void> {
+  await updateJson<MinutesRecipientSettings>(PATH, { to: {}, cc: {} }, (current) => ({
+    ...current,
+    byType: { ...(current.byType ?? {}), [body]: { ...(current.byType?.[body] ?? {}), ...stages } },
+  }));
 }
 
 export async function saveRecipientSettings(
@@ -64,13 +71,19 @@ export interface MinutesRecipient {
  * FINCOM tag today should receive the next set of FINCOM minutes without
  * anybody remembering to update a list.
  */
-async function holdersOf(tagId: string | undefined, why: string): Promise<{
+type Directory = { users: Awaited<ReturnType<typeof getUsers>>; people: Awaited<ReturnType<typeof getPeople>> };
+const loadDirectory = async (): Promise<Directory> => {
+  const [users, people] = await Promise.all([getUsers(), getPeople()]);
+  return { users, people };
+};
+
+async function holdersOf(tagId: string | undefined, why: string, dir?: Directory): Promise<{
   recipients: MinutesRecipient[];
   withoutEmail: string[];
 }> {
   if (!tagId) return { recipients: [], withoutEmail: [] };
 
-  const [users, people] = await Promise.all([getUsers(), getPeople()]);
+  const { users, people } = dir ?? (await loadDirectory());
   const recipients: MinutesRecipient[] = [];
   const withoutEmail: string[] = [];
   const seen = new Set<string>();
@@ -121,14 +134,24 @@ export interface ResolvedAudience {
   empty: boolean;
 }
 
-export async function resolveAudience(
-  audience: MinutesAudience,
-  settings?: MinutesRecipientSettings
+/**
+ * Who a set of minutes of this TYPE reaches at this STAGE. The one entry point
+ * for every send (checking, signing, the final copy) and for the previews, so
+ * a preview can never name different people from the send.
+ */
+export async function resolveStage(
+  stage: MinutesStage,
+  body: MeetingBody,
+  settings?: MinutesRecipientSettings,
+  dir?: Directory
 ): Promise<ResolvedAudience> {
   const s = settings ?? (await getRecipientSettings());
+  const tags = stageTags(s, body, stage);
+  const label = MINUTES_STAGES.find((x) => x.key === stage)!.label;
+  const d = dir ?? (tags.to || tags.cc ? await loadDirectory() : undefined);
   const [toResult, ccResult] = await Promise.all([
-    holdersOf(s.to[audience], AUDIENCE_LABELS[audience]),
-    holdersOf(s.cc[audience], `${AUDIENCE_LABELS[audience]} (copied)`),
+    holdersOf(tags.to, label, d),
+    holdersOf(tags.cc, `${label} (copied)`, d),
   ]);
 
   // Somebody on both lists is on the To list only. A duplicate address makes a
@@ -156,14 +179,7 @@ export async function resolveAudience(
  */
 export { audienceForBody } from "./minutes";
 
-/** Which audiences have nothing configured, so the admin screen can say what is
- *  not set up rather than letting a secretary discover it mid-workflow. */
-export async function unconfiguredAudiences(): Promise<MinutesAudience[]> {
-  const s = await getRecipientSettings();
-  return (Object.keys(AUDIENCE_LABELS) as MinutesAudience[]).filter(
-    (a) => !s.to[a]
-  );
-}
+export { loadDirectory };
 
 /** Tags a school has, for the admin screen's dropdowns. */
 export async function tagChoices(): Promise<{ id: string; name: string }[]> {

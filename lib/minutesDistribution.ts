@@ -6,7 +6,9 @@ import { isClosed, type ActionItem } from "./actionItems";
 import { getPeople } from "./peopleData";
 import { getUsers } from "./userData";
 import { documentHash, shortHash } from "./minutesSigning";
-import { resolveAudience, audienceForBody, AUDIENCE_LABELS } from "./minutesRecipients";
+import { resolveStage, audienceForBody } from "./minutesRecipients";
+import { getMeetingTypes } from "./meetingTypesData";
+import { meetingTypeLabel } from "./meetingTypes";
 import { loadMinutesAccessContext, loadRecipientResolver, viewerMayRead } from "./minutesAccess";
 import { sendMinutesSignedEmail, type EmailAttachment, type SignedEmailAction } from "./email";
 import { buildMinutesDocxFile, minutesDocxFilename } from "./minutesDocxFile";
@@ -122,7 +124,8 @@ export interface DistributionResult {
  *  the list before anybody clicks, and say what is not configured. */
 export async function previewDistribution(record: MinutesRecord) {
   const audience = audienceForBody(record.body);
-  const resolved = await resolveAudience(audience);
+  // This meeting type's own "Signed and final" list (or the old SGB / FINCOM one).
+  const [resolved, types] = await Promise.all([resolveStage("final", record.body), getMeetingTypes()]);
 
   // 🔴 Nobody is sent minutes they may not read. "Other" goes to the SGB list,
   // so a set limited to a disciplinary panel would otherwise land in the whole
@@ -137,7 +140,7 @@ export async function previewDistribution(record: MinutesRecord) {
 
   return {
     audience,
-    audienceLabel: AUDIENCE_LABELS[audience],
+    audienceLabel: `${meetingTypeLabel(types, record.body)} minutes`,
     to,
     cc,
     withoutEmail: resolved.withoutEmail,
@@ -225,7 +228,7 @@ export async function distributeSignedMinutes(
   }
   if (preview.empty) {
     throw new DistributionError(
-      `Nobody is set up to receive ${preview.audienceLabel.toLowerCase()}. Set that tag under Admin, Minutes Admin, and try again.`
+      `Nobody is set up to receive the signed ${preview.audienceLabel}. Under Admin, Minutes Admin, Who receives minutes, pick this meeting type and set "Signed and final", then try again.`
     );
   }
 
