@@ -2190,5 +2190,12 @@
   "Add meeting type": "Oketša mohuta wa kopano",
   "{name} minutes": "Metsotso ya {name}",
   "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Bohle bao ba swanetšego go amogela metsotso ye e saennwego ya SGB / Boto, le metsotso ya mehuta ye mengwe ka moka ya dikopano ntle le FINCOM.",
-  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Metsotso e bolokwa ge o ngwala gore o se lahlegelwe ke selo. Fela kgonthiša gore o na le phihlelelo ya inthanete."
+  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Metsotso e bolokwa ge o ngwala gore o se lahlegelwe ke selo. Fela kgonthiša gore o na le phihlelelo ya inthanete.",
+  "Add a PNG or JPEG picture (a screenshot is usually PNG).": "Oketša seswantšho sa PNG goba JPEG (seswantšho sa sekirini gantši ke PNG).",
+  "Could not add that picture.": "Ga e kgone go oketša seswantšho seo.",
+  "Pasted as a table. Check it in the preview below.": "Se kgomareditšwe bjalo ka tafola. Se lekole ponelopele ka fase.",
+  "Adding the picture...": "Go oketšwa seswantšho...",
+  "+ Add a picture": "+ Oketša seswantšho",
+  "Paste a table from Word or a screenshot straight into the box.": "Kgomaretša tafola go tšwa go Word goba seswantšho sa sekirini thwii ka lepokising.",
+  "How it will look": "Se tla bonagala bjang"
 }
