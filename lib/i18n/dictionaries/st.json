@@ -2212,5 +2212,7 @@
   "Column": "Kholomo",
   "Delete table": "Hlakola tafole",
   "Picture": "Setshwantsho",
-  "Clear formatting": "Tlosa ho fomata"
+  "Clear formatting": "Tlosa ho fomata",
+  "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Ditshwantsho tse ka hare ho mongolo wa Word o kgomareditsweng ha di fete. Kgomaretsa setshwantsho se seng le se seng se le sona, kapa o sebedise Setshwantsho.",
+  "This section is too long to save. Split it into two sections.": "Karolo ena e telele haholo hore e ka bolokwa. E arole e be dikarolo tse pedi."
 }

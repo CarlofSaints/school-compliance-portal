@@ -50,6 +50,14 @@ async function main() {
   const body = docToText(doc);
   assert.equal(body, ["Approved R12 000", "x", `[image:${SHA}:400x300]`, "- First", "- Second", "| Item | A/B |"].join("\n"));
 
+  // Paragraphs inside a table cell stay apart in the plain text.
+  const cell2 = cleanDoc({ type: "doc", content: [{ type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", attrs: {}, content: [p(text("Approved")), p(text("R12 000"))] }] }] }] }, MID)!;
+  assert.equal(docToText(cell2), "| Approved R12 000 |");
+
+  // Over the size limit the WHOLE document is refused, never saved cut short.
+  assert.equal(cleanDoc({ type: "doc", content: [p(text("x".repeat(200_001)))] }, MID), null);
+  assert.equal(cleanDoc({ type: "doc", content: Array.from({ length: 20_001 }, () => p()) }, MID), null);
+
   // An older plain section opens with its table as a table and comes back the same.
   const old = `Notes\n| a | b |\n| c | d |\n[image:${SHA}:10x20]`;
   assert.equal(docToText(cleanDoc(textToDoc(old, MID), MID)), old);
@@ -71,7 +79,8 @@ async function main() {
   // The Word file carries the formatting.
   const m = await createMinutes({ title: "Rich", body: "sgb", period: meta.period, sections: [] } as unknown as Parameters<typeof createMinutes>[0]);
   const imgId = await saveMinutesImage(m.id, PNG);
-  const wordDoc = cleanDoc({ ...sent, content: [...sent.content, { type: "image", attrs: { src: imageSrc(m.id, imgId) } }] }, m.id)!;
+  // The picture sits INSIDE a table cell: it must still reach the Word file.
+  const wordDoc = cleanDoc({ ...sent, content: [...sent.content, { type: "table", content: [{ type: "tableRow", content: [{ type: "tableCell", attrs: {}, content: [{ type: "image", attrs: { src: imageSrc(m.id, imgId) } }] }] }] }] }, m.id)!;
   await updateMinutes(m.id, { sections: [{ id: "s1", title: "Finance", order: 1, body: docToText(wordDoc), doc: wordDoc }] });
   const xml = await (await JSZip.loadAsync(await buildMinutesDocxFile((await getMinutes(m.id))!))).file("word/document.xml")!.async("string");
   assert.ok(/<w:b\/>/.test(xml), "bold");
@@ -81,7 +90,8 @@ async function main() {
   assert.ok(xml.includes('w:val="28"'), "14pt = 28 half-points");
   assert.ok(xml.includes("•") && xml.includes("Second"), "bullets");
   assert.ok((xml.match(/<w:tbl>/g) || []).length >= 2, "table nested in the section");
-  assert.ok(xml.includes("<w:drawing>"), "picture");
+  assert.ok(xml.includes("<w:drawing>"), "picture in a table cell embedded");
+  assert.ok(!xml.includes("picture unavailable"), "no missing picture");
   assert.ok(!/<\/w:tbl><\/w:tc>/.test(xml), "no cell ends on a table");
 
   console.log("check-minutes-rich-text: all passed");

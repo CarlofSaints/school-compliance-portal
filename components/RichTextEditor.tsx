@@ -7,6 +7,7 @@ import { TextStyle, Color, FontFamily, FontSize } from "@tiptap/extension-text-s
 import Highlight from "@tiptap/extension-highlight";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import Image from "@tiptap/extension-image";
+import { Placeholder } from "@tiptap/extensions";
 import { authFetch } from "@/lib/useAuth";
 import { imageSize } from "@/lib/minutesPaste";
 import { cleanDoc, docToText, stableDoc, textToDoc, imageSrc, FONTS, FONT_SIZES, type RichNode } from "@/lib/richDoc";
@@ -63,25 +64,43 @@ export default function RichTextEditor({
 
   // The editor, for the paste and drop handlers (set once it exists).
   const editorRef = useRef<Editor | null>(null);
+  // The document this editor last reported, by reference.
+  const lastDoc = useRef<RichNode | undefined>(doc);
 
-  const addPictures = async (ed: Editor, files: File[]) => {
-    for (const file of files) {
-      setBusy((n) => n + 1);
-      setNote("");
-      try {
-        const p = await uploadPicture(minutesId, file);
-        ed.chain().focus().setImage(p as { src: string }).run();
-      } catch (e) {
-        setNote(t((e as Error).message));
-      } finally {
-        setBusy((n) => n - 1);
+  const addPictures = async (ed: Editor, files: File[], at?: number) => {
+    // 🔴 Where the picture belongs, kept up to date as the person carries on
+    // typing during the upload. Inserting at the selection as it is when the
+    // upload FINISHES would replace whatever they had selected by then.
+    let pos = at ?? ed.state.selection.to;
+    const follow = ({ transaction }: { transaction: { mapping: { map: (p: number) => number } } }) => {
+      pos = transaction.mapping.map(pos);
+    };
+    ed.on("transaction", follow);
+    try {
+      for (const file of files) {
+        setBusy((n) => n + 1);
+        setNote("");
+        try {
+          const p = await uploadPicture(minutesId, file);
+          if (ed.isDestroyed) return;
+          const node = { type: "image", attrs: { src: p.src, width: p.width, height: p.height } };
+          ed.chain().insertContentAt(Math.min(pos, ed.state.doc.content.size), node).run();
+        } catch (e) {
+          setNote(t((e as Error).message));
+        } finally {
+          setBusy((n) => n - 1);
+        }
       }
+    } finally {
+      ed.off("transaction", follow);
     }
   };
 
   const editor = useEditor({
     // Next renders on the server first; the editor only exists in the browser.
     immediatelyRender: false,
+    // TipTap 3 does not redraw on a cursor move by default; the toolbar must.
+    shouldRerenderOnTransaction: true,
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false, blockquote: false, horizontalRule: false, link: false }),
       TextStyle,
@@ -98,18 +117,21 @@ export default function RichTextEditor({
           return { ...this.parent?.(), width: { default: null }, height: { default: null } };
         },
       }).configure({ inline: false, allowBase64: false }),
+      Placeholder.configure({ placeholder: placeholder ?? "" }),
     ],
     content: doc ?? textToDoc(body, minutesId),
     editorProps: {
       attributes: {
         class: "rich-minutes min-h-[7rem] px-3 py-2 text-sm text-gray-800 focus:outline-none",
-        ...(placeholder ? { "data-placeholder": placeholder } : {}),
       },
       // A pasted or dropped screenshot is uploaded. Copying TEXT from Office
       // also carries a picture of it: text wins, so the words arrive as words.
       handlePaste: (view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
         const hasText = !!event.clipboardData?.getData("text/plain").trim();
+        if (/<img[^>]+src=["']?(file:|cid:)/i.test(event.clipboardData?.getData("text/html") ?? "")) {
+          setNote(t("Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture."));
+        }
         if (!files.length || hasText) return false;
         if (editorRef.current) addPictures(editorRef.current, files);
         return true;
@@ -117,13 +139,19 @@ export default function RichTextEditor({
       handleDrop: (view, event) => {
         const files = Array.from((event as DragEvent).dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
         if (!files.length) return false;
-        if (editorRef.current) addPictures(editorRef.current, files);
+        const at = view.posAtCoords({ left: (event as DragEvent).clientX, top: (event as DragEvent).clientY })?.pos;
+        if (editorRef.current) addPictures(editorRef.current, files, at);
         return true;
       },
     },
     onUpdate: ({ editor: ed }) => {
       const clean = cleanDoc(ed.getJSON(), minutesId);
-      if (!clean) return;
+      if (!clean) {
+        setNote(t("This section is too long to save. Split it into two sections."));
+        return;
+      }
+      setNote((n) => (n === t("This section is too long to save. Split it into two sections.") ? "" : n));
+      lastDoc.current = clean;
       emitted.current = stableDoc(clean);
       onChangeRef.current(clean, docToText(clean));
     },
@@ -138,7 +166,7 @@ export default function RichTextEditor({
   // A change from outside (a backup restored, the newer copy loaded after a
   // save conflict) is put into the editor; its own typing coming back is not.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || (doc && doc === lastDoc.current)) return;
     const incoming = doc ?? textToDoc(body, minutesId);
     const key = stableDoc(cleanDoc(incoming, minutesId) ?? incoming);
     if (key === emitted.current) return;

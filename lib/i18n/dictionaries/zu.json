@@ -2212,5 +2212,7 @@
   "Column": "Ikholomu",
   "Delete table": "Susa ithebula",
   "Picture": "Isithombe",
-  "Clear formatting": "Susa ukufometha"
+  "Clear formatting": "Susa ukufometha",
+  "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Izithombe ezingaphakathi kombhalo we-Word onamathiselwe aziwedluli. Namathisela isithombe ngasinye sodwa, noma usebenzise Isithombe.",
+  "This section is too long to save. Split it into two sections.": "Lesi sigaba side kakhulu ukuthi singagcinwa. Sihlukanise sibe izigaba ezimbili."
 }
