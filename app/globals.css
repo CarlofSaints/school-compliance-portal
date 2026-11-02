@@ -52,3 +52,5 @@ body {
 .rich-minutes img.ProseMirror-selectednode { outline: 2px solid var(--color-primary, #2563eb); }
 .rich-minutes mark { padding: 0 0.1em; border-radius: 0.1em; }
 .rich-minutes .selectedCell { background: rgba(37, 99, 235, 0.08); }
+/* The grey hint in an empty section (Placeholder extension sets the attribute). */
+.rich-minutes p.is-editor-empty:first-child::before { content: attr(data-placeholder); float: left; height: 0; color: #9ca3af; pointer-events: none; }
