@@ -24,9 +24,14 @@ export interface Tenant {
   /** Clerk organisation. Membership of THIS org is what authorises a person to
    *  see this school, independently of which store the hostname selected. */
   clerkOrgId?: string;
-  /** Overrides on top of the branding defaults. A school can be onboarded with
-   *  none of this and still work, just looking generic. */
+  /** Written at signup (the school's name) but NOT applied as a base: a
+   *  school's look is its saved branding.json (Branding admin page), on top
+   *  of builtInLook for a moved school, else the generic look. */
   branding?: Partial<SchoolBranding>;
+  /** A school moved off its own deployment (lib/tenantMove.ts): the key of
+   *  its built-in look in SCHOOLS (lib/branding.ts), read live so a later
+   *  fix to that look reaches it. Absent on every self-serve school. */
+  builtInLook?: string;
   status: "active" | "suspended";
   /** When it was last suspended: the 90-day deletion clock (lib/schoolRetention.ts). */
   suspendedAt?: string;

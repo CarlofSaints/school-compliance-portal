@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // The steps of moving a school (lib/tenantMove.ts), one button each, in order.
 // The old store's token is kept in this page's memory only, never saved.
@@ -15,6 +15,17 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const testHost = `${key}-new.schoolcompliance.co.za`;
   const realHost = `${key}.schoolcompliance.co.za`;
+
+  // Where the school stands on the shared app: drives which buttons work.
+  const [status, setStatus] = useState<{ exists: boolean; ours: boolean; live: boolean; hostnames: string[] } | null>(null);
+  const refresh = useCallback(async () => {
+    const res = await fetch("/api/platform/move-school", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "status", key }) });
+    setStatus(res.ok ? await res.json() : null);
+  }, [key]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads status for the picked school
+    void refresh();
+  }, [refresh]);
 
   const say = (line: string) => setLog((l) => [...l, `${new Date().toLocaleTimeString()}  ${line}`]);
 
@@ -37,6 +48,7 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
       say(`❌ ${(e as Error).message}`);
     } finally {
       setBusy(false);
+      void refresh();
     }
   };
 
@@ -47,9 +59,10 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
 
   const copy = run(async () => {
     let at = cursor;
+    const resumed = !!at;
     let files = 0;
     let bytes = 0;
-    if (at) say("Carrying on from where the last copy stopped...");
+    if (resumed) say("Carrying on from where the last copy stopped...");
     do {
       const d = await step("copy", { cursor: at });
       files += d.copied;
@@ -60,6 +73,8 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
     } while (at);
     const p = await step("prune");
     say(`✅ Copy finished: ${files} files.${p.removed ? ` Removed ${p.removed} file(s) the old app no longer has.` : ""}`);
+    // Files before the resume point were not refreshed this time.
+    if (resumed) say("⚠️ That copy carried on part way, so files copied earlier were not refreshed. Run 2 once more for a full copy before switching.");
   });
 
   const check = run(async () => {
@@ -69,16 +84,25 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
       `${d.same ? "✅ Identical" : "⚠️ Different"}. Old: ${d.source.files} files (${mb(d.source.bytes)} MB). New: ${d.moved.files} files (${mb(d.moved.bytes)} MB).` +
         (d.missingCount ? ` Missing on the new side (${d.missingCount}): ${d.missing.join(", ")}.` : "") +
         (d.differentSize.length ? ` Different size: ${d.differentSize.join(", ")}.` : "") +
+        (d.changedSince.length ? ` Changed on the old app since the copy: ${d.changedSince.join(", ")}.` : "") +
         (d.extra.length ? ` Only on the new side: ${d.extra.join(", ")}.` : "") +
         (d.outsidePrefix ? ` ${d.outsidePrefix} file(s) in the old store sit OUTSIDE ${key}/: look at those before switching.` : "")
     );
   });
 
   const addReal = run(async () => {
-    const s = await step("status");
-    const d = await step("hostnames", { hostnames: [...new Set([...s.hostnames, realHost])] });
-    say(`✅ Now answers on: ${d.hostnames.join(", ")}`);
+    const d = await step("hostnames", { hostnames: [...(status?.hostnames ?? []), realHost] });
+    say(`✅ Now answers on: ${d.hostnames.join(", ")}. Copying is now locked.`);
   });
+
+  // The rollback: off the shared app's real address (put it back on the old project).
+  const takeOff = run(async () => {
+    const d = await step("hostnames", { hostnames: (status?.hostnames ?? []).filter((h) => h !== realHost) });
+    say(`↩️ Real address taken off; now answers on: ${d.hostnames.join(", ")}. Put ${realHost} back on the old Vercel project.`);
+  });
+
+  const live = !!status?.live;
+  const notOurs = !!status?.exists && !status.ours;
 
   const input = "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm";
   const btn = "rounded-lg bg-dark px-4 py-2 text-sm font-medium text-white disabled:opacity-40";
@@ -106,15 +130,27 @@ export default function MoveSchool({ schools }: { schools: Record<string, string
           Old app&apos;s folder: <span className="font-medium text-dark">{key}/</span>
         </div>
         <label className="text-xs text-gray-500 sm:col-span-2">Old app&apos;s Blob read-write token (vercel_blob_rw_...). Used for each step, never saved.
-          <input type="password" autoComplete="off" className={input} value={token} onChange={(e) => setToken(e.target.value.trim())} />
+          <input type="password" autoComplete="off" className={input} value={token} onChange={(e) => { setToken(e.target.value.trim()); setCursor(undefined); }} />
         </label>
       </section>
 
+      {notOurs && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          A school called &quot;{key}&quot; already exists on the shared app and was not made by this tool. Nothing here will touch it.
+        </div>
+      )}
+      {live && (
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+          {key} is live on {realHost}. Copying is locked so nobody&apos;s new work is overwritten.
+        </div>
+      )}
+
       <section className="space-y-3 rounded-xl border border-gray-100 bg-white p-5 text-sm">
-        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy} onClick={create}>1. Create the empty school</button><span className="text-gray-500">on the test address, its own store, its own colours and crest</span></div>
-        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy || !token} onClick={copy}>2. Copy every file</button><span className="text-gray-500">safe to run again; run it once more just before the switch</span></div>
-        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy || !token} onClick={check}>3. Compare old and new</button><span className="text-gray-500">file by file; then sign in on the test address and look around</span></div>
-        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy} onClick={addReal}>4. Add the real address</button><span className="text-gray-500">only AFTER the address is removed from the old Vercel project</span></div>
+        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy || !!status?.exists} onClick={create}>1. Create the empty school</button><span className="text-gray-500">on the test address, its own store, its own colours and crest</span></div>
+        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy || !token || !status?.ours || live} onClick={copy}>2. Copy every file</button><span className="text-gray-500">safe to run again; run it once more just before the switch</span></div>
+        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy || !token || !status?.ours} onClick={check}>3. Compare old and new</button><span className="text-gray-500">file by file; then sign in on the test address and look around, but change nothing there (the next copy overwrites it)</span></div>
+        <div className="flex flex-wrap items-center gap-3"><button className={btn} disabled={busy || !status?.ours || live} onClick={addReal}>4. Add the real address</button><span className="text-gray-500">only AFTER the address is removed from the old Vercel project</span></div>
+        {live && <div className="flex flex-wrap items-center gap-3"><button className="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-40" disabled={busy} onClick={takeOff}>Roll back: take the real address off</button><span className="text-gray-500">then put it back on the old Vercel project</span></div>}
       </section>
 
       <pre className="min-h-[8rem] whitespace-pre-wrap rounded-xl bg-gray-900 p-4 text-xs text-gray-100">{log.join("\n") || "Nothing run yet."}</pre>
