@@ -2189,5 +2189,6 @@
   "New meeting type, e.g. AGM": "Mohuta o moswa wa kopano, mohl. AGM",
   "Add meeting type": "Oketša mohuta wa kopano",
   "{name} minutes": "Metsotso ya {name}",
-  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Bohle bao ba swanetšego go amogela metsotso ye e saennwego ya SGB / Boto, le metsotso ya mehuta ye mengwe ka moka ya dikopano ntle le FINCOM."
+  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Bohle bao ba swanetšego go amogela metsotso ye e saennwego ya SGB / Boto, le metsotso ya mehuta ye mengwe ka moka ya dikopano ntle le FINCOM.",
+  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Metsotso e bolokwa ge o ngwala gore o se lahlegelwe ke selo. Fela kgonthiša gore o na le phihlelelo ya inthanete."
 }

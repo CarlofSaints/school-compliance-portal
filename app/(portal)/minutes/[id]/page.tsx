@@ -977,6 +977,12 @@ export default function MinutesDetailPage() {
         </div>
       )}
 
+      {/* Carl asked for this note above the sections while they can be edited. */}
+      {textEditable && (
+        <p className="mt-6 mb-2 text-sm text-gray-500">
+          {t("Minutes save as you type so you don't lose anything. Just make sure you have internet access.")}
+        </p>
+      )}
       <MinutesSectionEditor
         sections={record.sections}
         editable={textEditable}

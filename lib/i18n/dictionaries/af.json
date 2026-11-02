@@ -2189,5 +2189,6 @@
   "New meeting type, e.g. AGM": "Nuwe vergadertipe, bv. AJV",
   "Add meeting type": "Voeg vergadertipe by",
   "{name} minutes": "{name}-notule",
-  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Almal wat ondertekende SBL / Raad-notule moet ontvang, en die notule van elke ander vergadertipe behalwe FINCOM."
+  "Everyone who should receive signed SGB / Board minutes, and the minutes of every other meeting type except FINCOM.": "Almal wat ondertekende SBL / Raad-notule moet ontvang, en die notule van elke ander vergadertipe behalwe FINCOM.",
+  "Minutes save as you type so you don't lose anything. Just make sure you have internet access.": "Notule word gestoor terwyl u tik, sodat u niks verloor nie. Maak net seker u het internettoegang."
 }
