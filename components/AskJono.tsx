@@ -46,7 +46,11 @@ export default function AskJono() {
         // Take the question back off so it can be asked again.
         setTurns(turns);
         setDraft(q);
-        setError(body.error || t("Jono could not answer just now. Please try again."));
+        setError(
+          body.code === "out-of-ai-credit"
+            ? "out-of-ai-credit"
+            : body.error || t("Jono could not answer just now. Please try again.")
+        );
       }
     } catch {
       setTurns(turns);
@@ -139,7 +143,18 @@ export default function AskJono() {
           )
         )}
         {busy && <p className="text-sm text-gray-400">{t("Jono is reading your records...")}</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error === "out-of-ai-credit" ? (
+          // Not the school credits (Jono does not use them): the AI account that
+          // runs the portal is empty, so trying again cannot help.
+          <p className="text-sm text-red-600">
+            {t("Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.")}{" "}
+            <a href="/feedback" className="underline font-medium">
+              {t("Tell us about it")}
+            </a>
+          </p>
+        ) : (
+          error && <p className="text-sm text-red-600">{error}</p>
+        )}
         <div ref={endRef} />
       </div>
 
