@@ -1,9 +1,8 @@
-import { list, get, put } from "@vercel/blob";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { list, get, put, del } from "@vercel/blob";
 import { createBlobStore, deleteBlobStore } from "./vercelApi";
 import { createTenant, getTenantByKey, updateTenant, isTenantKeyAvailable, isHostnameAvailable } from "./tenantRegistry";
 import { seal, open } from "./secretBox";
+import { SCHOOLS } from "./branding";
 import type { Tenant } from "./tenant";
 
 // ---------------------------------------------------------------------------
@@ -20,18 +19,22 @@ import type { Tenant } from "./tenant";
 // that request only: never stored, never logged.
 //
 // Steps (app/platform/move-school): create the empty school on a TEST address,
-// copy every file (in batches, safe to repeat), apply the built-in branding,
-// compare counts, sign in on the test address, then add the real address.
+// set its built-in look, copy every file (in batches, safe to repeat - each
+// full copy ends by removing what the old side no longer has), compare, sign
+// in on the test address, then add the real address.
 // ---------------------------------------------------------------------------
 
-const BATCH = 100;
+/** Files per request: small enough that a batch of scanned PDFs finishes well
+ *  inside the 120 s limit; the page resumes from the last cursor on failure. */
+const BATCH = 25;
 
 /**
- * 🔴 Two-step sign-in secrets are sealed with the OLD app's signing key, so on
- * the shared app they could never be opened and the Super Admin would be
- * locked out. They are left behind: the next sign-in asks to set it up again.
+ * 🔴 Two-step sign-in records are sealed with the OLD app's signing key, so on
+ * the shared app the authenticator could never be checked. They are left
+ * behind, and kept on the new side: the Super Admin sets it up again at the
+ * first sign-in, and that new set-up must never be pruned by a later copy.
  */
-const leftBehind = (p: string) => /(^|\/)users\/[^/]+\/mfa\.json$/.test(p);
+const isMfa = (rel: string) => /^users\/[^/]+\/mfa\.json$/.test(rel);
 
 export class MoveError extends Error {}
 
@@ -41,19 +44,23 @@ function tenantToken(t: Tenant | null): string {
 }
 
 /** Step 1: the empty school, its own store, answering on a TEST address only. */
-export async function createMovedSchool(key: string, name: string, testHostname: string): Promise<Tenant> {
+export async function createMovedSchool(key: string, testHostname: string): Promise<Tenant> {
+  const look = SCHOOLS[key];
+  if (!look) throw new MoveError(`"${key}" is not a school with its own deployment.`);
   if (!(await isTenantKeyAvailable(key))) throw new MoveError(`A school with the key "${key}" already exists.`);
   if (!(await isHostnameAvailable(testHostname))) throw new MoveError(`${testHostname} is already taken.`);
   const store = await createBlobStore(`school-${key}`);
   const tenant: Tenant = {
     key,
-    name,
+    name: look.fullName,
     hostnames: [testHostname],
     blobStoreId: store.storeId,
     blobTokenSealed: seal(store.token),
     status: "active",
     createdAt: new Date().toISOString(),
-    branding: { fullName: name },
+    // Its exact built-in look (colours, words, crest), the base every page and
+    // email starts from (lib/brandingData.ts). Copying files never touches it.
+    branding: look,
   };
   try {
     await createTenant(tenant);
@@ -65,90 +72,99 @@ export async function createMovedSchool(key: string, name: string, testHostname:
 }
 
 /**
- * Step 2: one batch of files from the old store (`sourcePrefix`, e.g.
- * "jeppe/") into the school's store under "<key>/". Same relative paths, so
- * every record, file and own-copy lands where the app looks for it.
- * Overwrites, so it can be run again to pick up anything changed since.
+ * Step 2: one batch of files from the old store (`<key>/`) into the school's
+ * store under the same path. Overwrites, so it can be run again.
  */
-export async function copyBatch(sourceToken: string, sourcePrefix: string, key: string, cursor?: string) {
+export async function copyBatch(sourceToken: string, key: string, cursor?: string) {
   const target = tenantToken(await getTenantByKey(key));
-  const page = await list({ prefix: sourcePrefix, limit: BATCH, cursor, token: sourceToken });
-  let bytes = 0;
+  const prefix = `${key}/`;
+  const page = await list({ prefix, limit: BATCH, cursor, token: sourceToken });
+  let copied = 0;
   let skipped = 0;
+  let bytes = 0;
   for (const blob of page.blobs) {
-    if (leftBehind(blob.pathname)) {
+    if (isMfa(blob.pathname.slice(prefix.length))) {
       skipped++;
       continue;
     }
     const got = await get(blob.pathname, { access: "private", useCache: false, token: sourceToken });
-    if (!got) continue;
+    if (!got) continue; // deleted since it was listed: nothing to copy
     const data = Buffer.from(await new Response(got.stream).arrayBuffer());
-    await put(`${key}/${blob.pathname.slice(sourcePrefix.length)}`, data, {
+    await put(blob.pathname, data, {
       access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: got.blob.contentType || "application/octet-stream",
       token: target,
     });
+    copied++;
     bytes += data.length;
   }
-  return { copied: page.blobs.length - skipped, skipped, bytes, cursor: page.cursor, hasMore: page.hasMore };
+  return { copied, skipped, bytes, cursor: page.cursor, hasMore: page.hasMore };
 }
 
-async function countPrefix(token: string, prefix: string) {
-  let files = 0;
-  let bytes = 0;
+async function listAll(token: string, prefix: string) {
+  const out = new Map<string, number>();
   let cursor: string | undefined;
   do {
     const page = await list({ prefix, limit: 1000, cursor, token });
-    const kept = page.blobs.filter((b) => !leftBehind(b.pathname));
-    files += kept.length;
-    bytes += kept.reduce((n, b) => n + b.size, 0);
+    for (const b of page.blobs) out.set(b.pathname, b.size);
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
-  return { files, bytes };
-}
-
-/** Step 4: the old and new side, file count and size. Also what the old
- *  store holds OUTSIDE the prefix, so nothing is silently left behind. */
-export async function compare(sourceToken: string, sourcePrefix: string, key: string) {
-  const target = tenantToken(await getTenantByKey(key));
-  const [source, everything, moved] = await Promise.all([
-    countPrefix(sourceToken, sourcePrefix),
-    countPrefix(sourceToken, ""),
-    countPrefix(target, `${key}/`),
-  ]);
-  return { source, outsidePrefix: everything.files - source.files, moved };
+  return out;
 }
 
 /**
- * Step 3: the old app's built-in look (colours, short name, crest), written
- * into the school's own branding, WITHOUT overwriting anything the school had
- * already saved itself (its copied branding.json wins).
+ * The end of every full copy: removes from the new side anything the old side
+ * no longer has (minutes deleted between two copies would otherwise come back).
+ * Never the new side's own two-step sign-in set-ups.
  */
-export async function applyBuiltInBranding(
-  key: string,
-  look: { fullName: string; shortName: string; primary: string; accent: string; logoFile: string }
-) {
+export async function pruneRemoved(sourceToken: string, key: string): Promise<number> {
   const target = tenantToken(await getTenantByKey(key));
-  const brandingPath = `${key}/branding.json`;
-  const existing = await get(brandingPath, { access: "private", useCache: false, token: target }).catch(() => null);
-  const saved = existing ? JSON.parse(await new Response(existing.stream).text()) : {};
-  const next: Record<string, unknown> = {
-    fullName: look.fullName,
-    shortName: look.shortName,
-    primary: look.primary,
-    accent: look.accent,
-    ...saved,
-  };
-  if (!saved.logo) {
-    // The crest that ships with the old app (public/), traced into the functions.
-    const crest = await readFile(path.join(process.cwd(), "public", path.basename(look.logoFile)));
-    await put(`${key}/branding/logo`, crest, { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "image/png", token: target });
-    next.logo = { contentType: "image/png", filename: path.basename(look.logoFile), version: Date.now(), updatedAt: new Date().toISOString() };
+  const prefix = `${key}/`;
+  const [source, moved] = await Promise.all([listAll(sourceToken, prefix), listAll(target, prefix)]);
+  let removed = 0;
+  for (const p of moved.keys()) {
+    if (source.has(p) || isMfa(p.slice(prefix.length))) continue;
+    await del(p, { token: target });
+    removed++;
   }
-  await put(brandingPath, JSON.stringify(next, null, 2), { access: "private", addRandomSuffix: false, allowOverwrite: true, contentType: "application/json", token: target });
-  return next;
+  return removed;
+}
+
+/** Step 3: old and new compared file by file (path and size), and anything in
+ *  the old store OUTSIDE its folder, so nothing is silently left behind. */
+export async function compare(sourceToken: string, key: string) {
+  const target = tenantToken(await getTenantByKey(key));
+  const prefix = `${key}/`;
+  const [everything, moved] = await Promise.all([listAll(sourceToken, ""), listAll(target, prefix)]);
+  let files = 0;
+  let bytes = 0;
+  let outsidePrefix = 0;
+  const missing: string[] = [];
+  const differentSize: string[] = [];
+  for (const [p, size] of everything) {
+    if (!p.startsWith(prefix)) {
+      outsidePrefix++;
+      continue;
+    }
+    if (isMfa(p.slice(prefix.length))) continue;
+    files++;
+    bytes += size;
+    if (!moved.has(p)) missing.push(p.slice(prefix.length));
+    else if (moved.get(p) !== size) differentSize.push(p.slice(prefix.length));
+  }
+  const extra = [...moved.keys()].filter((p) => !everything.has(p) && !isMfa(p.slice(prefix.length))).map((p) => p.slice(prefix.length));
+  return {
+    source: { files, bytes },
+    moved: { files: moved.size, bytes: [...moved.values()].reduce((a, b) => a + b, 0) },
+    outsidePrefix,
+    missing: missing.slice(0, 20),
+    missingCount: missing.length,
+    differentSize: differentSize.slice(0, 20),
+    extra: extra.slice(0, 20),
+    same: missing.length === 0 && differentSize.length === 0 && extra.length === 0,
+  };
 }
 
 /** Step 5: the school answers on an extra address (the real one), or stops answering on one. */

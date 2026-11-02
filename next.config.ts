@@ -4,8 +4,6 @@ const nextConfig: NextConfig = {
   // The built-in crests, read from disk for the Word minutes (lib/minutesDocxFile.ts).
   outputFileTracingIncludes: {
     "/api/minutes/**/*": ["./public/logo*.png"],
-    // ...and for moving a school onto the shared app (lib/tenantMove.ts).
-    "/api/platform/move-school": ["./public/logo*.png"],
   },
 };
 

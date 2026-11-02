@@ -1,65 +1,97 @@
 // Moving a school with its own deployment onto the shared app (lib/tenantMove.ts).
-//   npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-move-school.ts
-// The fake store ignores tokens, so the two sides are told apart by folder:
-// the old app's "oldschool/" and the new school's "newschool/".
+//   FAKE_BLOB_PER_TOKEN=1 npx tsx --import ./scripts/fake-blob/register.mjs scripts/check-move-school.ts
+// Each token is its own store here, like real Blob: "old" (the old app),
+// "new" (the moved school) and "control" (the registry).
 import assert from "node:assert/strict";
+process.env.FAKE_BLOB_PER_TOKEN = "1";
 process.env.CONTROL_BLOB_READ_WRITE_TOKEN = "control";
 process.env.TENANT_SECRET = "check-only-secret";
-import { put, get, list } from "@vercel/blob";
+import { put, get, list, del } from "@vercel/blob";
 import { createTenant, getTenantByKey } from "../lib/tenantRegistry";
 import { seal } from "../lib/secretBox";
-import { copyBatch, compare, applyBuiltInBranding, setHostnames } from "../lib/tenantMove";
+import { runInScope } from "../lib/tenantContext";
+import { resolveBranding } from "../lib/brandingData";
+import { SCHOOLS } from "../lib/branding";
+import { copyBatch, pruneRemoved, compare, setHostnames } from "../lib/tenantMove";
 
-const read = async (p: string) => {
-  const r = await get(p, { access: "private", useCache: false, token: "x" });
+const OLD = { token: "old" };
+const NEW = { token: "new" };
+const read = async (p: string, t: { token: string }) => {
+  const r = await get(p, { access: "private", useCache: false, ...t });
   return r ? Buffer.from(await new Response(r.stream).arrayBuffer()) : null;
 };
+const write = (p: string, b: Buffer, t: { token: string }) => put(p, b, { access: "private", addRandomSuffix: false, allowOverwrite: true, ...t });
 
-async function main() {
-  // The old app's data, under its own folder, including a binary file.
-  const old: Record<string, Buffer> = {
-    "oldschool/users.json": Buffer.from('[{"id":"u1"}]'),
-    "oldschool/minutes/m1/record.json": Buffer.from('{"title":"Term 4"}'),
-    "oldschool/branding.json": Buffer.from('{"replyTo":"office@school.example"}'),
-    "oldschool/policies/p1/file.pdf": Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]),
-  };
-  // A two-step sign-in record, sealed with the OLD app's key: must not move.
-  await put("oldschool/users/u1/mfa.json", Buffer.from(`{"secret":"v1.sealed-with-old-key"}`), { access: "private", addRandomSuffix: false, allowOverwrite: true, token: "old" });
-  for (const [p, b] of Object.entries(old)) await put(p, b, { access: "private", addRandomSuffix: false, allowOverwrite: true, token: "old" });
-
-  await createTenant({ key: "newschool", name: "New School", hostnames: ["newschool-test.example"], blobTokenSealed: seal("new"), status: "active", createdAt: "" } as never);
-
-  // Copy in batches until done; every file lands at the same relative path.
+async function fullCopy() {
   let cursor: string | undefined;
   let copied = 0;
   do {
-    const r = await copyBatch("old", "oldschool/", "newschool", cursor);
+    const r = await copyBatch("old", "jeppe", cursor);
     copied += r.copied;
     cursor = r.hasMore ? r.cursor : undefined;
   } while (cursor);
-  assert.equal(copied, 4, "the MFA record is left behind");
-  assert.equal(await read("newschool/users/u1/mfa.json"), null, "two-step sign-in is set up again on the new app");
+  return { copied, removed: await pruneRemoved("old", "jeppe") };
+}
+
+async function main() {
+  // The old app's data, including a binary file and a branding.json the school saved.
+  const old: Record<string, Buffer> = {
+    "jeppe/users.json": Buffer.from('[{"id":"u1"}]'),
+    "jeppe/minutes/m1/record.json": Buffer.from('{"title":"Term 4"}'),
+    "jeppe/minutes/m2/record.json": Buffer.from('{"title":"Term 3"}'),
+    "jeppe/branding.json": Buffer.from('{"replyTo":"office@school.example"}'),
+    "jeppe/policies/p1/file.pdf": Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]),
+  };
+  for (const [p, b] of Object.entries(old)) await write(p, b, OLD);
+  // Two-step sign-in, sealed with the OLD app's key: must not move.
+  await write("jeppe/users/u1/mfa.json", Buffer.from('{"secret":"v1.old-key"}'), OLD);
+
+  // Step 1 as createMovedSchool does it (minus creating a real Vercel store).
+  await createTenant({ key: "jeppe", name: SCHOOLS.jeppe.fullName, hostnames: ["jeppe-new.example"], blobTokenSealed: seal("new"), status: "active", createdAt: "", branding: SCHOOLS.jeppe } as never);
+
+  // Copy: byte for byte, same paths, old side untouched, MFA left behind.
+  assert.equal((await fullCopy()).copied, 5);
   for (const [p, b] of Object.entries(old)) {
-    assert.deepEqual(await read(p.replace("oldschool/", "newschool/")), b, `${p} copied byte for byte`);
-    assert.deepEqual(await read(p), b, "the old side is untouched");
+    assert.deepEqual(await read(p, NEW), b, `${p} copied byte for byte`);
+    assert.deepEqual(await read(p, OLD), b, "the old side is untouched");
   }
-  // Running it again is safe (overwrites, no duplicates).
-  await copyBatch("old", "oldschool/", "newschool");
-  assert.equal((await list({ prefix: "newschool/", token: "x" })).blobs.length, 4);
+  assert.equal(await read("jeppe/users/u1/mfa.json", NEW), null, "two-step sign-in is set up again on the new app");
+  assert.equal((await compare("old", "jeppe")).same, true);
 
-  const c = await compare("old", "oldschool/", "newschool");
-  assert.equal(c.source.files, 4);
-  assert.equal(c.moved.files, 4);
+  // The exact built-in look, with what the school saved on top - and a second
+  // copy (the one just before the switch) does not undo it.
+  const look = () => runInScope({ prefix: "jeppe/", token: "new", key: "jeppe", fromRegistry: true }, resolveBranding);
+  for (const round of ["after the first copy", "after copying again"]) {
+    const b = await look();
+    assert.equal(b.colors.primaryDark, "#333333", `hand-tuned hover colour kept ${round}`);
+    assert.equal(b.colors.accent, "#fcb517");
+    assert.equal(b.slogan, "Forti Nihil Difficilius");
+    assert.equal(b.logo, "/logo-jeppe.png", "the built-in crest");
+    assert.equal(b.replyTo, "office@school.example", "the school's own saved settings win");
+    if (round === "after the first copy") await fullCopy();
+  }
 
-  // Branding: the built-in look, WITHOUT losing what the school saved (its reply-to).
-  const b = await applyBuiltInBranding("newschool", { fullName: "Jeppe Girls High", shortName: "JGHS", primary: "#000000", accent: "#fcb517", logoFile: "/logo-jeppe.png" });
-  assert.equal(b.replyTo, "office@school.example", "the school's own saved branding wins");
-  assert.equal(b.accent, "#fcb517");
-  assert.ok((await read("newschool/branding/logo"))!.length > 1000, "crest copied from public/");
+  // Changes on the old side between copies: a deleted minute does NOT come back,
+  // an edit arrives, and the new side's own two-step set-up is never pruned.
+  await del("jeppe/minutes/m2/record.json", OLD);
+  await write("jeppe/minutes/m1/record.json", Buffer.from('{"title":"Term 4 (corrected)"}'), OLD);
+  await write("jeppe/users/u1/mfa.json", Buffer.from('{"secret":"v1.new-key"}'), NEW);
+  const again = await fullCopy();
+  assert.equal(again.removed, 1, "the deleted minute is removed");
+  assert.equal(await read("jeppe/minutes/m2/record.json", NEW), null);
+  assert.equal(String(await read("jeppe/minutes/m1/record.json", NEW)), '{"title":"Term 4 (corrected)"}');
+  assert.ok(await read("jeppe/users/u1/mfa.json", NEW), "the new set-up stays");
+  const c = await compare("old", "jeppe");
+  assert.equal(c.same, true, JSON.stringify(c));
 
-  // The real address is added; the test one can stay or go.
-  await setHostnames("newschool", ["newschool-test.example", "newschool.example"]);
-  assert.deepEqual((await getTenantByKey("newschool"))?.hostnames, ["newschool-test.example", "newschool.example"]);
+  // Compare notices a file that differs.
+  await write("jeppe/policies/p1/file.pdf", Buffer.from("changed and longer"), OLD);
+  assert.deepEqual((await compare("old", "jeppe")).differentSize, ["policies/p1/file.pdf"]);
+
+  // The real address.
+  await setHostnames("jeppe", ["jeppe-new.example", "jeppe.example"]);
+  assert.deepEqual((await getTenantByKey("jeppe"))?.hostnames, ["jeppe-new.example", "jeppe.example"]);
+  assert.equal((await list({ prefix: "jeppe/", token: "control" })).blobs.length, 0, "nothing of the school's lands in the registry store");
   console.log("check-move-school: all passed");
 }
 main().catch((e) => {

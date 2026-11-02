@@ -11,13 +11,8 @@ export const dynamic = "force-dynamic";
 export default async function MoveSchoolPage() {
   const admin = await requirePlatformAdmin();
   if (admin instanceof NextResponse) return <PlatformSignedOut />;
-  // The built-in looks of the schools that still have their own deployment.
-  const looks = Object.fromEntries(
-    ["jeppe", "hvps"].filter((k) => SCHOOLS[k]).map((k) => {
-      const s = SCHOOLS[k];
-      return [k, { fullName: s.fullName, shortName: s.shortName, primary: s.colors.primary, accent: s.colors.accent, logoFile: s.logo }];
-    })
-  );
+  // The schools that still have their own deployment, by key.
+  const schools = Object.fromEntries(["jeppe", "hvps"].filter((k) => SCHOOLS[k]).map((k) => [k, SCHOOLS[k].fullName]));
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-dark text-white px-6 py-4">
@@ -33,7 +28,7 @@ export default async function MoveSchoolPage() {
         </div>
       </header>
       <main className="max-w-5xl mx-auto p-6">
-        <MoveSchool looks={looks} />
+        <MoveSchool schools={schools} />
       </main>
     </div>
   );
