@@ -55,7 +55,7 @@ export default function MinutesSectionEditor({
   const [captureHint, setCaptureHint] = useState<{ id: string; text: string } | null>(null);
   // The People register, for "Fill from People register" on an attendance
   // list. Only fetched while the minutes can still be edited.
-  const [people, setPeople] = useState<{ name: string; position?: string }[] | undefined>(undefined);
+  const [people, setPeople] = useState<{ id: string; name: string; position?: string }[] | undefined>(undefined);
   useEffect(() => {
     if (!editable) return;
     let live = true;
@@ -194,6 +194,50 @@ export default function MinutesSectionEditor({
               )}
             </div>
 
+            {/* Carl: "tag a section with any user/s from a dropdown" - the person
+                who reported it, say. Their initials print in the Responsible column. */}
+            {(editable || !!s.tags?.length) && (
+              <div className="mb-3 ml-11 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-gray-400">{t("People:")}</span>
+                {(s.tags ?? []).map((tag) => (
+                  <span key={tag.id} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
+                    {tag.name}
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => update(s.id, { tags: (s.tags ?? []).filter((x) => x.id !== tag.id) })}
+                        aria-label={t("Untag {name}", { name: tag.name })}
+                        className="text-gray-400 hover:text-dark"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                ))}
+                {editable && !!people?.length && (
+                  <select
+                    value=""
+                    aria-label={t("Tag person")}
+                    onChange={(e) => {
+                      const p = people.find((x) => x.id === e.target.value);
+                      if (p) update(s.id, { tags: [...(s.tags ?? []), { id: p.id, name: p.name }] });
+                    }}
+                    className="rounded border border-gray-200 bg-white px-1.5 py-0.5 text-xs"
+                  >
+                    <option value="">+ {t("Tag person")}</option>
+                    {people
+                      .filter((p) => !(s.tags ?? []).some((x) => x.id === p.id))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                {editable && !s.tags?.length && <span className="text-gray-400">{t("nobody tagged")}</span>}
+              </div>
+            )}
+
             {confirmRemove === s.id && (
               // Confirmed, because a section can hold a whole meeting's worth of
               // typing and there is no undo.
@@ -297,6 +341,7 @@ export default function MinutesSectionEditor({
                 }
                 onChange={(doc, body) => update(s.id, { doc, body })}
                 names={people?.map((p) => p.name)}
+                people={people?.map((p) => ({ id: p.id, name: p.name }))}
                 onReady={(ed) => {
                   if (ed) editors.current.set(s.id, ed);
                   else editors.current.delete(s.id);

@@ -11,12 +11,17 @@ function styled(text: ReactNode, marks: RichMark[] | undefined, key: number): Re
   if (!marks?.length) return <span key={key}>{text}</span>;
   const style: CSSProperties = {};
   const deco: string[] = [];
+  let tag: string | undefined;
   for (const m of marks) {
     if (m.type === "bold") style.fontWeight = 700;
     else if (m.type === "italic") style.fontStyle = "italic";
     else if (m.type === "underline") deco.push("underline");
     else if (m.type === "strike") deco.push("line-through");
     else if (m.type === "highlight") style.backgroundColor = m.attrs?.color;
+    else if (m.type === "personTag") {
+      style.borderBottom = "1px dotted #6b7280";
+      tag = m.attrs?.name;
+    }
     else if (m.type === "textStyle") {
       if (m.attrs?.color) style.color = m.attrs.color;
       if (m.attrs?.fontFamily) style.fontFamily = m.attrs.fontFamily;
@@ -25,7 +30,7 @@ function styled(text: ReactNode, marks: RichMark[] | undefined, key: number): Re
   }
   if (deco.length) style.textDecoration = deco.join(" ");
   return (
-    <span key={key} style={style}>
+    <span key={key} style={style} title={tag}>
       {text}
     </span>
   );

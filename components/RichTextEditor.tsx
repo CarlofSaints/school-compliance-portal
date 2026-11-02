@@ -9,6 +9,7 @@ import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table
 import Image from "@tiptap/extension-image";
 import { Placeholder } from "@tiptap/extensions";
 import { NameSpellcheck, nameSpellcheckKey, nameWords } from "@/lib/nameSpellcheck";
+import { PersonTag } from "@/lib/personTagMark";
 import { authFetch } from "@/lib/useAuth";
 import { imageSize } from "@/lib/minutesPaste";
 import { cleanDoc, docToText, stableDoc, textToDoc, imageSrc, FONTS, FONT_SIZES, type RichNode } from "@/lib/richDoc";
@@ -44,6 +45,7 @@ export default function RichTextEditor({
   onChange,
   onReady,
   names,
+  people,
 }: {
   minutesId: string;
   doc?: RichNode;
@@ -54,6 +56,8 @@ export default function RichTextEditor({
   onReady?: (editor: Editor | null) => void;
   /** Names on the People register: never marked as misspelt. */
   names?: string[];
+  /** The People register, for tagging selected text with a person. */
+  people?: { id: string; name: string }[];
 }) {
   const t = useT();
   const [note, setNote] = useState("");
@@ -127,6 +131,7 @@ export default function RichTextEditor({
       Placeholder.configure({ placeholder: placeholder ?? "" }),
       // eslint-disable-next-line react-hooks/refs -- read inside the plugin later, never during render
       NameSpellcheck(() => words.current),
+      PersonTag,
     ],
     content: doc ?? textToDoc(body, minutesId),
     editorProps: {
@@ -303,6 +308,36 @@ export default function RichTextEditor({
           />
           🖼 {busy ? t("Adding the picture...") : t("Picture")}
         </label>
+        {editor.isActive("personTag") ? (
+          <button type="button" onMouseDown={keep} onClick={() => editor.chain().focus().extendMarkRange("personTag").unsetMark("personTag").run()} className={btn(true)}>
+            👤 {t("Untag {name}", { name: String(editor.getAttributes("personTag").name ?? "") })}
+          </button>
+        ) : (
+          !!people?.length && (
+            <select
+              aria-label={t("Tag person")}
+              value=""
+              onChange={(e) => {
+                const p = people.find((x) => x.id === e.target.value);
+                if (!p) return;
+                if (editor.state.selection.empty) {
+                  setNote(t("Select the words first, then pick the person."));
+                  return;
+                }
+                setNote("");
+                editor.chain().focus().setMark("personTag", { id: p.id, name: p.name }).run();
+              }}
+              className="px-1.5 py-1 rounded border border-gray-200 text-sm bg-white"
+            >
+              <option value="">👤 {t("Tag person")}</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )
+        )}
         <button type="button" onMouseDown={keep} onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} className={btn(false)} title={t("Clear formatting")}>
           {t("Clear formatting")}
         </button>

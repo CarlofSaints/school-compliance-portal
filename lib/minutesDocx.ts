@@ -24,6 +24,7 @@ import {
   minutesWhenLabel,
   MEETING_BODY_LABELS,
   SIGNATORY_ROLE_LABELS,
+  responsibleText,
   sectionListGroups,
   sectionNumbers,
   type AttendeeRow,
@@ -119,6 +120,8 @@ function richRun(text: string, marks: RichMark[] | undefined, size?: number): Te
   return new TextRun(o);
 }
 
+// Tagged text prints as ordinary text: who it was shows as initials in the
+// Responsible column (responsibleText), not inside the wording.
 function richInline(nodes: RichNode[] | undefined, size?: number): TextRun[] {
   return (nodes ?? []).map((n) => (n.type === "hardBreak" ? new TextRun({ text: "", break: 1 }) : richRun(n.text ?? "", n.marks, size)));
 }
@@ -686,7 +689,7 @@ export async function buildMinutesDocx(
                 numbers.get(s.id) ?? null,
                 s.title,
                 s.body,
-                s.responsible || "",
+                responsibleText(s),
                 sectionListGroups(s, sections),
                 cols,
                 images,

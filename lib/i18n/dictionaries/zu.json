@@ -2220,5 +2220,10 @@
   "Deleted {ref}.": "Kususiwe u-{ref}.",
   "Delete {ref}?": "Susa u-{ref}?",
   "Yes, delete": "Yebo, susa",
-  "Everyone": "Wonke umuntu"
+  "Everyone": "Wonke umuntu",
+  "People:": "Abantu:",
+  "Untag {name}": "Susa ithegi ku-{name}",
+  "Tag person": "Thegi umuntu",
+  "nobody tagged": "akekho othegiwe",
+  "Select the words first, then pick the person.": "Khetha amagama kuqala, bese ukhetha umuntu."
 }

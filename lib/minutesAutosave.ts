@@ -6,6 +6,7 @@
 // saving, and lost all of it to the reload afterwards.
 
 import { stableDoc, type RichNode } from "./richDoc";
+import { cleanTags } from "./minutes";
 import {
   ATTENDANCE_STATUS_LABELS,
   cleanAttendees,
@@ -111,6 +112,7 @@ function normalText(t: MinutesText): string {
             attendees: kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
             // A formatting-only change (making a word bold) is a change to save.
             doc: s?.doc ? stableDoc(s.doc as RichNode) : undefined,
+            tags: cleanTags(s?.tags),
           };
         })
     : t.sections;

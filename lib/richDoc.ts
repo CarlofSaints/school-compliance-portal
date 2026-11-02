@@ -21,8 +21,8 @@ import { bodyBlocks, cellText, imageLine } from "./minutesBody";
 // ---------------------------------------------------------------------------
 
 export interface RichMark {
-  type: "bold" | "italic" | "underline" | "strike" | "textStyle" | "highlight";
-  attrs?: { color?: string; fontFamily?: string; fontSize?: string };
+  type: "bold" | "italic" | "underline" | "strike" | "textStyle" | "highlight" | "personTag";
+  attrs?: { color?: string; fontFamily?: string; fontSize?: string; id?: string; name?: string };
 }
 
 export interface RichNode {
@@ -99,6 +99,10 @@ function cleanMarks(raw: unknown): RichMark[] | undefined {
       const attrs = { color: cleanColor(a.color), fontFamily: cleanFont(a.fontFamily), fontSize: cleanFontSize(a.fontSize) };
       const kept = Object.fromEntries(Object.entries(attrs).filter(([, v]) => v)) as RichMark["attrs"];
       if (kept && Object.keys(kept).length) out.push({ type, attrs: kept });
+    } else if (type === "personTag") {
+      const id = String(a.id ?? "").trim().slice(0, 64);
+      const name = String(a.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+      if (id && name) out.push({ type, attrs: { id, name } });
     } else if (type === "highlight") {
       out.push({ type, attrs: { color: cleanColor(a.color) ?? "#fff59d" } });
     }
@@ -241,6 +245,17 @@ export function stableDoc(doc: RichNode): string {
         ? Object.fromEntries(Object.keys(v as object).sort().map((k) => [k, sort((v as Record<string, unknown>)[k])]))
         : v;
   return JSON.stringify(sort(doc));
+}
+
+/** The people tagged on text in a document, in order, once each. */
+export function docTags(doc: RichNode | null | undefined): { id: string; name: string }[] {
+  const out = new Map<string, string>();
+  const walk = (n: RichNode) => {
+    for (const m of n.marks ?? []) if (m.type === "personTag" && m.attrs?.id && m.attrs.name && !out.has(m.attrs.id)) out.set(m.attrs.id, m.attrs.name);
+    (n.content ?? []).forEach(walk);
+  };
+  if (doc) walk(doc);
+  return [...out].map(([id, name]) => ({ id, name }));
 }
 
 /** Picture ids a document uses. */

@@ -20,6 +20,7 @@ import {
   sectionNumbers,
   signingProgress,
   signatureMatchesDocument,
+  responsibleText,
   SIGNATORY_ROLE_LABELS,
   type MeetingBody,
   type MeetingPeriod,
@@ -220,7 +221,7 @@ export default function SignMinutesPage() {
                   )}
                 </td>
                 <td className="py-2 px-3 border border-gray-200 text-gray-700">
-                  {s.responsible || ""}
+                  {responsibleText(s)}
                 </td>
               </tr>
               );
