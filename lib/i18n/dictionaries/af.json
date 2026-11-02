@@ -2226,6 +2226,7 @@
   "Tag person": "Merk persoon",
   "nobody tagged": "niemand gemerk nie",
   "Select the words first, then pick the person.": "Kies eers die woorde en dan die persoon.",
+  "Part of this is already tagged with {name}. Untag that first.": "Deel hiervan is reeds met {name} gemerk. Verwyder daardie etiket eers.",
   "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono kan nie nou antwoord nie: die KI-diens wat hierdie portaal gebruik se krediet is op. Dit is nie u skool se krediete nie, so om krediete te koop sal dit nie regmaak nie.",
   "Tell us about it": "Laat weet ons"
 }

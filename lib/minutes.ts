@@ -232,8 +232,10 @@ export function initials(name: string): string {
 export function responsibleText(s: { responsible?: string; tags?: SectionTag[]; doc?: RichNode }): string {
   const people = new Map<string, string>();
   for (const t of [...(s.tags ?? []), ...docTags(s.doc)]) if (!people.has(t.id)) people.set(t.id, t.name);
+  // One entry per PERSON (already unique above), never merged by initials:
+  // Nomsa Khumalo and Nandi Khoza are both "NK" and both must print.
   const marks = [...people.values()].map(initials).filter(Boolean);
-  return [s.responsible?.trim(), [...new Set(marks)].join(", ")].filter(Boolean).join(", ");
+  return [s.responsible?.trim(), marks.join(", ")].filter(Boolean).join(", ");
 }
 
 /** A section of the minutes: Finance report, Principal's Report, and so on.
@@ -268,8 +270,8 @@ export interface MinutesSection {
   responsible?: string;
   /** People TAGGED on the section (Carl: "it was that person who reported it
    *  in the meeting"). The name is FROZEN when tagged, like `responsible`, so
-   *  a signed record never renames itself. Shown in the Responsible column
-   *  when nothing is typed there. */
+   *  a signed record never renames itself. Their INITIALS print in the
+   *  Responsible column, after anything typed there (responsibleText). */
   tags?: SectionTag[];
   /** "attendance" draws the section as a two-column list. Absent is text. */
   kind?: SectionKind;
