@@ -191,6 +191,12 @@ export interface ActionUpdate {
  * still says which meeting agreed it. The link is checked when it is drawn, so
  * a dead one becomes plain text rather than a 404.
  */
+/** Who has been told about an action. Absent = an action from before this was
+ *  recorded, when every assignee was emailed the moment they were assigned. */
+export function toldIds(item: Pick<ActionItem, "notifiedIds" | "assigneeIds">): string[] {
+  return item.notifiedIds ?? item.assigneeIds;
+}
+
 export interface FromMinutes {
   minutesId: string;
   minutesTitle: string;
@@ -253,6 +259,10 @@ export interface ActionItem {
   meetingDate?: string;
   // The minute it was raised from, where it was. See FromMinutes.
   fromMinutes?: FromMinutes;
+  /** People (register ids) who have been TOLD about this action, by the
+   *  assignment email or the signed-minutes email. Deleting it emails exactly
+   *  them, so nobody hears about removing an action they never heard of. */
+  notifiedIds?: string[];
   raisedById: string;
   raisedByName: string;
   createdAt: string;

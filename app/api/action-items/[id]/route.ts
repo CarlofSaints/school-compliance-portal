@@ -11,7 +11,7 @@ import {
 import { ACTION_ADMIN_PERMISSIONS, myPersonIdsIn } from "@/lib/actionItemRecipients";
 import { parseActionEdit, isNotOwnerStatusChange, withHistoryLine, notOwnerReasonOf, NEEDS_REASON } from "@/lib/actionItemFields";
 import { getActionCategories } from "@/lib/actionCategoryData";
-import { notifyAssignees } from "@/lib/actionItemNotify";
+import { notifyAssignees, notifyRemoved } from "@/lib/actionItemNotify";
 import { withMinutesMeetingDates } from "@/lib/minutesAccess";
 
 // Editing ONE action. An assignee updating their own progress goes to
@@ -94,9 +94,14 @@ export async function DELETE(
   if (session instanceof NextResponse) return session;
 
   const { id } = await params;
-  const ok = await deleteActionItem(id);
-  if (!ok) {
+  // The item as the delete removed it, for the "removed" email.
+  const before = await deleteActionItem(id);
+  if (!before) {
     return NextResponse.json({ error: "Action not found" }, { status: 404 });
   }
-  return NextResponse.json({ success: true });
+  // Carl: if adding it sent an email, deleting it sends a follow-up. Only to
+  // those actually told; never fails the delete that has already happened.
+  const by = `${session.name} ${session.surname}`.trim() || session.email;
+  const told = await notifyRemoved(before, by).catch(() => 0);
+  return NextResponse.json({ success: true, told });
 }

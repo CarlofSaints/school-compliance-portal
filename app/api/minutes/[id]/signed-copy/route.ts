@@ -5,6 +5,7 @@ import { getMinutes, saveSignedCopy, readSignedCopy } from "@/lib/minutesData";
 import { MINUTES_STATUS_LABELS, mayUploadSignedCopy } from "@/lib/minutes";
 import { documentHash, shortHash, minutesForClient } from "@/lib/minutesSigning";
 import { contentDisposition } from "@/lib/contentDisposition";
+import { tellAssigneesAtSigning } from "@/lib/minutesDistribution";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 
@@ -95,6 +96,10 @@ export async function POST(
     detail: { filename: file.name, size: bytes.length, documentHash: hash },
   });
 
+  // The upload just closed the minutes: the people with actions from them are told now.
+  if (saved?.status === "signed" && record.status !== "signed") {
+    await tellAssigneesAtSigning(saved, new Set()).catch((err) => console.error("[minutes] could not tell assignees:", id, err));
+  }
   return NextResponse.json({ record: minutesForClient(saved), documentRef: shortHash(hash) });
 }
 
