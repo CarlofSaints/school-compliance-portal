@@ -49,7 +49,11 @@ export async function POST(
   // ticked who signed on paper is offered this upload straight after).
   const me = session.email.trim().toLowerCase();
   const onList = record.signatories.some((s) => s.email.trim().toLowerCase() === me);
-  if (!session.permissions.some((p) => CAN_MANAGE.includes(p)) && !onList) {
+  const manages = session.permissions.some((p) => CAN_MANAGE.includes(p));
+  if (record.signedCopy && !manages) {
+    return NextResponse.json({ error: "A signed copy is already kept. Only a minutes admin can replace it." }, { status: 403 });
+  }
+  if (!manages && !onList) {
     return NextResponse.json({ error: "Only a minutes admin or somebody on the signing list can upload the signed copy." }, { status: 403 });
   }
   if (!mayUploadSignedCopy(record)) {

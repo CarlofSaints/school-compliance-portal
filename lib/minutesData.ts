@@ -257,7 +257,12 @@ export async function updateMinutes(
       saved = null;
       return NO_CHANGE;
     }
-    if (isLocked(existing.status)) throw new MinutesLockedError(id);
+    const addingScanToSigned =
+      existing.status === "signed" &&
+      !existing.signedCopy &&
+      typeof change !== "function" &&
+      Object.keys(change).every((k) => k === "signedCopy");
+    if (isLocked(existing.status) && !addingScanToSigned) throw new MinutesLockedError(id);
     const updates = typeof change === "function" ? change(existing) : change;
     if (
       existing.status === "awaiting_signatures" &&

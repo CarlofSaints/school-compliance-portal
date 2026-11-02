@@ -8,6 +8,8 @@ import { distributeOnFinalSignature } from "@/lib/minutesDistribution";
 import { sendPaperSignatureNoticeEmail } from "@/lib/email";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
+import { pause } from "@/lib/actionItemNotify";
+import { LIMITS, enforce } from "@/lib/rateLimit";
 
 const CAN_MANAGE = ["manage_minutes", "manage_users"];
 const norm = (e: string) => e.trim().toLowerCase();
@@ -56,6 +58,10 @@ export async function POST(
       { status: 403 }
     );
   }
+
+  // It sends email, so it shares the per-user email budget.
+  const limited = await enforce([[LIMITS.emailSendUser, session.id]]);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => ({}));
   const emails: string[] = Array.isArray(body.emails)
@@ -116,7 +122,7 @@ export async function POST(
   const actor = actorFrom(req, session);
   await recordActivity({
     ...actor,
-    action: "minutes.signed_on_paper",
+    action: "minutes.paper_signatures_recorded",
     entity: "minutes",
     entityId: id,
     summary: `Recorded ${marked.map((m) => m.name).join(", ")} as signing "${record.title}" on paper (${progress.signed} of ${progress.total})`,
@@ -125,9 +131,25 @@ export async function POST(
 
   // Each person ticked hears about it, so a wrong tick is caught. Not the one
   // who ticked themselves: they know.
+  // One at a time with a gap (the provider refuses bursts), and a notice that
+  // did not go is logged: it is the safeguard against a wrong tick.
+  const notNotified: string[] = [];
   for (const m of marked) {
     if (norm(m.email) === me) continue;
-    await sendPaperSignatureNoticeEmail(m.email, m.name, record.title, id, markedBy).catch(() => false);
+    if (!(await sendPaperSignatureNoticeEmail(m.email, m.name, record.title, id, markedBy).catch(() => false))) {
+      notNotified.push(m.email);
+    }
+    await pause();
+  }
+  if (notNotified.length) {
+    await recordActivity({
+      ...actor,
+      action: "minutes.paper_signature_notice_failed",
+      entity: "minutes",
+      entityId: id,
+      summary: `Could not email ${notNotified.join(", ")} that they were recorded as signing "${record.title}" on paper`,
+      detail: { emails: notNotified },
+    });
   }
 
   if (progress.complete && updated) {
