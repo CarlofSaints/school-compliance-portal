@@ -3,6 +3,8 @@ import path from "path";
 import { readSignatureImage } from "./minutesData";
 import { getMeetingTypes } from "./meetingTypesData";
 import { meetingTypeLabel } from "./meetingTypes";
+import { imageIds } from "./minutesBody";
+import { readMinutesImage } from "./minutesImages";
 import type { MinutesRecord } from "./minutesData";
 import { buildMinutesDocx } from "./minutesDocx";
 import { resolveBranding, readLogo } from "./brandingData";
@@ -54,7 +56,17 @@ export async function buildMinutesDocxFile(record: MinutesRecord): Promise<Buffe
   );
 
   const types = await getMeetingTypes();
-  return buildMinutesDocx(record, branding, crest, signatures, meetingTypeLabel(types, record.body));
+  // Pictures in the sections. One unreadable picture must not lose the file:
+  // it prints as "[picture unavailable]" instead.
+  const ids = [...new Set(record.sections.flatMap((s) => imageIds(s.body || "")))];
+  const images = new Map<string, Buffer>();
+  await Promise.all(
+    ids.map(async (img) => {
+      const bytes = await readMinutesImage(record.id, img).catch(() => null);
+      if (bytes) images.set(img, bytes);
+    })
+  );
+  return buildMinutesDocx(record, branding, crest, signatures, meetingTypeLabel(types, record.body), images);
 }
 
 /** The school's crest bytes for a Word file, or null. Also the policy letterhead (lib/policyCompile.ts). */

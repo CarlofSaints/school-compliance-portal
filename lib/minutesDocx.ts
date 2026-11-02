@@ -30,6 +30,72 @@ import {
   type ListGroup,
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
+import { bodyBlocks } from "./minutesBody";
+
+/** Pictures used by the sections, by id, read before the document is built. */
+export type SectionImages = Map<string, Buffer>;
+
+/**
+ * A section's wording as Word content: text lines, tables as real tables,
+ * pictures embedded and scaled to fit `width` (twips). Plain text comes out
+ * exactly as before. A picture whose file is missing is said in words rather
+ * than silently dropped, so a reader knows something was there.
+ */
+function bodyContent(body: string, width: number, images: SectionImages, opts: { size?: number } = {}): (Paragraph | Table)[] {
+  const out: (Paragraph | Table)[] = [];
+  for (const b of bodyBlocks(body)) {
+    if (b.kind === "text") {
+      for (const line of b.lines) {
+        out.push(new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: line, ...(opts.size ? { size: opts.size } : {}) })] }));
+      }
+    } else if (b.kind === "table") {
+      const n = b.rows[0]?.length || 1;
+      const col = Math.floor(width / n);
+      const border = { style: BorderStyle.SINGLE, size: 4, color: "999999" };
+      out.push(
+        new Table({
+          width: { size: col * n, type: WidthType.DXA },
+          columnWidths: Array(n).fill(col),
+          layout: TableLayoutType.FIXED,
+          borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
+          rows: b.rows.map(
+            (r, ri) =>
+              new TableRow({
+                children: r.map(
+                  (c) =>
+                    new TableCell({
+                      width: { size: col, type: WidthType.DXA },
+                      margins: { top: 40, bottom: 40, left: 80, right: 80 },
+                      children: [new Paragraph({ children: [new TextRun({ text: c, size: 18, bold: ri === 0 })] })],
+                    })
+                ),
+              })
+          ),
+        })
+      );
+      // Space after, and a cell may never END on a table (Word calls that corrupt).
+      out.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
+    } else {
+      const bytes = images.get(b.id);
+      const real = bytes ? crestImage(bytes) : null;
+      if (!bytes || !real || (real.type !== "png" && real.type !== "jpg")) {
+        out.push(new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] }));
+        continue;
+      }
+      // 1 px = 15 twips at 96 dpi. Never wider than the column, never upscaled.
+      const maxPx = Math.floor(width / 15);
+      // Size from the file itself: the "WxH" in the text is written by a browser.
+      const w = Math.min(real.width, maxPx);
+      const h = Math.max(1, Math.min(Math.round((real.height / real.width) * w), 1200));
+      try {
+        out.push(new Paragraph({ spacing: { before: 60, after: 60 }, children: [new ImageRun({ type: real.type, data: bytes, transformation: { width: w, height: h } })] }));
+      } catch {
+        out.push(new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] }));
+      }
+    }
+  }
+  return out;
+}
 
 // Every string of the record and branding is cleaned once at the top of
 // buildMinutesDocx, so no field (school name, title, a pasted section body)
@@ -197,7 +263,8 @@ function sectionRow(
   /** The lists this section draws (sectionListGroups): an attendance list,
    *  or the Apologies section's two. Empty for a text section. */
   groups: ListGroup[],
-  cols: Columns
+  cols: Columns,
+  images: SectionImages
 ): TableRow {
   const hasRows = groups.length > 0;
   // Each line its own paragraph. A single run containing newlines renders as
@@ -216,13 +283,7 @@ function sectionRow(
               ],
         }),
       ]
-    : lines.map(
-        (line) =>
-          new Paragraph({
-            spacing: { after: 60 },
-            children: [new TextRun({ text: line, size: 20 })],
-          })
-      );
+    : bodyContent(body, cols.item - CELL_PAD_X, images, { size: 20 });
 
   const pad = { top: 80, bottom: 80, left: CELL_PAD_X / 2, right: CELL_PAD_X / 2 };
   return new TableRow({
@@ -352,7 +413,8 @@ function leadingSection(
   title: string,
   body: string,
   groups: ListGroup[],
-  contentWidth: number
+  contentWidth: number,
+  images: SectionImages
 ): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [
     new Paragraph({
@@ -363,14 +425,7 @@ function leadingSection(
   // Indented ~1.25cm under the heading, as on the letterhead.
   out.push(...listGroupBlocks(groups, { indent: 720, width: contentWidth - 720 }));
   const lines = (body || "").split(/\r?\n/);
-  if (lines.some((l) => l.trim())) {
-    out.push(
-      ...lines.map(
-        (line) =>
-          new Paragraph({ spacing: { after: 60 }, children: [new TextRun({ text: line })] })
-      )
-    );
-  }
+  if (lines.some((l) => l.trim())) out.push(...bodyContent(body, contentWidth, images));
   out.push(spacer(240));
   return out;
 }
@@ -388,7 +443,8 @@ export async function buildMinutesDocx(
    */
   signatures: Map<string, { png: Buffer; width: number; height: number }> = new Map(),
   /** The school's name for the meeting type (it may have renamed one or added its own). */
-  meetingLabel?: string
+  meetingLabel?: string,
+  images: SectionImages = new Map()
 ): Promise<Buffer> {
   const meeting = meetingLabel ?? MEETING_BODY_LABELS[record.body] ?? record.body;
   // No people lookup: the responsible name was resolved and FROZEN when the
@@ -506,7 +562,7 @@ export async function buildMinutesDocx(
     const numbered = sections.filter((s) => numbers.get(s.id) != null);
 
     for (const s of leading) {
-      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections), cols.total));
+      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections), cols.total, images));
     }
 
     if (numbered.length > 0) {
@@ -524,7 +580,8 @@ export async function buildMinutesDocx(
                 s.body,
                 s.responsible || "",
                 sectionListGroups(s, sections),
-                cols
+                cols,
+                images
               )
             ),
           ],
