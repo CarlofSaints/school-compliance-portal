@@ -104,7 +104,7 @@ export async function PATCH(
       }
       updates.title = title;
     }
-    if (body.body !== undefined) {
+    if (body.body !== undefined && body.body !== existing.body) {
       if (!(await isMeetingTypeId(body.body))) return NextResponse.json({ error: "Choose a meeting type from the list." }, { status: 400 });
       updates.body = body.body;
     }

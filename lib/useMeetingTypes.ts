@@ -20,5 +20,9 @@ export function useMeetingTypes(): { types: MeetingType[]; label: (id: string) =
       live = false;
     };
   }, []);
-  return { types, label: (id: string) => meetingTypeLabel(types, id) };
+  return {
+    types,
+    // An id not (yet) on the list shows nothing rather than "mt-1a2b3c4d".
+    label: (id: string) => (types.some((t) => t.id === id) ? meetingTypeLabel(types, id) : ""),
+  };
 }
