@@ -31,6 +31,7 @@ import {
 } from "./minutes";
 import type { MinutesRecord } from "./minutesData";
 import { bodyBlocks } from "./minutesBody";
+import type { RichMark, RichNode } from "./richDoc";
 
 /** Pictures used by the sections, by id, read before the document is built. */
 export type SectionImages = Map<string, Buffer>;
@@ -76,24 +77,127 @@ function bodyContent(body: string, width: number, images: SectionImages, opts: {
       // Space after, and a cell may never END on a table (Word calls that corrupt).
       out.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
     } else {
-      const bytes = images.get(b.id);
-      const real = bytes ? crestImage(bytes) : null;
-      if (!bytes || !real || (real.type !== "png" && real.type !== "jpg")) {
-        out.push(new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] }));
-        continue;
-      }
-      // 1 px = 15 twips at 96 dpi. Never wider than the column, never upscaled.
-      const maxPx = Math.floor(width / 15);
-      // Size from the file itself: the "WxH" in the text is written by a browser.
-      const w = Math.min(real.width, maxPx);
-      const h = Math.max(1, Math.min(Math.round((real.height / real.width) * w), 1200));
-      try {
-        out.push(new Paragraph({ spacing: { before: 60, after: 60 }, children: [new ImageRun({ type: real.type, data: bytes, transformation: { width: w, height: h } })] }));
-      } catch {
-        out.push(new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] }));
-      }
+      out.push(picture(images.get(b.id), width));
     }
   }
+  return out;
+}
+
+/** A picture scaled to fit `width` (twips), or a line saying it is missing. */
+function picture(bytes: Buffer | undefined, width: number): Paragraph {
+  const missing = () => new Paragraph({ children: [new TextRun({ text: "[picture unavailable]", italics: true, color: "999999", size: 18 })] });
+  const real = bytes ? crestImage(bytes) : null;
+  if (!bytes || !real || (real.type !== "png" && real.type !== "jpg")) return missing();
+  // 1 px = 15 twips at 96 dpi. Never wider than the column, never upscaled.
+  // Size from the file itself: anything written beside it came from a browser.
+  const w = Math.min(real.width, Math.floor(width / 15));
+  const h = Math.max(1, Math.min(Math.round((real.height / real.width) * w), 1200));
+  try {
+    return new Paragraph({ spacing: { before: 60, after: 60 }, children: [new ImageRun({ type: real.type, data: bytes, transformation: { width: w, height: h } })] });
+  } catch {
+    return missing();
+  }
+}
+
+/** A run of text with its formatting, as Word formatting. */
+function richRun(text: string, marks: RichMark[] | undefined, size?: number): TextRun {
+  type RunOptions = Exclude<ConstructorParameters<typeof DocxTextRun>[0], string>;
+  const o: { -readonly [K in keyof RunOptions]: RunOptions[K] } = { text, ...(size ? { size } : {}) };
+  for (const m of marks ?? []) {
+    if (m.type === "bold") o.bold = true;
+    else if (m.type === "italic") o.italics = true;
+    else if (m.type === "underline") o.underline = {};
+    else if (m.type === "strike") o.strike = true;
+    else if (m.type === "highlight" && m.attrs?.color) o.shading = { type: ShadingType.CLEAR, fill: m.attrs.color.slice(1), color: "auto" };
+    else if (m.type === "textStyle") {
+      if (m.attrs?.color) o.color = m.attrs.color.slice(1);
+      if (m.attrs?.fontFamily) o.font = m.attrs.fontFamily;
+      // Word sizes are half-points.
+      if (m.attrs?.fontSize) o.size = Math.round(parseFloat(m.attrs.fontSize) * 2);
+    }
+  }
+  return new TextRun(o);
+}
+
+function richInline(nodes: RichNode[] | undefined, size?: number): TextRun[] {
+  return (nodes ?? []).map((n) => (n.type === "hardBreak" ? new TextRun({ text: "", break: 1 }) : richRun(n.text ?? "", n.marks, size)));
+}
+
+/**
+ * A FORMATTED section as Word content: bold, italics, underline, strike,
+ * colour, highlight, font and size kept; lists, tables and pictures as Word
+ * draws them. The output always ENDS with a paragraph (a table cell that ends
+ * on a table is a file Word calls corrupt).
+ */
+function richContent(doc: RichNode, width: number, images: SectionImages, size?: number): (Paragraph | Table)[] {
+  const out: (Paragraph | Table)[] = [];
+  const blocks = (nodes: RichNode[] | undefined, w: number, indent = 0, into = out) => {
+    for (const n of nodes ?? []) {
+      if (n.type === "paragraph" || n.type === "heading") {
+        const heading = n.type === "heading";
+        into.push(
+          new Paragraph({
+            spacing: { after: 60 },
+            ...(indent ? { indent: { left: indent } } : {}),
+            // A heading is its text in bold, a size up.
+            children: heading
+              ? (n.content ?? []).map((c) =>
+                  c.type === "text" ? richRun(c.text ?? "", [...(c.marks ?? []), { type: "bold" }], n.attrs?.level === 1 ? 28 : 24) : new TextRun({ text: "", break: 1 })
+                )
+              : richInline(n.content, size),
+          })
+        );
+      } else if (n.type === "bulletList" || n.type === "orderedList") {
+        let i = Number(n.attrs?.start ?? 1);
+        for (const item of n.content ?? []) {
+          const mark = n.type === "bulletList" ? "\u2022  " : `${i++}.  `;
+          (item.content ?? []).forEach((c, j) => {
+            if (j === 0 && c.type === "paragraph") {
+              into.push(new Paragraph({ spacing: { after: 40 }, indent: { left: indent + 360, hanging: 360 }, children: [new TextRun({ text: mark, ...(size ? { size } : {}) }), ...richInline(c.content, size)] }));
+            } else blocks([c], w, indent + 360, into);
+          });
+        }
+      } else if (n.type === "table") {
+        const rows = n.content ?? [];
+        const cols = Math.max(1, ...rows.map((r) => (r.content ?? []).reduce((a, c) => a + Number(c.attrs?.colspan ?? 1), 0)));
+        const col = Math.floor((w - indent) / cols);
+        const border = { style: BorderStyle.SINGLE, size: 4, color: "999999" };
+        into.push(
+          new Table({
+            width: { size: col * cols, type: WidthType.DXA },
+            columnWidths: Array(cols).fill(col),
+            layout: TableLayoutType.FIXED,
+            borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
+            rows: rows.map(
+              (r) =>
+                new TableRow({
+                  children: (r.content ?? []).map((c) => {
+                    const span = Number(c.attrs?.colspan ?? 1);
+                    const inner: (Paragraph | Table)[] = [];
+                    blocks(c.content, col * span - 160, 0, inner);
+                    if (!(inner[inner.length - 1] instanceof Paragraph)) inner.push(new Paragraph({ children: [] }));
+                    return new TableCell({
+                      width: { size: col * span, type: WidthType.DXA },
+                      columnSpan: span,
+                      rowSpan: Number(c.attrs?.rowspan ?? 1),
+                      margins: { top: 40, bottom: 40, left: 80, right: 80 },
+                      ...(c.type === "tableHeader" ? { shading: { type: ShadingType.CLEAR, fill: "F3F4F6", color: "auto" } } : {}),
+                      children: inner,
+                    });
+                  }),
+                })
+            ),
+          })
+        );
+        into.push(new Paragraph({ spacing: { after: 60 }, children: [] }));
+      } else if (n.type === "image") {
+        const id = /([0-9a-f]{64})$/.exec(String(n.attrs?.src ?? ""))?.[1];
+        into.push(picture(id ? images.get(id) : undefined, w - indent));
+      }
+    }
+  };
+  blocks(doc.content, width);
+  if (!(out[out.length - 1] instanceof Paragraph)) out.push(new Paragraph({ children: [] }));
   return out;
 }
 
@@ -264,7 +368,8 @@ function sectionRow(
    *  or the Apologies section's two. Empty for a text section. */
   groups: ListGroup[],
   cols: Columns,
-  images: SectionImages
+  images: SectionImages,
+  doc?: RichNode
 ): TableRow {
   const hasRows = groups.length > 0;
   // Each line its own paragraph. A single run containing newlines renders as
@@ -283,7 +388,9 @@ function sectionRow(
               ],
         }),
       ]
-    : bodyContent(body, cols.item - CELL_PAD_X, images, { size: 20 });
+    : doc
+      ? richContent(doc, cols.item - CELL_PAD_X, images, 20)
+      : bodyContent(body, cols.item - CELL_PAD_X, images, { size: 20 });
 
   const pad = { top: 80, bottom: 80, left: CELL_PAD_X / 2, right: CELL_PAD_X / 2 };
   return new TableRow({
@@ -414,7 +521,8 @@ function leadingSection(
   body: string,
   groups: ListGroup[],
   contentWidth: number,
-  images: SectionImages
+  images: SectionImages,
+  doc?: RichNode
 ): (Paragraph | Table)[] {
   const out: (Paragraph | Table)[] = [
     new Paragraph({
@@ -425,7 +533,7 @@ function leadingSection(
   // Indented ~1.25cm under the heading, as on the letterhead.
   out.push(...listGroupBlocks(groups, { indent: 720, width: contentWidth - 720 }));
   const lines = (body || "").split(/\r?\n/);
-  if (lines.some((l) => l.trim())) out.push(...bodyContent(body, contentWidth, images));
+  if (lines.some((l) => l.trim())) out.push(...(doc ? richContent(doc, contentWidth, images) : bodyContent(body, contentWidth, images)));
   out.push(spacer(240));
   return out;
 }
@@ -562,7 +670,7 @@ export async function buildMinutesDocx(
     const numbered = sections.filter((s) => numbers.get(s.id) != null);
 
     for (const s of leading) {
-      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections), cols.total, images));
+      body.push(...leadingSection(s.title, s.body, sectionListGroups(s, sections), cols.total, images, s.doc));
     }
 
     if (numbered.length > 0) {
@@ -581,7 +689,8 @@ export async function buildMinutesDocx(
                 s.responsible || "",
                 sectionListGroups(s, sections),
                 cols,
-                images
+                images,
+                s.doc
               )
             ),
           ],

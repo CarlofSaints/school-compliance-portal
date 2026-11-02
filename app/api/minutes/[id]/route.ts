@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isMeetingTypeId } from "@/lib/meetingTypesData";
+import { cleanDoc, docToText } from "@/lib/richDoc";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import {
@@ -143,12 +144,18 @@ export async function PATCH(
             responsible?: string;
             kind?: string;
             attendees?: unknown;
+            doc?: unknown;
           },
           i: number
-        ) => ({
+        ) => {
+          // 🔴 Formatting from the browser is rebuilt, and the plain text is
+          // worked out from it here, never taken from the request alongside it.
+          const doc = s.doc === undefined ? null : cleanDoc(s.doc, id);
+          return {
           id: String(s.id || crypto.randomUUID()),
           title: String(s.title || "").trim(),
-          body: String(s.body || ""),
+          body: doc ? docToText(doc) : String(s.body || ""),
+          doc: doc ?? undefined,
           // Named explicitly: this rebuilds each section field by field, so a
           // property left out here is discarded on every save.
           numberingStartsHere: s.numberingStartsHere || undefined,
@@ -160,7 +167,8 @@ export async function PATCH(
               : undefined,
           attendees: s.kind === "attendance" ? cleanAttendees(s.attendees) : undefined,
           order: i + 1,
-        })
+          };
+        }
       );
       // 🔴 Minutes with an attendance list always keep an Apologies section.
       // Somebody ticked Apology or Not Present leaves the attendance list for

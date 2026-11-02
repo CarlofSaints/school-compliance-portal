@@ -1,18 +1,24 @@
 "use client";
 
 import { bodyBlocks } from "@/lib/minutesBody";
+import RichView from "@/components/RichView";
+import type { RichNode } from "@/lib/richDoc";
 
 /** A section's wording with its tables and pictures drawn, the way the Word
  *  file prints them. Plain text renders exactly as it always did. */
 export default function MinutesBody({
   minutesId,
   body,
+  doc,
   className = "text-sm text-gray-700",
 }: {
   minutesId: string;
   body: string;
+  /** The formatted version, when the section has one: drawn instead. */
+  doc?: RichNode;
   className?: string;
 }) {
+  if (doc) return <RichView doc={doc} className={className} />;
   const blocks = bodyBlocks(body);
   return (
     <div className={className}>

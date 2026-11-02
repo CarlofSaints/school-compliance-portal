@@ -1,5 +1,6 @@
 import { tk } from "./i18n/translate";
 import { BUILT_IN_MEETING_TYPES } from "./meetingTypes";
+import { stableDoc, type RichNode } from "./richDoc";
 // PURE meeting-minutes types and period logic.
 //
 // No storage, no @vercel/blob, no next/headers, so a client component can
@@ -201,8 +202,12 @@ export function checkPeriod(p: MeetingPeriod): PeriodProblem {
 export interface MinutesSection {
   id: string;
   title: string;
-  /** What was minuted. Plain text; the Word template supplies the styling. */
+  /** What was minuted, as plain text. When `doc` is set this is DERIVED from
+   *  it (lib/richDoc docToText), so every plain-text reader keeps working. */
   body: string;
+  /** The formatted version (bold, colour, fonts, tables, pictures), from the
+   *  editor and rebuilt by cleanDoc on the server. Absent on older sections. */
+  doc?: RichNode;
   order: number;
   /** 🔴 Numbering starts AT this section. Everything before it is unnumbered.
    *  Carl: the attendees are not a numbered item, so numbering usually starts
@@ -1015,6 +1020,10 @@ export function canonicalMinutes(m: {
                 .join("\u001c"),
             ]
           : []),
+        // 🔴 Only when there is one, so every older signature still verifies.
+        // Formatting is part of what was signed: making a figure red after
+        // signing must read as an edit.
+        ...(s.doc ? [stableDoc(s.doc)] : []),
       ].join("\u001f")
     );
   return [

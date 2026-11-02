@@ -56,6 +56,7 @@ for (const { code } of LOCALES.filter((l) => l.code !== "en")) {
   const unused = Object.keys(dict).filter((k) => !keys.has(k));
   console.log(`${code}: ${missing.length} missing, ${unused.length} unused`);
   if (out) writeFileSync(join(out, `${code}.missing.json`), JSON.stringify(missing, null, 2));
+  if (out) writeFileSync(join(out, `${code}.unused.json`), JSON.stringify(unused, null, 2));
 }
 if (broken.length) {
   console.log(`\n${broken.length} t() calls that can never match a key:`);

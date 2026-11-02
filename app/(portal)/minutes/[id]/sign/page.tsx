@@ -178,7 +178,7 @@ export default function SignMinutesPage() {
               <p className="font-bold text-dark">{s.title}</p>
               <AttendanceGroups groups={sectionListGroups(s, ordered)} indent />
               {s.body?.trim() && (
-                <MinutesBody minutesId={record.id} body={s.body} className="text-gray-700 mt-1" />
+                <MinutesBody minutesId={record.id} body={s.body} doc={s.doc} className="text-gray-700 mt-1" />
               )}
             </div>
           ))}
@@ -212,7 +212,7 @@ export default function SignMinutesPage() {
                   <p className="font-medium text-dark">{numberedTitle(s.title, null)}</p>
                   <AttendanceGroups groups={groups} />
                   {s.body?.trim() ? (
-                    <MinutesBody minutesId={record.id} body={s.body} className="text-gray-700 mt-1" />
+                    <MinutesBody minutesId={record.id} body={s.body} doc={s.doc} className="text-gray-700 mt-1" />
                   ) : groups.length > 0 ? null : (
                     // Shown, not skipped: a reader cannot otherwise tell "not
                     // discussed" from "we left it out".
