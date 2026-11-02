@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isMeetingTypeId } from "@/lib/meetingTypesData";
 import { cleanDoc, docToText } from "@/lib/richDoc";
+import { cleanTags } from "@/lib/minutes";
 import { requireLogin, requireAnyPermission } from "@/lib/rolesData";
 import { sessionMayReadMinutes } from "@/lib/minutesAccess";
 import {
@@ -152,6 +153,7 @@ export async function PATCH(
             kind?: string;
             attendees?: unknown;
             doc?: unknown;
+            tags?: unknown;
           },
           i: number
         ) => {
@@ -169,6 +171,7 @@ export async function PATCH(
           numberingStartsHere: s.numberingStartsHere || undefined,
           personIds: s.personIds?.length ? s.personIds : undefined,
           responsible: s.responsible?.trim() || undefined,
+          tags: cleanTags(s.tags),
           kind:
             s.kind === "attendance" || s.kind === "apologies"
               ? (s.kind as "attendance" | "apologies")

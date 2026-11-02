@@ -2214,5 +2214,10 @@
   "Picture": "Umfanekiso",
   "Clear formatting": "Susa ufomatho",
   "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Imifanekiso engaphakathi kombhalo we-Word oncamathiselweyo ayiweli. Ncamathisela umfanekiso ngamnye wodwa, okanye usebenzise Umfanekiso.",
-  "This section is too long to save. Split it into two sections.": "Eli candelo lide kakhulu ukuba ligcinwe. Lahlule libe ngamacandelo amabini."
+  "This section is too long to save. Split it into two sections.": "Eli candelo lide kakhulu ukuba ligcinwe. Lahlule libe ngamacandelo amabini.",
+  "People:": "Abantu:",
+  "Untag {name}": "Susa ithegi ku-{name}",
+  "Tag person": "Thegi umntu",
+  "nobody tagged": "akukho mntu uthegiweyo",
+  "Select the words first, then pick the person.": "Khetha amagama kuqala, emva koko ukhethe umntu."
 }

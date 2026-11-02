@@ -2214,5 +2214,10 @@
   "Picture": "Seswantšho",
   "Clear formatting": "Tloša go fomata",
   "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Diswantšho ka gare ga mongwalo wa Word wo o kgomareditšwego ga di fete. Kgomaretša seswantšho se sengwe le se sengwe se nnoši, goba o šomiše Seswantšho.",
-  "This section is too long to save. Split it into two sections.": "Karolo ye e telele kudu go ka bolokwa. E arole e be dikarolo tše pedi."
+  "This section is too long to save. Split it into two sections.": "Karolo ye e telele kudu go ka bolokwa. E arole e be dikarolo tše pedi.",
+  "People:": "Batho:",
+  "Untag {name}": "Tloša leswao go {name}",
+  "Tag person": "Swaya motho",
+  "nobody tagged": "ga go yo a swailwego",
+  "Select the words first, then pick the person.": "Kgetha mantšu pele, ke moka o kgethe motho."
 }

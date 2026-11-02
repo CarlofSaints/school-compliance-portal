@@ -2214,5 +2214,10 @@
   "Picture": "Prent",
   "Clear formatting": "Verwyder formatering",
   "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Prente binne geplakte Word-teks kom nie saam nie. Plak elke prent apart, of gebruik Prent.",
-  "This section is too long to save. Split it into two sections.": "Hierdie afdeling is te lank om te stoor. Verdeel dit in twee afdelings."
+  "This section is too long to save. Split it into two sections.": "Hierdie afdeling is te lank om te stoor. Verdeel dit in twee afdelings.",
+  "People:": "Mense:",
+  "Untag {name}": "Verwyder etiket van {name}",
+  "Tag person": "Merk persoon",
+  "nobody tagged": "niemand gemerk nie",
+  "Select the words first, then pick the person.": "Kies eers die woorde en dan die persoon."
 }

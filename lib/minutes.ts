@@ -1,6 +1,6 @@
 import { tk } from "./i18n/translate";
 import { BUILT_IN_MEETING_TYPES } from "./meetingTypes";
-import { stableDoc, type RichNode } from "./richDoc";
+import { stableDoc, docTags, type RichNode } from "./richDoc";
 // PURE meeting-minutes types and period logic.
 //
 // No storage, no @vercel/blob, no next/headers, so a client component can
@@ -196,6 +196,46 @@ export function checkPeriod(p: MeetingPeriod): PeriodProblem {
   return null;
 }
 
+/** A person tagged on a section: their register id and their name then. */
+export interface SectionTag {
+  id: string;
+  name: string;
+}
+
+/** Tags as they may be stored: real ids and names only, no repeats, at most 20. */
+export function cleanTags(raw: unknown): SectionTag[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const out: SectionTag[] = [];
+  for (const t of raw) {
+    const id = String((t as SectionTag)?.id ?? "").trim().slice(0, 64);
+    const name = String((t as SectionTag)?.name ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name });
+    if (out.length === 20) break;
+  }
+  return out.length ? out : undefined;
+}
+
+/** "Graham Cuerden" -> "GC", "Pieter van Wyk" -> "PvW": the way a school's
+ *  own action sheets name people. A lower-case word stays lower case. */
+export function initials(name: string): string {
+  return (name.match(/[\p{L}][\p{L}'’-]*/gu) ?? []).map((w) => w[0]).join("");
+}
+
+/**
+ * The Responsible column: what was typed there, then the INITIALS of everyone
+ * tagged (on the section, or on text inside it). Carl: "the tagged person's
+ * initials must appear in the word doc in the responsible column".
+ */
+export function responsibleText(s: { responsible?: string; tags?: SectionTag[]; doc?: RichNode }): string {
+  const people = new Map<string, string>();
+  for (const t of [...(s.tags ?? []), ...docTags(s.doc)]) if (!people.has(t.id)) people.set(t.id, t.name);
+  const marks = [...people.values()].map(initials).filter(Boolean);
+  return [s.responsible?.trim(), [...new Set(marks)].join(", ")].filter(Boolean).join(", ");
+}
+
 /** A section of the minutes: Finance report, Principal's Report, and so on.
  *  Admins add, edit and remove these freely, so they are DATA and never a
  *  hard-coded list. */
@@ -226,6 +266,11 @@ export interface MinutesSection {
    * subcommittee" as readily as one name.
    */
   responsible?: string;
+  /** People TAGGED on the section (Carl: "it was that person who reported it
+   *  in the meeting"). The name is FROZEN when tagged, like `responsible`, so
+   *  a signed record never renames itself. Shown in the Responsible column
+   *  when nothing is typed there. */
+  tags?: SectionTag[];
   /** "attendance" draws the section as a two-column list. Absent is text. */
   kind?: SectionKind;
   /** The list itself, for an attendance section. Frozen per meeting like
@@ -1069,6 +1114,8 @@ export function canonicalMinutes(m: {
         // Formatting is part of what was signed: making a figure red after
         // signing must read as an edit.
         ...(s.doc ? [stableDoc(s.doc)] : []),
+        // Only when there are any, so every older signature still verifies.
+        ...(s.tags?.length ? [s.tags.map((t) => `${t.id}\u001d${t.name}`).join("\u001c")] : []),
       ].join("\u001f")
     );
   return [

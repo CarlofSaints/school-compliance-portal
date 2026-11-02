@@ -2214,5 +2214,10 @@
   "Picture": "Setshwantsho",
   "Clear formatting": "Tlosa go fomata",
   "Pictures inside pasted Word text do not come across. Paste each picture on its own, or use Picture.": "Ditshwantsho tse di mo teng ga mokwalo wa Word o o kgomareditsweng ga di tle. Kgomaretsa setshwantsho sengwe le sengwe se le esi, kgotsa o dirise Setshwantsho.",
-  "This section is too long to save. Split it into two sections.": "Karolo e e telele thata go ka bolokiwa. E kgaoganye e nne dikarolo di le pedi."
+  "This section is too long to save. Split it into two sections.": "Karolo e e telele thata go ka bolokiwa. E kgaoganye e nne dikarolo di le pedi.",
+  "People:": "Batho:",
+  "Untag {name}": "Tlosa letshwao mo go {name}",
+  "Tag person": "Tshwaya motho",
+  "nobody tagged": "ga go ope yo o tshwailweng",
+  "Select the words first, then pick the person.": "Tlhopha mafoko pele, morago o tlhophe motho."
 }
