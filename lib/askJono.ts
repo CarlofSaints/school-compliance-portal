@@ -115,17 +115,17 @@ import { portalHowTo } from "./jonoHowTo";
 
 export class JonoError extends Error {}
 
-export async function askJono(session: SessionPayload, turns: ChatTurn[], locale: Locale): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+/** The longest answer allowed: also what a quote assumes. */
+export const JONO_MAX_OUTPUT = 4000;
+
+/** The request exactly as it will be sent, so a quote prices what really runs. */
+async function jonoRequest(session: SessionPayload, turns: ChatTurn[], locale: Locale) {
   const [records, branding] = await Promise.all([cachedRecordsFor(session), resolveBranding()]);
   const language = LOCALES.find((l) => l.code === locale)?.label ?? "English";
   const today = new Date().toISOString().slice(0, 10);
-
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
-  const message = await client.messages.create({
+  return {
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: JONO_MAX_OUTPUT,
     output_config: { effort: "low" },
     system: [
       {
@@ -154,7 +154,33 @@ ${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "
       },
     ],
     messages: turns,
-  });
+  } satisfies Anthropic.MessageCreateParamsNonStreaming;
+}
+
+/**
+ * How many tokens the question will read, for the quote. Counted by the API
+ * (no charge); a rough count from the length if that fails, rounded up.
+ */
+export async function estimateJonoTokens(session: SessionPayload, turns: ChatTurn[], locale: Locale): Promise<number> {
+  const req = await jonoRequest(session, turns, locale);
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
+    const { input_tokens } = await client.messages.countTokens({ model: req.model, system: req.system, messages: req.messages });
+    return input_tokens;
+  } catch {
+    return Math.ceil(JSON.stringify([req.system, req.messages]).length / 3);
+  }
+}
+
+export async function askJono(
+  session: SessionPayload,
+  turns: ChatTurn[],
+  locale: Locale
+): Promise<{ text: string; usage: Anthropic.Usage }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  const message = await client.messages.create(await jonoRequest(session, turns, locale));
 
   if (message.stop_reason === "refusal") throw new JonoError("Jono cannot answer that one.");
   const text = message.content
@@ -163,7 +189,7 @@ ${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "
     .join("")
     .trim();
   if (!text) throw new JonoError("Jono had nothing to say. Try asking another way.");
-  return text;
+  return { text, usage: message.usage };
 }
 
 /** The conversation as it may be sent on: alternating, starting and ending with the person, capped. */

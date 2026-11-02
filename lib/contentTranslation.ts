@@ -146,7 +146,8 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
   let balance = 0;
   let applied = 0;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
-    balance = Math.max(0, c.balance + n);
+    // Kept to one decimal: Jono charges in tenths, and 0.1 + 0.2 must stay 0.3.
+    balance = Math.max(0, Math.round((c.balance + n) * 10) / 10);
     applied = balance - c.balance;
     return { balance, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
@@ -161,7 +162,7 @@ export async function spendCredits(n: number): Promise<boolean> {
     ok = false;
     if (c.balance < n) return NO_CHANGE;
     ok = true;
-    return { balance: c.balance - n, updatedAt: new Date().toISOString(), rev: randomUUID() };
+    return { balance: Math.round((c.balance - n) * 10) / 10, updatedAt: new Date().toISOString(), rev: randomUUID() };
   });
   return ok;
 }

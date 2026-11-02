@@ -2230,5 +2230,19 @@
   "How do I create a new minutes template?": "Ke dira jang tempolete e ntšhwa ya metsotso?",
   "About your minutes, actions and projects, school law, or how to use the portal": "Ka ga metsotso ya gago, ditiro le diporojeke, molao wa sekolo, kgotsa tsela ya go dirisa portal",
   "Scroll to the bottom to send out for checking or send out for signing.": "Theosa go ya kwa tlase go romela gore go tlhatlhobiwe kgotsa go saenwe.",
-  "Take me there": "Nkise koo"
+  "Take me there": "Nkise koo",
+  "Ask Jono, when the answer needs the AI (from {date})": "Botsa Jono, fa karabo e tlhoka AI (go simolola ka {date})",
+  "What the answer actually costs, in tenths of a credit. You see the most it can cost before you ask.": "Se karabo e se tlhwatlhwang tota, ka dikarolo tsa lesome tsa khrediti. O bona bontsi jo e ka bo tlhwatlhwang pele o botsa.",
+  "Ask Jono shows the most a question can cost and asks before it uses any credits. You pay what the answer actually cost the AI service, plus a margin, never more than shown. Most answers cost a fraction of a credit.": "Botsa Jono e bontsha bontsi jo potso e ka bo tlhwatlhwang mme e botsa pele e dirisa dikhrediti. O duela se karabo e se tlhwatlhwileng tirelo ya AI tota, le poelo, e seng go feta se se bontshitsweng. Dikarabo di le dintsi di tlhwatlhwa karolo ya khrediti.",
+  "Ask Jono: \"how do I...\" questions answered from the portal guide": "Botsa Jono: dipotso tsa \"ke dira jang...\" di arabiwa go tswa mo kaedionyong ya portal",
+  "Ask Jono: every answer until {date}": "Botsa Jono: karabo nngwe le nngwe go fitlha ka {date}",
+  "From the portal guide, no credits used.": "Go tswa mo kaedionyong ya portal, ga go dikhrediti tse di dirisitsweng.",
+  "Not what you meant? Ask the AI instead": "Ga se se o neng o se kaya? Botsa AI go na le moo",
+  "This answer used {n} credits.": "Karabo e e dirisitse dikhrediti di le {n}.",
+  "This question requires credits, and you are not allowed to spend your school's credits. Ask an administrator to tick Can spend credits for you.": "Potso e e tlhoka dikhrediti, mme ga o a letlelelwa go dirisa dikhrediti tsa sekolo sa gago. Kopa motsamaisi go go tshwaya gore O ka dirisa dikhrediti.",
+  "This question requires credits and you have none left.": "Potso e e tlhoka dikhrediti mme ga o sa na tsone.",
+  "This question requires up to {n} credits and you have {b} left.": "Potso e e tlhoka go fitlha go dikhrediti di le {n} mme o setse ka di le {b}.",
+  "Buy more credits here": "Reka dikhrediti tse dingwe fano",
+  "This question is going to require credits to answer: up to {n} (you have {b}). You are charged what it actually costs, never more than this.": "Potso e e tla tlhoka dikhrediti gore e arabiwe: go fitlha go di le {n} (o na le di le {b}). O duela se e se tlhwatlhwang tota, e seng go feta se.",
+  "Use up to {n} credits": "Dirisa go fitlha go dikhrediti di le {n}"
 }
