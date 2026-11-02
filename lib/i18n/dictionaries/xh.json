@@ -2226,5 +2226,7 @@
   "Select the words first, then pick the person.": "Khetha amagama kuqala, emva koko ukhethe umntu.",
   "Part of this is already tagged with {name}. Untag that first.": "Inxalenye yoku sele ithegiwe ngo-{name}. Qala ususe loo thegi.",
   "How do I create a new minutes template?": "Ndiyenza njani itemplate entsha yemizuzu?",
-  "About your minutes, actions and projects, school law, or how to use the portal": "Malunga nemizuzu yakho, izenzo neeprojekthi, umthetho wesikolo, okanye indlela yokusebenzisa iportal"
+  "About your minutes, actions and projects, school law, or how to use the portal": "Malunga nemizuzu yakho, izenzo neeprojekthi, umthetho wesikolo, okanye indlela yokusebenzisa iportal",
+  "Scroll to the bottom to send out for checking or send out for signing.": "Skrolela ezantsi ukuze uthumele ukuze kujongwe okanye kutyikitywe.",
+  "Take me there": "Ndise apho"
 }

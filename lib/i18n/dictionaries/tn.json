@@ -2226,5 +2226,7 @@
   "Select the words first, then pick the person.": "Tlhopha mafoko pele, morago o tlhophe motho.",
   "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e setse e tshwailwe ka {name}. Tlosa letshwao leo pele.",
   "How do I create a new minutes template?": "Ke dira jang tempolete e ntšhwa ya metsotso?",
-  "About your minutes, actions and projects, school law, or how to use the portal": "Ka ga metsotso ya gago, ditiro le diporojeke, molao wa sekolo, kgotsa tsela ya go dirisa portal"
+  "About your minutes, actions and projects, school law, or how to use the portal": "Ka ga metsotso ya gago, ditiro le diporojeke, molao wa sekolo, kgotsa tsela ya go dirisa portal",
+  "Scroll to the bottom to send out for checking or send out for signing.": "Theosa go ya kwa tlase go romela gore go tlhatlhobiwe kgotsa go saenwe.",
+  "Take me there": "Nkise koo"
 }
