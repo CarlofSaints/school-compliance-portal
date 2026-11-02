@@ -708,7 +708,7 @@ export default function MinutesDetailPage() {
     return false;
   };
   // The unsaved text as plain words, to read and copy.
-  const offeredText = (d: MinutesText) => plainText(d, t);
+  const offeredText = (d: MinutesText) => plainText(d, t, mt.label(String(d.body)));
 
   // The three ways out of a conflict. None loses anybody's words.
   const keepTheirs = async () => {

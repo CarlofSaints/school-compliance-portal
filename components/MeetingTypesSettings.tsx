@@ -75,6 +75,9 @@ export default function MeetingTypesSettings({
       setNames(Object.fromEntries(types.map((ty) => [ty.id, ty.label])));
       onSaved(ok);
       return true;
+    } catch {
+      onError(t("That did not work."));
+      return false;
     } finally {
       setBusy(false);
     }

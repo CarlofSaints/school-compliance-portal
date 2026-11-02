@@ -1,4 +1,5 @@
 import { tk } from "./i18n/translate";
+import { BUILT_IN_MEETING_TYPES } from "./meetingTypes";
 // PURE meeting-minutes types and period logic.
 //
 // No storage, no @vercel/blob, no next/headers, so a client component can
@@ -10,11 +11,9 @@ export type MeetingBody = string;
 
 /** The BUILT-IN names only. A screen shows the school's own name through
  *  meetingTypeLabel, since the school may have renamed one or added its own. */
-export const MEETING_BODY_LABELS: Record<string, string> = {
-  sgb: tk("SGB / Board"),
-  fincom: tk("FINCOM"),
-  other: tk("Other"),
-};
+export const MEETING_BODY_LABELS: Record<string, string> = Object.fromEntries(
+  BUILT_IN_MEETING_TYPES.map((t) => [t.id, t.label])
+);
 
 /**
  * How a set of minutes is dated.

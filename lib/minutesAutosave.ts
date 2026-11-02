@@ -226,14 +226,14 @@ export function mergeTypingOverSave<T extends MinutesText>(saved: T, sent: Minut
 /** The text as plain words, for a person to read and copy: everything the
  *  minute-taker typed, attendance (with who sent apologies), who is
  *  responsible. tr translates a label. */
-export function plainText(d: MinutesText, tr: (s: string) => string): string {
+export function plainText(d: MinutesText, tr: (s: string) => string, meetingLabel?: string): string {
   let period = "";
   try {
     period = formatPeriod(d.period as MeetingPeriod);
   } catch {
     // A malformed backup still shows its words.
   }
-  const meeting = MEETING_BODY_LABELS[d.body as MeetingBody];
+  const meeting = meetingLabel ?? MEETING_BODY_LABELS[d.body as MeetingBody];
   const sections = (Array.isArray(d.sections) ? (d.sections as Record<string, unknown>[]) : []).map((s) => {
     const lines = [String(s.title ?? ""), String(s.body ?? "")];
     for (const a of cleanAttendees(s.attendees) ?? []) {
