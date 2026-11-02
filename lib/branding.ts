@@ -67,7 +67,8 @@ export interface SchoolBranding {
   };
 }
 
-const SCHOOLS: Record<string, SchoolBranding> = {
+/** Exported for moving a school with its own deployment onto the shared app (lib/tenantMove.ts). */
+export const SCHOOLS: Record<string, SchoolBranding> = {
   // Neutral fallback — used only when NEXT_PUBLIC_SCHOOL is unset/unknown
   // (local dev or a misconfigured deploy). Not a real tenant.
   generic: {

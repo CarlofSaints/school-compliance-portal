@@ -37,6 +37,7 @@ export default async function PlatformPage() {
             <p className="text-xs text-white/60">Platform administration</p>
           </div>
           <div className="flex items-center gap-4 text-xs text-white/60">
+            <Link href="/platform/move-school" className="underline hover:text-white">Move a school in</Link>
             <Link href="/platform/jono-questions" className="underline hover:text-white">Jono questions</Link>
             <Link href="/platform/codes" className="underline hover:text-white">Discount codes</Link>
             <span>{admin.email}</span>
