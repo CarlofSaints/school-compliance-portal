@@ -168,6 +168,27 @@ async function main() {
   check("Signed by all", (await statusOf(inv)).status, "signed_all");
   check("signatures come back with the marks", (await (await sign.GET(req(clerk, "/x"), ctx(inv))).json()).map((s: { name: string; dataUrl: string }) => [s.name, s.dataUrl]), [["pat T", PNG_MARK], ["sam T", PNG_MARK]]);
 
+  // --- The signed invoice
+  const signed = await import("../app/api/payments/invoices/[id]/signed/route");
+  const { PDFDocument } = await import("pdf-lib");
+  const { signedInvoicePdf } = await import("../lib/paymentSignedPdf");
+  check("not yet signed: nothing to show", (await signed.GET(req(clerk, "/x"), ctx("no-such-invoice"))).status, 404);
+  check("closed to a stranger", (await signed.GET(req(stranger, "/x"), ctx(inv))).status, 403);
+  const signedRes = await signed.GET(req(principal, "/x?download=1"), ctx(inv));
+  check("a signer can open it", [signedRes.status, signedRes.headers.get("content-type")], [200, "application/pdf"]);
+  check("named as signed", signedRes.headers.get("content-disposition")?.includes("Signed - "), true);
+  check("what comes back is a real PDF", (await PDFDocument.load(await signedRes.arrayBuffer())).getPageCount(), 1);
+
+  const three = await PDFDocument.create();
+  [0, 1, 2].forEach(() => three.addPage());
+  const realPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const sigBase = { userId: "u", name: "Sipho Ndlovu š", at: new Date().toISOString(), tagIds: [], dataUrl: realPng, kind: "drawn" as const, fileHash: "h", bank: "match", amount: "mismatch", override: true };
+  const fake = { filename: "café € invoice.pdf", ext: "pdf", hash: "h", supplierName: "Ačme", invoiceNumber: "1", invoiceDate: "2026-11-01", amountDue: 10 } as never;
+  const built = await signedInvoicePdf(fake, Buffer.from(await three.save()), [sigBase, { ...sigBase, userId: "v", dataUrl: PNG_MARK }]);
+  check("original pages kept, one signature page added", (await PDFDocument.load(built)).getPageCount(), 4);
+  const many = await signedInvoicePdf(fake, Buffer.from(await three.save()), Array.from({ length: 12 }, (_, i) => ({ ...sigBase, userId: String(i) })));
+  check("many signatures run onto another page", (await PDFDocument.load(many)).getPageCount() > 4, true);
+
   // --- Released, then Paid
   await release.POST(json(principal, "/x", "POST", { released: true }), ctx(inv));
   check("Released by one", (await statusOf(inv)).status, "released_one");

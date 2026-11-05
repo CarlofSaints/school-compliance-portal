@@ -2355,5 +2355,6 @@
   "(signed with a check not green)": "(ho saennwe tlhahlobo e se tala)",
   "Payment Approvals": "Tumello ya Ditefo",
   "No bank proof loaded": "Ha ho bopaki ba banka bo kentsweng",
-  "On file: {name}. If the account changes, this proof is removed.": "Faeleng: {name}. Ha akhaonto e fetoha, bopaki bona bo a tlosoa."
+  "On file: {name}. If the account changes, this proof is removed.": "Faeleng: {name}. Ha akhaonto e fetoha, bopaki bona bo a tlosoa.",
+  "Signed Invoice": "Invoice e saennweng"
 }

@@ -2355,5 +2355,6 @@
   "(signed with a check not green)": "(kutyikitywe kukho uhlolo olungaluhlaza)",
   "Payment Approvals": "Ukuvunywa Kweentlawulo",
   "No bank proof loaded": "Akukho bungqina bebhanki bufakiweyo",
-  "On file: {name}. If the account changes, this proof is removed.": "Kwifayile: {name}. Ukuba i-akhawunti iyatshintsha, obu bungqina buyasuswa."
+  "On file: {name}. If the account changes, this proof is removed.": "Kwifayile: {name}. Ukuba i-akhawunti iyatshintsha, obu bungqina buyasuswa.",
+  "Signed Invoice": "I-invoyisi etyikityiweyo"
 }

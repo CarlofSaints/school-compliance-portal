@@ -2355,5 +2355,6 @@
   "(signed with a check not green)": "(geteken terwyl 'n kontrole nie groen was nie)",
   "Payment Approvals": "Betalingsgoedkeurings",
   "No bank proof loaded": "Geen bankbewys gelaai nie",
-  "On file: {name}. If the account changes, this proof is removed.": "Op lêer: {name}. As die rekening verander, word hierdie bewys verwyder."
+  "On file: {name}. If the account changes, this proof is removed.": "Op lêer: {name}. As die rekening verander, word hierdie bewys verwyder.",
+  "Signed Invoice": "Getekende faktuur"
 }
