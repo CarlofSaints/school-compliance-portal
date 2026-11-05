@@ -135,6 +135,7 @@ async function main() {
   check("green bank tick, grey amount, Pending approval", [row.bank.status, row.amount.status, row.status], ["match", "unknown", "pending_approval"]);
   check("invoice opens inline", (await files.GET(req(principal, "/x"), { params: Promise.resolve({ kind: "invoice", id: inv }) })).headers.get("content-disposition")?.startsWith("inline"), true);
   check("invoice closed to a stranger", (await files.GET(req(stranger, "/x"), { params: Promise.resolve({ kind: "invoice", id: inv }) })).status, 403);
+  check("a bad release body undoes nothing", (await release.POST(json(clerk, "/x", "POST", {}), ctx(inv))).status, 400);
   check("an unknown file kind is not found", (await files.GET(req(clerk, "/x"), { params: Promise.resolve({ kind: "secrets", id: inv }) })).status, 404);
 
   // --- Bank screen
@@ -148,6 +149,7 @@ async function main() {
   // --- Who signs
   check("nobody can sign before tags are chosen", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv))).status, 403);
   check("a clerk cannot choose the tags", (await settings.PUT(json(clerk, "/x", "PUT", { signerTagIds: ["principal"] }))).status, 403);
+  check("a bad body clears nobody", (await settings.PUT(json(admin, "/x", "PUT", {}))).status, 400);
   check("an admin chooses them, junk ignored", await (await settings.PUT(json(admin, "/x", "PUT", { signerTagIds: ["principal", "sgb", "made-up"] }))).json(), { signerTagIds: ["principal", "sgb"] });
   check("Super Admin with no tag cannot sign", (await sign.POST(json(admin, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv))).status, 403);
   check("a page-sized picture is no signature", (await sign.POST(json(principal, "/x", "POST", { dataUrl: "x" }), ctx(inv))).status, 400);
@@ -185,6 +187,16 @@ async function main() {
   check("cannot sign a red invoice without the tick", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(redId))).status, 409);
   check("can with it", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK, override: true }), ctx(redId))).status, 201);
   check("and it says so", (await (await sign.GET(req(clerk, "/x"), ctx(redId))).json())[0].override, true);
+
+  // --- Grey needs the same tick
+  aiAnswer = { supplierName: "Nobody On The List", invoiceNumber: "INV-9", invoiceDate: "2026-11-02", amountDue: 300, accountNumber: "22222222222", branchCode: "" };
+  const greyId = (await (await load(clerk, pdf("inv9"))).json()).id;
+  check("cannot sign a grey invoice without the tick", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(greyId))).status, 409);
+
+  // --- A deleted signing tag
+  const { deleteTag } = await import("../lib/tagData");
+  await deleteTag("sgb");
+  check("a deleted tag stops counting", (await (await settings.GET(req(admin, "/x"))).json()).signerTagIds, ["principal"]);
 
   // --- Out of credits
   await addCredits(-(await getCredits()));

@@ -2325,8 +2325,6 @@
   "Everyone carrying a ticked tag can sign. They also need the View Invoice Inbox permission on their role.": "Almal met ’n aangevinkte etiket kan teken. Hulle het ook die \"Bekyk faktuurinboks\"-toestemming op hul rol nodig.",
   "No tags yet. Create them under Admin > Tags.": "Nog geen etikette nie. Skep hulle onder Admin > Tags.",
   "Signature of {name}": "Handtekening van {name}",
-  "(signed despite a red check)": "(geteken ondanks ’n rooi kontrole)",
-  "I have looked into the red check and want to sign anyway.": "Ek het die rooi kontrole ondersoek en wil steeds teken.",
   "Sign invoice": "Teken faktuur",
   "Match: the bank details agree with the saved contact.": "Ooreenkoms: die bankbesonderhede stem ooreen met die gestoorde kontak.",
   "No match: the bank details on the invoice are different from the saved contact. Do not pay until this is explained.": "Geen ooreenkoms: die bankbesonderhede op die faktuur verskil van die gestoorde kontak. Moenie betaal voordat dit verduidelik is nie.",
@@ -2352,5 +2350,8 @@
   "A signer has ticked that they released this at the bank.": "’n Ondertekenaar het gemerk dat hulle dit by die bank vrygelaat het.",
   "Everyone who must sign has ticked that they released this at the bank. Only the bank statement proves it was paid.": "Almal wat moet teken, het gemerk dat hulle dit by die bank vrygelaat het. Net die bankstaat bewys dat dit betaal is.",
   "A payment for this exact amount is on a bank statement.": "’n Betaling vir hierdie presiese bedrag is op ’n bankstaat.",
-  "This was paid before everyone signed it.": "Dit is betaal voordat almal dit geteken het."
+  "This was paid before everyone signed it.": "Dit is betaal voordat almal dit geteken het.",
+  "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Die faktuur stem ooreen met die gestoorde kontak, maar die bankskerm wys nie die rekening wat betaal word nie. Kontroleer dit by die bank.",
+  "Not every check is green. I have looked into this and want to sign anyway.": "Nie elke kontrole is groen nie. Ek het dit nagegaan en wil tog teken.",
+  "(signed with a check not green)": "(geteken terwyl 'n kontrole nie groen was nie)"
 }

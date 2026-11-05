@@ -221,7 +221,7 @@ export default function InvoiceInboxPage() {
     if (k === "status") return STATUS_ORDER.indexOf(r.status);
     return String(r[k as keyof InboxRow] ?? "");
   });
-  const red = !!signing && (signing.bank.status === "mismatch" || signing.amount.status === "mismatch");
+  const red = !!signing && (signing.bank.status !== "match" || signing.amount.status !== "match");
   const mine = !!signing && signing.signedBy.some((s) => s.userId === session?.id);
 
   return (
@@ -427,7 +427,7 @@ export default function InvoiceInboxPage() {
               <div key={s.at} className="border-t border-gray-100 py-2 text-sm">
                 <img src={s.dataUrl} alt={t("Signature of {name}", { name: s.name })} className="h-12" />
                 {s.name}, {new Date(s.at).toLocaleString("en-ZA")}
-                {s.override && <span className="text-red-600"> {t("(signed despite a red check)")}</span>}
+                {s.override && <span className="text-red-600"> {t("(signed with a check not green)")}</span>}
               </div>
             ))}
             {inbox?.canSign && !mine && (
@@ -436,7 +436,7 @@ export default function InvoiceInboxPage() {
                 {red && (
                   <label className="flex gap-2 text-sm text-red-700 mt-3">
                     <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
-                    {t("I have looked into the red check and want to sign anyway.")}
+                    {t("Not every check is green. I have looked into this and want to sign anyway.")}
                   </label>
                 )}
               </div>

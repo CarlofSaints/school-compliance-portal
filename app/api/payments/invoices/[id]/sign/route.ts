@@ -38,9 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!invoice || !row) return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
 
   // Judged from the live checks, not what the page showed when it opened.
-  const red = row.bank.status === "mismatch" || row.amount.status === "mismatch";
-  if (red && body?.override !== true) {
-    return NextResponse.json({ error: "This invoice has a red check. Tick the box to say you have looked into it, then sign." }, { status: 409 });
+  const unchecked = row.bank.status !== "match" || row.amount.status !== "match";
+  if (unchecked && body?.override !== true) {
+    return NextResponse.json({ error: "Not every check on this invoice is green. Tick the box to say you have looked into it, then sign." }, { status: 409 });
   }
 
   const name = `${session.name} ${session.surname}`.trim();
@@ -54,15 +54,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     fileHash: invoice.hash,
     bank: row.bank.status,
     amount: row.amount.status,
-    override: red,
+    override: unchecked,
   });
   if (!added) return NextResponse.json({ error: "You have already signed this invoice." }, { status: 409 });
   await recordActivity({
     ...actorFrom(req, session),
-    action: red ? "payment.invoice_signed_over_red" : "payment.invoice_signed",
+    action: unchecked ? "payment.invoice_signed_not_green" : "payment.invoice_signed",
     entity: "payment",
     entityId: id,
-    summary: `${red ? "Signed despite a red check: invoice" : "Signed invoice"} ${invoice.filename}`,
+    summary: `${unchecked ? "Signed with a check not green: invoice" : "Signed invoice"} ${invoice.filename}`,
   });
   return NextResponse.json({ success: true }, { status: 201 });
 }

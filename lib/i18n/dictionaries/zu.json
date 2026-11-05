@@ -2325,8 +2325,6 @@
   "Everyone carrying a ticked tag can sign. They also need the View Invoice Inbox permission on their role.": "Wonke umuntu ophethe ithegi ethikiwe angasayina. Badinga futhi imvume ethi \"Buka Ibhokisi Lokungena Lama-invoyisi\" endimeni yabo.",
   "No tags yet. Create them under Admin > Tags.": "Awekho amathegi okwamanje. Wadale ku-Admin > Tags.",
   "Signature of {name}": "Isignesha ka-{name}",
-  "(signed despite a red check)": "(kusayiniwe nakuba ukuhlola kubomvu)",
-  "I have looked into the red check and want to sign anyway.": "Ngiluqedile ukuhlola okubomvu futhi ngifuna ukusayina nokho.",
   "Sign invoice": "Sayina i-invoyisi",
   "Match: the bank details agree with the saved contact.": "Iyafana: imininingwane yebhange iyavumelana noxhumana naye olondoloziwe.",
   "No match: the bank details on the invoice are different from the saved contact. Do not pay until this is explained.": "Ayifani: imininingwane yebhange ku-invoyisi yehlukile kunaleyo yoxhumana naye olondoloziwe. Ungakhokhi kuze kuchazwe lokhu.",
@@ -2352,5 +2350,8 @@
   "A signer has ticked that they released this at the bank.": "Umsayini uphawule ukuthi ukhiphe lokhu ebhange.",
   "Everyone who must sign has ticked that they released this at the bank. Only the bank statement proves it was paid.": "Wonke umuntu okufanele asayine uphawule ukuthi ukhiphe lokhu ebhange. Isitatimende sebhange kuphela esifakazela ukuthi kukhokhiwe.",
   "A payment for this exact amount is on a bank statement.": "Inkokhelo yaleli nani ncamashi isesitatimendeni sebhange.",
-  "This was paid before everyone signed it.": "Lokhu kukhokhwe ngaphambi kokuba wonke umuntu akusayine."
+  "This was paid before everyone signed it.": "Lokhu kukhokhwe ngaphambi kokuba wonke umuntu akusayine.",
+  "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "I-invoyisi iyavumelana nomuntu ogciniwe, kodwa isikrini sasebhange asibonisi i-akhawunti ekhokhelwayo. Yihlole ebhange.",
+  "Not every check is green. I have looked into this and want to sign anyway.": "Akuzona zonke izivivinyo eziluhlaza. Ngikubhekile lokhu futhi ngifuna ukusayina noma kunjalo.",
+  "(signed with a check not green)": "(kusayinwe kukhona ukuhlola okungaluhlazanga)"
 }

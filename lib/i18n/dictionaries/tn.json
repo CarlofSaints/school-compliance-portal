@@ -2325,8 +2325,6 @@
   "Everyone carrying a ticked tag can sign. They also need the View Invoice Inbox permission on their role.": "Mongwe le mongwe yo o nang le tshupo e e tshwailweng a ka saena. Gape ba tlhoka tetla ya \"Leba Inboksi ya Diinvoise\" mo tirong ya bone.",
   "No tags yet. Create them under Admin > Tags.": "Ga go na ditshupo ga jaanong. Di dire fa tlase ga Admin > Tags.",
   "Signature of {name}": "Tshaeno ya {name}",
-  "(signed despite a red check)": "(e saenilwe le fa tlhatlhobo e le khibidu)",
-  "I have looked into the red check and want to sign anyway.": "Ke lebeleditse tlhatlhobo e khibidu mme ke batla go saena le fa go ntse jalo.",
   "Sign invoice": "Saena invoise",
   "Match: the bank details agree with the saved contact.": "E a tshwana: dintlha tsa banka di dumelelana le motho wa kgolagano yo o bolokilweng.",
   "No match: the bank details on the invoice are different from the saved contact. Do not pay until this is explained.": "Ga e tshwane: dintlha tsa banka mo invoiseng di farologane le tsa motho wa kgolagano yo o bolokilweng. O se ka wa duela go fitlha go tlhalosiwa.",
@@ -2352,5 +2350,8 @@
   "A signer has ticked that they released this at the bank.": "Mosaeni o tshwailwe gore o ntshitse se kwa bankeng.",
   "Everyone who must sign has ticked that they released this at the bank. Only the bank statement proves it was paid.": "Botlhe ba ba tshwanetseng go saena ba tshwailwe gore ba ntshitse se kwa bankeng. Ke setatemente sa banka fela se se supang gore se duetswe.",
   "A payment for this exact amount is on a bank statement.": "Tuelo ya madi a a tshwanang tota e mo setatementeng sa banka.",
-  "This was paid before everyone signed it.": "Se se duetswe pele botlhe ba se saena."
+  "This was paid before everyone signed it.": "Se se duetswe pele botlhe ba se saena.",
+  "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Invoice e dumalana le kgolagano e e bolokilweng, mme sekirini sa banka ga se bontshe akhaonte e e duelwang. E tlhatlhobe kwa bankeng.",
+  "Not every check is green. I have looked into this and want to sign anyway.": "Ga se ditlhatlhobo tsotlhe tse di leng tala. Ke lebeletse se mme ke batla go saena le fa go ntse jalo.",
+  "(signed with a check not green)": "(go saenilwe tlhatlhobo e se tala)"
 }

@@ -17,8 +17,9 @@ export async function PUT(req: NextRequest) {
   const session = await requirePermission(req, "manage_approval_settings");
   if (session instanceof NextResponse) return session;
   const body = (await req.json().catch(() => null)) as { signerTagIds?: unknown } | null;
+  if (!Array.isArray(body?.signerTagIds)) return NextResponse.json({ error: "Choose the tags." }, { status: 400 });
   const known = new Set((await getTags()).map((t) => t.id));
-  const ids = Array.isArray(body?.signerTagIds) ? body.signerTagIds.filter((x): x is string => typeof x === "string" && known.has(x)) : [];
+  const ids = body.signerTagIds.filter((x): x is string => typeof x === "string" && known.has(x));
   await savePaymentSettings([...new Set(ids)]);
   await recordActivity({
     ...actorFrom(req, session),

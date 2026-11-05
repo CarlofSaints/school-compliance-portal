@@ -108,6 +108,7 @@ export type CheckStatus = "match" | "mismatch" | "unknown";
 /** The hover text for every state. Each cell shows exactly one of these. */
 export const CHECK_HOVER = {
   bank_match: tk("Match: the bank details agree with the saved contact."),
+  bank_match_invoice_only: tk("The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank."),
   bank_invoice_differs: tk("No match: the bank details on the invoice are different from the saved contact. Do not pay until this is explained."),
   bank_payment_differs: tk("No match: the bank details on the bank payment are different from the saved contact. Do not authorise until this is explained."),
   no_contact: tk("No contact found for this supplier. Add them under Contacts."),
@@ -218,11 +219,11 @@ export function namesMatch(a: string, b: string): boolean {
 /** True/false, or null when there is nothing to compare. A bank screen may mask
  *  the number ("****1234"): then only the digits it shows can be compared. */
 export function sameAccount(seen: string, saved: string): boolean | null {
-  const full = onlyDigits(saved).replace(/^0+/, "");
-  if (!seen.trim() || !full) return null;
-  const shown = onlyDigits(seen).replace(/^0+/, "");
-  if (isMasked(seen)) return shown.length >= 3 ? full.endsWith(shown) : null;
-  return shown === full;
+  if (!seen.trim() || !onlyDigits(saved)) return null;
+  // Masked digits are compared as shown: a zero in a tail is a real digit.
+  if (isMasked(seen)) return onlyDigits(seen).length >= 3 ? onlyDigits(saved).endsWith(onlyDigits(seen)) : null;
+  const whole = (s: string) => onlyDigits(s).replace(/^0+/, "");
+  return whole(seen) === whole(saved);
 }
 
 function sameBank(seen: { accountNumber: string; branchCode: string }, saved: BankDetails): boolean | null {
@@ -311,7 +312,8 @@ export function bankCheck(inv: Invoice, contact: Contact | null, line: BankLine 
     return { status: "mismatch", code: "bank_payment_differs", detail: `${last4(line!.accountNumber)} / ${last4(contact.bank.accountNumber)}` };
   }
   if (onInvoice === null && onPayment === null) return { status: "unknown", code: "no_bank_read" };
-  return { status: "match", code: "bank_match" };
+  // Green for what was compared, but say so when the money's real destination was not.
+  return { status: "match", code: line && onPayment === null ? "bank_match_invoice_only" : "bank_match" };
 }
 
 export function amountCheck(inv: Invoice, line: BankLine | undefined): { check: Check; delta: number | null } {
@@ -323,10 +325,21 @@ export function amountCheck(inv: Invoice, line: BankLine | undefined): { check: 
     : { check: { status: "mismatch", code: "amount_differs" }, delta: delta / 100 };
 }
 
-/** Every signing tag carried by someone different. A person holding both tags
- *  still counts as one, so "the principal and an SGB member" stays two people. */
+/** Can every signing tag be given its own person? One person holding two tags
+ *  counts once, so "the principal and an SGB member" stays two people. */
 function everyTag(who: SignedBy[], tagIds: string[]): boolean {
-  return tagIds.length > 0 && who.length >= tagIds.length && tagIds.every((t) => who.some((s) => s.tagIds.includes(t)));
+  if (!tagIds.length) return false;
+  const holder = new Map<string, string>();
+  const place = (tag: string, tried: Set<string>): boolean =>
+    who.some((s) => {
+      if (!s.tagIds.includes(tag) || tried.has(s.userId)) return false;
+      tried.add(s.userId);
+      const taken = [...holder].find(([, u]) => u === s.userId)?.[0];
+      if (taken && !place(taken, tried)) return false;
+      holder.set(tag, s.userId);
+      return true;
+    });
+  return tagIds.every((t) => place(t, new Set()));
 }
 
 export function invoiceStatus(inv: Pick<Invoice, "signedBy">, bank: Check, amount: Check, paid: boolean, signerTagIds: string[]): InvoiceStatus {
@@ -346,20 +359,30 @@ export function invoiceStatus(inv: Pick<Invoice, "signedBy">, bank: Check, amoun
 export function findPaid(invoices: Invoice[], contacts: Contact[], lines: BankLine[]): Map<string, BankLine> {
   const paid = new Map<string, BankLine>();
   const used = new Set<BankLine>();
+  const candidates: { inv: Invoice; byNumber: (l: BankLine) => boolean; byName: (l: BankLine) => boolean }[] = [];
   for (const inv of invoices) {
     if (inv.amountDue === null) continue;
     const owner = contactOf(contacts, inv);
     const firsts = [inv.supplierName, owner?.name ?? "", owner?.bank?.accountHolder ?? ""].map((n) => nameWords(n)[0] ?? "").filter((w) => w.length >= 4);
     const number = alnum(inv.invoiceNumber);
-    const hit = lines.find((l) => {
-      if (used.has(l) || l.amount === null || cents(l.amount) !== cents(inv.amountDue!)) return false;
-      if (l.date && inv.invoiceDate && l.date < inv.invoiceDate) return false;
-      const text = `${l.payee} ${l.reference}`;
-      return (number.length >= 3 && alnum(text).includes(number)) || firsts.some((w) => nameWords(text).includes(w));
+    const fits = (l: BankLine) =>
+      !used.has(l) && l.amount !== null && cents(l.amount) === cents(inv.amountDue!) && !(l.date && inv.invoiceDate && l.date < inv.invoiceDate);
+    const text = (l: BankLine) => `${l.payee} ${l.reference}`;
+    candidates.push({
+      inv,
+      byNumber: (l) => fits(l) && number.length >= 3 && alnum(text(l)).includes(number),
+      byName: (l) => fits(l) && firsts.some((w) => nameWords(text(l)).includes(w)),
     });
-    if (hit) {
-      used.add(hit);
-      paid.set(inv.id, hit);
+  }
+  // Every invoice number first, so a monthly bill's payment finds its own month.
+  for (const test of ["byNumber", "byName"] as const) {
+    for (const c of candidates) {
+      if (paid.has(c.inv.id)) continue;
+      const hit = lines.find(c[test]);
+      if (hit) {
+        used.add(hit);
+        paid.set(c.inv.id, hit);
+      }
     }
   }
   return paid;
@@ -371,10 +394,14 @@ export function buildInbox(
   allScreens: BankScreen[],
   signerTagIds: string[] = []
 ): { rows: InboxRow[]; unmatched: UnmatchedLine[] } {
+  // Invoices are from creditors. A debtor needs no proof, so never vouches for bank details.
+  contacts = contacts.filter((c) => c.type === "creditor");
   const screens = allScreens.filter((s) => s.kind !== "statement");
   const paidLines = findPaid(invoices, contacts, allScreens.filter((s) => s.kind === "statement").flatMap((s) => s.lines));
   const lines = screens.flatMap((s) => s.lines);
-  const paired = pairPayments(invoices, contacts, lines);
+  // A payment on the screen belongs with what is still unpaid, when there is a choice.
+  const unpaidFirst = [...invoices].sort((a, b) => Number(paidLines.has(a.id)) - Number(paidLines.has(b.id)));
+  const paired = pairPayments(unpaidFirst, contacts, lines);
   const lineOf = new Map([...paired].map(([line, inv]) => [inv.id, line]));
   const rows = invoices.map((inv): InboxRow => {
     const contact = contactOf(contacts, inv);
@@ -495,7 +522,7 @@ export function cleanInvoiceRead(raw: unknown): InvoiceRead {
 export function cleanBankLines(raw: unknown): BankLine[] {
   const list = raw && typeof raw === "object" ? (raw as { payments?: unknown }).payments : null;
   return (Array.isArray(list) ? list : [])
-    .slice(0, 200)
+    .slice(0, 2000)
     .map((p): BankLine => {
       const r = (p && typeof p === "object" ? p : {}) as Record<string, unknown>;
       return {

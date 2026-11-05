@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { NO_CHANGE, addToList, readJson, removeFromList, updateInList, updateJson } from "./controlData";
-import { getTagMembers } from "./tagData";
+import { getTagMembers, getTags } from "./tagData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
 import { isAiOutOfCredit } from "./aiErrors";
@@ -56,7 +56,11 @@ export interface PaymentSettings {
   signerTagIds: string[];
 }
 
-export const getPaymentSettings = () => readJson<PaymentSettings>(SETTINGS, { signerTagIds: [] });
+/** A deleted tag drops out here, or "signed by all" could never be reached. */
+export async function getPaymentSettings(): Promise<PaymentSettings> {
+  const [saved, tags] = await Promise.all([readJson<PaymentSettings>(SETTINGS, { signerTagIds: [] }), getTags()]);
+  return { signerTagIds: saved.signerTagIds.filter((id) => tags.some((t) => t.id === id)) };
+}
 
 export async function savePaymentSettings(signerTagIds: string[]) {
   await updateJson<PaymentSettings>(SETTINGS, { signerTagIds: [] }, () => ({ signerTagIds }));
@@ -128,7 +132,7 @@ export async function setReleased(id: string, userId: string, released: boolean)
 export async function uploadedFile(
   req: Request,
   allowed: string[]
-): Promise<{ bytes: Buffer; name: string; ext: string; form: FormData } | NextResponse> {
+): Promise<{ bytes: Buffer; name: string; ext: string } | NextResponse> {
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!form || !(file instanceof File)) return NextResponse.json({ error: "Choose a file." }, { status: 400 });
@@ -136,7 +140,7 @@ export async function uploadedFile(
   const bytes = Buffer.from(await file.arrayBuffer());
   const ext = fileKind(bytes);
   if (!ext || !allowed.includes(ext)) return NextResponse.json({ error: `Only ${allowed.join(", ").toUpperCase()} files can be read.` }, { status: 415 });
-  return { bytes, name: file.name, ext, form };
+  return { bytes, name: file.name, ext };
 }
 
 export function readFailed(err: unknown): NextResponse {

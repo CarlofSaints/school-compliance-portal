@@ -62,6 +62,8 @@ assert.equal(sameAccount("62012345679", "62012345678"), false);
 assert.equal(sameAccount("****5678", "62012345678"), true, "masked: the digits shown");
 assert.equal(sameAccount("****5679", "62012345678"), false);
 assert.equal(sameAccount("****78", "62012345678"), null, "too few digits to say anything");
+assert.equal(sameAccount("****0123", "99999123"), false, "a zero in the tail is a real digit");
+assert.equal(sameAccount("****0123", "99990123"), true);
 assert.equal(sameAccount("", "62012345678"), null);
 
 // Bank Details Match: the three icons
@@ -72,7 +74,10 @@ assert.equal(red.detail, "...9999 / ...5678", "last digits only");
 assert.equal(row([invoice("i", "Unknown Co", 100, "99999999999")], [acme]).bank.code, "no_contact", "grey: no contact");
 assert.equal(row([invoice("i", "Acme Supplies", 100)], [acme]).bank.code, "no_bank_read", "grey: nothing read is never green");
 assert.equal(row([invoice("i", "Acme", 100, "62012345678", { branchCode: "632005" })], [acme]).bank.status, "mismatch", "same number at another branch is red");
-assert.equal(row([invoice("i", "Debtor Co", 100, "62012345678")], [contact("5", "Debtor Co", "1", "1", { bank: null, type: "debtor" })]).bank.code, "contact_no_bank");
+assert.equal(row([invoice("i", "Bare Co", 100, "62012345678")], [contact("5", "Bare Co", "1", "1", { bank: null })]).bank.code, "contact_no_bank");
+assert.equal(row([invoice("i", "Debtor Co", 100, "62012345678")], [contact("6", "Debtor Co", "62012345678", "250655", { type: "debtor" })]).bank.code, "no_contact", "a debtor never vouches for an invoice");
+assert.equal(row([invoice("i", "Both Co", 100, "62012345678")], [contact("7", "Both Co", "62012345678"), contact("8", "Both Co", "62012345678", "250655", { type: "debtor" })]).bank.status, "match", "the same business as both is one creditor");
+assert.equal(row([invoice("i", "Acme", 100, "62012345678")], [acme], [line("Acme", 100)]).bank.code, "bank_match_invoice_only", "the screen shows no account: says so");
 assert.equal(row([invoice("i", "Acme", 100, "62012345678")], [acme], [line("Acme", 100, { accountNumber: "11111111111" })]).bank.code, "bank_payment_differs", "good invoice, redirected bank payment: red");
 
 // Amount Match
@@ -115,6 +120,10 @@ assert.equal(status([signer("a", ["principal"]), signer("b", ["sgb"])]), "signed
 assert.equal(status([signer("a", ["principal"], now), signer("b", ["sgb"])]), "released_one");
 assert.equal(status([signer("a", ["principal"], now), signer("b", ["sgb"], now)]), "released_all");
 assert.equal(status([], green, green, true), "paid", "the statement outranks everything");
+const threeTags = ["a", "b", "c"];
+const signedAll = (...who: Invoice["signedBy"]) => invoiceStatus({ signedBy: who }, green, green, false, threeTags) === "signed_all";
+assert.ok(!signedAll(signer("x", ["a", "b", "c"]), signer("y", ["a"]), signer("z", ["a"])), "two tags cannot rest on one person");
+assert.ok(signedAll(signer("x", ["a", "b"]), signer("y", ["b", "c"]), signer("z", ["a"])), "people can be shuffled to fit");
 
 // Paid, from a statement
 const statement = (...lines: BankLine[]): BankScreen => ({ ...screen(...lines), id: "st", kind: "statement" });
@@ -126,6 +135,12 @@ assert.notEqual(paidRow(owed, line("ACME SUPP", 499, { date: "2026-11-03" })).st
 assert.notEqual(paidRow(owed, line("WOOLWORTHS", 500, { date: "2026-11-03" })).status, "paid", "same amount, someone else");
 assert.notEqual(paidRow(owed, line("ACME SUPP", 500, { date: "2026-10-03" })).status, "paid", "paid before the invoice existed");
 assert.ok(paidRow(owed, line("ACME SUPP", 500, { date: "2026-11-03" })).paidUnsigned, "paid with nobody signed is flagged");
+const jan = invoice("jan", "Acme", 1500, "", { invoiceNumber: "INV-0101", invoiceDate: "2026-01-01" });
+const feb = invoice("feb", "Acme", 1500, "", { invoiceNumber: "INV-0202", invoiceDate: "2026-02-01" });
+const monthly = buildInbox([jan, feb], [acme], [statement(line("ACME", 1500, { date: "2026-02-20", reference: "INV-0202" }))]).rows;
+assert.deepEqual(monthly.map((r) => r.status === "paid"), [false, true], "the payment finds its own month");
+const nextMonth = buildInbox([jan, feb], [acme], [statement(line("ACME", 1500, { date: "2026-01-20", reference: "INV-0101" })), screen(line("ACME", 1500))]).rows;
+assert.deepEqual(nextMonth.map((r) => r.amount.status), ["unknown", "match"], "a new payment goes to the unpaid invoice");
 const repeat = buildInbox([invoice("x", "Acme", 500), invoice("y", "Acme", 500, "", { hash: "y" })], [acme], [statement(line("ACME", 500))]);
 assert.equal(repeat.rows.filter((r) => r.status === "paid").length, 1, "one statement line pays one invoice");
 assert.equal(buildInbox([owed], [acme], [statement(line("Nobody", 5))]).unmatched.length, 0, "statement lines are not 'no invoice' rows");

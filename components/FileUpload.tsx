@@ -31,21 +31,21 @@ export default function FileUpload({
   // shortcut: hard 4 MB cap; upgrade to direct-to-Blob client uploads if schools need bigger scans.
   const pick = (file: File) => {
     if (file.size > MAX_UPLOAD_BYTES) {
-      setTooBig(
+      setTooBig((earlier) => `${earlier} ${
         t("{name} is {size} MB. Files must be under 4 MB. For a scan, scan in black and white at 150 to 200 dpi, or split it into parts.", {
           name: file.name,
           size: (file.size / 1024 / 1024).toFixed(1),
         })
-      );
+      }`.trim());
       return;
     }
-    setTooBig("");
     onChange(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
+    setTooBig("");
     (multiple ? [...e.dataTransfer.files] : [...e.dataTransfer.files].slice(0, 1)).forEach(pick);
   };
 
@@ -70,6 +70,7 @@ export default function FileUpload({
         accept={accept}
         multiple={multiple}
         onChange={(e) => {
+          setTooBig("");
           [...(e.target.files ?? [])].forEach(pick);
           // The same file again must fire onChange again.
           e.target.value = "";

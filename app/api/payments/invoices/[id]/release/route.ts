@@ -11,7 +11,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (session instanceof NextResponse) return session;
   const { id } = await params;
   const body = (await req.json().catch(() => null)) as { released?: unknown } | null;
-  const released = body?.released === true;
+  if (typeof body?.released !== "boolean") return NextResponse.json({ error: "Say whether it was released." }, { status: 400 });
+  const released = body.released;
   if (!(await setReleased(id, session.id, released))) return NextResponse.json({ error: "Sign the invoice first." }, { status: 409 });
   await recordActivity({
     ...actorFrom(req, session),
