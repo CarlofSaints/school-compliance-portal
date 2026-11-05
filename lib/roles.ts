@@ -45,6 +45,10 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   // Deliberately its own key rather than riding on manage_spend_settings:
   // deleting a project is not the same authority as editing settings.
   { key: "delete_spend", name: "Delete Spend Applications", category: "Spend" },
+  // Seeing the invoice inbox, and loading into it. Signing is NOT here: it sits
+  // on a tag (signingTags in lib/paymentData.ts), because it is a named person's authority.
+  { key: "view_payments", name: "View Invoice Inbox", category: "Payments" },
+  { key: "manage_payments", name: "Load Invoices and Manage Contacts", category: "Payments" },
   // Booking covers making, editing and cancelling your OWN bookings, and asking
   // a holder for their room. Anyone who can book sees the calendar.
   { key: "book_rooms", name: "Book Meeting Rooms", category: "Rooms" },

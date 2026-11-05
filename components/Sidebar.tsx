@@ -161,6 +161,20 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    label: tk("Payments"),
+    href: "/payments",
+    permissions: ["view_payments", "manage_payments"],
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l2 2 4-4m1-7H8a2 2 0 00-2 2v14l3-2 3 2 3-2 3 2V7a2 2 0 00-2-2z" />
+      </svg>
+    ),
+    children: [
+      { label: tk("Invoice Inbox"), href: "/payments", permissions: ["view_payments", "manage_payments"] },
+      { label: tk("Contacts"), href: "/payments/contacts", permission: "manage_payments" },
+    ],
+  },
+  {
     label: tk("Rooms"),
     href: "/bookings",
     permissions: ["book_rooms", "manage_rooms"],

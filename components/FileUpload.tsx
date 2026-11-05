@@ -10,6 +10,8 @@ interface FileUploadProps {
   label?: string;
   onChange: (file: File) => void;
   value?: File | null;
+  /** Several at once: onChange runs once per file. */
+  multiple?: boolean;
 }
 
 export default function FileUpload({
@@ -17,6 +19,7 @@ export default function FileUpload({
   label,
   onChange,
   value,
+  multiple,
 }: FileUploadProps) {
   const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,23 +31,22 @@ export default function FileUpload({
   // shortcut: hard 4 MB cap; upgrade to direct-to-Blob client uploads if schools need bigger scans.
   const pick = (file: File) => {
     if (file.size > MAX_UPLOAD_BYTES) {
-      setTooBig(
+      setTooBig((earlier) => `${earlier} ${
         t("{name} is {size} MB. Files must be under 4 MB. For a scan, scan in black and white at 150 to 200 dpi, or split it into parts.", {
           name: file.name,
           size: (file.size / 1024 / 1024).toFixed(1),
         })
-      );
+      }`.trim());
       return;
     }
-    setTooBig("");
     onChange(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) pick(file);
+    setTooBig("");
+    (multiple ? [...e.dataTransfer.files] : [...e.dataTransfer.files].slice(0, 1)).forEach(pick);
   };
 
   return (
@@ -66,9 +68,12 @@ export default function FileUpload({
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={multiple}
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) pick(file);
+          setTooBig("");
+          [...(e.target.files ?? [])].forEach(pick);
+          // The same file again must fire onChange again.
+          e.target.value = "";
         }}
         className="hidden"
       />
