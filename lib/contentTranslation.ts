@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "crypto";
 import { inflateSync } from "zlib";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
+import { tenantScope } from "./tenantContext";
 import { LOCALES, type Locale } from "./i18n/locales";
 
 // ---------------------------------------------------------------------------
@@ -135,7 +136,14 @@ interface Credits {
 
 const CREDITS_PATH = "settings/translation-credits.json";
 
+// The demo school is ours: nothing there is gated on credits or the spend tick,
+// so a demo never stops on "buy credits". Its AI cost lands on our AI account,
+// and the per-user and per-school rate limits still cap it.
+const DEMO_BALANCE = 9999;
+const isDemoSchool = async () => (await tenantScope()).key === "demo";
+
 export async function getCredits(): Promise<number> {
+  if (await isDemoSchool()) return DEMO_BALANCE;
   return (await readJson<Credits>(CREDITS_PATH, { balance: 0 })).balance;
 }
 
@@ -143,6 +151,7 @@ export async function getCredits(): Promise<number> {
  *  balance, and how many credits actually moved (a correction larger than
  *  the balance only removes what is there). */
 export async function addCredits(n: number): Promise<{ balance: number; applied: number }> {
+  if (await isDemoSchool()) return { balance: DEMO_BALANCE, applied: 0 };
   let balance = 0;
   let applied = 0;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
@@ -156,6 +165,7 @@ export async function addCredits(n: number): Promise<{ balance: number; applied:
 
 /** Takes n credits, atomically. False when the school has fewer. */
 export async function spendCredits(n: number): Promise<boolean> {
+  if (await isDemoSchool()) return true;
   let ok = false;
   await updateJson<Credits>(CREDITS_PATH, { balance: 0 }, (c) => {
     // Reset on every run: updateJson re-runs this after a lost write race, and only the run that lands counts.
@@ -169,6 +179,7 @@ export async function spendCredits(n: number): Promise<boolean> {
 
 /** Ticked per user on the Users screen ("Can spend translation credits"). Read fresh, never from the session. */
 export async function maySpendCredits(userId: string): Promise<boolean> {
+  if (await isDemoSchool()) return true;
   const { getUserById } = await import("./userData");
   return !!(await getUserById(userId))?.canSpendTranslationCredits;
 }
