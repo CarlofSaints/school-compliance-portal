@@ -327,7 +327,7 @@ export default function InvoiceInboxPage() {
                   {r.signedBy.length > 0 ? (
                     <>
                       <a href={`/api/payments/invoices/${r.id}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
-                      <div><DownloadLink href={`/api/payments/invoices/${r.id}/signed?download=1`} filename={`Signed - ${r.filename}`} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
+                      <div><DownloadLink href={`/api/payments/invoices/${r.id}/signed?download=1`} filename={`Signed - ${r.filename.replace(/\.[^.]+$/, "")}.pdf`} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
                     </>
                   ) : (
                     "-"

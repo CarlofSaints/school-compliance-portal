@@ -21,7 +21,8 @@ const rand = (n: number | null) => (n === null ? "-" : `R ${n.toFixed(2)}`);
 async function addOriginal(pdf: PDFDocument, bytes: Buffer, ext: string): Promise<boolean> {
   try {
     if (ext === "pdf") {
-      const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
+      // No ignoreEncryption: it copies encrypted pages in blank. Failing here shows the note instead.
+      const source = await PDFDocument.load(bytes);
       const pages = await pdf.copyPages(source, source.getPageIndices());
       pages.forEach((p) => pdf.addPage(p));
       return pages.length > 0;
