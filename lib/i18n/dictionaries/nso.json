@@ -2353,5 +2353,6 @@
   "This was paid before everyone signed it.": "Se se lefilwe pele bohle ba se saena.",
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Invoice e dumelelana le kgokagano ye e bolokilwego, eupša sekirini sa panka ga se bontšhe akhaonte yeo e lefelwago. E hlahlobe pankeng.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Ga se ditlhahlobo ka moka tše di lego talamorogo. Ke lebeletše se gomme ke nyaka go saena le ge go le bjalo.",
-  "(signed with a check not green)": "(go saennwe tlhahlobo e sa le talamorogo)"
+  "(signed with a check not green)": "(go saennwe tlhahlobo e sa le talamorogo)",
+  "Payment Approvals": "Go dumelelwa ga Ditefo"
 }

@@ -2353,5 +2353,6 @@
   "This was paid before everyone signed it.": "Dit is betaal voordat almal dit geteken het.",
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Die faktuur stem ooreen met die gestoorde kontak, maar die bankskerm wys nie die rekening wat betaal word nie. Kontroleer dit by die bank.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Nie elke kontrole is groen nie. Ek het dit nagegaan en wil tog teken.",
-  "(signed with a check not green)": "(geteken terwyl 'n kontrole nie groen was nie)"
+  "(signed with a check not green)": "(geteken terwyl 'n kontrole nie groen was nie)",
+  "Payment Approvals": "Betalingsgoedkeurings"
 }

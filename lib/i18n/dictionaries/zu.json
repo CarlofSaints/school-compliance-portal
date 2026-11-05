@@ -2353,5 +2353,6 @@
   "This was paid before everyone signed it.": "Lokhu kukhokhwe ngaphambi kokuba wonke umuntu akusayine.",
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "I-invoyisi iyavumelana nomuntu ogciniwe, kodwa isikrini sasebhange asibonisi i-akhawunti ekhokhelwayo. Yihlole ebhange.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Akuzona zonke izivivinyo eziluhlaza. Ngikubhekile lokhu futhi ngifuna ukusayina noma kunjalo.",
-  "(signed with a check not green)": "(kusayinwe kukhona ukuhlola okungaluhlazanga)"
+  "(signed with a check not green)": "(kusayinwe kukhona ukuhlola okungaluhlazanga)",
+  "Payment Approvals": "Ukugunyazwa Kwezinkokhelo"
 }
