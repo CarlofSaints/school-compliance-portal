@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "@/lib/useAuth";
 import { useT } from "@/components/I18nProvider";
-import { CREDIT_PACK, MAX_PACKS, PAGES_PER_CREDIT, POLICY_AI_CREDITS } from "@/lib/creditPack";
+import { CREDIT_PACK, MAX_PACKS, PAGES_PER_CREDIT, PAYMENT_READ_MAX_CREDITS, PAYMENT_STATEMENT_MAX_CREDITS, POLICY_AI_CREDITS } from "@/lib/creditPack";
 
 // How the portal bills for AI, for everyone signed in. Every number on this
 // page is read from lib/creditPack.ts, the same constants the charges use, so
@@ -62,6 +62,14 @@ export default function BillingPage() {
             <tr>
               <td className="py-2 pr-4">{t("Compile a policy: compliance check of the draft")}</td>
               <td className="py-2">{POLICY_AI_CREDITS.check === 1 ? t("{n} credit", { n: 1 }) : t("{n} credits", { n: POLICY_AI_CREDITS.check })}</td>
+            </tr>
+            <tr>
+              <td className="py-2 pr-4">{t("Payments: reading an invoice or a bank screenshot")}</td>
+              <td className="py-2">{t("What it actually costs, in tenths of a credit, usually 0.1. Never more than {n}.", { n: PAYMENT_READ_MAX_CREDITS })}</td>
+            </tr>
+            <tr>
+              <td className="py-2 pr-4">{t("Payments: reading a bank statement")}</td>
+              <td className="py-2">{t("What it actually costs, in tenths of a credit. Never more than {n}.", { n: PAYMENT_STATEMENT_MAX_CREDITS })}</td>
             </tr>
           </tbody>
         </table>

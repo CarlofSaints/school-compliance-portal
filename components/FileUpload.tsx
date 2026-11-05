@@ -10,6 +10,8 @@ interface FileUploadProps {
   label?: string;
   onChange: (file: File) => void;
   value?: File | null;
+  /** Several at once: onChange runs once per file. */
+  multiple?: boolean;
 }
 
 export default function FileUpload({
@@ -17,6 +19,7 @@ export default function FileUpload({
   label,
   onChange,
   value,
+  multiple,
 }: FileUploadProps) {
   const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -43,8 +46,7 @@ export default function FileUpload({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) pick(file);
+    (multiple ? [...e.dataTransfer.files] : [...e.dataTransfer.files].slice(0, 1)).forEach(pick);
   };
 
   return (
@@ -66,9 +68,11 @@ export default function FileUpload({
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={multiple}
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) pick(file);
+          [...(e.target.files ?? [])].forEach(pick);
+          // The same file again must fire onChange again.
+          e.target.value = "";
         }}
         className="hidden"
       />
