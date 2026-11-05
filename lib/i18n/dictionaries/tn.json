@@ -2282,7 +2282,6 @@
   "Account type": "Mofuta wa akhaonto",
   "Proof of bank details": "Bosupi jwa dintlha tsa banka",
   "Upload proof of bank details": "Tsenya bosupi jwa dintlha tsa banka",
-  "On file: {name}. If the account changes, new proof is required.": "Mo faeleng: {name}. Fa akhaonto e fetoga, go tlhokega bosupi jo bo ntšhwa.",
   "Address": "Aterese",
   "Contact person name": "Leina la motho wa kgolagano",
   "Contact person email": "Emeile ya motho wa kgolagano",
@@ -2354,5 +2353,7 @@
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Invoice e dumalana le kgolagano e e bolokilweng, mme sekirini sa banka ga se bontshe akhaonte e e duelwang. E tlhatlhobe kwa bankeng.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Ga se ditlhatlhobo tsotlhe tse di leng tala. Ke lebeletse se mme ke batla go saena le fa go ntse jalo.",
   "(signed with a check not green)": "(go saenilwe tlhatlhobo e se tala)",
-  "Payment Approvals": "Go dumelelwa ga Dituelo"
+  "Payment Approvals": "Go dumelelwa ga Dituelo",
+  "No bank proof loaded": "Ga go na bosupi jwa banka jo bo tsentsweng",
+  "On file: {name}. If the account changes, this proof is removed.": "Mo faeleng: {name}. Fa akhaonte e fetoga, bosupi jono bo a tlosiwa."
 }

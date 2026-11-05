@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
   const hasFile = form?.get("file") instanceof File;
-  if (parsed.value.type === "creditor" && !hasFile) return NextResponse.json({ error: "Upload proof of bank details." }, { status: 400 });
   const upload = hasFile ? await uploadedFile(req, ["pdf", "png", "jpg", "webp"]) : null;
   if (upload instanceof NextResponse) return upload;
 

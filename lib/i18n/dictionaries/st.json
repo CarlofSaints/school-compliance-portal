@@ -2282,7 +2282,6 @@
   "Account type": "Mofuta wa akhaonto",
   "Proof of bank details": "Bopaki ba dintlha tsa banka",
   "Upload proof of bank details": "Kenya bopaki ba dintlha tsa banka",
-  "On file: {name}. If the account changes, new proof is required.": "Faeleng: {name}. Haeba akhaonto e fetoha, ho hlokahala bopaki bo bocha.",
   "Address": "Aterese",
   "Contact person name": "Lebitso la motho wa kgokahano",
   "Contact person email": "Imeile ya motho wa kgokahano",
@@ -2354,5 +2353,7 @@
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Invoice e dumellana le kgokahano e bolokilweng, empa skrini sa banka ha se bontshe akhaonto e lefellwang. E hlahlobe bankeng.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Hase ditlhahlobo tsohle tse tala. Ke shebile sena mme ke batla ho saena leha ho le joalo.",
   "(signed with a check not green)": "(ho saennwe tlhahlobo e se tala)",
-  "Payment Approvals": "Tumello ya Ditefo"
+  "Payment Approvals": "Tumello ya Ditefo",
+  "No bank proof loaded": "Ha ho bopaki ba banka bo kentsweng",
+  "On file: {name}. If the account changes, this proof is removed.": "Faeleng: {name}. Ha akhaonto e fetoha, bopaki bona bo a tlosoa."
 }

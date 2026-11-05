@@ -17,22 +17,19 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsed = parseContactInput(contactFromForm(form?.get("contact")));
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  // Changed bank details are how invoice fraud starts: a new account always needs new proof.
+  // Changed bank details are how invoice fraud starts: old proof does not prove a
+  // new account, so it goes and the inbox shows the orange alert until new proof comes.
   const changed = bankChanged(current.bank, parsed.value.bank);
   const hasFile = form?.get("file") instanceof File;
-  if (changed && parsed.value.bank && !hasFile) {
-    return NextResponse.json({ error: "The bank account changed. Upload new proof of bank details." }, { status: 400 });
-  }
-  if (parsed.value.type === "creditor" && !hasFile && !current.proof) return NextResponse.json({ error: "Upload proof of bank details." }, { status: 400 });
 
   const upload = hasFile ? await uploadedFile(req, ["pdf", "png", "jpg", "webp"]) : null;
   if (upload instanceof NextResponse) return upload;
-  const proof = upload ? { filename: cleanFilename(upload.name), ext: upload.ext } : null;
+  const proof = upload ? { filename: cleanFilename(upload.name), ext: upload.ext } : changed ? null : undefined;
   if (upload && proof) await writeFile(FILE_PATHS.proof(id, proof), upload.bytes);
 
   const saved = await saveContact(id, parsed.value, proof);
   if (!saved) return NextResponse.json({ error: "Contact not found." }, { status: 404 });
-  if (proof && current.proof && current.proof.ext !== proof.ext) await deleteFile(FILE_PATHS.proof(id, current.proof));
+  if (current.proof && proof !== undefined && proof?.ext !== current.proof.ext) await deleteFile(FILE_PATHS.proof(id, current.proof));
   await recordActivity({
     ...actorFrom(req, session),
     action: changed ? "payment.contact_bank_changed" : "payment.contact_updated",
