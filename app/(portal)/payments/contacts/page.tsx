@@ -7,7 +7,7 @@ import Toast from "@/components/Toast";
 import FileUpload from "@/components/FileUpload";
 import SortableTh from "@/components/SortableTh";
 import { useT } from "@/components/I18nProvider";
-import type { Contact, ContactType } from "@/lib/payments";
+import { NO_PROOF, type Contact, type ContactType } from "@/lib/payments";
 
 // The list every invoice and bank payment is checked against.
 
@@ -138,6 +138,8 @@ export default function ContactsPage() {
                     <a href={`/api/payments/files/proof/${c.id}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                       {t("View")}
                     </a>
+                  ) : c.type === "creditor" ? (
+                    <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">{t(NO_PROOF)}</span>
                   ) : (
                     "-"
                   )}
@@ -205,10 +207,10 @@ export default function ContactsPage() {
                 <input id="c-acctype" className={input} value={form.bank.accountType} onChange={(e) => setBank({ accountType: e.target.value })} />
               </div>
               <div className="sm:col-span-2">
-                <p className={label}>{needed(t("Proof of bank details"), creditor && (editing === "new" || !editing.proof))}</p>
+                <p className={label}>{t("Proof of bank details")}</p>
                 <FileUpload accept=".pdf,.png,.jpg,.jpeg,.webp" label={t("Upload proof of bank details")} value={proof} onChange={setProof} />
                 {editing !== "new" && editing.proof && (
-                  <p className="text-xs text-gray-500 mt-1">{t("On file: {name}. If the account changes, new proof is required.", { name: editing.proof.filename })}</p>
+                  <p className="text-xs text-gray-500 mt-1">{t("On file: {name}. If the account changes, this proof is removed.", { name: editing.proof.filename })}</p>
                 )}
               </div>
 

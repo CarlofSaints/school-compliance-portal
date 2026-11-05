@@ -161,7 +161,7 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    label: tk("Payments"),
+    label: tk("Payment Approvals"),
     href: "/payments",
     permissions: ["view_payments", "manage_payments"],
     icon: (

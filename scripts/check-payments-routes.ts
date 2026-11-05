@@ -107,14 +107,18 @@ async function main() {
   const acme = { type: "creditor", name: "Acme Supplies (Pty) Ltd", bank: { bankName: "FNB", accountHolder: "Acme Supplies", accountNumber: "62012345678", branchCode: "250655" } };
   check("a stranger cannot see contacts", (await contacts.GET(req(stranger, "/x"))).status, 403);
   check("a signer cannot see whole bank details", (await contacts.GET(req(principal, "/x"))).status, 403);
-  check("creditor without proof refused", (await contacts.POST(req(clerk, "/x", "POST", form({ contact: JSON.stringify(acme) })))).status, 400);
+  const bare = { ...acme, name: "Bare Supplier", bank: { ...acme.bank, accountHolder: "Bare Supplier", accountNumber: "33333333333" } };
+  check("creditor without proof is allowed", (await contacts.POST(req(clerk, "/x", "POST", form({ contact: JSON.stringify(bare) })))).status, 201);
   check("rubbish instead of a contact refused", (await contacts.POST(req(clerk, "/x", "POST", form({ contact: "{not json" })))).status, 400);
   check("an SVG as proof refused", (await contacts.POST(req(clerk, "/x", "POST", form({ contact: JSON.stringify(acme), file: new File(["<svg/>"], "p.png") })))).status, 415);
   const created = await contacts.POST(req(clerk, "/x", "POST", form({ contact: JSON.stringify(acme), file: pdf("proof") })));
   check("creditor with proof saved", created.status, 201);
   const acmeId = (await created.json()).id;
   const moved = { ...acme, bank: { ...acme.bank, accountNumber: "99999999999" } };
-  check("new account without new proof refused", (await contact.PUT(req(clerk, "/x", "PUT", form({ contact: JSON.stringify(moved) })), ctx(acmeId))).status, 400);
+  const movedId = (await (await contacts.POST(req(clerk, "/x", "POST", form({ contact: JSON.stringify({ ...moved, name: "Moving Co", bank: { ...moved.bank, accountHolder: "Moving Co" } }), file: pdf("proof2") })))).json()).id;
+  const movedAgain = { ...moved, name: "Moving Co", bank: { ...moved.bank, accountHolder: "Moving Co", accountNumber: "44444444444" } };
+  check("a new account drops the old proof", (await (await contact.PUT(req(clerk, "/x", "PUT", form({ contact: JSON.stringify(movedAgain) })), ctx(movedId))).json()).proof, null);
+  check("and its file goes", (await files.GET(req(clerk, "/x"), { params: Promise.resolve({ kind: "proof", id: movedId }) })).status, 404);
   check("tidying the name needs no proof", (await contact.PUT(req(clerk, "/x", "PUT", form({ contact: JSON.stringify({ ...acme, address: "Rosebank" }) })), ctx(acmeId))).status, 200);
   check("proof opens for the clerk", (await files.GET(req(clerk, "/x"), { params: Promise.resolve({ kind: "proof", id: acmeId }) })).headers.get("content-type"), "application/pdf");
   check("proof closed to a signer", (await files.GET(req(principal, "/x"), { params: Promise.resolve({ kind: "proof", id: acmeId }) })).status, 403);
@@ -132,6 +136,7 @@ async function main() {
   aiAnswer = { supplierName: "", amountDue: null };
   check("not an invoice: refused and free", [(await load(clerk, pdf("menu"))).status, await getCredits()], [422, before - 0.1]);
   let row = await statusOf(inv);
+  check("proof on file: no orange alert", row.noProof, false);
   check("green bank tick, grey amount, Pending approval", [row.bank.status, row.amount.status, row.status], ["match", "unknown", "pending_approval"]);
   check("invoice opens inline", (await files.GET(req(principal, "/x"), { params: Promise.resolve({ kind: "invoice", id: inv }) })).headers.get("content-disposition")?.startsWith("inline"), true);
   check("invoice closed to a stranger", (await files.GET(req(stranger, "/x"), { params: Promise.resolve({ kind: "invoice", id: inv }) })).status, 403);
@@ -197,6 +202,11 @@ async function main() {
   const { deleteTag } = await import("../lib/tagData");
   await deleteTag("sgb");
   check("a deleted tag stops counting", (await (await settings.GET(req(admin, "/x"))).json()).signerTagIds, ["principal"]);
+
+  // --- No proof
+  aiAnswer = { supplierName: "Bare Supplier", invoiceNumber: "INV-5", invoiceDate: "2026-11-02", amountDue: 40, accountNumber: "33333333333", branchCode: "250655" };
+  const bareRow = await statusOf((await (await load(clerk, pdf("inv5"))).json()).id);
+  check("no proof: still green, with the orange alert", [bareRow.bank.status, bareRow.noProof], ["match", true]);
 
   // --- Out of credits
   await addCredits(-(await getCredits()));

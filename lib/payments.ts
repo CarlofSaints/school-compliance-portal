@@ -150,6 +150,8 @@ export const STATUS_HOVER: Record<InvoiceStatus, string> = {
   paid: tk("A payment for this exact amount is on a bank statement."),
 };
 
+export const NO_PROOF = tk("No bank proof loaded");
+
 export const PAID_UNSIGNED = tk("This was paid before everyone signed it.");
 
 export interface InboxRow {
@@ -161,6 +163,8 @@ export interface InboxRow {
   filename: string;
   supplierName: string;
   contactName: string;
+  /** The matched contact has no proof of bank details: the green tick rests on what someone typed. */
+  noProof: boolean;
   invoiceNumber: string;
   invoiceDate: string;
   amountDue: number | null;
@@ -417,6 +421,7 @@ export function buildInbox(
       filename: inv.filename,
       supplierName: inv.supplierName,
       contactName: contact?.name ?? "",
+      noProof: !!contact && !contact.proof,
       invoiceNumber: inv.invoiceNumber,
       invoiceDate: inv.invoiceDate,
       amountDue: inv.amountDue,

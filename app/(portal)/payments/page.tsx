@@ -10,7 +10,7 @@ import SortableTh from "@/components/SortableTh";
 import SignaturePad from "@/components/SignaturePad";
 import DownloadLink from "@/components/DownloadLink";
 import { useT } from "@/components/I18nProvider";
-import { CHECK_HOVER, PAID_UNSIGNED, STATUS_HOVER, STATUS_LABELS, type Check, type InboxRow, type InvoiceStatus, type UnmatchedLine } from "@/lib/payments";
+import { CHECK_HOVER, NO_PROOF, PAID_UNSIGNED, STATUS_HOVER, STATUS_LABELS, type Check, type InboxRow, type InvoiceStatus, type UnmatchedLine } from "@/lib/payments";
 
 // The invoice inbox. Files go up one at a time (a request is capped at 4.5 MB)
 // and three at once, so a month-end batch does not take all morning.
@@ -312,7 +312,10 @@ export default function InvoiceInboxPage() {
                     {r.paidUnsigned && " ⚠"}
                   </span>
                 </td>
-                <td className="px-4 py-3">{r.supplierName || "-"}</td>
+                <td className="px-4 py-3">
+                  {r.supplierName || "-"}
+                  {r.noProof && <div><span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">{t(NO_PROOF)}</span></div>}
+                </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">{rand(r.amountDue)}</td>
                 <td className="px-4 py-3 whitespace-nowrap">{r.invoiceDate || "-"}</td>
                 <td className="px-4 py-3 text-center"><CheckIcon check={r.bank} /></td>
@@ -419,6 +422,7 @@ export default function InvoiceInboxPage() {
           <div className="bg-white rounded-xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-dark mb-1 break-all">{signing.filename}</h2>
             <p className="text-sm text-gray-600 mb-4">{signing.supplierName || "-"}, {rand(signing.amountDue)}</p>
+            {signing.noProof && <p className="bg-orange-100 text-orange-800 text-sm rounded-lg px-3 py-2 mb-3">{t(NO_PROOF)}</p>}
             <ul className="text-sm space-y-2 mb-4">
               <li className="flex gap-2"><CheckIcon check={signing.bank} /><span>{t(CHECK_HOVER[signing.bank.code])}</span></li>
               <li className="flex gap-2"><CheckIcon check={signing.amount} /><span>{t(CHECK_HOVER[signing.amount.code])}</span></li>

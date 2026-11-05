@@ -32,8 +32,9 @@ export const addContact = (c: Contact) => addToList(CONTACTS, c);
 export const removeContact = (id: string) => removeFromList<Contact>(CONTACTS, id);
 export const removeScreen = (id: string) => removeFromList<BankScreen>(SCREENS, id);
 
-export function saveContact(id: string, input: ContactInput, proof: StoredFile | null) {
-  return updateInList<Contact>(CONTACTS, id, (c) => ({ ...c, ...input, proof: proof ?? c.proof, updatedAt: new Date().toISOString() }));
+/** proof: undefined keeps what is on file, null removes it. */
+export function saveContact(id: string, input: ContactInput, proof: StoredFile | null | undefined) {
+  return updateInList<Contact>(CONTACTS, id, (c) => ({ ...c, ...input, proof: proof === undefined ? c.proof : proof, updatedAt: new Date().toISOString() }));
 }
 
 /** Signed invoices stay: they are the record of who authorised what. */

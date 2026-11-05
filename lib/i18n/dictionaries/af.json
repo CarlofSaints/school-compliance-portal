@@ -2282,7 +2282,6 @@
   "Account type": "Rekeningtipe",
   "Proof of bank details": "Bewys van bankbesonderhede",
   "Upload proof of bank details": "Laai bewys van bankbesonderhede op",
-  "On file: {name}. If the account changes, new proof is required.": "Op lêer: {name}. As die rekening verander, is nuwe bewys nodig.",
   "Address": "Adres",
   "Contact person name": "Naam van kontakpersoon",
   "Contact person email": "E-pos van kontakpersoon",
@@ -2353,5 +2352,8 @@
   "This was paid before everyone signed it.": "Dit is betaal voordat almal dit geteken het.",
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "Die faktuur stem ooreen met die gestoorde kontak, maar die bankskerm wys nie die rekening wat betaal word nie. Kontroleer dit by die bank.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Nie elke kontrole is groen nie. Ek het dit nagegaan en wil tog teken.",
-  "(signed with a check not green)": "(geteken terwyl 'n kontrole nie groen was nie)"
+  "(signed with a check not green)": "(geteken terwyl 'n kontrole nie groen was nie)",
+  "Payment Approvals": "Betalingsgoedkeurings",
+  "No bank proof loaded": "Geen bankbewys gelaai nie",
+  "On file: {name}. If the account changes, this proof is removed.": "Op lêer: {name}. As die rekening verander, word hierdie bewys verwyder."
 }

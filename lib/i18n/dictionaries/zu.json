@@ -2282,7 +2282,6 @@
   "Account type": "Uhlobo lwe-akhawunti",
   "Proof of bank details": "Ubufakazi bemininingwane yebhange",
   "Upload proof of bank details": "Layisha ubufakazi bemininingwane yebhange",
-  "On file: {name}. If the account changes, new proof is required.": "Kufayilini: {name}. Uma i-akhawunti ishintsha, kudingeka ubufakazi obusha.",
   "Address": "Ikheli",
   "Contact person name": "Igama lomuntu oxhumana naye",
   "Contact person email": "I-imeyili yomuntu oxhumana naye",
@@ -2353,5 +2352,8 @@
   "This was paid before everyone signed it.": "Lokhu kukhokhwe ngaphambi kokuba wonke umuntu akusayine.",
   "The invoice agrees with the saved contact, but the bank screen does not show the account being paid. Check it at the bank.": "I-invoyisi iyavumelana nomuntu ogciniwe, kodwa isikrini sasebhange asibonisi i-akhawunti ekhokhelwayo. Yihlole ebhange.",
   "Not every check is green. I have looked into this and want to sign anyway.": "Akuzona zonke izivivinyo eziluhlaza. Ngikubhekile lokhu futhi ngifuna ukusayina noma kunjalo.",
-  "(signed with a check not green)": "(kusayinwe kukhona ukuhlola okungaluhlazanga)"
+  "(signed with a check not green)": "(kusayinwe kukhona ukuhlola okungaluhlazanga)",
+  "Payment Approvals": "Ukugunyazwa Kwezinkokhelo",
+  "No bank proof loaded": "Abukho ubufakazi basebhange obulayishiwe",
+  "On file: {name}. If the account changes, this proof is removed.": "Efayeleni: {name}. Uma i-akhawunti ishintsha, lobu bufakazi buyasuswa."
 }
