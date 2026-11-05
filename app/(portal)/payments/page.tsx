@@ -295,6 +295,7 @@ export default function InvoiceInboxPage() {
               <SortableTh label={t("Amount Match")} sortKey="amount" align="center" {...th} />
               <SortableTh label={t("Difference")} sortKey="delta" align="right" {...th} />
               <th className="px-4 py-3 font-medium">{t("Signed by")}</th>
+              <th className="px-4 py-3 font-medium">{t("Signed Invoice")}</th>
               <th className="px-4 py-3 font-medium text-center">{t("Released")}</th>
               <th className="px-4 py-3" />
             </tr>
@@ -322,6 +323,16 @@ export default function InvoiceInboxPage() {
                 <td className="px-4 py-3 text-center"><CheckIcon check={r.amount} /></td>
                 <td className="px-4 py-3 text-right whitespace-nowrap text-red-700">{r.delta === null ? "" : `${r.delta > 0 ? "+" : "-"}${rand(Math.abs(r.delta))}`}</td>
                 <td className="px-4 py-3">{r.signedBy.map((s) => s.name).join(", ") || "-"}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {r.signedBy.length > 0 ? (
+                    <>
+                      <a href={`/api/payments/invoices/${r.id}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
+                      <div><DownloadLink href={`/api/payments/invoices/${r.id}/signed?download=1`} filename={`Signed - ${r.filename.replace(/\.[^.]+$/, "")}.pdf`} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
+                    </>
+                  ) : (
+                    "-"
+                  )}
+                </td>
                 <td className="px-4 py-3 text-center">
                   {r.signedBy.some((s) => s.userId === session?.id) ? (
                     <input
@@ -343,7 +354,7 @@ export default function InvoiceInboxPage() {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-gray-400">{t("No invoices yet.")}</td>
+                <td colSpan={12} className="px-4 py-8 text-center text-gray-400">{t("No invoices yet.")}</td>
               </tr>
             )}
           </tbody>
