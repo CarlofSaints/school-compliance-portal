@@ -1,4 +1,6 @@
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
+import { getPeople } from "./peopleData";
+import { staffOnlyLogin } from "./staffData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
 import { listMinutes, minutesByIdStrict, type MinutesRecord } from "./minutesData";
@@ -76,11 +78,12 @@ export async function weeklyRecipients(): Promise<{
   recipients: WeeklyRecipient[];
   noEmail: string[];
 }> {
-  const [users, roles] = await Promise.all([getUsers(), getRoles()]);
+  const [users, roles, people] = await Promise.all([getUsers(), getRoles(), getPeople()]);
   const seen = new Set<string>();
   const recipients: WeeklyRecipient[] = [];
   const noEmail: string[] = [];
-  for (const u of users.filter((x) => !x.retiredAt && !x.termLocked)) {
+  // The weekly update is an SGB thing (Carl): teachers and coaches are not on it.
+  for (const u of users.filter((x) => !x.retiredAt && !x.termLocked && !staffOnlyLogin(x, people))) {
     const email = String(u.email || "").trim().toLowerCase();
     const name = `${u.name || ""} ${u.surname || ""}`.trim();
     if (!isPlausibleEmail(email)) {

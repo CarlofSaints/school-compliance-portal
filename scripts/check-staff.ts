@@ -15,8 +15,9 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
   const { checkRows, cleanRow, parseType, rowsFromGrid } = await import("../lib/staff");
   const { loadStaff } = await import("../lib/staffData");
   const { createUser, getUsers, getUserRecord } = await import("../lib/userData");
-  const { getPeople, createPerson } = await import("../lib/peopleData");
+  const { getPeople, createPerson, deletePerson } = await import("../lib/peopleData");
   const { usersToLock } = await import("../lib/governanceTerm");
+  const { weeklyRecipients } = await import("../lib/weeklyUpdateData");
 
   let failed = 0;
   const check = (name: string, ok: boolean) => {
@@ -97,6 +98,11 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
   const before = (await getUsers()).find((u) => u.id === "gov")!.updatedAt;
   const quiet = await loadStaff(checkRows([row({ email: "gov@school.co.za", name: "", surname: "", subject: "Tennis" })], { ...live, users: await getUsers() }));
   check("a row that changes nothing writes nothing", quiet.updated === 0 && (await getUsers()).find((u) => u.id === "gov")!.updatedAt === before);
+  const weekly = (await weeklyRecipients()).recipients.map((r) => r.email);
+  check("a teacher gets no weekly update", !weekly.includes("b@school.co.za"));
+  await createPerson({ id: "p3", position: "Co-opted SGB", userId: bo.id, name: "Bo de Wet", email: "b@school.co.za", phone: "", profilePic: "" });
+  check("a teacher with an SGB seat does", (await weeklyRecipients()).recipients.some((r) => r.email === "b@school.co.za"));
+  await deletePerson("p3");
   check("loading the same file again adds nobody", again.added === 0 && (await getPeople()).length === people.length && (await getUsers()).length === users.length + 1);
 
   console.log(failed ? `${failed} FAILED` : "all passed");

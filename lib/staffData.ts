@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NO_CHANGE } from "./controlData";
 import { TERM_EXEMPT_POSITIONS } from "./governanceTerm";
-import { changePeople } from "./peopleData";
+import { changePeople, type Person } from "./peopleData";
 import type { RowResult, StaffDetails } from "./staff";
 import { createUsers, getUsers, updateUsersWhere, type User } from "./userData";
 
@@ -12,6 +12,10 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 
 /** Staff still owed the email with their login link. The Staff page and the send must agree on this. */
 export const awaitingLink = (u: User) => !!u.staff && u.forcePasswordChange && !u.staff.invitedAt && !u.retiredAt && !u.termLocked;
+
+/** On the staff list and nothing else. A tag or a governing-body seat on the register makes them SGB too. */
+export const staffOnlyLogin = (u: User, people: Person[]) =>
+  !!u.staff && !u.tagIds?.length && !people.some((p) => p.userId === u.id && !p.staffOnly);
 
 const unchanged = (a: StaffDetails, b: StaffDetails) => (Object.keys(b) as (keyof StaffDetails)[]).every((k) => k === "invitedAt" || a[k] === b[k]);
 
