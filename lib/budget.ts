@@ -31,13 +31,42 @@ export interface Centre {
   name: string;
 }
 
+export type SchoolPhase = "primary" | "high" | "combined";
+
+export const GRADES: Record<SchoolPhase, string[]> = {
+  primary: ["0", "1", "2", "3", "4", "5", "6", "7"],
+  high: ["8", "9", "10", "11", "12"],
+  combined: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+};
+
+export interface FeeScenario {
+  id: string;
+  increase: number;
+  /** A grade's own increase, where it differs from the column's. */
+  byGrade?: Record<string, number>;
+}
+
+export interface GradeFee {
+  grade: string;
+  lastFee: number;
+  learners: number;
+}
+
 /** Fee × learners, per centre. Fees are set as a monthly amount, so it rounds per month. */
 export interface FeePlan {
   centre: string;
+  /** same = one fee for the whole school. grades = each grade has its own. */
+  mode: "same" | "grades";
+  phase: SchoolPhase;
   lastFee: number;
   months: number;
   roundTo: number;
   learners: number;
+  grades: GradeFee[];
+  /** The increases being tried. Always at least one. */
+  scenarios: FeeScenario[];
+  /** The scenario put on a line. */
+  chosenId?: string;
   /** The fee put on a line. A copied budget starts from this, the fee really charged. */
   chosenFee?: number;
   /** The line fee income goes on, once chosen. */
@@ -54,7 +83,7 @@ export interface BudgetYear {
 
 export const emptyBudget = (year: number): BudgetYear => ({ year, centres: [{ id: "main", name: "School" }], lines: [], fees: [] });
 
-export const emptyFeePlan = (centre: string): FeePlan => ({ centre, lastFee: 0, months: 11, roundTo: 10, learners: 0 });
+export const emptyFeePlan = (centre: string): FeePlan => ({ centre, mode: "same", phase: "primary", lastFee: 0, months: 11, roundTo: 10, learners: 0, grades: [], scenarios: [{ id: "first", increase: 3 }] });
 
 export const lineAmount = (l: Pick<BudgetLine, "amount" | "items">) => (l.items.length ? l.items.reduce((sum, i) => sum + i.amount, 0) : l.amount);
 
@@ -87,6 +116,13 @@ export function byGroup(lines: BudgetLine[]): BudgetGroup[] {
   return [...groups.values()];
 }
 
+export const rands = (n: number) => `${n < 0 ? "-" : ""}R ${Math.abs(n).toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
+
+/** Every grade in the plan's phase, with what has been typed for it. */
+export const gradeRows = (p: Pick<FeePlan, "phase" | "grades">): GradeFee[] => GRADES[p.phase].map((grade) => p.grades.find((g) => g.grade === grade) ?? { grade, lastFee: 0, learners: 0 });
+
+export const gradeIncrease = (s: FeeScenario, grade: string) => s.byGrade?.[grade] ?? s.increase;
+
 /** Next year's fee: the increase is applied, then the MONTHLY amount is rounded, as schools publish it. */
 export function feeAfter(p: Pick<FeePlan, "lastFee" | "months" | "roundTo">, increase: number) {
   const months = Math.max(1, p.months);
@@ -103,6 +139,25 @@ export function feeLineIn(lines: BudgetLine[]): BudgetLine | null {
   const size = (l: BudgetLine) => Math.max(l.lastBudget, l.actual, lineAmount(l));
   const fees = lines.filter((l) => l.kind === "income" && /\bfees?\b/i.test(l.name) && !/discount|concession|rebate|bad debt|interest|arrear|application|registration|exam|hiring|\blate\b/i.test(l.name));
   return [...fees].sort((a, b) => size(b) - size(a))[0] ?? null;
+}
+
+/** What a scenario brings in. */
+export function feeIncome(p: FeePlan, s: FeeScenario) {
+  if (p.mode === "same") return feeAfter(p, s.increase) * p.learners;
+  return gradeRows(p).reduce((sum, g) => sum + feeAfter({ ...p, lastFee: g.lastFee }, gradeIncrease(s, g.grade)) * g.learners, 0);
+}
+
+/** The plan a copied year starts from: what was chosen becomes last year's fee. Not chosen means the school types it. */
+export function rollFeePlan(p: FeePlan, lineIds: Map<string, string>): FeePlan {
+  const chosen = p.scenarios.find((s) => s.id === p.chosenId);
+  const { chosenId: _chosenId, chosenFee, feeLineId, ...rest } = p;
+  return {
+    ...rest,
+    lastFee: chosen ? feeAfter(p, chosen.increase) : (chosenFee ?? 0),
+    grades: p.grades.map((g) => ({ ...g, lastFee: chosen ? feeAfter({ ...p, lastFee: g.lastFee }, gradeIncrease(chosen, g.grade)) : 0 })),
+    scenarios: emptyFeePlan(p.centre).scenarios,
+    ...(feeLineId && lineIds.has(feeLineId) ? { feeLineId: lineIds.get(feeLineId) } : {}),
+  };
 }
 
 const text = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -132,7 +187,31 @@ export function cleanFee(b: Record<string, unknown>, centres: Centre[]): FeePlan
     const n = Math.round(money(v));
     return n >= min ? n : fallback;
   };
-  return { centre: b.centre as string, lastFee: Math.max(0, money(b.lastFee)), months: Math.min(12, whole(b.months, 1, 11)), roundTo: whole(b.roundTo, 1, 1), learners: whole(b.learners, 0, 0), ...(money(b.chosenFee) > 0 ? { chosenFee: money(b.chosenFee) } : {}), ...(typeof b.feeLineId === "string" && b.feeLineId ? { feeLineId: b.feeLineId.slice(0, 60) } : {}) };
+  const known = GRADES.combined;
+  const percent = (v: unknown) => Math.max(-100, Math.min(1000, money(v)));
+  const scenarios = (Array.isArray(b.scenarios) ? b.scenarios : []).slice(0, 20).flatMap((s: { id?: unknown; increase?: unknown; byGrade?: unknown }): FeeScenario[] => {
+    const id = text(s?.id, 60);
+    if (!id) return [];
+    const own = Object.entries(typeof s.byGrade === "object" && s.byGrade ? s.byGrade : {}).filter(([g]) => known.includes(g)).map(([g, n]) => [g, percent(n)]);
+    return [{ id, increase: percent(s.increase), ...(own.length ? { byGrade: Object.fromEntries(own) } : {}) }];
+  });
+  const grades = (Array.isArray(b.grades) ? b.grades : []).flatMap((g: { grade?: unknown; lastFee?: unknown; learners?: unknown }): GradeFee[] =>
+    known.includes(g?.grade as string) ? [{ grade: g.grade as string, lastFee: Math.max(0, money(g.lastFee)), learners: whole(g.learners, 0, 0) }] : []
+  );
+  return {
+    centre: b.centre as string,
+    mode: b.mode === "grades" ? "grades" : "same",
+    phase: b.phase === "high" || b.phase === "combined" ? b.phase : "primary",
+    lastFee: Math.max(0, money(b.lastFee)),
+    months: Math.min(12, whole(b.months, 1, 11)),
+    roundTo: whole(b.roundTo, 1, 1),
+    learners: whole(b.learners, 0, 0),
+    grades,
+    scenarios: scenarios.length ? scenarios : emptyFeePlan(b.centre as string).scenarios,
+    ...(typeof b.chosenId === "string" && b.chosenId ? { chosenId: b.chosenId.slice(0, 60) } : {}),
+    ...(money(b.chosenFee) > 0 ? { chosenFee: money(b.chosenFee) } : {}),
+    ...(typeof b.feeLineId === "string" && b.feeLineId ? { feeLineId: b.feeLineId.slice(0, 60) } : {}),
+  };
 }
 
 /** A starting list for a school with no spreadsheet. Every line can be renamed or removed. */

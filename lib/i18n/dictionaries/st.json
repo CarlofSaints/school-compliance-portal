@@ -2586,5 +2586,16 @@
   "More per month": "Ho eketsehileng ka kgwedi",
   "In the budget": "Tekanyetsong",
   "Use this": "Sebedisa sena",
-  "Change line": "Fetola mola"
+  "Change line": "Fetola mola",
+  "All grades pay the same": "Dikereiti tsohle di lefa ho tshwana",
+  "Fees differ per grade": "Ditefiso di fapana ho ya ka kereiti",
+  "Grades": "Dikereiti",
+  "Primary, Grade 0 to 7": "Praemari, Kereiti 0 ho isa ho 7",
+  "High, Grade 8 to 12": "Sekondari, Kereiti 8 ho isa ho 12",
+  "Combined, Grade 0 to 12": "Tse kopantsweng, Kereiti 0 ho isa ho 12",
+  "+ Add an increase": "+ Eketsa keketso",
+  "Remove this increase": "Tlosa keketso ena",
+  "Grade {grade}": "Kereiti {grade}",
+  "Fees per grade, {learners} learners": "Ditefiso ka kereiti, baithuti ba {learners}",
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Phesente ka hodima kholomo e tlatsa dikereiti tsohle. Fetola lebokose la kereiti ho e fa keketso e fapaneng."
 }

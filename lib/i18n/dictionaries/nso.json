@@ -2586,5 +2586,16 @@
   "More per month": "Tše dintši ka kgwedi",
   "In the budget": "Ka tekanyetšong",
   "Use this": "Šomiša se",
-  "Change line": "Fetola mothaladi"
+  "Change line": "Fetola mothaladi",
+  "All grades pay the same": "Dikreiti ka moka di lefa go swana",
+  "Fees differ per grade": "Ditefo di fapana go ya ka kreiti",
+  "Grades": "Dikreiti",
+  "Primary, Grade 0 to 7": "Praemari, Kreiti 0 go ya go 7",
+  "High, Grade 8 to 12": "Sekontari, Kreiti 8 go ya go 12",
+  "Combined, Grade 0 to 12": "Tše di kopantšwego, Kreiti 0 go ya go 12",
+  "+ Add an increase": "+ Oketša koketšo",
+  "Remove this increase": "Tloša koketšo ye",
+  "Grade {grade}": "Kreiti {grade}",
+  "Fees per grade, {learners} learners": "Ditefo ka kreiti, barutwana ba {learners}",
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Phesente ka godimo ga kholomo e tlatša dikreiti ka moka. Fetola lepokisi la kreiti go e fa koketšo ye e fapanego."
 }

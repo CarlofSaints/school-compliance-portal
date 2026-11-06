@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { STARTER, cleanFee, cleanLine, emptyFeePlan, lineAmount, type BudgetLine, type BudgetYear } from "@/lib/budget";
+import { STARTER, cleanFee, cleanLine, emptyFeePlan, lineAmount, rollFeePlan, type BudgetLine, type BudgetYear } from "@/lib/budget";
 import { changeBudget, getBudget, guardManage, guardView } from "@/lib/budgetData";
 import { NO_CHANGE } from "@/lib/controlData";
 import { isDate } from "@/lib/section38a";
@@ -103,8 +103,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           centres: last.centres,
           // Actuals belong to a year not yet known, so they are left for the upload.
           lines: last.lines.map((l) => ({ ...l, id: ids.get(l.id)!, actual: 0, lastBudget: lineAmount(l) })),
-          // Last year's real fee is the one chosen then. With none chosen, the school types it.
-          fees: last.fees.map(({ chosenFee, feeLineId, ...f }) => ({ ...f, lastFee: chosenFee ?? 0, ...(feeLineId && ids.has(feeLineId) ? { feeLineId: ids.get(feeLineId) } : {}) })),
+          fees: last.fees.map((f) => rollFeePlan({ ...emptyFeePlan(f.centre), ...f }, ids)),
         };
       }
       case "addCentre": {

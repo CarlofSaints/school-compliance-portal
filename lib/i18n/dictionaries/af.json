@@ -2586,5 +2586,16 @@
   "More per month": "Meer per maand",
   "In the budget": "In die begroting",
   "Use this": "Gebruik dit",
-  "Change line": "Wysig lyn"
+  "Change line": "Wysig lyn",
+  "All grades pay the same": "Alle grade betaal dieselfde",
+  "Fees differ per grade": "Fooie verskil per graad",
+  "Grades": "Grade",
+  "Primary, Grade 0 to 7": "Primêr, Graad 0 tot 7",
+  "High, Grade 8 to 12": "Hoër, Graad 8 tot 12",
+  "Combined, Grade 0 to 12": "Gekombineer, Graad 0 tot 12",
+  "+ Add an increase": "+ Voeg 'n verhoging by",
+  "Remove this increase": "Verwyder hierdie verhoging",
+  "Grade {grade}": "Graad {grade}",
+  "Fees per grade, {learners} learners": "Fooie per graad, {learners} leerders",
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Die persentasie bo-aan 'n kolom vul elke graad. Verander 'n graad se eie blokkie om dit 'n ander verhoging te gee."
 }

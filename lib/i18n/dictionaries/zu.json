@@ -2586,5 +2586,16 @@
   "More per month": "Okwengeziwe ngenyanga",
   "In the budget": "Kusesabelomali",
   "Use this": "Sebenzisa lokhu",
-  "Change line": "Shintsha umugqa"
+  "Change line": "Shintsha umugqa",
+  "All grades pay the same": "Wonke amabanga akhokha okufanayo",
+  "Fees differ per grade": "Izimali ziyehluka ngebanga",
+  "Grades": "Amabanga",
+  "Primary, Grade 0 to 7": "Amabanga aphansi, iBanga 0 kuya ku-7",
+  "High, Grade 8 to 12": "Amabanga aphezulu, iBanga 8 kuya ku-12",
+  "Combined, Grade 0 to 12": "Okuhlanganisiwe, iBanga 0 kuya ku-12",
+  "+ Add an increase": "+ Engeza ukwenyuka",
+  "Remove this increase": "Susa lokhu kwenyuka",
+  "Grade {grade}": "iBanga {grade}",
+  "Fees per grade, {learners} learners": "Izimali ngebanga, abafundi abangu-{learners}",
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Iphesenti phezulu kwekholomu ligcwalisa wonke amabanga. Shintsha ibhokisi lebanga ukulinika ukwenyuka okuhlukile."
 }

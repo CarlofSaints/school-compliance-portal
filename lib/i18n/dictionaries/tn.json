@@ -2586,5 +2586,16 @@
   "More per month": "Go oketsega ka kgwedi",
   "In the budget": "Mo tekanyetsong",
   "Use this": "Dirisa se",
-  "Change line": "Fetola mola"
+  "Change line": "Fetola mola",
+  "All grades pay the same": "Mephato yotlhe e duela go tshwana",
+  "Fees differ per grade": "Dituelo di farologana ka mophato",
+  "Grades": "Mephato",
+  "Primary, Grade 0 to 7": "Poraemari, Mophato 0 go ya go 7",
+  "High, Grade 8 to 12": "Sekontari, Mophato 8 go ya go 12",
+  "Combined, Grade 0 to 12": "Tse di kopantsweng, Mophato 0 go ya go 12",
+  "+ Add an increase": "+ Oketsa koketso",
+  "Remove this increase": "Tlosa koketso eno",
+  "Grade {grade}": "Mophato {grade}",
+  "Fees per grade, {learners} learners": "Dituelo ka mophato, baithuti ba le {learners}",
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Diphesente fa godimo ga kholomo di tlatsa mephato yotlhe. Fetola lebokoso la mophato go o naya koketso e e farologaneng."
 }
