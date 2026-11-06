@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { PDFDocument } from "pdf-lib";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/rolesData";
 import { recordActivity } from "@/lib/activityLog";
@@ -19,9 +20,13 @@ export const maxDuration = 300;
 export async function POST(req: NextRequest) {
   const session = await requirePermission(req, "manage_payments");
   if (session instanceof NextResponse) return session;
-  const file = await uploadedFile(req, ["png", "jpg", "webp", "pdf"]);
-  if (file instanceof NextResponse) return file;
   const statement = req.nextUrl.searchParams.get("kind") === "statement";
+  // A notice gets our stamp, which cannot go on a WEBP or a locked PDF. Refused now, before the paid read.
+  const file = await uploadedFile(req, statement ? ["png", "jpg", "webp", "pdf"] : ["png", "jpg", "pdf"]);
+  if (file instanceof NextResponse) return file;
+  if (!statement && file.ext === "pdf" && !(await PDFDocument.load(file.bytes).then((d) => d.getPageCount() > 0).catch(() => false))) {
+    return NextResponse.json({ error: "This PDF is locked or damaged, so our stamp cannot go on it. Load a screenshot of the notice instead." }, { status: 415 });
+  }
 
   const hash = createHash("sha256").update(file.bytes).digest("hex");
   if ((await getScreens()).some((s) => s.hash === hash)) return NextResponse.json({ error: "This file has already been loaded." }, { status: 409 });
@@ -67,6 +72,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id") ?? "";
   const removed = await removeScreen(id);
   if (!removed) return NextResponse.json({ error: "Screenshot not found." }, { status: 404 });
+  if (removed === "signed") return NextResponse.json({ error: "A signed payment notice cannot be removed." }, { status: 409 });
   await deleteFolder(`payments/screens/${id}`);
   await recordActivity({
     ...actorFrom(req, session),

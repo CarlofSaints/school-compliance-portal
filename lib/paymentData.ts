@@ -5,7 +5,7 @@ import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
 import { isAiOutOfCredit } from "./aiErrors";
 import { ReadError } from "./paymentAi";
-import { fileKind, type BankScreen, type Contact, type ContactInput, type Invoice, type SignedBy, type StoredFile } from "./payments";
+import { fileKind, fillSlots, type BankScreen, type Contact, type ContactInput, type Invoice, type SignSlot, type SignedBy, type StoredFile } from "./payments";
 
 // Storage for payment approvals. Lists are guarded (lib/controlData.ts), files
 // are keyed by id so nothing a person named a file can reach a blob path.
@@ -30,11 +30,21 @@ export const addInvoice = (inv: Invoice) => addToList(INVOICES, inv);
 export const addScreen = (s: BankScreen) => addToList(SCREENS, s);
 export const addContact = (c: Contact) => addToList(CONTACTS, c);
 export const removeContact = (id: string) => removeFromList<Contact>(CONTACTS, id);
-export const removeScreen = (id: string) => removeFromList<BankScreen>(SCREENS, id);
 
 /** proof: undefined keeps what is on file, null removes it. */
 export function saveContact(id: string, input: ContactInput, proof: StoredFile | null | undefined) {
   return updateInList<Contact>(CONTACTS, id, (c) => ({ ...c, ...input, proof: proof === undefined ? c.proof : proof, updatedAt: new Date().toISOString() }));
+}
+
+/** A signed notice stays: it is the record of who authorised what. */
+export async function removeScreen(id: string): Promise<BankScreen | "signed" | null> {
+  let out: BankScreen | "signed" | null = null;
+  await updateJson<BankScreen[]>(SCREENS, [], (list) => {
+    const s = list.find((x) => x.id === id) ?? null;
+    out = s?.signedBy?.length ? "signed" : s;
+    return out && out !== "signed" ? list.filter((x) => x.id !== id) : NO_CHANGE;
+  });
+  return out;
 }
 
 /** Signed invoices stay: they are the record of who authorised what. */
@@ -67,14 +77,23 @@ export async function savePaymentSettings(signerTagIds: string[]) {
   await updateJson<PaymentSettings>(SETTINGS, { signerTagIds: [] }, () => ({ signerTagIds }));
 }
 
-/** The signing tags this user carries. Empty means they may not sign. */
-export async function signingTags(userId: string): Promise<string[]> {
+/** Each ticked tag is one line on the stamp. Someone with no login cannot sign, so is not listed.
+ *  Pass the notices to also get the lines they froze before a tag was unticked. */
+export async function getSigningSlots(notices: BankScreen[] = []): Promise<SignSlot[]> {
   const { signerTagIds } = await getPaymentSettings();
-  if (!signerTagIds.length) return [];
-  const preloaded = { users: await getUsers(), people: await getPeople() };
-  const held = await Promise.all(signerTagIds.map(async (t) => ((await getTagMembers(t, preloaded)).some((m) => m.userId === userId) ? t : "")));
-  return held.filter(Boolean);
+  const [tags, users, people] = await Promise.all([getTags(), getUsers(), getPeople()]);
+  const live = signerTagIds.map((tagId) => ({ tagId, label: tags.find((t) => t.id === tagId)?.name ?? "" }));
+  const frozen = new Map(notices.flatMap((n) => n.frozen?.slots ?? []).filter((f) => !signerTagIds.includes(f.tagId)).map((f) => [f.tagId, f]));
+  const slot = async (s: { tagId: string; label: string }, retired: boolean): Promise<SignSlot> => ({
+    ...s,
+    members: (await getTagMembers(s.tagId, { users, people })).flatMap((m) => (m.userId ? [{ userId: m.userId, name: m.name }] : [])),
+    ...(retired ? { retired } : {}),
+  });
+  return Promise.all([...live.map((s) => slot(s, false)), ...[...frozen.values()].map((s) => slot(s, true))]);
 }
+
+/** The signing tags this user carries. Empty means they may not sign. */
+export const tagsHeld = (slots: SignSlot[], userId: string) => slots.filter((s) => s.members.some((m) => m.userId === userId)).map((s) => s.tagId);
 
 // --- Signatures ---------------------------------------------------------------
 
@@ -90,42 +109,64 @@ export interface InvoiceSignature extends SignedBy {
   override: boolean;
 }
 
-const signaturesPath = (id: string) => `payments/invoices/${id}/signatures.json`;
-export const getSignatures = (id: string) => readJson<InvoiceSignature[]>(signaturesPath(id), []);
+/** Written by the first version, which signed each invoice. Read-only now. */
+export const getSignatures = (id: string) => readJson<InvoiceSignature[]>(`payments/invoices/${id}/signatures.json`, []);
 
-/** False when this person has already signed. Safe to retry: the row is set
- *  from the signature, so a failure between the two writes heals on the next try. */
-export async function addSignature(id: string, sig: InvoiceSignature): Promise<boolean> {
-  let added = false;
-  const all = await updateJson<InvoiceSignature[]>(signaturesPath(id), [], (list) => {
-    added = !list.some((s) => s.userId === sig.userId);
-    return added ? [...list, sig] : NO_CHANGE;
-  });
-  await updateInList<Invoice>(INVOICES, id, (inv) => ({
-    ...inv,
-    signedBy: all.map(({ userId, name, at, tagIds }) => ({
-      userId,
-      name,
-      at,
-      tagIds,
-      releasedAt: inv.signedBy.find((s) => s.userId === userId)?.releasedAt,
-    })),
-  }));
-  return added;
+/** What each payment's checks said when this person signed; the live ones can change later. */
+export interface NoticeSignature extends Omit<InvoiceSignature, "bank" | "amount"> {
+  checks: { payee: string; invoiceId: string; bank: string; amount: string }[];
 }
 
-/** A signer's own "I released this at the bank". False when they have not signed. */
+const noticeSignaturesPath = (id: string) => `payments/screens/${id}/signatures.json`;
+export const getNoticeSignatures = (id: string) => readJson<NoticeSignature[]>(noticeSignaturesPath(id), []);
+
+/** Would this signature put someone on a line nobody holds? */
+export function fillsALine(signed: Pick<SignedBy, "userId" | "tagIds">[], me: Pick<SignedBy, "userId" | "tagIds">, tagIds: string[]): boolean {
+  return fillSlots([...signed, me], tagIds).size > fillSlots(signed, tagIds).size;
+}
+
+/** Safe to retry: the row is set from the signatures, so a failure between the two writes heals on the next try. */
+export async function addNoticeSignature(id: string, sig: NoticeSignature, signerTagIds: string[], frozen: NonNullable<BankScreen["frozen"]>): Promise<"signed" | "already" | "line_taken"> {
+  let out: "signed" | "already" | "line_taken" = "signed";
+  const all = await updateJson<NoticeSignature[]>(noticeSignaturesPath(id), [], (list) => {
+    out = list.some((s) => s.userId === sig.userId) ? "already" : fillsALine(list, sig, signerTagIds) ? "signed" : "line_taken";
+    return out === "signed" ? [...list, sig] : NO_CHANGE;
+  });
+  // Added to what is there, never replacing it: two people signing at once each
+  // hold a different copy of `all`, and the slower write must not drop the other.
+  await updateInList<BankScreen>(SCREENS, id, (s) => {
+    const had = s.signedBy ?? [];
+    const fresh = all.filter((a) => !had.some((b) => b.userId === a.userId)).map(({ userId, name, at, tagIds }) => ({ userId, name, at, tagIds }));
+    return { ...s, signedBy: [...had, ...fresh], frozen: s.frozen ?? frozen };
+  });
+  return out;
+}
+
+/** A signer's own "I approved this at the bank". False when they have not signed. */
 export async function setReleased(id: string, userId: string, released: boolean): Promise<boolean> {
   let signed = false;
-  await updateInList<Invoice>(INVOICES, id, (inv) => {
-    signed = inv.signedBy.some((s) => s.userId === userId);
+  await updateInList<BankScreen>(SCREENS, id, (s) => {
+    signed = !!s.signedBy?.some((b) => b.userId === userId);
     return {
-      ...inv,
-      signedBy: inv.signedBy.map((s) => (s.userId === userId ? { ...s, releasedAt: released ? new Date().toISOString() : undefined } : s)),
+      ...s,
+      signedBy: s.signedBy?.map((b) => (b.userId === userId ? { ...b, releasedAt: released ? new Date().toISOString() : undefined } : b)),
     };
   });
   return signed;
 }
+
+// One-time codes, kept apart from the screen list because that list feeds the inbox route.
+type NoticeCodes = Record<string, { hash: string; sentAt: string }>;
+const codesPath = (id: string) => `payments/screens/${id}/codes.json`;
+export const noticeCodeSalt = (id: string, userId: string) => `notice:${id}:${userId}`;
+const CODE_LIFE_MS = 60 * 60 * 1000;
+export const codeExpired = (sentAt: string) => Date.now() - Date.parse(sentAt) > CODE_LIFE_MS;
+export const getNoticeCodes = (id: string) => readJson<NoticeCodes>(codesPath(id), {});
+export const saveNoticeCode = (id: string, userId: string, hash: string) =>
+  updateJson<NoticeCodes>(codesPath(id), {}, (codes) => ({ ...codes, [userId]: { hash, sentAt: new Date().toISOString() } }));
+/** The code is spent once it has signed. */
+export const spendNoticeCode = (id: string, userId: string) =>
+  updateJson<NoticeCodes>(codesPath(id), {}, ({ [userId]: _spent, ...rest }) => rest);
 
 // --- Shared by the routes that take a file --------------------------------------
 

@@ -426,6 +426,29 @@ export async function sendMinutesChangesRequestedEmail(
 // makes an ordinary electronic signature stand up is that the signer did
 // something deliberate that only they could do, and clicking a button while
 // logged in is not that.
+export async function sendPaymentNoticeCodeEmail(
+  to: string,
+  recipientName: string,
+  filename: string,
+  payments: number,
+  total: number,
+  code: string
+): Promise<boolean> {
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
+    <p style="color:#333;">Here is your code to sign this bank payment notice:</p>
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
+      <p style="margin:0;color:#333;"><strong>${esc(filename)}</strong></p>
+      <p style="margin:6px 0 0;color:#555;font-size:14px;">${payments} payment(s), R ${total.toFixed(2)}</p>
+    ${BOX_CLOSE}
+    ${boxOpen("#f4f4f5", "14px 20px", "8px 0 20px", "text-align:center;")}<span style="font-family:'Courier New',monospace;font-size:30px;letter-spacing:6px;color:#111;"><strong>${esc(code)}</strong></span>${BOX_CLOSE}
+    ${button(`${siteOf(b)}/payments`, `Open Payment Approvals`, b.colors.primary)}
+    <p style="color:#666;font-size:13px;margin-top:20px;">The code is yours alone. Do not pass it on: whoever uses it signs in your name. If you did not ask for it, tell your finance office.</p>
+  `;
+  return sendEmail(b.fromEmail, to, `Your signing code: ${filename}`, emailShell(b, "Ready to sign", body), b.replyTo);
+}
+
 export async function sendMinutesSigningCodeEmail(
   to: string,
   recipientName: string,

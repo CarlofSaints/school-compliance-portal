@@ -12,10 +12,13 @@ import {
   cleanInvoiceRead,
   fileKind,
   findContact,
-  invoiceStatus,
+  fillSlots,
   namesMatch,
   parseContactInput,
+  progressOf,
   sameAccount,
+  statusCount,
+  statusOf,
   type BankLine,
   type BankScreen,
   type Contact,
@@ -109,19 +112,44 @@ const green = { status: "match", code: "bank_match" } as const;
 const grey = { status: "unknown", code: "no_payment" } as const;
 const tags = ["principal", "sgb"];
 const signer = (userId: string, tagIds: string[], releasedAt?: string) => ({ userId, name: userId, at: now, tagIds, releasedAt });
-const status = (signedBy: Invoice["signedBy"], bank: typeof green | typeof grey = green, amount: typeof green | typeof grey = green, paid = false) =>
-  invoiceStatus({ signedBy }, bank, amount, paid, tags);
+const slotsOf = (ids: string[]) => ids.map((tagId) => ({ tagId, label: tagId.toUpperCase(), members: [{ userId: `${tagId}-1`, name: `${tagId} one` }, { userId: `${tagId}-2`, name: `${tagId} two` }] }));
+const status = (signedBy: Invoice["signedBy"], bank: typeof green | typeof grey = green, amount: typeof green | typeof grey = green, paid = false) => {
+  const progress = progressOf(signedBy, slotsOf(tags));
+  const key = statusOf(signedBy, bank.status === "match" && amount.status === "match", paid, progress);
+  const { n, total } = statusCount({ status: key, progress });
+  return key === "signing" || key === "approving" ? `${key} ${n}/${total}` : key;
+};
 assert.equal(status([], green, grey), "pending_approval", "a check is not green");
 assert.equal(status([]), "pending_signatures");
-assert.equal(status([signer("a", ["principal"])]), "signed_one");
-assert.equal(status([signer("a", ["principal"]), signer("b", ["principal"])]), "signed_one", "two from one tag is not everyone");
-assert.equal(status([signer("a", ["principal", "sgb"])]), "signed_one", "one person holding both tags is still one person");
-assert.equal(status([signer("a", ["principal"]), signer("b", ["sgb"])]), "signed_all");
-assert.equal(status([signer("a", ["principal"], now), signer("b", ["sgb"])]), "released_one");
-assert.equal(status([signer("a", ["principal"], now), signer("b", ["sgb"], now)]), "released_all");
+assert.equal(status([signer("a", ["principal"])]), "signing 1/2");
+assert.equal(status([signer("a", ["principal"]), signer("b", ["principal"])]), "signing 1/2", "two from one tag fill one line");
+assert.equal(status([signer("a", ["principal", "sgb"])]), "signing 1/2", "one person holding both tags is still one person");
+assert.equal(status([signer("a", ["principal"]), signer("b", ["sgb"])]), "signing 2/2");
+assert.equal(status([signer("a", ["principal"], now), signer("b", ["sgb"])]), "approving 1/2");
+assert.equal(status([signer("a", ["principal"], now), signer("b", ["sgb"], now)]), "approving 2/2");
+
+// Names: who signed which line, who is still owed
+const three = slotsOf(["init", "head", "sgb"]);
+const shown = progressOf([signer("init-1", ["init"], now), signer("head-2", ["head"])], three);
+assert.deepEqual([shown.signed, shown.approved, shown.required], [2, 1, 3], "1 of 3 approved, 2 of 3 signed");
+assert.deepEqual(shown.slots.map((s) => [s.label, s.signer, s.approved]), [["INIT", "init-1", true], ["HEAD", "head-2", false], ["SGB", "", false]]);
+assert.deepEqual(shown.slots[2].waitingOn, ["sgb one", "sgb two"], "everyone who could sign the empty line is named");
+assert.deepEqual(progressOf([signer("x", ["gone"])], three).slots.at(-1), { label: "", signer: "x", approved: false, waitingOn: [] }, "a signature with no ticked tag still shows");
+const overlap = [{ tagId: "i", label: "I", members: [{ userId: "alice", name: "Alice" }, { userId: "bob", name: "Bob" }] }, { tagId: "p", label: "P", members: [{ userId: "alice", name: "Alice" }] }];
+assert.deepEqual(progressOf([signer("alice", ["i", "p"])], overlap).slots[1].waitingOn, ["Bob"], "Bob's signature frees Alice for the empty line");
+
+// A signed notice keeps its invoices: a statement or a new match cannot move them
+const oct = invoice("oct", "Acme", 500, "", { invoiceNumber: "OCT", invoiceDate: "2026-10-01" });
+const nov = invoice("nov", "Acme", 500, "", { invoiceNumber: "NOV", invoiceDate: "2026-11-01" });
+const signedScreen = { ...screen(line("Acme", 500)), signedBy: [signer("a", ["principal"])], frozen: { slots: [{ tagId: "principal", label: "Principal" }, { tagId: "sgb", label: "SGB" }], invoiceIds: ["oct"] } };
+const settled = buildInbox([oct, nov], [acme], [signedScreen, { ...screen(line("ACME", 500, { date: "2026-11-02", reference: "OCT" })), id: "st", kind: "statement" as const }], slotsOf(["principal"]));
+assert.deepEqual(settled.rows.map((r) => [r.id, r.signedOnNotice]), [["oct", true], ["nov", false]], "the signature stays on the invoice that was signed for");
+assert.equal(settled.notices[0].progress.required, 2, "a tag unticked after signing leaves the notice's lines alone");
+assert.equal(buildInbox([oct, nov], [acme], [signedScreen], slotsOf(["principal", "sgb", "extra"])).notices[0].progress.required, 2, "nor does a new tag add one");
+assert.deepEqual([progressOf([signer("x", [])], []).signed, progressOf([signer("x", [])], []).required], [1, 1], "no tags ticked: never 0 of 0");
 assert.equal(status([], green, green, true), "paid", "the statement outranks everything");
 const threeTags = ["a", "b", "c"];
-const signedAll = (...who: Invoice["signedBy"]) => invoiceStatus({ signedBy: who }, green, green, false, threeTags) === "signed_all";
+const signedAll = (...who: Invoice["signedBy"]) => fillSlots(who, threeTags).size === threeTags.length;
 assert.ok(!signedAll(signer("x", ["a", "b", "c"]), signer("y", ["a"]), signer("z", ["a"])), "two tags cannot rest on one person");
 assert.ok(signedAll(signer("x", ["a", "b"]), signer("y", ["b", "c"]), signer("z", ["a"])), "people can be shuffled to fit");
 
