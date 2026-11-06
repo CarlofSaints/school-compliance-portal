@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   // A notice gets our stamp, which cannot go on a WEBP or a locked PDF. Refused now, before the paid read.
   const file = await uploadedFile(req, statement ? ["png", "jpg", "webp", "pdf"] : ["png", "jpg", "pdf"]);
   if (file instanceof NextResponse) return file;
-  if (!statement && file.ext === "pdf" && !(await PDFDocument.load(file.bytes).then((d) => d.getPageCount() > 0, () => false))) {
+  if (!statement && file.ext === "pdf" && !(await PDFDocument.load(file.bytes).then((d) => d.getPageCount() > 0).catch(() => false))) {
     return NextResponse.json({ error: "This PDF is locked or damaged, so our stamp cannot go on it. Load a screenshot of the notice instead." }, { status: 415 });
   }
 
