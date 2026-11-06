@@ -40,6 +40,9 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
   check("Super Admin refused", one({ role: "super admin" }).problems.length === 1);
   check("role beyond reach refused", one({ role: "SGB Admin" }).problems.length === 1);
   check("same email twice refused on the second", checkRows([row({}, 2), row({ email: "A@school.co.za " }, 3)], ctx)[1].problems.length === 1);
+  check("a coach needs no SACE or Persal", !one({ type: "Coach", sace: "", persal: "" }).problems.length);
+  check("a teacher still needs SACE, an SGB one too", one({ type: "SGB or Board Teacher", sace: "", persal: "" }).problems.length === 1);
+  check("the first template still loads", rowsFromGrid([["Email address *", "Name *", "Surname *", "Role *", "SGB or State *", "SACE number *", "Persal number *"]]).missing.length === 0);
   check("short type words read", parseType("State") === "state" && parseType("SGB") === "sgb" && parseType("Board") === "sgb");
   check("invalid row carries no details", one({ sace: "" }).details === null);
 

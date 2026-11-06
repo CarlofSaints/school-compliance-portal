@@ -2501,7 +2501,6 @@
   "The rows above are left out. Everyone else loads.": "Die rye hierbo word uitgelaat. Almal anders word gelaai.",
   "Load {count} people": "Laai {count} mense",
   "These rows were not loaded. Fix them and upload the file again.": "Hierdie rye is nie gelaai nie. Stel dit reg en laai die lêer weer op.",
-  "SGB or State": "BLS of Staat",
   "Staff number": "Personeelnommer",
   "SACE number": "SACE-nommer",
   "Persal number": "Persal-nommer",
@@ -2518,5 +2517,8 @@
   "Put a comma between each subject or grade. Leave Grade blank for a coach.": "Sit 'n komma tussen elke vak of graad. Laat Graad oop vir 'n afrigter.",
   "SGB or Board Teacher": "BLS- of Raadsonderwyser",
   "State Teacher": "Staatsonderwyser",
-  "Already have a login, so only their staff details change: {names}": "Het reeds 'n aanmelding, so net hul personeelbesonderhede verander: {names}"
+  "Already have a login, so only their staff details change: {names}": "Het reeds 'n aanmelding, so net hul personeelbesonderhede verander: {names}",
+  "Coach": "Afrigter",
+  "Staff type": "Personeeltipe",
+  "SACE number (optional)": "SACE-nommer (opsioneel)"
 }

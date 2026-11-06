@@ -129,7 +129,7 @@ export default function StaffPage() {
     setForm({ ...m.staff, email: m.email, name: m.name, surname: m.surname, role: m.roleName, type: TYPE_LABELS[m.staff.type] });
   };
 
-  const typeLabel = (k: StaffType) => (k === "state" ? t("State Teacher") : t("SGB or Board Teacher"));
+  const typeLabel = (k: StaffType) => (k === "state" ? t("State Teacher") : k === "coach" ? t("Coach") : t("SGB or Board Teacher"));
   const waiting = staff.filter((m) => m.waiting).length;
   const sendLinks = async () => {
     if (!confirm(t("Email {count} staff a link to set their password? The link lasts one hour. After that they use Forgot your password? on the sign-in page.", { count: waiting }))) return;
@@ -262,7 +262,7 @@ export default function StaffPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {[t("Name"), t("Email"), t("Role"), t("SGB or State"), t("Staff number"), t("SACE number"), t("Persal number"), t("Subject"), t("Grade"), ""].map((h, i) => (
+              {[t("Name"), t("Email"), t("Role"), t("Staff type"), t("Staff number"), t("SACE number"), t("Persal number"), t("Subject"), t("Grade"), ""].map((h, i) => (
                 <th key={i} className="text-left px-4 py-3 font-medium text-gray-500 whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -275,7 +275,7 @@ export default function StaffPage() {
                 <td className="px-4 py-3">{m.roleName}</td>
                 <td className="px-4 py-3 whitespace-nowrap">{typeLabel(m.staff.type)}</td>
                 <td className="px-4 py-3">{m.staff.staffNumber || "-"}</td>
-                <td className="px-4 py-3">{m.staff.sace}</td>
+                <td className="px-4 py-3">{m.staff.sace || "-"}</td>
                 <td className="px-4 py-3">{m.staff.persal || "-"}</td>
                 <td className="px-4 py-3">{m.staff.subject || "-"}</td>
                 <td className="px-4 py-3">{m.staff.grade || "-"}</td>
@@ -324,7 +324,7 @@ export default function StaffPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t("SGB or State")}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("Staff type")}</label>
                 <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required className={INPUT}>
                   <option value="">{t("Choose one")}</option>
                   {(Object.keys(TYPE_LABELS) as StaffType[]).map((k) => (
@@ -334,7 +334,7 @@ export default function StaffPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {field("staffNumber", t("Staff number (optional)"))}
-                {field("sace", t("SACE number"), true)}
+                {field("sace", form.type === TYPE_LABELS.coach ? t("SACE number (optional)") : t("SACE number"), form.type !== TYPE_LABELS.coach)}
               </div>
               {field("persal", form.type === TYPE_LABELS.state ? t("Persal number") : t("Persal number (optional)"), form.type === TYPE_LABELS.state)}
               {field("subject", t("Subject, or what they coach"))}

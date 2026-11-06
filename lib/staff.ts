@@ -5,7 +5,7 @@ import { SUPER_ADMIN_ROLE_ID } from "./roles";
 // so deleting the user deletes them too. Client-safe. SACE and PERSAL numbers
 // are for manage_users only: GET /api/users strips this field.
 
-export type StaffType = "sgb" | "state";
+export type StaffType = "sgb" | "state" | "coach";
 
 export interface StaffDetails {
   staffNumber: string;
@@ -32,7 +32,7 @@ export interface StaffRow {
   grade: string;
 }
 
-export const TYPE_LABELS: Record<StaffType, string> = { sgb: "SGB or Board Teacher", state: "State Teacher" };
+export const TYPE_LABELS: Record<StaffType, string> = { sgb: "SGB or Board Teacher", state: "State Teacher", coach: "Coach" };
 
 /** Header text in the template, in Carl's order. A * marks a column the file must have. */
 export const COLUMNS: { key: keyof StaffRow; header: string; aliases: string[]; width: number }[] = [
@@ -41,7 +41,7 @@ export const COLUMNS: { key: keyof StaffRow; header: string; aliases: string[]; 
   { key: "name", header: "Name *", aliases: ["firstname"], width: 18 },
   { key: "surname", header: "Surname *", aliases: [], width: 18 },
   { key: "role", header: "Role *", aliases: [], width: 16 },
-  { key: "type", header: "SGB or State *", aliases: ["type", "sgbteacherorstateteacher"], width: 22 },
+  { key: "type", header: "Staff type *", aliases: ["type", "sgborstate", "sgbteacherorstateteacher"], width: 22 },
   { key: "sace", header: "SACE number *", aliases: ["sace"], width: 15 },
   { key: "persal", header: "Persal number *", aliases: ["persal"], width: 15 },
   { key: "subject", header: "Subject", aliases: ["subjects"], width: 28 },
@@ -53,6 +53,8 @@ const text = (v: unknown, max = 200) => String(v ?? "").trim().slice(0, max);
 
 export function parseType(v: string): StaffType | null {
   const s = squash(v);
+  // Only a coach who does not teach. One who also teaches is a teacher, with a SACE number.
+  if (s.includes("coach")) return "coach";
   if (s.includes("state")) return "state";
   return s.includes("sgb") || s.includes("board") ? "sgb" : null;
 }
@@ -140,8 +142,8 @@ export function checkRows(rows: (StaffRow & { row: number })[], ctx: Ctx): RowRe
     }
 
     const type = parseType(r.type);
-    if (!type) problems.push(r.type ? `"${r.type}" is not SGB or State.` : "SGB or State is missing.");
-    if (!r.sace) problems.push("SACE number is missing.");
+    if (!type) problems.push(r.type ? `"${r.type}" is not one of the staff types.` : "Staff type is missing.");
+    if (!r.sace && type !== "coach") problems.push("SACE number is needed for a teacher.");
     if (type === "state" && !r.persal) problems.push("Persal number is needed for a State teacher.");
     else if (r.persal && !/^\d{5,12}$/.test(r.persal)) problems.push("The Persal number must be 5 to 12 digits.");
 

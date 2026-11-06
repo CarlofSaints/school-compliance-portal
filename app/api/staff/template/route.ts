@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     allowBlank: true,
     formulae: [`"${Object.values(TYPE_LABELS).join(",")}"`],
     showErrorMessage: true,
-    errorTitle: "SGB or State",
+    errorTitle: "Staff type",
     error: "Choose from the list.",
   });
 
@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
   how.getColumn(1).width = 100;
   const roles = (await getRoles()).filter((r) => r.id !== SUPER_ADMIN_ROLE_ID).map((r) => r.name);
   how.addRows([
-    ["* The column must be there. Every cell needs filling, except Persal number for an SGB or Board teacher."],
+    ["* The column must be there."],
+    ["SACE number must be filled in for every teacher. Choose Coach only for someone who does not teach: a coach who also teaches is a teacher."],
     ["Persal number must be filled in for a State teacher."],
     ["Subject: what they teach or coach, with a comma between each one. Grade: the grades they teach, with a comma between each one. Leave Grade blank for a coach."],
     ["Someone who already has a login keeps their name and role. Only the staff details change."],

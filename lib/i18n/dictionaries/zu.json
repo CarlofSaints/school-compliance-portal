@@ -2501,7 +2501,6 @@
   "The rows above are left out. Everyone else loads.": "Imigqa engenhla ishiywa ngaphandle. Bonke abanye bayalayishwa.",
   "Load {count} people": "Layisha abantu abangu-{count}",
   "These rows were not loaded. Fix them and upload the file again.": "Le migqa ayilayishwanga. Yilungise bese ulayisha ifayela futhi.",
-  "SGB or State": "I-SGB noma uHulumeni",
   "Staff number": "Inombolo yabasebenzi",
   "SACE number": "Inombolo ye-SACE",
   "Persal number": "Inombolo ye-Persal",
@@ -2518,5 +2517,8 @@
   "Put a comma between each subject or grade. Leave Grade blank for a coach.": "Faka ukhefana phakathi kwesifundo noma ibanga ngalinye. Shiya Ibanga lingenalutho kumqeqeshi.",
   "SGB or Board Teacher": "Uthisha we-SGB noma weBhodi",
   "State Teacher": "Uthisha kaHulumeni",
-  "Already have a login, so only their staff details change: {names}": "Sebevele banakho ukungena, ngakho kushintsha imininingwane yabo yabasebenzi kuphela: {names}"
+  "Already have a login, so only their staff details change: {names}": "Sebevele banakho ukungena, ngakho kushintsha imininingwane yabo yabasebenzi kuphela: {names}",
+  "Coach": "Umqeqeshi",
+  "Staff type": "Uhlobo lwabasebenzi",
+  "SACE number (optional)": "Inombolo ye-SACE (uyazikhethela)"
 }
