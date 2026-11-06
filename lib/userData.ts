@@ -1,5 +1,6 @@
 import { readJson, writeJson, updateJson, NO_CHANGE, listFiles, deleteFile } from "./controlData";
 import bcrypt from "bcryptjs";
+import type { StaffDetails } from "./staff";
 
 export interface User {
   id: string;
@@ -24,6 +25,8 @@ export interface User {
   termLocked?: boolean;
   retiredAt?: string;
   keepsAccessAfterTerm?: boolean;
+  // Teachers and coaches (lib/staff.ts). Holds SACE and PERSAL numbers: manage_users only.
+  staff?: StaffDetails;
 }
 
 const USERS_PATH = "users.json";
@@ -146,6 +149,31 @@ export async function createUser(
   // Guarded (updateJson): two accounts created at the same moment both stay.
   await updateJson<User[]>(USERS_PATH, [], (list) => [...list, newUser]);
   return newUser;
+}
+
+/**
+ * Many accounts in ONE guarded write. An address taken in the meantime is left
+ * out. Returns those created. The passwords are random and thrown away, so one
+ * hash serves the batch: bcrypt per person would take minutes on a full staff list.
+ */
+export async function createUsers(
+  list: (Omit<User, "password" | "createdAt" | "updatedAt"> & { password: string })[]
+): Promise<User[]> {
+  if (!list.length) return [];
+  const hashed = await bcrypt.hash(list[0].password, 10);
+  const now = new Date().toISOString();
+  const fresh: User[] = list.map((u) => ({ ...u, password: hashed, createdAt: now, updatedAt: now }));
+  // Own copies first, as in createUser. In small groups: each is a storage write.
+  for (let i = 0; i < fresh.length; i += 25) await Promise.all(fresh.slice(i, i + 25).map(saveUserRecord));
+  let added: User[] = [];
+  await updateJson<User[]>(USERS_PATH, [], (current) => {
+    const emails = new Set(current.map((u) => u.email.trim().toLowerCase()));
+    added = fresh.filter((u) => !emails.has(u.email.trim().toLowerCase()));
+    return added.length ? [...current, ...added] : NO_CHANGE;
+  });
+  const dropped = fresh.filter((u) => !added.includes(u));
+  await Promise.all(dropped.map((u) => deleteFile(recordPath(u.id))));
+  return added;
 }
 
 /**

@@ -9,7 +9,8 @@ const outOfReach = () =>
     { status: 403 }
   );
 import { getUserById, updateUser, deleteUser, getUsers } from "@/lib/userData";
-import { addressCarriesTags } from "@/lib/peopleData";
+import { addressCarriesTags, changePeople } from "@/lib/peopleData";
+import { NO_CHANGE } from "@/lib/controlData";
 
 export async function GET(
   req: NextRequest,
@@ -146,5 +147,10 @@ export async function DELETE(
   }
   // Their sign-in tally goes with them (erasure). Never fails the delete.
   await deleteSignInStats(id);
+  // A staff entry exists only because of this login, so it goes with it.
+  await changePeople((people) => {
+    const kept = people.filter((p) => !(p.staffOnly && p.userId === id));
+    return kept.length === people.length ? NO_CHANGE : kept;
+  });
   return NextResponse.json({ success: true });
 }

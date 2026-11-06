@@ -13,6 +13,8 @@ export interface Person {
   profilePic: string;
   // See lib/tagData.ts - a tag can sit on a Person or on a User.
   tagIds?: string[];
+  // Added by the Staff page: a teacher or coach, not a governor, so kept off minutes attendance.
+  staffOnly?: boolean;
 }
 
 const PEOPLE_PATH = "people.json";

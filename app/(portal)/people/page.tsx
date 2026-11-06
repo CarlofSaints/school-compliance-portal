@@ -17,6 +17,7 @@ interface DirectoryPerson {
   photoUrl: string | null;
   tagIds: string[];
   hasLogin: boolean;
+  roleName: string;
 }
 
 interface TagRecord {
@@ -34,6 +35,7 @@ export default function PeopleDirectoryPage() {
   const [people, setPeople] = useState<DirectoryPerson[]>([]);
   const [tags, setTags] = useState<TagRecord[]>([]);
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   // The order the cards read in is the order set in Admin > People Types.
   const [positions, setPositions] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -84,14 +86,15 @@ export default function PeopleDirectoryPage() {
     };
 
     return people
-      .filter(matches)
+      .filter((p) => matches(p) && (!roleFilter || p.roleName === roleFilter))
       .sort(
         (a, b) =>
           rank(a.position) - rank(b.position) || a.name.localeCompare(b.name)
       );
-  }, [people, query, positions]);
+  }, [people, query, positions, roleFilter]);
 
   const total = people.length;
+  const roleNames = [...new Set(people.map((p) => p.roleName).filter(Boolean))].sort();
   const shownCount = ordered.length;
 
   if (loading) return <div className="p-6">{t("Loading...")}</div>;
@@ -110,6 +113,17 @@ export default function PeopleDirectoryPage() {
           )}
         </p>
       </div>
+
+      {roleNames.length > 1 && (
+        <div className="mb-4">
+          <select aria-label={t("Filter by role")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+            <option value="">{t("All roles")}</option>
+            {roleNames.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {total > 3 && (
         <div className="mb-6 max-w-sm">

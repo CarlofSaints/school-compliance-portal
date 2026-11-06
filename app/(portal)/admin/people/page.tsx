@@ -24,6 +24,7 @@ interface PersonRecord {
   phone: string;
   tagIds?: string[];
   photoUrl?: string | null;
+  roleName?: string;
 }
 
 interface UserOption {
@@ -50,6 +51,8 @@ export default function PeoplePage() {
   const [photoFile, setPhotoFile] = useState<Blob | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("");
+  const roleNames = [...new Set(people.map((p) => p.roleName || "").filter(Boolean))].sort();
   const [form, setForm] = useState({
     position: "",
     userId: "",
@@ -303,9 +306,22 @@ export default function PeoplePage() {
         </div>
       )}
 
+      {roleNames.length > 1 && (
+        <div className="mb-4">
+          <select aria-label={t("Filter by role")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+            <option value="">{t("All roles")}</option>
+            {roleNames.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {shownPositions.map((pos) => {
-          const positionPeople = people.filter((p) => p.position === pos);
+          const positionPeople = people.filter((p) => p.position === pos && (!roleFilter || p.roleName === roleFilter));
+          // A filter leaves only the positions it found someone in.
+          if (roleFilter && !positionPeople.length) return null;
           const offList = !positions.some(
             (known) => known.toLowerCase() === pos.toLowerCase()
           );

@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 // A register that cannot be read gives an empty list rather than blocking.
 async function registerWithNames(): Promise<{ position: string; name: string }[]> {
   const [people, users] = await Promise.all([getPeople().catch(() => []), getUsers().catch(() => [])]);
-  return people.map((p) => {
+  return people.filter((p) => !p.staffOnly).map((p) => {
     const linked = p.userId ? users.find((u) => u.id === p.userId) : undefined;
     return { position: p.position, name: linked ? `${linked.name} ${linked.surname}`.trim() : p.name };
   });
