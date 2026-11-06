@@ -92,6 +92,12 @@ export function feeAfter(p: Pick<FeePlan, "lastFee" | "months" | "roundTo">, inc
   return (Math.round((p.lastFee * (1 + increase / 100)) / months / step) * step * months);
 }
 
+/** The line fee income belongs on: the biggest income line called a fee that is not a discount or a one-off charge. */
+export function feeLineIn(lines: BudgetLine[]): BudgetLine | null {
+  const fees = lines.filter((l) => l.kind === "income" && /fee/i.test(l.name) && !/discount|concession|bad debt|interest|application|hiring|late/i.test(l.name));
+  return [...fees].sort((a, b) => Number(/received/i.test(b.name)) - Number(/received/i.test(a.name)) || lineAmount(b) - lineAmount(a))[0] ?? null;
+}
+
 const text = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const money = (v: unknown) => {
   const n = typeof v === "number" ? v : Number(v);

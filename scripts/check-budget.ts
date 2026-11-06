@@ -1,7 +1,7 @@
 // Budget totals, fees and reading a school's Excel. No store needed: all pure.
 //
 //   npx tsx scripts/check-budget.ts
-import { byGroup, cleanFee, cleanLine, feeAfter, guessColumns, numberIn, parseGrid, totals, type BudgetLine } from "../lib/budget";
+import { byGroup, cleanFee, feeLineIn, cleanLine, feeAfter, guessColumns, numberIn, parseGrid, totals, type BudgetLine } from "../lib/budget";
 
 let failed = 0;
 const check = (name: string, ok: boolean) => {
@@ -17,6 +17,9 @@ check("groups keep their order and add up", byGroup([line({ group: "B", amount: 
 
 const plan = { lastFee: 12000, months: 12, roundTo: 10 };
 check("fee rounds the monthly amount", feeAfter(plan, 7) === 1070 * 12);
+const fees = [line({ name: "School Fees Received", amount: 900 }), line({ name: "Early Payment Discount", amount: -5 }), line({ name: "Application Fee", amount: 950 }), line({ name: "Late Fee Interest", amount: 999 }), line({ name: "Uniform Sales", amount: 5000 })];
+check("the fee line is found by itself", feeLineIn(fees)?.name === "School Fees Received");
+check("no fee line means the school chooses", feeLineIn([line({ name: "Tuition", amount: 9 })]) === null);
 check("fee never divides by nothing", feeAfter({ lastFee: 100, months: 0, roundTo: 0 }, 0) === 100);
 
 const centres = [{ id: "main", name: "School" }];

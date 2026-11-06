@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
-import { byGroup, emptyFeePlan, feeAfter, guessColumns, lineAmount, parseGrid, totals, type BudgetKind, type BudgetLine, type BudgetYear, type ColumnChoice, type FeePlan } from "@/lib/budget";
+import { byGroup, emptyFeePlan, feeAfter, feeLineIn, guessColumns, lineAmount, parseGrid, totals, type BudgetKind, type BudgetLine, type BudgetYear, type ColumnChoice, type FeePlan } from "@/lib/budget";
 import { parseWorkbook } from "@/lib/spendImportSheet";
 import { apiErrorMessage, authFetch, useAuth } from "@/lib/useAuth";
 
@@ -37,6 +37,7 @@ export default function BudgetPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ kind: BudgetKind; group: string; name: string } | null>(null);
   const [approving, setApproving] = useState<{ date: string; note: string } | null>(null);
+  const [pickedFeeLine, setPickedFeeLine] = useState("");
   const file = useRef<HTMLInputElement>(null);
 
   const signedIn = !!session;
@@ -114,6 +115,9 @@ export default function BudgetPage() {
   const feePlan: FeePlan = budget?.fees.find((f) => f.centre === showing) ?? emptyFeePlan(showing);
   const saveFee = (change: Partial<FeePlan>) => act({ action: "saveFee", centre: showing, plan: change });
   const feeLines = lines.filter((l) => l.kind === "income");
+  // Found by itself. The list only appears for a school whose fee line has an unusual name.
+  const feeLine = feeLines.find((l) => l.id === pickedFeeLine) ?? feeLineIn(feeLines);
+  const feesReady = !!feePlan.lastFee && !!feePlan.learners;
   const empty = !!budget && lines.length === 0;
   const columns = upload ? (upload.sheets[upload.sheet] || []).reduce((n, r) => Math.max(n, r.length), 0) : 0;
   const pickColumn = (label: string, key: keyof ColumnChoice) => (
@@ -303,7 +307,7 @@ export default function BudgetPage() {
               {!combined && (
                 <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                   <h2 className="font-semibold text-dark mb-1">{t("Work out school fees")}</h2>
-                  <p className="text-xs text-gray-500 mb-3">{t("Try different increases, then put the one you choose on a line.")}</p>
+                  <p className="text-xs text-gray-500 mb-3">{t("See what each increase means for parents, then press Use this on the one you choose.")}</p>
                   <div key={`${year}-${showing}`} className="flex flex-wrap gap-3 mb-3">
                     {[
                       { key: "lastFee" as const, label: t("Last year's fee for the year") },
@@ -317,6 +321,19 @@ export default function BudgetPage() {
                       </label>
                     ))}
                   </div>
+                  {editable && (
+                    <p className="text-xs text-gray-500 mb-2">
+                      {feeLine ? t("Use this puts the amount on the line {name}.", { name: feeLine.name }) : t("Choose the line for fee income.")}
+                      {(!feeLine || pickedFeeLine) && (
+                        <select aria-label={t("Choose the line for fee income.")} value={pickedFeeLine} onChange={(e) => setPickedFeeLine(e.target.value)} className={`${INPUT} text-xs ml-2`}>
+                          <option value="">-</option>
+                          {feeLines.map((l) => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </p>
+                  )}
                   <div className="overflow-x-auto">
                     <table className="text-sm">
                       <thead>
@@ -324,6 +341,7 @@ export default function BudgetPage() {
                           <th className="text-left pr-6 py-1 font-medium text-gray-500">{t("Increase")}</th>
                           <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("Fee for the year")}</th>
                           <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("Per month")}</th>
+                          <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("More per month")}</th>
                           <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("Fee income")}</th>
                           <th />
                         </tr>
@@ -331,30 +349,33 @@ export default function BudgetPage() {
                       <tbody>
                         {[4, 5, 6, 7, 8, 9, 10].map((increase) => {
                           const fee = feeAfter(feePlan, increase);
+                          const months = Math.max(1, feePlan.months);
+                          const income = fee * feePlan.learners;
+                          const inBudget = feesReady && !!feeLine && lineAmount(feeLine) === income;
                           return (
-                            <tr key={increase}>
+                            <tr key={increase} className={inBudget ? "bg-emerald-50" : ""}>
                               <td className="pr-6 py-1">{increase}%</td>
                               <td className="pr-6 py-1 text-right">{rands(fee)}</td>
-                              <td className="pr-6 py-1 text-right">{rands(fee / Math.max(1, feePlan.months))}</td>
-                              <td className="pr-6 py-1 text-right">{rands(fee * feePlan.learners)}</td>
+                              <td className="pr-6 py-1 text-right">{rands(fee / months)}</td>
+                              <td className="pr-6 py-1 text-right">{rands((fee - feePlan.lastFee) / months)}</td>
+                              <td className="pr-6 py-1 text-right">{rands(income)}</td>
                               <td className="py-1">
-                                {editable && feeLines.length > 0 && (
-                                  <select
-                                    aria-label={t("Put this on a line")}
-                                    value=""
-                                    disabled={!feePlan.lastFee || !feePlan.learners}
-                                    onChange={async (e) => {
-                                      const line = feeLines.find((l) => l.id === e.target.value);
-                                      if (!line) return;
-                                      if (await saveLine(line, { amount: fee * feePlan.learners, items: [], note: t("{fee} a year × {learners} learners ({increase}% increase)", { fee: rands(fee), learners: feePlan.learners, increase }) })) saveFee({ chosenFee: fee });
-                                    }}
-                                    className={`${INPUT} text-xs`}
-                                  >
-                                    <option value="">{t("Put this on a line")}</option>
-                                    {feeLines.map((l) => (
-                                      <option key={l.id} value={l.id}>{l.name}</option>
-                                    ))}
-                                  </select>
+                                {inBudget ? (
+                                  <span className="text-xs font-medium text-emerald-700">{t("In the budget")}</span>
+                                ) : (
+                                  editable &&
+                                  feeLine && (
+                                    <button
+                                      disabled={!feesReady}
+                                      onClick={async () => {
+                                        const note = t("{fee} a year \u00d7 {learners} learners ({increase}% increase)", { fee: rands(fee), learners: feePlan.learners, increase });
+                                        if (await saveLine(feeLine, { amount: income, items: [], note })) saveFee({ chosenFee: fee });
+                                      }}
+                                      className="text-primary text-xs font-medium disabled:opacity-40"
+                                    >
+                                      {t("Use this")}
+                                    </button>
+                                  )
                                 )}
                               </td>
                             </tr>

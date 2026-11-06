@@ -2562,7 +2562,6 @@
   "Start from the standard list": "Thoma ka lenaneo le le tlwaelegilego",
   "Copy last year's budget": "Kopiša tekanyetšo ya ngwaga wa go feta",
   "Work out school fees": "Bala ditefo tša sekolo",
-  "Try different increases, then put the one you choose on a line.": "Leka dikoketšo tše di fapanego, ke moka o bee yeo o e kgethilego mothalading.",
   "Last year's fee for the year": "Tefo ya ngwaga wa go feta",
   "Months paid": "Dikgwedi tše di lefelwago",
   "Round the monthly fee to": "Dikološa tefo ya kgwedi go",
@@ -2571,7 +2570,6 @@
   "Fee for the year": "Tefo ya ngwaga",
   "Per month": "Ka kgwedi",
   "Fee income": "Letseno la ditefo",
-  "Put this on a line": "Bea se mothalading",
   "{fee} a year × {learners} learners ({increase}% increase)": "{fee} ka ngwaga × barutwana ba {learners} (koketšo ya {increase}%)",
   "Group": "Sehlopha",
   "Line name": "Leina la mothaladi",
@@ -2581,5 +2579,11 @@
   "Remove this line?": "Tloša mothaladi wo?",
   "No spending found. Check the sheet has a heading such as Expenses above its spending lines.": "Ga go a hwetšwa tšhomišo ya tšhelete. Lekola gore letlakala le na le hlogo ya go swana le Ditshenyegelo ka godimo ga methaladi ya tšhomišo.",
   "These rows have figures but no account code, so they were left out: {names}": "Methaladi ye e na le dipalo eupša ga e na khoutu ya akhaonte, ka fao e tlogetšwe: {names}",
-  "Remove this part": "Tloša karolo ye"
+  "Remove this part": "Tloša karolo ye",
+  "See what each increase means for parents, then press Use this on the one you choose.": "Bona gore koketšo ye nngwe le ye nngwe e ra eng go batswadi, ke moka o tobetše Šomiša se go yeo o e kgethilego.",
+  "Use this puts the amount on the line {name}.": "Šomiša se se bea tšhelete mothalading wa {name}.",
+  "Choose the line for fee income.": "Kgetha mothaladi wa letseno la ditefo.",
+  "More per month": "Tše dintši ka kgwedi",
+  "In the budget": "Ka tekanyetšong",
+  "Use this": "Šomiša se"
 }

@@ -2562,7 +2562,6 @@
   "Start from the standard list": "Qala ngohlu olujwayelekile",
   "Copy last year's budget": "Kopisha isabelomali sonyaka odlule",
   "Work out school fees": "Bala izimali zesikole",
-  "Try different increases, then put the one you choose on a line.": "Zama ukwenyuka okuhlukene, bese ufaka okukhethile emugqeni.",
   "Last year's fee for the year": "Imali yonyaka odlule",
   "Months paid": "Izinyanga ezikhokhwayo",
   "Round the monthly fee to": "Yenza imali yanyanga ibe ngu",
@@ -2571,7 +2570,6 @@
   "Fee for the year": "Imali yonyaka",
   "Per month": "Ngenyanga",
   "Fee income": "Imali engena ngezimali zesikole",
-  "Put this on a line": "Faka lokhu emugqeni",
   "{fee} a year × {learners} learners ({increase}% increase)": "{fee} ngonyaka × abafundi abangu-{learners} (ukwenyuka okungu-{increase}%)",
   "Group": "Iqembu",
   "Line name": "Igama lomugqa",
@@ -2581,5 +2579,11 @@
   "Remove this line?": "Susa lo mugqa?",
   "No spending found. Check the sheet has a heading such as Expenses above its spending lines.": "Akutholakalanga okusetshenzisiwe. Hlola ukuthi ishidi linesihloko esifana nokuthi Izindleko ngaphezu kwemigqa yokusebenzisa.",
   "These rows have figures but no account code, so they were left out: {names}": "Le migqa inezibalo kodwa ayinayo ikhodi ye-akhawunti, ngakho ishiywe ngaphandle: {names}",
-  "Remove this part": "Susa le ngxenye"
+  "Remove this part": "Susa le ngxenye",
+  "See what each increase means for parents, then press Use this on the one you choose.": "Bona ukuthi ukwenyuka ngakunye kusho ukuthini kubazali, bese ucindezela okuthi Sebenzisa lokhu kokukhethile.",
+  "Use this puts the amount on the line {name}.": "Sebenzisa lokhu kufaka inani emugqeni {name}.",
+  "Choose the line for fee income.": "Khetha umugqa wemali engena ngezimali zesikole.",
+  "More per month": "Okwengeziwe ngenyanga",
+  "In the budget": "Kusesabelomali",
+  "Use this": "Sebenzisa lokhu"
 }
