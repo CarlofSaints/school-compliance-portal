@@ -61,7 +61,8 @@ export default function MinutesSectionEditor({
     let live = true;
     authFetch("/api/people/directory")
       .then(async (res) => {
-        if (res.ok && live) setPeople(await res.json());
+        // Teachers and coaches are on the directory but not at SGB meetings.
+        if (res.ok && live) setPeople(((await res.json()) as { staffOnly?: boolean; id: string; name: string; position?: string }[]).filter((p) => !p.staffOnly));
       })
       // No register means no Fill button, nothing worse.
       .catch(() => {});

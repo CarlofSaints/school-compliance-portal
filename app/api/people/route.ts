@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission, maySelfTag } from "@/lib/rolesData";
+import { getRoles, requirePermission, maySelfTag } from "@/lib/rolesData";
+import { getUsers } from "@/lib/userData";
 import { getPeople, createPerson, photoUrlFor, isOwnPhotoPath } from "@/lib/peopleData";
 import { v4 as uuidv4 } from "uuid";
 
@@ -10,11 +11,15 @@ export async function GET(req: NextRequest) {
   const session = await requirePermission(req, "manage_people");
   if (session instanceof NextResponse) return session;
 
-  const people = await getPeople();
+  const [people, users, roles] = await Promise.all([getPeople(), getUsers(), getRoles()]);
+  const roleName = (userId: string | null) => {
+    const linked = userId ? users.find((u) => u.id === userId) : undefined;
+    return linked ? roles.find((r) => r.id === linked.role)?.name || "" : "";
+  };
   // photoUrl alongside the raw record so the admin list renders thumbnails
   // from the same URL the directory uses, rather than building its own.
   return NextResponse.json(
-    people.map((p) => ({ ...p, photoUrl: photoUrlFor(p) })),
+    people.map((p) => ({ ...p, photoUrl: photoUrlFor(p), roleName: roleName(p.userId) })),
     { headers: { "Cache-Control": "no-store" } }
   );
 }

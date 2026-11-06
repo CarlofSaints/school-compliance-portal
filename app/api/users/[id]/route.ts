@@ -9,7 +9,8 @@ const outOfReach = () =>
     { status: 403 }
   );
 import { getUserById, updateUser, deleteUser, getUsers } from "@/lib/userData";
-import { addressCarriesTags } from "@/lib/peopleData";
+import { addressCarriesTags, changePeople } from "@/lib/peopleData";
+import { NO_CHANGE } from "@/lib/controlData";
 
 export async function GET(
   req: NextRequest,
@@ -140,6 +141,12 @@ export async function DELETE(
   }
   const target = await getUserById(id);
   if (target && !(await roleWithinReach(session, target.role))) return outOfReach();
+  // A staff entry exists only because of this login, so it goes too. First: after
+  // the account is gone a retry answers 404 and the name and email would stay.
+  await changePeople((people) => {
+    const kept = people.filter((p) => !(p.staffOnly && p.userId === id));
+    return kept.length === people.length ? NO_CHANGE : kept;
+  });
   const deleted = await deleteUser(id);
   if (!deleted) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });

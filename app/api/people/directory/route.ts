@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireLogin } from "@/lib/rolesData";
 import { getPeople, photoUrlFor } from "@/lib/peopleData";
+import { getRoles } from "@/lib/rolesData";
 import { getUsers } from "@/lib/userData";
 
 // The register as everyone else sees it: who holds which position, how to reach
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   const session = await requireLogin(req);
   if (session instanceof NextResponse) return session;
 
-  const [people, users] = await Promise.all([getPeople(), getUsers()]);
+  const [people, users, roles] = await Promise.all([getPeople(), getUsers(), getRoles()]);
 
   const directory = people
     .filter((p) => p.name || p.userId)
@@ -44,6 +45,9 @@ export async function GET(req: NextRequest) {
         // shows this so a band is not quietly set to a person who can never
         // action it.
         hasLogin: !!linked,
+        // For the role filter on the People page.
+        roleName: linked ? roles.find((r) => r.id === linked.role)?.name || "" : "",
+        staffOnly: !!p.staffOnly,
       };
     })
     .sort((a, b) => a.position.localeCompare(b.position));

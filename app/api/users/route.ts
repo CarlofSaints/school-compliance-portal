@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
   const [users, roles] = await Promise.all([getUsers(), getRoles()]);
   // The role NAME is included so a read-only viewer, who cannot call
   // /api/roles, still sees "SGB Admin" rather than a raw role id.
-  const safe = users.map(({ password, ...u }) => ({
+  // staff holds SACE and PERSAL numbers: /api/staff, manage_users only.
+  const safe = users.map(({ password, staff, ...u }) => ({
     ...u,
     roleName: roles.find((r) => r.id === u.role)?.name || u.role,
   }));

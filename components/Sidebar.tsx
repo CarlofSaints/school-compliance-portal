@@ -217,6 +217,7 @@ const navItems: NavItem[] = [
         href: "/admin/users",
         permissions: ["view_users", "manage_users"],
       },
+      { label: tk("Staff"), href: "/admin/staff", permission: "manage_users" },
       { label: tk("Roles"), href: "/admin/roles", permission: "manage_roles" },
       { label: tk("SGB or Board Term"), href: "/admin/term", permissions: ["manage_users", "manage_sgb_term"] },
       { label: tk("People & Positions"), href: "/admin/people", permission: "manage_people" },

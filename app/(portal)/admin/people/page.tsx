@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
 import PersonPhoto from "@/components/PersonPhoto";
+import RoleFilter from "@/components/RoleFilter";
 import PhotoUpload from "@/components/PhotoUpload";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { useT } from "@/components/I18nProvider";
@@ -24,6 +25,8 @@ interface PersonRecord {
   phone: string;
   tagIds?: string[];
   photoUrl?: string | null;
+  roleName?: string;
+  staffOnly?: boolean;
 }
 
 interface UserOption {
@@ -50,6 +53,8 @@ export default function PeoplePage() {
   const [photoFile, setPhotoFile] = useState<Blob | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("");
+  const roleNames = [...new Set(people.map((p) => p.roleName || "").filter(Boolean))].sort();
   const [form, setForm] = useState({
     position: "",
     userId: "",
@@ -303,12 +308,16 @@ export default function PeoplePage() {
         </div>
       )}
 
+      <RoleFilter names={roleNames} value={roleFilter} onChange={setRoleFilter} />
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {shownPositions.map((pos) => {
-          const positionPeople = people.filter((p) => p.position === pos);
+          const positionPeople = people.filter((p) => p.position === pos && (!roleFilter || p.roleName === roleFilter));
+          // A filter leaves only the positions it found someone in.
+          if (roleFilter && !positionPeople.length) return null;
           const offList = !positions.some(
             (known) => known.toLowerCase() === pos.toLowerCase()
-          );
+          ) && !positionPeople.every((p) => p.staffOnly);
           return (
             <div
               key={pos}

@@ -1,5 +1,7 @@
 import { readJson, writeJson, updateJson, NO_CHANGE, listFiles, deleteFile } from "./controlData";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
+import type { StaffDetails } from "./staff";
 
 export interface User {
   id: string;
@@ -24,6 +26,8 @@ export interface User {
   termLocked?: boolean;
   retiredAt?: string;
   keepsAccessAfterTerm?: boolean;
+  // Teachers and coaches (lib/staff.ts). Holds SACE and PERSAL numbers: manage_users only.
+  staff?: StaffDetails;
 }
 
 const USERS_PATH = "users.json";
@@ -149,6 +153,30 @@ export async function createUser(
 }
 
 /**
+ * Many accounts in ONE guarded write. An address taken in the meantime is left
+ * out. Returns those created. Nobody knows the password: one random secret is
+ * hashed and thrown away, because bcrypt per person would take minutes on a
+ * full staff list. They set their own through the emailed link.
+ */
+export async function createUsers(list: Omit<User, "password" | "createdAt" | "updatedAt">[]): Promise<User[]> {
+  if (!list.length) return [];
+  const hashed = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
+  const now = new Date().toISOString();
+  const fresh: User[] = list.map((u) => ({ ...u, password: hashed, createdAt: now, updatedAt: now }));
+  // Own copies first, as in createUser. In small groups: each is a storage write.
+  for (let i = 0; i < fresh.length; i += 25) await Promise.all(fresh.slice(i, i + 25).map(saveUserRecord));
+  let added: User[] = [];
+  await updateJson<User[]>(USERS_PATH, [], (current) => {
+    const emails = new Set(current.map((u) => u.email.trim().toLowerCase()));
+    added = fresh.filter((u) => !emails.has(u.email.trim().toLowerCase()));
+    return added.length ? [...current, ...added] : NO_CHANGE;
+  });
+  const dropped = fresh.filter((u) => !added.includes(u));
+  await Promise.all(dropped.map((u) => deleteFile(recordPath(u.id))));
+  return added;
+}
+
+/**
  * Changes many accounts in ONE guarded write of users.json. `change` sees each
  * account as it is NOW and returns the fields to change, or null to leave it.
  * Returns the ids changed. Each own copy is brought in step afterwards.
@@ -167,7 +195,9 @@ export async function updateUsersWhere(change: (u: User) => Partial<User> | null
     });
     return changed.length ? next : NO_CHANGE;
   });
-  for (const u of changed) await saveUserRecord(u).catch((err) => console.error("[users] own copy not updated:", u.id, err));
+  for (let i = 0; i < changed.length; i += 25) {
+    await Promise.all(changed.slice(i, i + 25).map((u) => saveUserRecord(u).catch((err) => console.error("[users] own copy not updated:", u.id, err))));
+  }
   return changed.map((u) => u.id);
 }
 

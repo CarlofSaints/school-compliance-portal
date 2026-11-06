@@ -3,6 +3,7 @@
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
+import RoleFilter from "@/components/RoleFilter";
 import { useT } from "@/components/I18nProvider";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { SUPER_ADMIN_ROLE_ID as SUPER_ADMIN } from "@/lib/roles";
@@ -65,6 +66,7 @@ export default function UsersPage() {
   // row shows a spinner rather than the whole table going busy.
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState("");
   const [form, setForm] = useState({
     name: "",
     surname: "",
@@ -395,6 +397,9 @@ export default function UsersPage() {
 
   if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
+  const nameOfRole = (u: UserRecord) => roles.find((r) => r.id === u.role)?.name || u.roleName || u.role;
+  const roleNames = [...new Set(users.map(nameOfRole))].sort();
+
   return (
     <div>
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -434,6 +439,8 @@ export default function UsersPage() {
         </div>
       )}
 
+      <RoleFilter names={roleNames} value={roleFilter} onChange={setRoleFilter} />
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
@@ -449,11 +456,8 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => {
-              const roleName =
-                roles.find((r) => r.id === user.role)?.name ||
-                user.roleName ||
-                user.role;
+            {users.filter((u) => !roleFilter || nameOfRole(u) === roleFilter).map((user) => {
+              const roleName = nameOfRole(user);
               const person = personForUser(user.id);
               return (
                 <tr key={user.id} className="border-b border-gray-50 hover:bg-gray-50">
