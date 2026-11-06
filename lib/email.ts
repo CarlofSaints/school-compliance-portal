@@ -449,6 +449,28 @@ export async function sendPaymentNoticeCodeEmail(
   return sendEmail(b.fromEmail, to, `Your signing code: ${filename}`, emailShell(b, "Ready to sign", body), b.replyTo);
 }
 
+export async function sendSection38aLinkEmail(to: string, recipientName: string, year: number, what: string, token: string): Promise<boolean> {
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;">Dear ${esc(recipientName)},</p>
+    <p style="color:#333;">${esc(b.fullName)} needs your signature on its section 38A application for ${year}: ${esc(what)}.</p>
+    <p style="color:#333;">No login is needed. Open the link, read what it says, and sign, or tell us if something is wrong.</p>
+    ${button(`${siteOf(b)}/sign-38a/${token}`, `Open and sign`, b.colors.primary)}
+    <p style="color:#666;font-size:13px;margin-top:20px;">This link is yours alone and lasts 30 days. Do not pass it on: whoever uses it signs in your name.</p>
+  `;
+  return sendEmail(b.fromEmail, to, `Section 38A ${year}: please sign`, emailShell(b, "Ready to sign", body), b.replyTo);
+}
+
+export async function sendSection38aProblemEmail(to: string, name: string, year: number, note: string): Promise<boolean> {
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;">${esc(name)} has not signed their section 38A form for ${year} and says something is wrong:</p>
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}<p style="margin:0;color:#333;">${esc(note)}</p>${BOX_CLOSE}
+    ${button(`${siteOf(b)}/section-38a`, `Open Section 38A`, b.colors.primary)}
+  `;
+  return sendEmail(b.fromEmail, to, `Section 38A ${year}: ${name} reported a problem`, emailShell(b, "Reported a problem", body), b.replyTo);
+}
+
 export async function sendMinutesSigningCodeEmail(
   to: string,
   recipientName: string,

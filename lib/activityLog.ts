@@ -47,6 +47,7 @@ export type ActivityEntity =
   | "room"
   | "training"
   | "payment"
+  | "section_38a"
   | "auth"
   | "password"
   | "system";

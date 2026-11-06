@@ -86,6 +86,7 @@ export const LIMITS = {
   guestCalendarIp: { scope: "guest-calendar-ip", max: 300, windowSec: 15 * 60, message: "Too many requests. Try again in {wait}." },
   guestBookingIp: { scope: "guest-booking-ip", failClosed: true, max: 5, windowSec: 60 * 60, message: "Too many booking requests from this connection. Try again in {wait}." },
   signCodeSend: { scope: "sign-code-send", failClosed: true, max: 6, windowSec: 60 * 60, message: "Too many codes sent. Try again in {wait}." },
+  section38aLink: { scope: "section38a-link", failClosed: true, max: 60, windowSec: 60 * 60, message: "Too many requests from this connection. Try again in {wait}." },
   signCodeAttempt: { scope: "sign-code-attempt", failClosed: true, max: 10, windowSec: 60 * 60, message: "Too many signing attempts. Try again in {wait}, or ask the secretary to send a new code." },
 } satisfies Record<string, Limit>;
 
