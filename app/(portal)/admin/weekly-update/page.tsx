@@ -275,6 +275,7 @@ export default function WeeklyUpdatePage() {
             <p className="text-sm text-gray-500 mb-4">
               {t("Every portal user, including the {count} who have not signed in yet. Their copy adds a \"Set my password\" link so they can finish setting up.", { count: notActivated.length })}
             </p>
+            <p className="text-sm text-gray-500 mb-4">{t("Teachers and coaches from the Staff page are left out unless they hold a seat on the People register.")}</p>
             <ul className="divide-y text-sm">
               {data.recipients.map((r) => (
                 <li key={r.id} className="py-2 flex justify-between gap-4">

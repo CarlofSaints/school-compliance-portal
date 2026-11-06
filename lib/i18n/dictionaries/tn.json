@@ -2521,5 +2521,16 @@
   "Coach": "Mokatisi",
   "Staff type": "Mofuta wa modiri",
   "SACE number (optional)": "Nomoro ya SACE (ga e patelesege)",
-  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Tlhopha Mokatisi fela mo mothong yo o sa ruteng. Mokatisi yo o rutang gape ke morutabana."
+  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Tlhopha Mokatisi fela mo mothong yo o sa ruteng. Mokatisi yo o rutang gape ke morutabana.",
+  "Sign in and sign out": "Go tsena le go tswa",
+  "Change their own password": "Go fetola lefoko la bone la sephiri",
+  "Update their own name, email and photo": "Go ntšhafatsa leina la bone, imeile le setshwantsho",
+  "Choose their language": "Go tlhopha puo ya bone",
+  "Campus: take courses and see the leaderboard": "Campus: go dira dikhoso le go bona lenaane la baeteledipele",
+  "Our People page": "Tsebe ya Batho ba Rona",
+  "Action Items: see the list and update their own": "Dilo tsa go Dirwa: go bona lenaane le go ntšhafatsa tsa bone",
+  "Meeting Minutes page. Minutes Admin decides which minutes they can read": "Tsebe ya Metsotso ya Kopano. Minutes Admin e tlhopha gore ke metsotso efe e ba ka e balang",
+  "Automatic for everyone with a login": "Ka bo yone go botlhe ba ba nang le go tsena",
+  "These come with every role and cannot be switched off.": "Tseno di tla le tiro nngwe le nngwe mme ga di kgone go tima.",
+  "Teachers and coaches from the Staff page are left out unless they hold a seat on the People register.": "Barutabana le bakatisi go tswa mo tsebeng ya Badiri ba tlogelwa kwa ntle fa e se fa ba na le setulo mo rejisetareng ya Batho."
 }

@@ -1,4 +1,6 @@
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
+import { getPeople } from "./peopleData";
+import { staffOnlyLogin } from "./staffData";
 import { getUsers } from "./userData";
 import { getActionItems } from "./actionItemData";
 import { listMinutes, minutesByIdStrict, type MinutesRecord } from "./minutesData";
@@ -69,18 +71,19 @@ export interface WeeklyRecipient {
   tagIds: string[];
 }
 
-/** Every user with a usable address, once each. Users who have never signed
+/** Every user with a usable address, once each, except staff who are not on the SGB. Users who have never signed
  *  in are INCLUDED: their address is on the account from the day it was made,
  *  and the email tells them how to finish signing in. */
 export async function weeklyRecipients(): Promise<{
   recipients: WeeklyRecipient[];
   noEmail: string[];
 }> {
-  const [users, roles] = await Promise.all([getUsers(), getRoles()]);
+  const [users, roles, people] = await Promise.all([getUsers(), getRoles(), getPeople()]);
   const seen = new Set<string>();
   const recipients: WeeklyRecipient[] = [];
   const noEmail: string[] = [];
-  for (const u of users.filter((x) => !x.retiredAt && !x.termLocked)) {
+  // The weekly update is an SGB thing (Carl): teachers and coaches are not on it.
+  for (const u of users.filter((x) => !x.retiredAt && !x.termLocked && !staffOnlyLogin(x, people))) {
     const email = String(u.email || "").trim().toLowerCase();
     const name = `${u.name || ""} ${u.surname || ""}`.trim();
     if (!isPlausibleEmail(email)) {
@@ -108,9 +111,10 @@ export async function gatherWeeklyFacts(
   now: Date = new Date(),
   minutes?: Map<string, MinutesRecord | null>
 ): Promise<WeeklyFacts> {
-  const [actions, users, list, spend] = await Promise.all([
+  const [actions, users, people, list, spend] = await Promise.all([
     getActionItems(),
     getUsers(),
+    getPeople(),
     minutes
       ? [...minutes.values()]
           .filter((m): m is MinutesRecord => !!m)
@@ -118,7 +122,7 @@ export async function gatherWeeklyFacts(
       : listMinutes(),
     getSpendApplications(),
   ]);
-  return buildWeeklyFacts(actions, users, list, spend, now);
+  return buildWeeklyFacts(actions, users.filter((u) => !staffOnlyLogin(u, people)), list, spend, now);
 }
 
 export interface WeeklySendResult {

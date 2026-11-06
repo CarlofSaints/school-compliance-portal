@@ -1,19 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { NO_CHANGE } from "./controlData";
 import { TERM_EXEMPT_POSITIONS } from "./governanceTerm";
-import { changePeople } from "./peopleData";
+import { STAFF_POSITION, changePeople, type Person } from "./peopleData";
 import type { RowResult, StaffDetails } from "./staff";
 import { createUsers, getUsers, updateUsersWhere, type User } from "./userData";
-
-// Never the role's name: a role called Deputy Principal must not make someone a head on the register.
-export const STAFF_POSITION = "Staff";
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** Staff still owed the email with their login link. The Staff page and the send must agree on this. */
 export const awaitingLink = (u: User) => !!u.staff && u.forcePasswordChange && !u.staff.invitedAt && !u.retiredAt && !u.termLocked;
 
-const unchanged = (a: StaffDetails, b: StaffDetails) => (Object.keys(b) as (keyof StaffDetails)[]).every((k) => k === "invitedAt" || a[k] === b[k]);
+/** Came in through the Staff page and holds no real seat on the register, by link or by email. Off the weekly update. */
+export const staffOnlyLogin = (u: User, people: Person[]) =>
+  !!u.staff && !u.staff.hadLogin && !people.some((p) => !p.staffOnly && (p.userId === u.id || (!!p.email && same(p.email, u.email))));
+
+const unchanged = (a: StaffDetails, b: StaffDetails) => (Object.keys(b) as (keyof StaffDetails)[]).every((k) => k === "invitedAt" || k === "hadLogin" || a[k] === b[k]);
 
 /** Loads checked rows, each with no problems: new users, details on existing ones, and one register entry each. */
 export async function loadStaff(good: RowResult[]): Promise<{ added: number; updated: number }> {
@@ -43,7 +44,7 @@ export async function loadStaff(good: RowResult[]): Promise<{ added: number; upd
         // A blank cell keeps the number already stored: SACE and Persal can be blank on a Coach row.
         const next = { ...row, sace: row.sace || u.staff?.sace || "", persal: row.persal || u.staff?.persal || "" };
         if (u.staff && unchanged(u.staff, next)) return null;
-        return { staff: { ...next, invitedAt: u.staff?.invitedAt } };
+        return { staff: { ...next, invitedAt: u.staff?.invitedAt, hadLogin: u.staff ? u.staff.hadLogin : true } };
       })
     : [];
 

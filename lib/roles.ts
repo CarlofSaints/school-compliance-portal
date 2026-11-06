@@ -1,4 +1,5 @@
 import { GOVERNANCE_LABEL, GOVERNANCE_MEMBER_LABEL } from "./positions";
+import { tk } from "./i18n/translate";
 
 /** The built-in Super Admin role id. Here, not rolesData, so pages can use it. */
 export const SUPER_ADMIN_ROLE_ID = "super-admin";
@@ -24,6 +25,22 @@ export interface SessionPayload {
   roleName: string;
   permissions: string[];
 }
+
+/** What needs no permission, shown greyed on the Roles page. A feature that drops its permission belongs here. */
+export const AUTOMATIC_ACCESS = [
+  tk("Sign in and sign out"),
+  tk("Change their own password"),
+  tk("Update their own name, email and photo"),
+  tk("Choose their language"),
+  tk("Campus: take courses and see the leaderboard"),
+  tk("Our People page"),
+  tk("Action Items: see the list and update their own"),
+  tk("Meeting Minutes page. Minutes Admin decides which minutes they can read"),
+  tk("Guide"),
+  tk("How billing works"),
+  tk("Ask Jono"),
+  tk("Report a bug or request a feature"),
+];
 
 export const DEFAULT_PERMISSIONS: Permission[] = [
   { key: "view_dashboard", name: "View Dashboard", category: "Dashboard" },
