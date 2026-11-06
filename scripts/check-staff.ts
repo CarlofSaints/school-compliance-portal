@@ -14,10 +14,10 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
   }
   const { checkRows, cleanRow, parseType, rowsFromGrid } = await import("../lib/staff");
   const { loadStaff } = await import("../lib/staffData");
-  const { createUser, getUsers, getUserRecord } = await import("../lib/userData");
-  const { getPeople, createPerson, deletePerson } = await import("../lib/peopleData");
+  const { createUser, getUsers, getUserRecord, updateUser } = await import("../lib/userData");
+  const { getPeople, createPerson, updatePerson, personFieldsFrom } = await import("../lib/peopleData");
   const { usersToLock } = await import("../lib/governanceTerm");
-  const { weeklyRecipients } = await import("../lib/weeklyUpdateData");
+  const { weeklyRecipients, gatherWeeklyFacts } = await import("../lib/weeklyUpdateData");
 
   let failed = 0;
   const check = (name: string, ok: boolean) => {
@@ -100,9 +100,18 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
   check("a row that changes nothing writes nothing", quiet.updated === 0 && (await getUsers()).find((u) => u.id === "gov")!.updatedAt === before);
   const weekly = (await weeklyRecipients()).recipients.map((r) => r.email);
   check("a teacher gets no weekly update", !weekly.includes("b@school.co.za"));
-  await createPerson({ id: "p3", position: "Co-opted SGB", userId: bo.id, name: "Bo de Wet", email: "b@school.co.za", phone: "", profilePic: "" });
-  check("a teacher with an SGB seat does", (await weeklyRecipients()).recipients.some((r) => r.email === "b@school.co.za"));
-  await deletePerson("p3");
+  const onWeekly = async (email: string) => (await weeklyRecipients()).recipients.some((r) => r.email === email);
+  const boEntry = (await getPeople()).find((p) => p.userId === bo.id)!;
+  await updatePerson(boEntry.id, personFieldsFrom({ position: "Co-opted SGB" }));
+  check("a teacher moved into a seat gets it, and is no longer staff only", (await onWeekly("b@school.co.za")) && !(await getPeople()).find((p) => p.id === boEntry.id)?.staffOnly);
+  await updatePerson(boEntry.id, { position: "Staff", staffOnly: true });
+  await updateUser(bo.id, { tagIds: ["sports"] });
+  check("a grouping tag does not put a teacher on it", !(await onWeekly("b@school.co.za")));
+  check("an unlinked seat found by email counts", await onWeekly("dee@school.co.za"));
+  check("someone who already had a login stays on it", await onWeekly("gov@school.co.za"));
+  check("an update keeps hadLogin", (await getUsers()).find((u) => u.id === "gov")!.staff!.hadLogin === true);
+  const facts = await gatherWeeklyFacts();
+  check("the not-signed-in list leaves staff out", facts.accounts.total === (await weeklyRecipients()).recipients.length && !facts.accounts.notActivatedNames.join().includes("Bo"));
   check("loading the same file again adds nobody", again.added === 0 && (await getPeople()).length === people.length && (await getUsers()).length === users.length + 1);
 
   console.log(failed ? `${failed} FAILED` : "all passed");

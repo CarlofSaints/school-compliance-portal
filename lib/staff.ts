@@ -15,6 +15,8 @@ export interface StaffDetails {
   persal: string;
   subject: string;
   grade: string;
+  /** Had a login before the staff details went on, so may be a governor. Stays on the weekly update. */
+  hadLogin?: boolean;
   /** When the login link was emailed, so a second press does not mail them again. */
   invitedAt?: string;
 }

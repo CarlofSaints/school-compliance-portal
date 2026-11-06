@@ -2531,5 +2531,6 @@
   "Action Items: see the list and update their own": "Dintho tse Lokelang ho Etswa: ho bona lethathamo le ho ntjhafatsa tsa bona",
   "Meeting Minutes page. Minutes Admin decides which minutes they can read": "Leqephe la Metsotso ya Seboka. Minutes Admin e etsa qeto ya hore ke metsotso efe eo ba ka e balang",
   "Automatic for everyone with a login": "Ka boiketsetso ho bohle ba nang le ho kena",
-  "These come with every role and cannot be switched off.": "Tsena di tla le mosebetsi o mong le o mong mme di ke ke tsa tingwa."
+  "These come with every role and cannot be switched off.": "Tsena di tla le mosebetsi o mong le o mong mme di ke ke tsa tingwa.",
+  "Teachers and coaches from the Staff page are left out unless they hold a seat on the People register.": "Matitjhere le bakwetlisi ba tswang leqepheng la Basebetsi ba siuwa ka ntle ntle le haeba ba na le setulo rejisetareng ya Batho."
 }

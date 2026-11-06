@@ -2531,5 +2531,6 @@
   "Action Items: see the list and update their own": "Izinto Zokwenza: ukubona uhlu nokubuyekeza ezabo",
   "Meeting Minutes page. Minutes Admin decides which minutes they can read": "Ikhasi Lemizuzu Yomhlangano. I-Minutes Admin inquma ukuthi yimiphi imizuzu abangayifunda",
   "Automatic for everyone with a login": "Okuzenzakalelayo kubo bonke abanokungena",
-  "These come with every role and cannot be switched off.": "Lokhu kuza nendima ngayinye futhi akunakucishwa."
+  "These come with every role and cannot be switched off.": "Lokhu kuza nendima ngayinye futhi akunakucishwa.",
+  "Teachers and coaches from the Staff page are left out unless they hold a seat on the People register.": "Othisha nabaqeqeshi abavela ekhasini Labasebenzi bashiywa ngaphandle ngaphandle uma benesihlalo kurejista Yabantu."
 }

@@ -2531,5 +2531,6 @@
   "Action Items: see the list and update their own": "Dilo tša go Dirwa: go bona lenaneo le go mpshafatša tša bona",
   "Meeting Minutes page. Minutes Admin decides which minutes they can read": "Letlakala la Metsotso ya Kopano. Minutes Admin e kgetha gore ke metsotso efe yeo ba ka e balago",
   "Automatic for everyone with a login": "Ka go itiragalela go bohle bao ba nago le go tsena",
-  "These come with every role and cannot be switched off.": "Tše di tla le mošomo o mongwe le o mongwe gomme di ka se tswalelwe."
+  "These come with every role and cannot be switched off.": "Tše di tla le mošomo o mongwe le o mongwe gomme di ka se tswalelwe.",
+  "Teachers and coaches from the Staff page are left out unless they hold a seat on the People register.": "Barutiši le bakwetliši go tšwa letlakaleng la Bašomi ba tlogelwa ntle ge e se ge ba na le setulo rejistareng ya Batho."
 }

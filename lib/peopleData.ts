@@ -3,6 +3,9 @@ import { POSITIONS } from "./positions";
 
 export { POSITIONS };
 
+// Never a role's name: a role called Deputy Principal must not make someone a head on the register.
+export const STAFF_POSITION = "Staff";
+
 export interface Person {
   id: string;
   position: string;
@@ -35,7 +38,11 @@ export function isOwnPhotoPath(personId: string, path: unknown): path is string 
 /** The fields the People screens edit, and nothing else. */
 export function personFieldsFrom(body: Record<string, unknown>): Partial<Omit<Person, "id" | "profilePic">> {
   const out: Partial<Omit<Person, "id" | "profilePic">> = {};
-  if (typeof body.position === "string") out.position = body.position;
+  if (typeof body.position === "string") {
+    out.position = body.position;
+    // Moved into a real seat: from now on they count as a governor everywhere.
+    if (body.position !== STAFF_POSITION) out.staffOnly = false;
+  }
   if (body.userId === null || typeof body.userId === "string") out.userId = (body.userId as string | null) || null;
   if (typeof body.name === "string") out.name = body.name;
   if (typeof body.email === "string") out.email = body.email;
