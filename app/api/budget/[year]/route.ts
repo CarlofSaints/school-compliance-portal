@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { STARTER, cleanFee, cleanLine, emptyFeePlan, lineAmount, type BudgetLine, type BudgetYear } from "@/lib/budget";
+import { STARTER, cleanFee, cleanLine, emptyFeePlan, lineAmount, rollFeePlan, type BudgetLine, type BudgetYear } from "@/lib/budget";
 import { changeBudget, getBudget, guardManage, guardView } from "@/lib/budgetData";
 import { NO_CHANGE } from "@/lib/controlData";
 import { isDate } from "@/lib/section38a";
@@ -97,13 +97,13 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         if (y.lines.length) return refuse("This year already has lines.", 409);
         if (!last?.lines.length) return refuse("There is no budget for last year to copy.", 404);
         log = `Started the ${year} budget from ${year - 1}`;
+        const ids = new Map(last.lines.map((l) => [l.id, randomUUID()]));
         return {
           ...y,
           centres: last.centres,
           // Actuals belong to a year not yet known, so they are left for the upload.
-          lines: last.lines.map((l) => ({ ...l, id: randomUUID(), actual: 0, lastBudget: lineAmount(l) })),
-          // Last year's real fee is the one chosen then. With none chosen, the school types it.
-          fees: last.fees.map(({ chosenFee, ...f }) => ({ ...f, lastFee: chosenFee ?? 0 })),
+          lines: last.lines.map((l) => ({ ...l, id: ids.get(l.id)!, actual: 0, lastBudget: lineAmount(l) })),
+          fees: last.fees.map((f) => rollFeePlan({ ...emptyFeePlan(f.centre), ...f }, ids)),
         };
       }
       case "addCentre": {
@@ -123,6 +123,18 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         const plan = cleanFee({ ...current, ...((b.plan ?? {}) as object), centre: b.centre }, y.centres);
         if (!plan) return refuse("Choose where this line belongs.");
         return { ...y, fees: [...y.fees.filter((f) => f.centre !== plan.centre), plan] };
+      }
+      case "useFee": {
+        // The line and the choice in one write, so neither can be saved without the other.
+        const old = y.lines.find((l) => l.id === b.lineId);
+        if (!old) return refuse("That line has been removed. Reload the page.", 409);
+        const clean = cleanLine({ ...old, amount: b.amount, note: b.note, items: [] }, y.centres);
+        if (typeof clean === "string") return refuse(clean);
+        const current = y.fees.find((f) => f.centre === b.centre) ?? emptyFeePlan(text(b.centre, 60));
+        const plan = cleanFee({ ...current, ...((b.plan ?? {}) as object), centre: b.centre, feeLineId: old.id }, y.centres);
+        if (!plan) return refuse("Choose where this line belongs.");
+        log = `Put school fees of ${clean.amount} on ${clean.name} for ${year}`;
+        return { ...y, lines: y.lines.map((l) => (l.id === old.id ? { ...clean, id: old.id } : l)), fees: [...y.fees.filter((f) => f.centre !== plan.centre), plan] };
       }
       case "approve": {
         if (!isDate(b.date)) return refuse("Give the date of the meeting that approved it.");

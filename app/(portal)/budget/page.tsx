@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FeeCalculator from "@/components/FeeCalculator";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
-import { byGroup, emptyFeePlan, feeAfter, guessColumns, lineAmount, parseGrid, totals, type BudgetKind, type BudgetLine, type BudgetYear, type ColumnChoice, type FeePlan } from "@/lib/budget";
+import { byGroup, guessColumns, lineAmount, parseGrid, rands, totals, type BudgetKind, type BudgetLine, type BudgetYear, type ColumnChoice, type FeePlan } from "@/lib/budget";
 import { parseWorkbook } from "@/lib/spendImportSheet";
 import { apiErrorMessage, authFetch, useAuth } from "@/lib/useAuth";
 
-const rands = (n: number) => `${n < 0 ? "-" : ""}R ${Math.abs(n).toLocaleString("en-ZA", { maximumFractionDigits: 0 })}`;
 const pct = (now: number, was: number) => (was ? `${(((now - was) / Math.abs(was)) * 100).toFixed(1)}%` : "-");
 const columnName = (i: number) => (i < 26 ? String.fromCharCode(65 + i) : `A${String.fromCharCode(39 + i)}`);
 const BTN = "border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50";
@@ -111,7 +111,6 @@ export default function BudgetPage() {
 
   if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
-  const feePlan: FeePlan = budget?.fees.find((f) => f.centre === showing) ?? emptyFeePlan(showing);
   const saveFee = (change: Partial<FeePlan>) => act({ action: "saveFee", centre: showing, plan: change });
   const feeLines = lines.filter((l) => l.kind === "income");
   const empty = !!budget && lines.length === 0;
@@ -301,69 +300,15 @@ export default function BudgetPage() {
           ) : (
             <>
               {!combined && (
-                <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                  <h2 className="font-semibold text-dark mb-1">{t("Work out school fees")}</h2>
-                  <p className="text-xs text-gray-500 mb-3">{t("Try different increases, then put the one you choose on a line.")}</p>
-                  <div key={`${year}-${showing}`} className="flex flex-wrap gap-3 mb-3">
-                    {[
-                      { key: "lastFee" as const, label: t("Last year's fee for the year") },
-                      { key: "months" as const, label: t("Months paid") },
-                      { key: "roundTo" as const, label: t("Round the monthly fee to") },
-                      { key: "learners" as const, label: t("Learners") },
-                    ].map((f) => (
-                      <label key={f.key} className="text-sm">
-                        <span className="block text-gray-600 mb-1">{f.label}</span>
-                        <input type="number" min={0} disabled={!editable} defaultValue={feePlan[f.key]} onBlur={(e) => Number(e.target.value) !== feePlan[f.key] && saveFee({ [f.key]: Number(e.target.value) })} className={`${INPUT} w-36`} />
-                      </label>
-                    ))}
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="text-sm">
-                      <thead>
-                        <tr>
-                          <th className="text-left pr-6 py-1 font-medium text-gray-500">{t("Increase")}</th>
-                          <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("Fee for the year")}</th>
-                          <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("Per month")}</th>
-                          <th className="text-right pr-6 py-1 font-medium text-gray-500">{t("Fee income")}</th>
-                          <th />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[4, 5, 6, 7, 8, 9, 10].map((increase) => {
-                          const fee = feeAfter(feePlan, increase);
-                          return (
-                            <tr key={increase}>
-                              <td className="pr-6 py-1">{increase}%</td>
-                              <td className="pr-6 py-1 text-right">{rands(fee)}</td>
-                              <td className="pr-6 py-1 text-right">{rands(fee / Math.max(1, feePlan.months))}</td>
-                              <td className="pr-6 py-1 text-right">{rands(fee * feePlan.learners)}</td>
-                              <td className="py-1">
-                                {editable && feeLines.length > 0 && (
-                                  <select
-                                    aria-label={t("Put this on a line")}
-                                    value=""
-                                    disabled={!feePlan.lastFee || !feePlan.learners}
-                                    onChange={async (e) => {
-                                      const line = feeLines.find((l) => l.id === e.target.value);
-                                      if (!line) return;
-                                      if (await saveLine(line, { amount: fee * feePlan.learners, items: [], note: t("{fee} a year × {learners} learners ({increase}% increase)", { fee: rands(fee), learners: feePlan.learners, increase }) })) saveFee({ chosenFee: fee });
-                                    }}
-                                    className={`${INPUT} text-xs`}
-                                  >
-                                    <option value="">{t("Put this on a line")}</option>
-                                    {feeLines.map((l) => (
-                                      <option key={l.id} value={l.id}>{l.name}</option>
-                                    ))}
-                                  </select>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                <FeeCalculator
+                  key={`${year}-${showing}`}
+                  stored={budget.fees.find((f) => f.centre === showing)}
+                  centre={showing}
+                  lines={feeLines}
+                  editable={editable}
+                  onSave={saveFee}
+                  onUse={(line, amount, note, plan) => act({ action: "useFee", centre: showing, lineId: line.id, amount, note, plan })}
+                />
               )}
 
               {section("income", t("Income"), sums.income)}
