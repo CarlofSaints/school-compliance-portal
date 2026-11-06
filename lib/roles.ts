@@ -62,6 +62,8 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   // Deliberately its own key rather than riding on manage_spend_settings:
   // deleting a project is not the same authority as editing settings.
   { key: "delete_spend", name: "Delete Spend Applications", category: "Spend" },
+  { key: "view_budget", name: "View the Budget", category: "Budget" },
+  { key: "manage_budget", name: "Manage the Budget", category: "Budget" },
   // Seeing the invoice inbox, and loading into it. Signing is NOT here: it sits
   // on a tag (getSigningSlots in lib/paymentData.ts), because it is a named person's authority.
   { key: "view_payments", name: "View Invoice Inbox", category: "Payments" },

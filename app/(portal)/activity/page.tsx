@@ -32,6 +32,7 @@ const ENTITY_LABELS: Record<ActivityEntity | "all", string> = {
   room: tk("Rooms & bookings"),
   payment: tk("Payments"),
   section_38a: tk("Section 38A"),
+  budget: tk("Budget"),
   training: tk("Campus"),
   auth: tk("Sign in"),
   password: tk("Password changes"),
