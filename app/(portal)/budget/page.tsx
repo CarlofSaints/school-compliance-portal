@@ -43,7 +43,9 @@ export default function BudgetPage() {
   useEffect(() => {
     if (!signedIn) return;
     let live = true;
+    latest.current++;
     setBudget(null);
+    setUpload(null);
     authFetch(`/api/budget/${year}`, { cache: "no-store" }).then(async (res) => {
       if (!live) return;
       if (res.ok) setBudget(await res.json());
@@ -54,14 +56,18 @@ export default function BudgetPage() {
     };
   }, [signedIn, year]);
 
+  // Only the newest answer for the year on screen counts: an older one would put back what the newer changed.
+  const latest = useRef(0);
   const act = useCallback(
     async (body: object) => {
+      const mine = ++latest.current;
       const res = await authFetch(`/api/budget/${year}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok) {
         setToast({ message: await apiErrorMessage(res), type: "error" });
         return false;
       }
-      setBudget(await res.json());
+      const saved = await res.json();
+      if (mine === latest.current) setBudget(saved);
       return true;
     },
     [year]
@@ -75,9 +81,10 @@ export default function BudgetPage() {
   const locked = !!budget?.approved;
   const editable = canManage && !locked && !combined;
 
-  const saveLine = (l: BudgetLine, change: Partial<BudgetLine>) => act({ action: "saveLine", line: { ...l, ...change } });
+  const saveLine = (l: BudgetLine, change: Partial<BudgetLine>) => act({ action: "saveLine", id: l.id, line: change });
 
   const pickFile = async (f: File) => {
+    if (!budget) return;
     try {
       const { sheetNames, sheets } = await parseWorkbook(await f.arrayBuffer(), true);
       const visible = sheetNames.filter((n) => (sheets[n] || []).length > 0);
@@ -105,7 +112,7 @@ export default function BudgetPage() {
   if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
   const feePlan: FeePlan = budget?.fees.find((f) => f.centre === showing) ?? emptyFeePlan(showing);
-  const saveFee = (change: Partial<FeePlan>) => act({ action: "saveFee", centre: showing, plan: { ...feePlan, ...change } });
+  const saveFee = (change: Partial<FeePlan>) => act({ action: "saveFee", centre: showing, plan: change });
   const feeLines = lines.filter((l) => l.kind === "income");
   const empty = !!budget && lines.length === 0;
   const columns = upload ? (upload.sheets[upload.sheet] || []).reduce((n, r) => Math.max(n, r.length), 0) : 0;
@@ -243,6 +250,8 @@ export default function BudgetPage() {
             {t("{count} lines. Income {income}, spending {expense}. Check these match your spreadsheet.", { count: parsed.lines.length, income: rands(parsedSums.income), expense: rands(parsedSums.expense) })}{" "}
             {parsed.dormant > 0 && t("{count} lines with no figures left out.", { count: parsed.dormant })}
           </p>
+          {parsedSums.expense === 0 && parsed.lines.length > 0 && <p className="text-sm text-risk-high mb-3">{t("No spending found. Check the sheet has a heading such as Expenses above its spending lines.")}</p>}
+          {parsed.skipped.length > 0 && <p className="text-sm text-risk-high mb-3">{t("These rows have figures but no account code, so they were left out: {names}", { names: parsed.skipped.join(", ") })}</p>}
           <div className="flex gap-2">
             <button onClick={loadUpload} disabled={!parsed.lines.length || upload.columns.amount < 0} className={MAIN}>{t("Load these lines")}</button>
             <button onClick={() => setUpload(null)} className={BTN}>{t("Cancel")}</button>
@@ -285,6 +294,7 @@ export default function BudgetPage() {
                   <button onClick={() => file.current?.click()} className={MAIN}>{t("Upload your Excel budget")}</button>
                   <button onClick={() => act({ action: "starter", centre: showing })} className={BTN}>{t("Start from the standard list")}</button>
                   <button onClick={() => act({ action: "copy" })} className={BTN}>{t("Copy last year's budget")}</button>
+                  {centres.length > 1 && <button onClick={() => act({ action: "removeCentre", id: showing })} className={BTN}>{t("Remove this part")}</button>}
                 </div>
               ) : null}
             </div>
@@ -294,7 +304,7 @@ export default function BudgetPage() {
                 <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                   <h2 className="font-semibold text-dark mb-1">{t("Work out school fees")}</h2>
                   <p className="text-xs text-gray-500 mb-3">{t("Try different increases, then put the one you choose on a line.")}</p>
-                  <div key={`${showing}-${budget.fees.length}`} className="flex flex-wrap gap-3 mb-3">
+                  <div key={`${year}-${showing}`} className="flex flex-wrap gap-3 mb-3">
                     {[
                       { key: "lastFee" as const, label: t("Last year's fee for the year") },
                       { key: "months" as const, label: t("Months paid") },
@@ -333,9 +343,10 @@ export default function BudgetPage() {
                                     aria-label={t("Put this on a line")}
                                     value=""
                                     disabled={!feePlan.lastFee || !feePlan.learners}
-                                    onChange={(e) => {
+                                    onChange={async (e) => {
                                       const line = feeLines.find((l) => l.id === e.target.value);
-                                      if (line) saveLine(line, { amount: fee * feePlan.learners, items: [], note: t("{fee} a year × {learners} learners ({increase}% increase)", { fee: rands(fee), learners: feePlan.learners, increase }) });
+                                      if (!line) return;
+                                      if (await saveLine(line, { amount: fee * feePlan.learners, items: [], note: t("{fee} a year × {learners} learners ({increase}% increase)", { fee: rands(fee), learners: feePlan.learners, increase }) })) saveFee({ chosenFee: fee });
                                     }}
                                     className={`${INPUT} text-xs`}
                                   >

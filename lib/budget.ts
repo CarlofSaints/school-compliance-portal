@@ -38,6 +38,8 @@ export interface FeePlan {
   months: number;
   roundTo: number;
   learners: number;
+  /** The fee put on a line. A copied budget starts from this, the fee really charged. */
+  chosenFee?: number;
 }
 
 export interface BudgetYear {
@@ -117,7 +119,7 @@ export function cleanFee(b: Record<string, unknown>, centres: Centre[]): FeePlan
     const n = Math.round(money(v));
     return n >= min ? n : fallback;
   };
-  return { centre: b.centre as string, lastFee: Math.max(0, money(b.lastFee)), months: Math.min(12, whole(b.months, 1, 11)), roundTo: whole(b.roundTo, 1, 1), learners: whole(b.learners, 0, 0) };
+  return { centre: b.centre as string, lastFee: Math.max(0, money(b.lastFee)), months: Math.min(12, whole(b.months, 1, 11)), roundTo: whole(b.roundTo, 1, 1), learners: whole(b.learners, 0, 0), ...(money(b.chosenFee) > 0 ? { chosenFee: money(b.chosenFee) } : {}) };
 }
 
 /** A starting list for a school with no spreadsheet. Every line can be renamed or removed. */
@@ -156,17 +158,32 @@ const CODED = /^(\d{6})\s+(.+)$/;
 /** Reads a number from a cell. A spreadsheet error such as #DIV/0! counts as nothing. */
 export function numberIn(v: unknown): number {
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const s = cellText(v).replace(/[R\s ,]/g, "");
+  let s = cellText(v).replace(/[R\s\u00a0]/g, "");
   const negative = /^\(.*\)$/.test(s);
-  const n = Number(s.replace(/[()]/g, ""));
+  s = s.replace(/[()]/g, "");
+  const lastComma = s.lastIndexOf(",");
+  // South African text uses a decimal comma: 1 200,50. A comma before three digits is a thousands mark: 1,200.
+  if (lastComma > s.lastIndexOf(".") && s.length - lastComma - 1 !== 3) s = s.replaceAll(".", "").replace(",", ".");
+  else s = s.replaceAll(",", "");
+  const n = Number(s);
   if (!s || !Number.isFinite(n)) return 0;
   return negative ? -n : n;
+}
+
+/** The row's label: the code and name together, wherever in the first columns they sit. */
+function labelOf(row: unknown[], figures: number[] = []): string {
+  const cells = row.slice(0, 3).map((c, i) => (figures.includes(i) ? "" : cellText(c)));
+  const at = cells.findIndex((c) => c && !(typeof row[cells.indexOf(c)] === "number" && !/^\d{6}$/.test(c)));
+  if (at < 0) return "";
+  return /^\d{6}$/.test(cells[at]) ? `${cells[at]} ${cells[at + 1] ?? ""}`.trim() : cells[at];
 }
 
 /** Finds the budget columns from the headings. -1 means not found, and the person picks. */
 export function guessColumns(grid: unknown[][], year: number): ColumnChoice {
   const choice: ColumnChoice = { amount: -1, actual: -1, lastBudget: -1 };
   for (const row of grid.slice(0, 20)) {
+    // Headings sit above the first account: a figure further down may just equal the year.
+    if (CODED.test(labelOf(row))) break;
     row.forEach((cell, i) => {
       const s = cellText(cell).toLowerCase();
       if (s === String(year) || s === `budget ${year}`) choice.amount = i;
@@ -177,18 +194,34 @@ export function guessColumns(grid: unknown[][], year: number): ColumnChoice {
   return choice;
 }
 
+function sectionOf(heading: string, hasFigures: boolean): BudgetKind | null {
+  if (/total|surplus|deficit/.test(heading)) return null;
+  if (["income", "revenue", "receipts"].includes(heading)) return "income";
+  if (["expenses", "expense", "expenditure", "spending", "payments"].includes(heading)) return "expense";
+  if (hasFigures) return null;
+  if (/expens|expenditure|spending|payments/.test(heading)) return "expense";
+  return /income|revenue|receipts/.test(heading) ? "income" : null;
+}
+
 /**
  * The lines of a sheet. With six-digit account codes, a group's own figure is ignored
  * because it only adds up the lines beneath it. Codes alone cannot say which rows are
  * groups: 612000 is a line at one school and a group in another part of the same file,
- * and 617500 is a group too. So a round code starts a group only when the group before
- * it has reached its total AND the rows beneath it add up to its figure. A code ending
- * 0000 always starts one. Without codes, any row with a name and a number is a line.
+ * and 617500 is a group too. So a code ending 0000 always starts a group; one ending 00
+ * does when the last group has reached its total and the rows beneath add up to its
+ * figure; one ending 000 or 500 does on that second test alone, so a group whose lines
+ * fall short cannot swallow the next group and count it twice.
+ * Without codes, any row with a name and a number is a line.
  * Lines with no figures are left out: accounting exports list every dormant account.
+ * `skipped` names rows with figures but no code in a coded sheet: never lost in silence.
  */
-export function parseGrid(grid: unknown[][], col: ColumnChoice): { lines: ParsedLine[]; dormant: number } {
-  const coded = grid.some((r) => CODED.test(cellText(r[0])));
+export function parseGrid(grid: unknown[][], col: ColumnChoice): { lines: ParsedLine[]; dormant: number; skipped: string[] } {
+  const figures = [col.amount, col.actual, col.lastBudget].filter((i) => i >= 0);
+  const labelled = grid.map((row) => ({ row, label: labelOf(row, figures) }));
+  const firstCoded = labelled.findIndex((r) => CODED.test(r.label));
+  const coded = firstCoded >= 0;
   const lines: ParsedLine[] = [];
+  const skipped: string[] = [];
   let dormant = 0;
   const keep = (l: ParsedLine) => {
     if (l.amount || l.actual || l.lastBudget) lines.push(l);
@@ -200,26 +233,29 @@ export function parseGrid(grid: unknown[][], col: ColumnChoice): { lines: Parsed
   const rows: Row[] = [];
   let kind: BudgetKind = "income";
   let section = 0;
-  for (const row of grid) {
-    const first = cellText(row[0]);
-    const heading = first.toLowerCase();
-    const flips: BudgetKind | null = heading === "income" ? "income" : ["expenses", "expense", "expenditure"].includes(heading) ? "expense" : null;
+  labelled.forEach(({ row, label }, at) => {
+    if (!label) return;
+    const heading = label.toLowerCase();
+    const base = { kind, section, actual: figure(row, col.actual), lastBudget: figure(row, col.lastBudget), amount: figure(row, col.amount) };
+    const hasFigures = !!(base.amount || base.actual || base.lastBudget);
+    const match = label.match(CODED);
+    const flips = match ? null : sectionOf(heading, hasFigures);
     if (flips) {
       kind = flips;
       section++;
-      continue;
+      return;
     }
-    if (!first) continue;
     const note = col.amount >= 0 ? row.slice(col.amount + 1).filter((c) => typeof c === "string" && c.trim() && !c.startsWith("#") && !/^[\d.,\s%-]+$/.test(c)).map((c) => cellText(c)).join(" ").slice(0, 500) : "";
-    const base = { kind, section, actual: figure(row, col.actual), lastBudget: figure(row, col.lastBudget), amount: figure(row, col.amount), note };
-    const match = first.match(CODED);
-    if (coded && match) rows.push({ ...base, code: match[1], name: match[2].trim() });
-    else if (!coded && (base.amount || base.actual || base.lastBudget) && !/total|surplus|deficit/.test(heading)) rows.push({ ...base, code: "", name: first });
-  }
+    if (match) rows.push({ ...base, note, code: match[1], name: match[2].trim() });
+    else if (hasFigures && !/total|surplus|deficit/.test(heading)) {
+      if (!coded) rows.push({ ...base, note, code: "", name: label });
+      else if (at > firstCoded) skipped.push(label);
+    }
+  });
 
   if (!coded) {
     for (const { section: _section, ...r } of rows) keep({ ...r, group: "General" });
-    return { lines, dormant };
+    return { lines, dormant, skipped };
   }
 
   const measureOf = (r: Row) => (r.amount ? "amount" : r.actual ? "actual" : "lastBudget") as "amount" | "actual" | "lastBudget";
@@ -245,7 +281,8 @@ export function parseGrid(grid: unknown[][], col: ColumnChoice): { lines: Parsed
   let inSection = 0;
   rows.forEach(({ section: rowSection, ...r }, i) => {
     const reached = rowSection !== inSection || near(running, target);
-    if (r.code.endsWith("0000") || (reached && r.code.endsWith("00") && addsUp(i))) {
+    const roundest = r.code.endsWith("000") || r.code.endsWith("500");
+    if (r.code.endsWith("0000") || ((reached ? r.code.endsWith("00") : roundest) && addsUp(i))) {
       // A group with a figure and no lines beneath it is itself the line.
       if (pending) keep(pending);
       group = r.name;
@@ -256,10 +293,11 @@ export function parseGrid(grid: unknown[][], col: ColumnChoice): { lines: Parsed
       inSection = rowSection;
       return;
     }
-    pending = null;
+    // A dormant line beneath a group says nothing about the group's own figure.
+    if (r.amount || r.actual || r.lastBudget) pending = null;
     running += r[measure];
     keep({ ...r, group });
   });
   if (pending) keep(pending);
-  return { lines, dormant };
+  return { lines, dormant, skipped };
 }

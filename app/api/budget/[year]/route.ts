@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
-import { STARTER, cleanFee, cleanLine, emptyFeePlan, type BudgetLine, type BudgetYear } from "@/lib/budget";
+import { STARTER, cleanFee, cleanLine, emptyFeePlan, lineAmount, type BudgetLine, type BudgetYear } from "@/lib/budget";
 import { changeBudget, getBudget, guardManage, guardView } from "@/lib/budgetData";
 import { NO_CHANGE } from "@/lib/controlData";
 import { isDate } from "@/lib/section38a";
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
   const saved = await changeBudget(year, (y): BudgetYear | typeof NO_CHANGE => {
     problem = "";
+    log = "";
     if (b.action === "unapprove") {
       if (!y.approved) return NO_CHANGE;
       log = `Undid the approval of the ${year} budget`;
@@ -51,10 +52,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
 
     switch (b.action) {
       case "saveLine": {
-        const clean = cleanLine((b.line ?? {}) as Record<string, unknown>, y.centres);
-        if (typeof clean === "string") return refuse(clean);
-        const id = text((b.line as { id?: unknown })?.id, 60);
+        // An edit sends only what changed, so an overlapping save keeps the other field.
+        const id = text(b.id, 60);
         const old = y.lines.find((l) => l.id === id);
+        if (id && !old) return refuse("That line has been removed. Reload the page.", 409);
+        const clean = cleanLine({ ...old, ...((b.line ?? {}) as Record<string, unknown>) }, y.centres);
+        if (typeof clean === "string") return refuse(clean);
         if (old) {
           log = old.amount !== clean.amount ? `Changed budget line ${clean.name} for ${year} from ${old.amount} to ${clean.amount}` : `Edited budget line ${clean.name} for ${year}`;
           return { ...y, lines: y.lines.map((l) => (l.id === id ? { ...clean, id } : l)) };
@@ -98,8 +101,9 @@ export async function POST(req: NextRequest, { params }: Ctx) {
           ...y,
           centres: last.centres,
           // Actuals belong to a year not yet known, so they are left for the upload.
-          lines: last.lines.map((l) => ({ ...l, id: randomUUID(), actual: 0, lastBudget: l.items.length ? l.items.reduce((n, i) => n + i.amount, 0) : l.amount })),
-          fees: last.fees,
+          lines: last.lines.map((l) => ({ ...l, id: randomUUID(), actual: 0, lastBudget: lineAmount(l) })),
+          // Last year's real fee is the one chosen then. With none chosen, the school types it.
+          fees: last.fees.map(({ chosenFee, ...f }) => ({ ...f, lastFee: chosenFee ?? 0 })),
         };
       }
       case "addCentre": {
@@ -109,18 +113,14 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         log = `Added ${name} to the ${year} budget`;
         return { ...y, centres: [...y.centres, { id: randomUUID(), name }] };
       }
-      case "renameCentre": {
-        const name = text(b.name, 60);
-        if (!name) return refuse("Give it a name.");
-        return { ...y, centres: y.centres.map((c) => (c.id === b.id ? { ...c, name } : c)) };
-      }
       case "removeCentre": {
         if (y.centres.length < 2) return refuse("A budget needs at least one part.");
         if (y.lines.some((l) => l.centre === b.id)) return refuse("Remove its lines first.", 409);
         return { ...y, centres: y.centres.filter((c) => c.id !== b.id), fees: y.fees.filter((f) => f.centre !== b.id) };
       }
       case "saveFee": {
-        const plan = cleanFee({ ...emptyFeePlan(text(b.centre, 60)), ...((b.plan ?? {}) as object), centre: b.centre }, y.centres);
+        const current = y.fees.find((f) => f.centre === b.centre) ?? emptyFeePlan(text(b.centre, 60));
+        const plan = cleanFee({ ...current, ...((b.plan ?? {}) as object), centre: b.centre }, y.centres);
         if (!plan) return refuse("Choose where this line belongs.");
         return { ...y, fees: [...y.fees.filter((f) => f.centre !== plan.centre), plan] };
       }

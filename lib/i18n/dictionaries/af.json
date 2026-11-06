@@ -2578,5 +2578,8 @@
   "This locks the budget. Do it once the meeting has approved it.": "Dit sluit die begroting. Doen dit sodra die vergadering dit goedgekeur het.",
   "This budget shows a shortfall.": "Hierdie begroting toon 'n tekort.",
   "Date of the meeting": "Datum van die vergadering",
-  "Remove this line?": "Verwyder hierdie lyn?"
+  "Remove this line?": "Verwyder hierdie lyn?",
+  "No spending found. Check the sheet has a heading such as Expenses above its spending lines.": "Geen besteding gevind nie. Maak seker die blad het 'n opskrif soos Uitgawes bo sy bestedingslyne.",
+  "These rows have figures but no account code, so they were left out: {names}": "Hierdie rye het syfers maar geen rekeningkode nie, so hulle is uitgelaat: {names}",
+  "Remove this part": "Verwyder hierdie deel"
 }

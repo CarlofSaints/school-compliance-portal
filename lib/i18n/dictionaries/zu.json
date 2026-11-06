@@ -2578,5 +2578,8 @@
   "This locks the budget. Do it once the meeting has approved it.": "Lokhu kukhiya isabelomali. Kwenze uma umhlangano usuvumile.",
   "This budget shows a shortfall.": "Lesi sabelomali sibonisa ukushoda.",
   "Date of the meeting": "Usuku lomhlangano",
-  "Remove this line?": "Susa lo mugqa?"
+  "Remove this line?": "Susa lo mugqa?",
+  "No spending found. Check the sheet has a heading such as Expenses above its spending lines.": "Akutholakalanga okusetshenzisiwe. Hlola ukuthi ishidi linesihloko esifana nokuthi Izindleko ngaphezu kwemigqa yokusebenzisa.",
+  "These rows have figures but no account code, so they were left out: {names}": "Le migqa inezibalo kodwa ayinayo ikhodi ye-akhawunti, ngakho ishiywe ngaphandle: {names}",
+  "Remove this part": "Susa le ngxenye"
 }

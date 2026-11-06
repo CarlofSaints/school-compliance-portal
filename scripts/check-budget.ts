@@ -24,7 +24,7 @@ check("line needs a name", cleanLine({ group: "G", kind: "income", centre: "main
 check("line needs a real centre", typeof cleanLine({ name: "n", group: "G", kind: "income", centre: "nope" }, centres) === "string");
 check("a nonsense amount is nothing", (cleanLine({ name: "n", group: "G", kind: "income", centre: "main", amount: "abc" }, centres) as BudgetLine).amount === 0);
 check("fee plan needs a real centre", cleanFee({ centre: "nope" }, centres) === null);
-check("spreadsheet errors read as nothing", numberIn("#DIV/0!") === 0 && numberIn("R 1 200,5".replace(",", ".")) === 1200.5 && numberIn("(50)") === -50);
+check("spreadsheet errors read as nothing", numberIn("#DIV/0!") === 0 && numberIn("R 1 200,50") === 1200.5 && numberIn("1200,5") === 1200.5 && numberIn("1,200") === 1200 && numberIn("1 234 567") === 1234567 && numberIn("1.200,50") === 1200.5 && numberIn("(50)") === -50);
 
 // An accounting export: summary rows at the top, groups, dormant accounts, notes beside the figures.
 const coded: unknown[][] = [
@@ -67,7 +67,19 @@ const halfCodes = parseGrid([["Expenses"], ["612000 Admin", "", 0, 0, 70], ["612
 check("a group code ending 500 is still a group", totals(halfCodes.lines.map((l) => line(l))).expense === 90 && halfCodes.lines.find((l) => l.name === "Books")?.group === "Educational");
 const twins = parseGrid([["Expenses"], ["610000 Admin", "", 0, 0, 200], ["610100 Audit", "", 0, 0, 100], ["610200 Bank", "", 0, 0, 100]], { amount: 4, actual: 3, lastBudget: 2 });
 check("two equal lines are not mistaken for a group and its line", totals(twins.lines.map((l) => line(l))).expense === 200);
-check("dormant accounts left out and counted", dormant === 1 && !parsed.some((l) => l.name.startsWith("Dormant")));
+const c = { amount: 4, actual: 3, lastBudget: 2 };
+const sumOf = (r: { lines: Parameters<typeof line>[0][] }) => totals(r.lines.map((l) => line(l)));
+check("spending under any heading is spending", sumOf(parseGrid([["Income"], ["410100 Fees", "", 0, 0, 100], ["OPERATING EXPENSES"], ["610100 Audit", "", 0, 0, 40]], c)).expense === 40);
+check("a line called Other Income is not a heading", parseGrid([["Expenses"], ["Rent", "", 0, 0, 5], ["Other Income", "", 0, 0, 7]], c).lines.every((l) => l.kind === "expense"));
+check("a dormant line does not lose its group's figure", sumOf(parseGrid([["Income"], ["420000 Interest", "", 0, 0, 20], ["420100 Interest received", "", 0, 0, 0]], c)).income === 20);
+check("a group short of its total does not swallow the next", sumOf(parseGrid([["Expenses"], ["610000 Admin", "", 0, 0, 100], ["610100 Audit", "", 0, 0, 90], ["612000 Edu", "", 0, 0, 50], ["612100 Books", "", 0, 0, 50]], c)).expense === 140);
+const split = parseGrid([["Income"], ["410000", "Fees", 0, 0, 100], ["410100", "Received", 0, 0, 100]], c);
+check("code and name in separate columns", sumOf(split).income === 100 && split.lines[0].name === "Received" && split.lines[0].group === "Fees");
+check("labels starting in column B", parseGrid([["", "410100 Fees", 0, 0, 100]], c).lines.length === 1);
+const typed = parseGrid([["Income"], ["410100 Fees", "", 0, 0, 100], ["Manual fundraising", "", 0, 0, 5000], ["Total income", "", 0, 0, 5100]], c);
+check("a row with figures and no code is named, not lost", typed.skipped.join() === "Manual fundraising");
+check("a year in the data is not a heading", guessColumns([["", 2027], ["410100 Fees", 2027]], 2027).amount === 1 && guessColumns([["410100 Fees", 2027], ["", "", 2027]], 2027).amount === -1);
+check("dormant accounts left out and counted", dormant === 2 && !parsed.some((l) => l.name.startsWith("Dormant")));
 
 const plain = parseGrid([["Item", "Amount"], ["Income"], ["Fees", 500], ["Total income", 500], ["Expenses"], ["Rent", 200], ["Surplus", 300]], { amount: 1, actual: -1, lastBudget: -1 });
 check("a plain list with no codes reads, totals skipped", totals(plain.lines.map((l) => line(l))).income === 500 && totals(plain.lines.map((l) => line(l))).expense === 200);

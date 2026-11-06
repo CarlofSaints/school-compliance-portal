@@ -2578,5 +2578,8 @@
   "This locks the budget. Do it once the meeting has approved it.": "Se se notlela tekanyetšo. Se dire ge kopano e e dumeletše.",
   "This budget shows a shortfall.": "Tekanyetšo ye e bontšha tlhaelelo.",
   "Date of the meeting": "Letšatšikgwedi la kopano",
-  "Remove this line?": "Tloša mothaladi wo?"
+  "Remove this line?": "Tloša mothaladi wo?",
+  "No spending found. Check the sheet has a heading such as Expenses above its spending lines.": "Ga go a hwetšwa tšhomišo ya tšhelete. Lekola gore letlakala le na le hlogo ya go swana le Ditshenyegelo ka godimo ga methaladi ya tšhomišo.",
+  "These rows have figures but no account code, so they were left out: {names}": "Methaladi ye e na le dipalo eupša ga e na khoutu ya akhaonte, ka fao e tlogetšwe: {names}",
+  "Remove this part": "Tloša karolo ye"
 }
