@@ -3,6 +3,7 @@
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
+import RoleFilter from "@/components/RoleFilter";
 import { useT } from "@/components/I18nProvider";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { SUPER_ADMIN_ROLE_ID as SUPER_ADMIN } from "@/lib/roles";
@@ -438,16 +439,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {roleNames.length > 1 && (
-        <div className="mb-4">
-          <select aria-label={t("Filter by role")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">{t("All roles")}</option>
-            {roleNames.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <RoleFilter names={roleNames} value={roleFilter} onChange={setRoleFilter} />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full text-sm">

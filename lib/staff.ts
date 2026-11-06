@@ -101,7 +101,7 @@ export interface RowResult {
 
 interface Ctx {
   roles: { id: string; name: string }[];
-  users: { id: string; email: string; role: string }[];
+  users: { id: string; email: string; role: string; name: string; surname: string }[];
   /** May this admin give, or change someone on, this role? */
   within: (roleId: string) => boolean;
 }
@@ -124,6 +124,10 @@ export function checkRows(rows: (StaffRow & { row: number })[], ctx: Ctx): RowRe
 
     if (existing) {
       if (!ctx.within(existing.role)) problems.push("This person already has an account with more access than yours.");
+      // A mistyped address must not put one person's numbers on someone else's account.
+      const typed = `${r.name} ${r.surname}`.trim().toLowerCase();
+      const account = `${existing.name} ${existing.surname}`.trim();
+      if (typed && typed !== account.toLowerCase()) problems.push(`${r.email} belongs to ${account} on the portal, not ${r.name} ${r.surname}.`);
     } else {
       if (!r.name) problems.push("Name is missing.");
       if (!r.surname) problems.push("Surname is missing.");
@@ -139,7 +143,7 @@ export function checkRows(rows: (StaffRow & { row: number })[], ctx: Ctx): RowRe
     if (!type) problems.push(r.type ? `"${r.type}" is not SGB or State.` : "SGB or State is missing.");
     if (!r.sace) problems.push("SACE number is missing.");
     if (type === "state" && !r.persal) problems.push("Persal number is needed for a State teacher.");
-    else if (r.persal && !/^\d{5,12}$/.test(r.persal)) problems.push("The Persal number must be digits only.");
+    else if (r.persal && !/^\d{5,12}$/.test(r.persal)) problems.push("The Persal number must be 5 to 12 digits.");
 
     return {
       row: r.row,

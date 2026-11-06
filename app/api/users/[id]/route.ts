@@ -141,16 +141,17 @@ export async function DELETE(
   }
   const target = await getUserById(id);
   if (target && !(await roleWithinReach(session, target.role))) return outOfReach();
+  // A staff entry exists only because of this login, so it goes too. First: after
+  // the account is gone a retry answers 404 and the name and email would stay.
+  await changePeople((people) => {
+    const kept = people.filter((p) => !(p.staffOnly && p.userId === id));
+    return kept.length === people.length ? NO_CHANGE : kept;
+  });
   const deleted = await deleteUser(id);
   if (!deleted) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
   // Their sign-in tally goes with them (erasure). Never fails the delete.
   await deleteSignInStats(id);
-  // A staff entry exists only because of this login, so it goes with it.
-  await changePeople((people) => {
-    const kept = people.filter((p) => !(p.staffOnly && p.userId === id));
-    return kept.length === people.length ? NO_CHANGE : kept;
-  });
   return NextResponse.json({ success: true });
 }

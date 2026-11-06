@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import RoleFilter from "@/components/RoleFilter";
 import Toast from "@/components/Toast";
 import { useT } from "@/components/I18nProvider";
 import { downloadWithAuth } from "@/lib/download";
@@ -69,7 +70,7 @@ export default function StaffPage() {
 
   const fetchData = useCallback(async () => {
     const res = await authFetch("/api/staff", { cache: "no-store" });
-    if (!res.ok) return;
+    if (!res.ok) return setToast({ message: await apiErrorMessage(res), type: "error" });
     const data = await res.json();
     setStaff(data.staff);
     setRoles(data.roles);
@@ -100,8 +101,7 @@ export default function StaffPage() {
   const loadFile = async () => {
     if (!upload) return;
     setSaving(true);
-    const res = await post({ rows: upload.rows, ignoreInvalid });
-    setSaving(false);
+    const res = await post({ rows: upload.rows, ignoreInvalid }).finally(() => setSaving(false));
     if (!res.ok) return setToast({ message: await apiErrorMessage(res), type: "error" });
     const data = await res.json();
     setUpload(null);
@@ -114,8 +114,7 @@ export default function StaffPage() {
     e.preventDefault();
     if (!form) return;
     setSaving(true);
-    const res = await post({ rows: [form] });
-    setSaving(false);
+    const res = await post({ rows: [form] }).finally(() => setSaving(false));
     if (res.ok) {
       setForm(null);
       setToast({ message: t("Staff member saved"), type: "success" });
@@ -135,8 +134,7 @@ export default function StaffPage() {
   const sendLinks = async () => {
     if (!confirm(t("Email {count} staff a link to set their password? The link lasts one hour. After that they use Forgot your password? on the sign-in page.", { count: waiting }))) return;
     setSending(true);
-    const res = await authFetch("/api/staff/invite", { method: "POST" });
-    setSending(false);
+    const res = await authFetch("/api/staff/invite", { method: "POST" }).finally(() => setSending(false));
     if (!res.ok) return setToast({ message: await apiErrorMessage(res), type: "error" });
     const data = await res.json();
     setToast({ message: t("{sent} sent, {failed} failed, {left} still to send", { sent: data.sent, failed: data.failed.length, left: data.left }), type: data.failed.length ? "error" : "success" });
@@ -147,6 +145,7 @@ export default function StaffPage() {
 
   const problems = upload?.results.filter((r) => r.problems.length) ?? [];
   const ready = upload ? upload.results.length - problems.length : 0;
+  const updates = upload?.results.filter((r) => r.action === "update" && !r.problems.length) ?? [];
   const roleNames = [...new Set(staff.map((m) => m.roleName))].sort();
   const shown = staff.filter((m) => !roleFilter || m.roleName === roleFilter);
   const field = (key: keyof StaffRow, label: string, required = false, locked = false) => (
@@ -219,6 +218,11 @@ export default function StaffPage() {
         <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <p className="text-sm font-medium text-dark">{upload.fileName}</p>
           <p className="text-sm text-gray-600 mb-3">{t("{ready} ready to load, {bad} with something wrong", { ready, bad: problems.length })}</p>
+          {updates.length > 0 && (
+            <p className="text-sm text-gray-600 mb-3">
+              {t("Already have a login, so only their staff details change: {names}", { names: updates.map((r) => r.name).join(", ") })}
+            </p>
+          )}
           {problems.length > 0 && (
             <div className="mb-3 rounded-lg bg-amber-50 border border-amber-200 p-3">
               <Problems items={problems} />
@@ -252,16 +256,7 @@ export default function StaffPage() {
         </div>
       )}
 
-      {roleNames.length > 1 && (
-        <div className="mb-4">
-          <select aria-label={t("Filter by role")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">{t("All roles")}</option>
-            {roleNames.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <RoleFilter names={roleNames} value={roleFilter} onChange={setRoleFilter} />
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm">

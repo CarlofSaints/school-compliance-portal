@@ -2517,5 +2517,6 @@
   "Subject, or what they coach": "Thuto, kapa seo ba se kwetlisang",
   "Put a comma between each subject or grade. Leave Grade blank for a coach.": "Kenya koma pakeng tsa thuto kapa kereiti ka nngwe. Siya Kereiti e se na letho bakeng sa mokwetlisi.",
   "SGB or Board Teacher": "Titjhere wa SGB kapa wa Boto",
-  "State Teacher": "Titjhere wa Mmuso"
+  "State Teacher": "Titjhere wa Mmuso",
+  "Already have a login, so only their staff details change: {names}": "Ba se ba na le ho kena, ka hona ho fetoha feela dintlha tsa bona tsa basebetsi: {names}"
 }

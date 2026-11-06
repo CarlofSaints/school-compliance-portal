@@ -57,7 +57,8 @@ export default function MinutesAdminPage() {
       if (tplRes.ok) setTemplates(await tplRes.json());
       if (p.ok) {
         const rows = await p.json();
-        setPeople(Array.isArray(rows) ? rows : rows.people || []);
+        // Teachers and coaches are not at SGB meetings: the template editor fills attendance from this.
+        setPeople((Array.isArray(rows) ? rows : rows.people || []).filter((p: { staffOnly?: boolean }) => !p.staffOnly));
       }
       if (pos.ok) {
         const list = await pos.json();

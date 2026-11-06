@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import Toast from "@/components/Toast";
 import PersonPhoto from "@/components/PersonPhoto";
+import RoleFilter from "@/components/RoleFilter";
 import PhotoUpload from "@/components/PhotoUpload";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import { useT } from "@/components/I18nProvider";
@@ -25,6 +26,7 @@ interface PersonRecord {
   tagIds?: string[];
   photoUrl?: string | null;
   roleName?: string;
+  staffOnly?: boolean;
 }
 
 interface UserOption {
@@ -306,16 +308,7 @@ export default function PeoplePage() {
         </div>
       )}
 
-      {roleNames.length > 1 && (
-        <div className="mb-4">
-          <select aria-label={t("Filter by role")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">{t("All roles")}</option>
-            {roleNames.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <RoleFilter names={roleNames} value={roleFilter} onChange={setRoleFilter} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {shownPositions.map((pos) => {
@@ -324,7 +317,7 @@ export default function PeoplePage() {
           if (roleFilter && !positionPeople.length) return null;
           const offList = !positions.some(
             (known) => known.toLowerCase() === pos.toLowerCase()
-          );
+          ) && !positionPeople.every((p) => p.staffOnly);
           return (
             <div
               key={pos}

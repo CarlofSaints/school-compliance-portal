@@ -26,7 +26,7 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
 
   const roles = [{ id: "teacher", name: "Teacher" }, { id: "admin", name: "SGB Admin" }, { id: "super-admin", name: "Super Admin" }];
   const row = (o: Record<string, string>, n = 2) => ({ ...cleanRow({ email: "a@school.co.za", name: "Ann", surname: "Lee", role: "teacher", type: "State Teacher", sace: "123", persal: "12345678", ...o }), row: n });
-  const ctx = { roles, users: [] as { id: string; email: string; role: string }[], within: (id: string) => id !== "admin" };
+  const ctx = { roles, users: [] as { id: string; email: string; role: string; name: string; surname: string }[], within: (id: string) => id !== "admin" };
   const one = (o: Record<string, string>) => checkRows([row(o)], ctx)[0];
 
   check("clean row passes, role matched ignoring case", !one({}).problems.length && one({}).roleId === "teacher");
@@ -57,8 +57,9 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
 
   await createUser({ id: "gov", name: "Gov", surname: "Ernor", email: "gov@school.co.za", password: "x", role: "admin", forcePasswordChange: false });
   await createPerson({ id: "p1", position: "Teacher", userId: null, name: "Ann Lee", email: "a@school.co.za", phone: "", profilePic: "" });
+  await createPerson({ id: "p2", position: "Deputy Principal", userId: null, name: "Dee Puty", email: "dee@school.co.za", phone: "", profilePic: "" });
   const live = { ...ctx, users: await getUsers(), within: () => true };
-  const first = checkRows([row({}), row({ email: "b@school.co.za", name: "Bo", surname: "de Wet" }, 3), row({ email: "gov@school.co.za", role: "Coach", subject: "Tennis" }, 4)], live);
+  const first = checkRows([row({}), row({ email: "b@school.co.za", name: "Bo", surname: "de Wet" }, 3), row({ email: "gov@school.co.za", name: "", surname: "", role: "Coach", subject: "Tennis" }, 4)], live);
   check("existing user is an update, role column ignored", first[2].action === "update" && !first[2].problems.length);
   const done = await loadStaff(first);
   check("two added, one updated", done.added === 2 && done.updated === 1);
@@ -74,11 +75,18 @@ process.env.NEXT_PUBLIC_SCHOOL ||= "hvps";
   check("end of term does not lock staff", usersToLock([ann, bo]).length === 0);
   check("existing user keeps role and gets details", gov.role === "admin" && gov.staff?.subject === "Tennis");
   check("unlinked register entry is linked, not doubled", people.filter((p) => p.email === "a@school.co.za").length === 1 && people.find((p) => p.id === "p1")?.userId === ann.id);
-  check("new register entry is staff only, position is the role", people.some((p) => p.userId === bo.id && p.staffOnly && p.position === "Teacher"));
+  check("new register entry is staff only, position is the role", people.some((p) => p.userId === bo.id && p.staffOnly && p.position === "Staff"));
   check("existing user gets a register entry too", people.filter((p) => p.userId === "gov").length === 1);
 
   const again = await loadStaff(checkRows([row({})], { ...live, users: await getUsers() }));
-  check("loading the same file again adds nobody", again.added === 0 && (await getPeople()).length === people.length && (await getUsers()).length === users.length);
+  check("a different name on an existing address is refused", checkRows([row({ email: "gov@school.co.za", name: "John", surname: "Smith" })], live)[0].problems.some((p: string) => /belongs to Gov Ernor/.test(p)));
+  check("the existing person's register name is the account's", people.find((p) => p.userId === "gov")?.name === "Gov Ernor");
+  await loadStaff(checkRows([row({ email: "dee@school.co.za", name: "Dee", surname: "Puty" })], { ...live, users: await getUsers() }));
+  check("an upload never links a Deputy Principal entry", !(await getPeople()).find((p) => p.id === "p2")?.userId);
+  const before = (await getUsers()).find((u) => u.id === "gov")!.updatedAt;
+  const quiet = await loadStaff(checkRows([row({ email: "gov@school.co.za", name: "", surname: "", subject: "Tennis" })], { ...live, users: await getUsers() }));
+  check("a row that changes nothing writes nothing", quiet.updated === 0 && (await getUsers()).find((u) => u.id === "gov")!.updatedAt === before);
+  check("loading the same file again adds nobody", again.added === 0 && (await getPeople()).length === people.length && (await getUsers()).length === users.length + 1);
 
   console.log(failed ? `${failed} FAILED` : "all passed");
   process.exit(failed ? 1 : 0);

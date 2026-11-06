@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { GOVERNANCE_LABEL } from "@/lib/positions";
 import { TAG_COLOR_CLASSES } from "@/lib/tags";
 import PersonPhoto from "@/components/PersonPhoto";
+import RoleFilter from "@/components/RoleFilter";
 import { useBranding } from "@/components/BrandingProvider";
 import { useT } from "@/components/I18nProvider";
 
@@ -114,16 +115,7 @@ export default function PeopleDirectoryPage() {
         </p>
       </div>
 
-      {roleNames.length > 1 && (
-        <div className="mb-4">
-          <select aria-label={t("Filter by role")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">{t("All roles")}</option>
-            {roleNames.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </div>
-      )}
+      <RoleFilter names={roleNames} value={roleFilter} onChange={setRoleFilter} />
 
       {total > 3 && (
         <div className="mb-6 max-w-sm">

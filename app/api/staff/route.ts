@@ -4,10 +4,10 @@ import { actorFrom } from "@/lib/activityActor";
 import { getRoles, requirePermission, resolveRolePermissions } from "@/lib/rolesData";
 import { SUPER_ADMIN_ROLE_ID, type Role } from "@/lib/roles";
 import { checkRows, cleanRow, type StaffRow } from "@/lib/staff";
-import { loadStaff } from "@/lib/staffData";
+import { awaitingLink, loadStaff } from "@/lib/staffData";
 import { getUsers } from "@/lib/userData";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 const MAX_ROWS = 2000;
 
 const reach = (roles: Role[], session: { permissions: string[] }) => (id: string) =>
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
       role: u.role,
       roleName: roles.find((r) => r.id === u.role)?.name || u.role,
       staff: u.staff,
-      waiting: !!u.forcePasswordChange && !u.staff?.invitedAt,
+      waiting: awaitingLink(u),
     }))
     .sort((a, b) => `${a.surname} ${a.name}`.localeCompare(`${b.surname} ${b.name}`));
   return NextResponse.json(

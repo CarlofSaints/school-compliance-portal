@@ -1,5 +1,6 @@
 import { readJson, writeJson, updateJson, NO_CHANGE, listFiles, deleteFile } from "./controlData";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 import type { StaffDetails } from "./staff";
 
 export interface User {
@@ -153,14 +154,13 @@ export async function createUser(
 
 /**
  * Many accounts in ONE guarded write. An address taken in the meantime is left
- * out. Returns those created. The passwords are random and thrown away, so one
- * hash serves the batch: bcrypt per person would take minutes on a full staff list.
+ * out. Returns those created. Nobody knows the password: one random secret is
+ * hashed and thrown away, because bcrypt per person would take minutes on a
+ * full staff list. They set their own through the emailed link.
  */
-export async function createUsers(
-  list: (Omit<User, "password" | "createdAt" | "updatedAt"> & { password: string })[]
-): Promise<User[]> {
+export async function createUsers(list: Omit<User, "password" | "createdAt" | "updatedAt">[]): Promise<User[]> {
   if (!list.length) return [];
-  const hashed = await bcrypt.hash(list[0].password, 10);
+  const hashed = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
   const now = new Date().toISOString();
   const fresh: User[] = list.map((u) => ({ ...u, password: hashed, createdAt: now, updatedAt: now }));
   // Own copies first, as in createUser. In small groups: each is a storage write.
@@ -195,7 +195,9 @@ export async function updateUsersWhere(change: (u: User) => Partial<User> | null
     });
     return changed.length ? next : NO_CHANGE;
   });
-  for (const u of changed) await saveUserRecord(u).catch((err) => console.error("[users] own copy not updated:", u.id, err));
+  for (let i = 0; i < changed.length; i += 25) {
+    await Promise.all(changed.slice(i, i + 25).map((u) => saveUserRecord(u).catch((err) => console.error("[users] own copy not updated:", u.id, err))));
+  }
   return changed.map((u) => u.id);
 }
 

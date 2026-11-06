@@ -2517,5 +2517,6 @@
   "Subject, or what they coach": "Thuto, goba seo ba se kwetlišago",
   "Put a comma between each subject or grade. Leave Grade blank for a coach.": "Bea khoma magareng ga thuto goba kreiti ye nngwe le ye nngwe. Tlogela Kreiti e se na selo go mokwetliši.",
   "SGB or Board Teacher": "Morutiši wa SGB goba wa Boto",
-  "State Teacher": "Morutiši wa Mmušo"
+  "State Teacher": "Morutiši wa Mmušo",
+  "Already have a login, so only their staff details change: {names}": "Ba šetše ba na le go tsena, ka fao go fetoga fela dintlha tša bona tša bašomi: {names}"
 }
