@@ -38,8 +38,11 @@ export async function loadStaff(good: RowResult[]): Promise<{ added: number; upd
   // A row that changes nothing writes nothing, so a large re-upload stays quick.
   const updated = details.size
     ? await updateUsersWhere((u) => {
-        const next = details.get(u.id);
-        if (!next || (u.staff && unchanged(u.staff, next))) return null;
+        const row = details.get(u.id);
+        if (!row) return null;
+        // A blank cell keeps the number already stored: SACE and Persal can be blank on a Coach row.
+        const next = { ...row, sace: row.sace || u.staff?.sace || "", persal: row.persal || u.staff?.persal || "" };
+        if (u.staff && unchanged(u.staff, next)) return null;
         return { staff: { ...next, invitedAt: u.staff?.invitedAt } };
       })
     : [];

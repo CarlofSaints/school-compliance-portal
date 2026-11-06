@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
   how.getColumn(1).width = 100;
   const roles = (await getRoles()).filter((r) => r.id !== SUPER_ADMIN_ROLE_ID).map((r) => r.name);
   how.addRows([
-    ["* The column must be there."],
+    ["* Must be filled in on every row."],
     ["SACE number must be filled in for every teacher. Choose Coach only for someone who does not teach: a coach who also teaches is a teacher."],
     ["Persal number must be filled in for a State teacher."],
     ["Subject: what they teach or coach, with a comma between each one. Grade: the grades they teach, with a comma between each one. Leave Grade blank for a coach."],

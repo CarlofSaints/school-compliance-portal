@@ -129,7 +129,6 @@ export default function StaffPage() {
     setForm({ ...m.staff, email: m.email, name: m.name, surname: m.surname, role: m.roleName, type: TYPE_LABELS[m.staff.type] });
   };
 
-  const typeLabel = (k: StaffType) => (k === "state" ? t("State Teacher") : k === "coach" ? t("Coach") : t("SGB or Board Teacher"));
   const waiting = staff.filter((m) => m.waiting).length;
   const sendLinks = async () => {
     if (!confirm(t("Email {count} staff a link to set their password? The link lasts one hour. After that they use Forgot your password? on the sign-in page.", { count: waiting }))) return;
@@ -273,7 +272,7 @@ export default function StaffPage() {
                 <td className="px-4 py-3 font-medium whitespace-nowrap">{m.name} {m.surname}</td>
                 <td className="px-4 py-3 text-gray-600">{m.email}</td>
                 <td className="px-4 py-3">{m.roleName}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{typeLabel(m.staff.type)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">{t(TYPE_LABELS[m.staff.type])}</td>
                 <td className="px-4 py-3">{m.staff.staffNumber || "-"}</td>
                 <td className="px-4 py-3">{m.staff.sace || "-"}</td>
                 <td className="px-4 py-3">{m.staff.persal || "-"}</td>
@@ -328,9 +327,10 @@ export default function StaffPage() {
                 <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} required className={INPUT}>
                   <option value="">{t("Choose one")}</option>
                   {(Object.keys(TYPE_LABELS) as StaffType[]).map((k) => (
-                    <option key={k} value={TYPE_LABELS[k]}>{typeLabel(k)}</option>
+                    <option key={k} value={TYPE_LABELS[k]}>{t(TYPE_LABELS[k])}</option>
                   ))}
                 </select>
+                <p className="text-xs text-gray-400 mt-1">{t("Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.")}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 {field("staffNumber", t("Staff number (optional)"))}

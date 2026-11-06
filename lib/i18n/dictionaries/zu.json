@@ -2520,5 +2520,6 @@
   "Already have a login, so only their staff details change: {names}": "Sebevele banakho ukungena, ngakho kushintsha imininingwane yabo yabasebenzi kuphela: {names}",
   "Coach": "Umqeqeshi",
   "Staff type": "Uhlobo lwabasebenzi",
-  "SACE number (optional)": "Inombolo ye-SACE (uyazikhethela)"
+  "SACE number (optional)": "Inombolo ye-SACE (uyazikhethela)",
+  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Khetha uMqeqeshi kuphela kumuntu ongafundisi. Umqeqeshi ophinde afundise unguthisha."
 }

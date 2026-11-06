@@ -2520,5 +2520,6 @@
   "Already have a login, so only their staff details change: {names}": "Ba setse ba na le go tsena, ka jalo go fetoga fela dintlha tsa bone tsa badiri: {names}",
   "Coach": "Mokatisi",
   "Staff type": "Mofuta wa modiri",
-  "SACE number (optional)": "Nomoro ya SACE (ga e patelesege)"
+  "SACE number (optional)": "Nomoro ya SACE (ga e patelesege)",
+  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Tlhopha Mokatisi fela mo mothong yo o sa ruteng. Mokatisi yo o rutang gape ke morutabana."
 }
