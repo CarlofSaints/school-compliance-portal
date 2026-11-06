@@ -3,7 +3,7 @@
 import { useAuth, authFetch } from "@/lib/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import Toast from "@/components/Toast";
-import { ALL_PERMISSION_KEYS, Permission, Role } from "@/lib/roles";
+import { ALL_PERMISSION_KEYS, AUTOMATIC_ACCESS, Permission, Role } from "@/lib/roles";
 import { useT } from "@/components/I18nProvider";
 
 const BUILT_IN_KEYS = new Set(ALL_PERMISSION_KEYS);
@@ -192,6 +192,18 @@ export default function RolesPage() {
                     </div>
                   </div>
                 ))}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 uppercase">{t("Automatic for everyone with a login")}</h4>
+                  <p className="text-xs text-gray-400 mb-2">{t("These come with every role and cannot be switched off.")}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {AUTOMATIC_ACCESS.map((item) => (
+                      <label key={item} className="flex items-center gap-3 p-2 text-gray-400">
+                        <input type="checkbox" checked disabled readOnly className="accent-gray-400 w-4 h-4 opacity-60" />
+                        <span className="text-sm">{t(item)}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

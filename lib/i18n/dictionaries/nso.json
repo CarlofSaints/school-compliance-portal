@@ -2521,5 +2521,15 @@
   "Coach": "Mokwetliši",
   "Staff type": "Mohuta wa mošomi",
   "SACE number (optional)": "Nomoro ya SACE (ga se gapeletšo)",
-  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Kgetha Mokwetliši fela go motho yo a sa rutego. Mokwetliši yo a rutago gape ke morutiši."
+  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Kgetha Mokwetliši fela go motho yo a sa rutego. Mokwetliši yo a rutago gape ke morutiši.",
+  "Sign in and sign out": "Go tsena le go tšwa",
+  "Change their own password": "Go fetola phasewete ya bona",
+  "Update their own name, email and photo": "Go mpshafatša leina la bona, imeile le seswantšho",
+  "Choose their language": "Go kgetha polelo ya bona",
+  "Campus: take courses and see the leaderboard": "Campus: go dira dikhoso le go bona lenaneo la baetapele",
+  "Our People page": "Letlakala la Batho ba Rena",
+  "Action Items: see the list and update their own": "Dilo tša go Dirwa: go bona lenaneo le go mpshafatša tša bona",
+  "Meeting Minutes page. Minutes Admin decides which minutes they can read": "Letlakala la Metsotso ya Kopano. Minutes Admin e kgetha gore ke metsotso efe yeo ba ka e balago",
+  "Automatic for everyone with a login": "Ka go itiragalela go bohle bao ba nago le go tsena",
+  "These come with every role and cannot be switched off.": "Tše di tla le mošomo o mongwe le o mongwe gomme di ka se tswalelwe."
 }

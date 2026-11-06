@@ -2521,5 +2521,15 @@
   "Coach": "Umqeqeshi",
   "Staff type": "Uhlobo lwabasebenzi",
   "SACE number (optional)": "Inombolo ye-SACE (uyazikhethela)",
-  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Khetha uMqeqeshi kuphela kumuntu ongafundisi. Umqeqeshi ophinde afundise unguthisha."
+  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Khetha uMqeqeshi kuphela kumuntu ongafundisi. Umqeqeshi ophinde afundise unguthisha.",
+  "Sign in and sign out": "Ukungena nokuphuma",
+  "Change their own password": "Ukushintsha iphasiwedi yabo",
+  "Update their own name, email and photo": "Ukubuyekeza igama labo, i-imeyili nesithombe",
+  "Choose their language": "Ukukhetha ulimi lwabo",
+  "Campus: take courses and see the leaderboard": "I-Campus: ukwenza izifundo nokubona ibhodi labaholayo",
+  "Our People page": "Ikhasi Labantu Bethu",
+  "Action Items: see the list and update their own": "Izinto Zokwenza: ukubona uhlu nokubuyekeza ezabo",
+  "Meeting Minutes page. Minutes Admin decides which minutes they can read": "Ikhasi Lemizuzu Yomhlangano. I-Minutes Admin inquma ukuthi yimiphi imizuzu abangayifunda",
+  "Automatic for everyone with a login": "Okuzenzakalelayo kubo bonke abanokungena",
+  "These come with every role and cannot be switched off.": "Lokhu kuza nendima ngayinye futhi akunakucishwa."
 }
