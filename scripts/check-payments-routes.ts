@@ -149,6 +149,8 @@ async function main() {
   aiAnswer = { payments: [{ payee: "ACME SUPPLIES", amount: 1000, accountNumber: "62012345678", branchCode: "", reference: "INV-1" }, { payee: "Someone Else", amount: 50, accountNumber: "", branchCode: "", reference: "" }] };
   const screenRes = await screens.POST(req(clerk, "/api/payments/screens", "POST", form({ file: new File([Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1])], "bank.jpg") })));
   check("bank screen loaded", screenRes.status, 201);
+  check("a WEBP notice is refused, it cannot be stamped", (await screens.POST(req(clerk, "/api/payments/screens", "POST", form({ file: new File([new TextEncoder().encode("RIFF0000WEBPVP8 ")], "n.webp") })))).status, 415);
+  check("a damaged PDF notice is refused before any charge", (await screens.POST(req(clerk, "/api/payments/screens", "POST", form({ file: pdf("broken-notice") })))).status, 415);
   const notice = (await screenRes.json()).id as string;
   check("a bad release body undoes nothing", (await release.POST(json(clerk, "/x", "POST", {}), ctx(notice))).status, 400);
   row = await statusOf(inv);
@@ -184,7 +186,12 @@ async function main() {
   check("the wrong code: refused", (await signNow(principal, { code: "ZZZZZZ" })).status, 400);
   check("someone else's code: refused", (await signNow(sgb)).status, 400);
   check("a payment with no invoice needs the tick", (await signNow(principal, { override: false })).status, 409);
+  const { updateJson } = await import("../lib/controlData");
+  await updateJson<Record<string, { hash: string; sentAt: string }>>(`payments/screens/${notice}/codes.json`, {}, (c) => ({ ...c, [principal.id]: { ...c[principal.id], sentAt: "2026-01-01T00:00:00.000Z" } }));
+  check("an old code has expired", (await signNow(principal)).status, 400);
+  await codeFor(principal);
   check("code and tick: signed", (await signNow(principal)).status, 201);
+  check("each signature keeps the checks as they stood", (await (await import("../lib/paymentData")).getNoticeSignatures(notice))[0].checks.map((c) => [c.payee, c.amount]), [["ACME SUPPLIES", "match"], ["Someone Else", "unknown"]]);
   check("the code is spent", (await getNoticeCodes(notice))[principal.id], undefined);
   let n = await noticeRow();
   check("1 of 2 have signed", [n.status, n.progress.signed, n.progress.required], ["signing", 1, 2]);
@@ -212,7 +219,7 @@ async function main() {
   const stamped = await noticePdf.GET(req(principal, "/x?download=1"), ctx(notice));
   check("a signer can open it", [stamped.status, stamped.headers.get("content-type"), stamped.headers.get("content-disposition")?.includes("Signed - ")], [200, "application/pdf", true]);
   const stampSlots = [{ tagId: "a", label: "Initiator", members: [] }, { tagId: "b", label: "Principal", members: [] }, { tagId: "c", label: "SGB Representative", members: [] }];
-  const stampSig = { userId: "u", name: "Sipho Ndlovu š", at: new Date().toISOString(), tagIds: ["b"], dataUrl: MARK, kind: "drawn" as const, fileHash: "h", override: true };
+  const stampSig = { userId: "u", name: "Sipho Ndlovu š", at: new Date().toISOString(), tagIds: ["b"], dataUrl: MARK, kind: "drawn" as const, fileHash: "h", override: true, checks: [{ payee: "Acme", invoiceId: "", bank: "mismatch", amount: "match" }] };
   const noticeFile = { filename: "fnb.pdf", ext: "pdf", hash: "h".repeat(64), lines: [] } as never;
   const twoPages = await PDFDocument.create();
   twoPages.addPage([595, 842]);
@@ -223,6 +230,11 @@ async function main() {
   const turned = await PDFDocument.create();
   turned.addPage([842, 595]).setRotation(degrees(90));
   check("a turned page keeps its shape, stamp on its own page", (await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from(await turned.save()), [stampSig], stampSlots))).getPageCount(), 2);
+  const slip = await PDFDocument.create();
+  slip.addPage([226, 400]);
+  const slipOut = await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from(await slip.save()), [stampSig], stampSlots));
+  check("a narrow page keeps its shape, stamp on its own page", [slipOut.getPageCount(), slipOut.getPage(0).getHeight()], [2, 400]);
+  check("a long tag name does not break the stamp", (await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from(await twoPages.save()), [stampSig], [{ tagId: "b", label: "SGB or Board Representative of the School", members: [] }]))).getPageCount(), 2);
   check("a damaged PDF still gives the stamp", (await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from("%PDF-junk"), [stampSig], stampSlots))).getPageCount(), 1);
   const picture = Buffer.from(MARK.split(",")[1], "base64");
   check("a screenshot becomes one stamped page", (await PDFDocument.load(await signedNoticePdf({ ...(noticeFile as object), ext: "png" } as never, picture, [stampSig], stampSlots))).getPageCount(), 1);

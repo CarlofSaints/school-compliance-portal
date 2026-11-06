@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     getInvoices(),
     getContacts(),
     getScreens(),
-    getSigningSlots(),
+    getScreens().then(getSigningSlots),
     getCredits(),
     maySpendCredits(session.id),
   ]);
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
       ...buildInbox(invoices, contacts, screens, slots),
       screens: screens.map((s) => ({ id: s.id, filename: s.filename, loadedAt: s.loadedAt, payments: s.lines.length, statement: s.kind === "statement", signed: !!s.signedBy?.length })),
       canSign: tagsHeld(slots, session.id).length > 0,
-      signersChosen: slots.length > 0,
+      signersChosen: slots.some((s) => !s.retired),
       balance,
       canSpend,
     },

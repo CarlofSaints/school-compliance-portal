@@ -292,7 +292,7 @@ export default function InvoiceInboxPage() {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-dark mb-2">{t("2. Load the bank payment notice")}</h2>
-              <FileUpload multiple accept=".png,.jpg,.jpeg,.webp,.pdf" label={t("Drop a screenshot here, or paste it with Ctrl+V")} onChange={(f) => send(f, "/api/payments/screens")} />
+              <FileUpload multiple accept=".png,.jpg,.jpeg,.pdf" label={t("Drop a screenshot here, or paste it with Ctrl+V")} onChange={(f) => send(f, "/api/payments/screens")} />
             </div>
             <div>
               <h2 className="text-sm font-semibold text-dark mb-2">{t("3. Load the bank statement")}</h2>
@@ -423,15 +423,14 @@ export default function InvoiceInboxPage() {
                 <td className="px-4 py-3 text-right whitespace-nowrap text-red-700">{r.delta === null ? "" : `${r.delta > 0 ? "+" : "-"}${rand(Math.abs(r.delta))}`}</td>
                 <td className="px-4 py-3"><Slots progress={r.progress} /></td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  {r.signedOnNotice ? (
-                    <a href={`/api/payments/screens/${r.noticeId}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
-                  ) : r.signedBy.length > 0 ? (
+                  {r.signedOnNotice && <div><a href={`/api/payments/screens/${r.noticeId}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a></div>}
+                  {r.oldSignatures ? (
                     <>
                       <a href={`/api/payments/invoices/${r.id}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
                       <div><DownloadLink href={`/api/payments/invoices/${r.id}/signed?download=1`} filename={`Signed - ${r.filename.replace(/\.[^.]+$/, "")}.pdf`} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
                     </>
                   ) : (
-                    "-"
+                    !r.signedOnNotice && "-"
                   )}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">

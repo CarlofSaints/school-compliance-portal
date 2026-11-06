@@ -4,6 +4,7 @@ import { readFile } from "@/lib/controlData";
 import { contentDisposition } from "@/lib/contentDisposition";
 import { FILE_PATHS, getNoticeSignatures, getScreens, getSigningSlots } from "@/lib/paymentData";
 import { signedNoticePdf } from "@/lib/paymentSignedPdf";
+import { noticeSlots } from "@/lib/payments";
 
 // The payment notice with our stamp on it. Opens in the browser; ?download=1 saves it.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const original = await readFile(FILE_PATHS.screen(id, notice));
   if (!original) return NextResponse.json({ error: "File not found." }, { status: 404 });
 
-  const bytes = await signedNoticePdf(notice, original, signatures, await getSigningSlots());
+  const bytes = await signedNoticePdf(notice, original, signatures, noticeSlots(notice, await getSigningSlots([notice])));
   const disposition = contentDisposition(`Signed - ${notice.filename.replace(/\.[^.]+$/, "")}.pdf`);
   return new NextResponse(new Uint8Array(bytes), {
     headers: {

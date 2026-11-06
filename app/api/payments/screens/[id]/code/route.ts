@@ -4,6 +4,7 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import { hashSigningCode, mintSigningCode } from "@/lib/minutesSigning";
 import { sendPaymentNoticeCodeEmail } from "@/lib/email";
 import { fillsALine, getNoticeSignatures, getScreens, getSigningSlots, noticeCodeSalt, saveNoticeCode, tagsHeld } from "@/lib/paymentData";
+import { noticeSlots } from "@/lib/payments";
 
 // Emails the signer their own one-time code, as signing minutes does: proof
 // that the person at the keyboard also holds the mailbox.
@@ -11,10 +12,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const session = await requireAnyPermission(req, ["view_payments", "manage_payments"]);
   if (session instanceof NextResponse) return session;
   const { id } = await params;
-  const slots = await getSigningSlots();
+  const screens = await getScreens();
+  const notice = screens.find((s) => s.id === id && s.kind !== "statement");
+  const all = await getSigningSlots(screens);
+  const slots = notice ? noticeSlots(notice, all) : all;
   const tagIds = tagsHeld(slots, session.id);
   if (!tagIds.length) return NextResponse.json({ error: "You are not one of the people who sign payment notices." }, { status: 403 });
-  const notice = (await getScreens()).find((s) => s.id === id && s.kind !== "statement");
   if (!notice) return NextResponse.json({ error: "Payment notice not found." }, { status: 404 });
 
   const signed = await getNoticeSignatures(id);

@@ -4,15 +4,18 @@ import { recordActivity } from "@/lib/activityLog";
 import { actorFrom } from "@/lib/activityActor";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { SignatureError, decodeSignature, signCodeLimitKey, signingCodeMatches } from "@/lib/minutesSigning";
-import { addNoticeSignature, getContacts, getInvoices, getNoticeCodes, getScreens, getSigningSlots, noticeCodeSalt, spendNoticeCode, tagsHeld } from "@/lib/paymentData";
-import { buildInbox } from "@/lib/payments";
+import { addNoticeSignature, codeExpired, getContacts, getInvoices, getNoticeCodes, getScreens, getSigningSlots, noticeCodeSalt, spendNoticeCode, tagsHeld } from "@/lib/paymentData";
+import { buildInbox, noticeSlots } from "@/lib/payments";
 
 // Signs the payment notice: a signing tag, the code emailed to them, and a mark.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireAnyPermission(req, ["view_payments", "manage_payments"]);
   if (session instanceof NextResponse) return session;
   const { id } = await params;
-  const slots = await getSigningSlots();
+  const [invoices, contacts, screens, codes] = await Promise.all([getInvoices(), getContacts(), getScreens(), getNoticeCodes(id)]);
+  const all = await getSigningSlots(screens);
+  const screen = screens.find((s) => s.id === id && s.kind !== "statement");
+  const slots = screen ? noticeSlots(screen, all) : all;
   const tagIds = tagsHeld(slots, session.id);
   if (!tagIds.length) return NextResponse.json({ error: "You are not one of the people who sign payment notices." }, { status: 403 });
 
@@ -26,9 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     throw e;
   }
 
-  const [invoices, contacts, screens, codes] = await Promise.all([getInvoices(), getContacts(), getScreens(), getNoticeCodes(id)]);
-  const screen = screens.find((s) => s.id === id && s.kind !== "statement");
-  const notice = buildInbox(invoices, contacts, screens).notices.find((n) => n.id === id);
+  const notice = buildInbox(invoices, contacts, screens, all).notices.find((n) => n.id === id);
   if (!screen || !notice) return NextResponse.json({ error: "Payment notice not found." }, { status: 404 });
 
   const mine = codes[session.id];
@@ -44,6 +45,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     return NextResponse.json({ error: "That code does not match. Check the email you were sent, or send yourself a new one." }, { status: 400 });
   }
+
+  if (codeExpired(mine.sentAt)) return NextResponse.json({ error: "That code has expired. Send yourself a new one." }, { status: 400 });
 
   // Judged from the live checks, not what the page showed when it opened.
   const unchecked = notice.lines.some((l) => l.bank.status !== "match" || l.amountMatch.status !== "match");
@@ -62,8 +65,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       kind: body?.kind === "typed" ? "typed" : "drawn",
       fileHash: screen.hash,
       override: unchecked,
+      checks: notice.lines.map((l) => ({ payee: l.payee, invoiceId: l.invoiceId, bank: l.bank.status, amount: l.amountMatch.status })),
     },
-    slots.map((s) => s.tagId)
+    slots.map((s) => s.tagId),
+    { slots: slots.map(({ tagId, label }) => ({ tagId, label })), invoiceIds: notice.lines.map((l) => l.invoiceId) }
   );
   if (outcome === "already") return NextResponse.json({ error: "You have already signed this payment notice." }, { status: 409 });
   if (outcome === "line_taken") return NextResponse.json({ error: "Your line on this payment notice has already been signed." }, { status: 409 });

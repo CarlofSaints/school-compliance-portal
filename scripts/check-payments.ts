@@ -135,6 +135,17 @@ assert.deepEqual([shown.signed, shown.approved, shown.required], [2, 1, 3], "1 o
 assert.deepEqual(shown.slots.map((s) => [s.label, s.signer, s.approved]), [["INIT", "init-1", true], ["HEAD", "head-2", false], ["SGB", "", false]]);
 assert.deepEqual(shown.slots[2].waitingOn, ["sgb one", "sgb two"], "everyone who could sign the empty line is named");
 assert.deepEqual(progressOf([signer("x", ["gone"])], three).slots.at(-1), { label: "", signer: "x", approved: false, waitingOn: [] }, "a signature with no ticked tag still shows");
+const overlap = [{ tagId: "i", label: "I", members: [{ userId: "alice", name: "Alice" }, { userId: "bob", name: "Bob" }] }, { tagId: "p", label: "P", members: [{ userId: "alice", name: "Alice" }] }];
+assert.deepEqual(progressOf([signer("alice", ["i", "p"])], overlap).slots[1].waitingOn, ["Bob"], "Bob's signature frees Alice for the empty line");
+
+// A signed notice keeps its invoices: a statement or a new match cannot move them
+const oct = invoice("oct", "Acme", 500, "", { invoiceNumber: "OCT", invoiceDate: "2026-10-01" });
+const nov = invoice("nov", "Acme", 500, "", { invoiceNumber: "NOV", invoiceDate: "2026-11-01" });
+const signedScreen = { ...screen(line("Acme", 500)), signedBy: [signer("a", ["principal"])], frozen: { slots: [{ tagId: "principal", label: "Principal" }, { tagId: "sgb", label: "SGB" }], invoiceIds: ["oct"] } };
+const settled = buildInbox([oct, nov], [acme], [signedScreen, { ...screen(line("ACME", 500, { date: "2026-11-02", reference: "OCT" })), id: "st", kind: "statement" as const }], slotsOf(["principal"]));
+assert.deepEqual(settled.rows.map((r) => [r.id, r.signedOnNotice]), [["oct", true], ["nov", false]], "the signature stays on the invoice that was signed for");
+assert.equal(settled.notices[0].progress.required, 2, "a tag unticked after signing leaves the notice's lines alone");
+assert.equal(buildInbox([oct, nov], [acme], [signedScreen], slotsOf(["principal", "sgb", "extra"])).notices[0].progress.required, 2, "nor does a new tag add one");
 assert.deepEqual([progressOf([signer("x", [])], []).signed, progressOf([signer("x", [])], []).required], [1, 1], "no tags ticked: never 0 of 0");
 assert.equal(status([], green, green, true), "paid", "the statement outranks everything");
 const threeTags = ["a", "b", "c"];

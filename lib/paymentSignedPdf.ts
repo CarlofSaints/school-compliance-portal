@@ -96,8 +96,8 @@ const stampHeight = (rows: number) => STAMP_PAD * 2 + 20 + rows * STAMP_ROW + 22
 /** Makes the page taller and clears the new strip. Nothing here can tell where a
  *  PDF page is blank, and the stamp must never cover the notice. */
 function roomBelow(page: PDFPage, height: number): { x: number; y: number } | null {
-  if (page.getRotation().angle % 360 !== 0) return null;
   const box = page.getCropBox();
+  if (page.getRotation().angle % 360 !== 0 || box.width < STAMP_WIDTH + 40) return null;
   page.setMediaBox(box.x, box.y - height, box.width, box.height + height);
   page.setCropBox(box.x, box.y - height, box.width, box.height + height);
   page.drawRectangle({ x: box.x, y: box.y - height, width: box.width, height, color: rgb(1, 1, 1) });
@@ -120,7 +120,7 @@ export async function signedNoticePdf(notice: BankScreen, original: Buffer, sign
 
   const pages = pdf.getPages();
   const last = included ? pages[pages.length - 1] : null;
-  // A picture was fitted with this room left under it. A rotated PDF page cannot be extended.
+  // A picture was fitted with this room left under it. A turned or narrow PDF page gets the stamp on its own page.
   const spot = last && notice.ext === "pdf" ? roomBelow(last, height + 20) : null;
   const page = last && (spot || notice.ext !== "pdf") ? last : pdf.addPage(A4);
   const right = spot ? spot.x - 20 : A4[0] - MARGIN;
@@ -134,8 +134,18 @@ export async function signedNoticePdf(notice: BankScreen, original: Buffer, sign
   let y = bottom + height - STAMP_PAD;
   text("AUTHORISATION", left + STAMP_PAD, y - 11, 11, bold);
   y -= 20;
+  // A label is a school's own tag name, so it wraps rather than being cut.
+  const labelLines = (label: string) => {
+    const lines = [""];
+    for (const word of safe(`${label}:`).split(" ")) {
+      const next = `${lines[lines.length - 1]} ${word}`.trim();
+      if (lines[lines.length - 1] && bold.widthOfTextAtSize(next, 8) > 85) lines.push(word);
+      else lines[lines.length - 1] = next;
+    }
+    return lines.slice(0, 4);
+  };
   for (const { label, sig } of rows) {
-    text(`${label.slice(0, 20)}:`, left + STAMP_PAD, y - 12, 8, bold);
+    labelLines(label).forEach((l, i) => text(l, left + STAMP_PAD, y - 12 - i * 9, 8, bold));
     if (sig) {
       try {
         const mark = await pdf.embedPng(sig.dataUrl);
@@ -146,7 +156,9 @@ export async function signedNoticePdf(notice: BankScreen, original: Buffer, sign
       }
       text(sig.name.slice(0, 24), left + 205, y - 12, 8, bold);
       text(when(sig.at), left + 205, y - 23, 7);
-      text(sig.override ? "One-time code. A check was not green." : "Verified with a one-time code", left + 205, y - 33, 6);
+      const notGreen = sig.checks.filter((c) => c.bank !== "match" || c.amount !== "match").map((c) => c.payee || "?");
+      text("Verified with a one-time code", left + 205, y - 32, 6);
+      if (sig.override) text(`Not green: ${notGreen.join(", ")}`.slice(0, 40), left + 205, y - 40, 6, bold);
     } else {
       text("Not signed yet", left + 100, y - 12, 8);
     }

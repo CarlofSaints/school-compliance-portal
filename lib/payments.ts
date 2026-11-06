@@ -76,6 +76,8 @@ export interface SignSlot {
   tagId: string;
   label: string;
   members: { userId: string; name: string }[];
+  /** Unticked since, but a notice already being signed still has this line. */
+  retired?: boolean;
 }
 
 /** A stamp line as the page shows it. Blank label: a signature no ticked tag accounts for any more. */
@@ -127,6 +129,9 @@ export interface BankScreen extends StoredFile {
   lines: BankLine[];
   /** The people who signed this payment notice. One notice covers many payments, so it is signed once. */
   signedBy?: SignedBy[];
+  /** Set by the first signature: its stamp lines, and which invoice each payment is (by line, "" for none).
+   *  What was signed for must not shift when a tag, a contact or a statement changes later. */
+  frozen?: { slots: { tagId: string; label: string }[]; invoiceIds: string[] };
 }
 
 export type CheckStatus = "match" | "mismatch" | "unknown";
@@ -200,6 +205,8 @@ export interface InboxRow {
   noticeId: string;
   /** Signed on the notice, not on the invoice itself as the first version did. */
   signedOnNotice: boolean;
+  /** The first version's signature page exists for this invoice. */
+  oldSignatures: boolean;
   loadedAt: string;
 }
 
@@ -396,16 +403,33 @@ export function fillSlots<T extends Pick<SignedBy, "userId" | "tagIds">>(who: T[
   return holder;
 }
 
+/** The stamp lines of this notice: its own once signed, else today's ticked tags. */
+export function noticeSlots(notice: Pick<BankScreen, "frozen">, slots: SignSlot[]): SignSlot[] {
+  if (!notice.frozen) return slots.filter((s) => !s.retired);
+  return notice.frozen.slots.map((f) => ({ ...f, members: slots.find((s) => s.tagId === f.tagId)?.members ?? [] }));
+}
+
 export function progressOf(signedBy: SignedBy[], slots: SignSlot[]): Progress {
-  const filled = fillSlots(signedBy, slots.map((s) => s.tagId));
+  const tagIds = slots.map((s) => s.tagId);
+  const filled = fillSlots(signedBy, tagIds);
   const placed = [...filled.values()];
+  // Someone may hold two tags, so the person who frees a line can sit on another: ask the matching, not the tag.
+  const free = new Map<string, { userId: string; name: string; tagIds: string[] }>();
+  for (const s of slots) {
+    for (const m of s.members) {
+      if (signedBy.some((b) => b.userId === m.userId)) continue;
+      const seen = free.get(m.userId);
+      free.set(m.userId, { ...m, tagIds: [...(seen?.tagIds ?? []), s.tagId] });
+    }
+  }
+  const helping = [...free.values()].filter((m) => fillSlots([...signedBy, m], tagIds).size > filled.size);
   const views = slots.map((s): SlotView => {
     const who = filled.get(s.tagId);
     return {
       label: s.label,
       signer: who?.name ?? "",
       approved: !!who?.releasedAt,
-      waitingOn: who ? [] : s.members.filter((m) => !signedBy.some((b) => b.userId === m.userId)).map((m) => m.name),
+      waitingOn: who ? [] : (helping.filter((m) => m.tagIds.includes(s.tagId)).length ? helping.filter((m) => m.tagIds.includes(s.tagId)) : helping).map((m) => m.name),
     };
   });
   const loose = signedBy.filter((s) => !placed.includes(s)).map((s): SlotView => ({ label: "", signer: s.name, approved: !!s.releasedAt, waitingOn: [] }));
@@ -479,10 +503,18 @@ export function buildInbox(
   contacts = contacts.filter((c) => c.type === "creditor");
   const screens = allScreens.filter((s) => s.kind !== "statement");
   const paidLines = findPaid(invoices, contacts, allScreens.filter((s) => s.kind === "statement").flatMap((s) => s.lines));
-  const lines = screens.flatMap((s) => s.lines);
+  const liveSlots = slots.filter((s) => !s.retired);
+  // A signed notice keeps its invoices. Only what is left gets paired.
+  const signedPairs = screens.flatMap((s) =>
+    (s.frozen?.invoiceIds ?? []).flatMap((id, i) => {
+      const inv = invoices.find((x) => x.id === id);
+      return inv && s.lines[i] ? [[s.lines[i], inv] as const] : [];
+    })
+  );
+  const held = new Set(signedPairs.map(([, inv]) => inv.id));
   // A payment on the screen belongs with what is still unpaid, when there is a choice.
-  const unpaidFirst = [...invoices].sort((a, b) => Number(paidLines.has(a.id)) - Number(paidLines.has(b.id)));
-  const paired = pairPayments(unpaidFirst, contacts, lines);
+  const unpaidFirst = invoices.filter((i) => !held.has(i.id)).sort((a, b) => Number(paidLines.has(a.id)) - Number(paidLines.has(b.id)));
+  const paired = new Map([...signedPairs, ...pairPayments(unpaidFirst, contacts, screens.filter((s) => !s.frozen).flatMap((s) => s.lines))]);
   const lineOf = new Map([...paired].map(([line, inv]) => [inv.id, line]));
   const noticeOf = new Map(screens.flatMap((s) => s.lines.map((l) => [l, s] as const)));
   const rows = invoices.map((inv): InboxRow => {
@@ -494,12 +526,13 @@ export function buildInbox(
     const notice = line && noticeOf.get(line);
     const signedOnNotice = !!notice?.signedBy?.length;
     const signedBy = signedOnNotice ? notice.signedBy! : inv.signedBy;
-    const progress = progressOf(signedBy, slots);
+    const rowSlots = signedOnNotice ? noticeSlots(notice, slots) : liveSlots;
+    const progress = progressOf(signedBy, rowSlots);
     return {
       id: inv.id,
       status: statusOf(signedBy, bank.status === "match" && check.status === "match", !!paid, progress),
       paidOn: paid?.date ?? "",
-      paidUnsigned: !!paid && (!slots.length || progress.signed < slots.length),
+      paidUnsigned: !!paid && (!rowSlots.length || progress.signed < rowSlots.length),
       filename: inv.filename,
       supplierName: inv.supplierName,
       contactName: contact?.name ?? "",
@@ -514,6 +547,7 @@ export function buildInbox(
       progress,
       noticeId: notice?.id ?? "",
       signedOnNotice,
+      oldSignatures: inv.signedBy.length > 0,
       loadedAt: inv.loadedAt,
     };
   });
@@ -536,7 +570,7 @@ export function buildInbox(
       };
     });
     const signedBy = s.signedBy ?? [];
-    const progress = progressOf(signedBy, slots);
+    const progress = progressOf(signedBy, noticeSlots(s, slots));
     const allPaid = lines.every((l) => rowOf.get(l.invoiceId)?.status === "paid");
     const green = lines.every((l) => l.bank.status === "match" && l.amountMatch.status === "match");
     return {
