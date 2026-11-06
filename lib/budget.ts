@@ -40,6 +40,8 @@ export interface FeePlan {
   learners: number;
   /** The fee put on a line. A copied budget starts from this, the fee really charged. */
   chosenFee?: number;
+  /** The line fee income goes on, once chosen. */
+  feeLineId?: string;
 }
 
 export interface BudgetYear {
@@ -92,10 +94,15 @@ export function feeAfter(p: Pick<FeePlan, "lastFee" | "months" | "roundTo">, inc
   return (Math.round((p.lastFee * (1 + increase / 100)) / months / step) * step * months);
 }
 
-/** The line fee income belongs on: the biggest income line called a fee that is not a discount or a one-off charge. */
+/**
+ * A first guess at the line fee income belongs on, until the school has chosen one:
+ * the biggest income line called a fee that is not a discount or a smaller charge.
+ * Sized by last year's figures, because this year's amount is what Use this changes.
+ */
 export function feeLineIn(lines: BudgetLine[]): BudgetLine | null {
-  const fees = lines.filter((l) => l.kind === "income" && /fee/i.test(l.name) && !/discount|concession|bad debt|interest|application|hiring|late/i.test(l.name));
-  return [...fees].sort((a, b) => Number(/received/i.test(b.name)) - Number(/received/i.test(a.name)) || lineAmount(b) - lineAmount(a))[0] ?? null;
+  const size = (l: BudgetLine) => Math.max(l.lastBudget, l.actual, lineAmount(l));
+  const fees = lines.filter((l) => l.kind === "income" && /\bfees?\b/i.test(l.name) && !/discount|concession|rebate|bad debt|interest|arrear|application|registration|exam|hiring|\blate\b/i.test(l.name));
+  return [...fees].sort((a, b) => size(b) - size(a))[0] ?? null;
 }
 
 const text = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -125,7 +132,7 @@ export function cleanFee(b: Record<string, unknown>, centres: Centre[]): FeePlan
     const n = Math.round(money(v));
     return n >= min ? n : fallback;
   };
-  return { centre: b.centre as string, lastFee: Math.max(0, money(b.lastFee)), months: Math.min(12, whole(b.months, 1, 11)), roundTo: whole(b.roundTo, 1, 1), learners: whole(b.learners, 0, 0), ...(money(b.chosenFee) > 0 ? { chosenFee: money(b.chosenFee) } : {}) };
+  return { centre: b.centre as string, lastFee: Math.max(0, money(b.lastFee)), months: Math.min(12, whole(b.months, 1, 11)), roundTo: whole(b.roundTo, 1, 1), learners: whole(b.learners, 0, 0), ...(money(b.chosenFee) > 0 ? { chosenFee: money(b.chosenFee) } : {}), ...(typeof b.feeLineId === "string" && b.feeLineId ? { feeLineId: b.feeLineId.slice(0, 60) } : {}) };
 }
 
 /** A starting list for a school with no spreadsheet. Every line can be renamed or removed. */

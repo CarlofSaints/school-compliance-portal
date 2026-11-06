@@ -17,8 +17,10 @@ check("groups keep their order and add up", byGroup([line({ group: "B", amount: 
 
 const plan = { lastFee: 12000, months: 12, roundTo: 10 };
 check("fee rounds the monthly amount", feeAfter(plan, 7) === 1070 * 12);
-const fees = [line({ name: "School Fees Received", amount: 900 }), line({ name: "Early Payment Discount", amount: -5 }), line({ name: "Application Fee", amount: 950 }), line({ name: "Late Fee Interest", amount: 999 }), line({ name: "Uniform Sales", amount: 5000 })];
+const fees = [line({ name: "School Fees Received", lastBudget: 900 }), line({ name: "Early Payment Discount", lastBudget: -5 }), line({ name: "Application Fee", lastBudget: 950 }), line({ name: "Late Fee Interest", lastBudget: 999 }), line({ name: "Arrear fees received", lastBudget: 40 }), line({ name: "Feeding Scheme", lastBudget: 9999 }), line({ name: "Coffee", lastBudget: 9999 }), line({ name: "Uniform Sales", lastBudget: 5000 })];
 check("the fee line is found by itself", feeLineIn(fees)?.name === "School Fees Received");
+check("Use this cannot move the guess: last year decides", feeLineIn([line({ name: "School fees", lastBudget: 900, amount: 1 }), line({ name: "Aftercare fees", lastBudget: 200, amount: 200 })])?.name === "School fees");
+check("a chosen line and fee survive cleaning", cleanFee({ centre: "main", feeLineId: "abc", chosenFee: 30030 }, [{ id: "main", name: "School" }])?.feeLineId === "abc");
 check("no fee line means the school chooses", feeLineIn([line({ name: "Tuition", amount: 9 })]) === null);
 check("fee never divides by nothing", feeAfter({ lastFee: 100, months: 0, roundTo: 0 }, 0) === 100);
 

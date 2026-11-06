@@ -14,6 +14,7 @@ const BTN = "border border-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm f
 const MAIN = "bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50";
 const INPUT = "px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none";
 const COMBINED = "__combined__";
+const INCREASES = [4, 5, 6, 7, 8, 9, 10];
 
 interface Upload {
   fileName: string;
@@ -37,7 +38,9 @@ export default function BudgetPage() {
   const [open, setOpen] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ kind: BudgetKind; group: string; name: string } | null>(null);
   const [approving, setApproving] = useState<{ date: string; note: string } | null>(null);
-  const [pickedFeeLine, setPickedFeeLine] = useState("");
+  const [changingLine, setChangingLine] = useState(false);
+  // The fee boxes as typed. The table follows them at once, and Use this acts on them, not on what was last saved.
+  const [feeDraft, setFeeDraft] = useState<{ key: string; values: Partial<FeePlan> }>({ key: "", values: {} });
   const file = useRef<HTMLInputElement>(null);
 
   const signedIn = !!session;
@@ -112,11 +115,12 @@ export default function BudgetPage() {
 
   if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
-  const feePlan: FeePlan = budget?.fees.find((f) => f.centre === showing) ?? emptyFeePlan(showing);
+  const feeKey = `${year}-${showing}`;
+  const feePlan: FeePlan = { ...(budget?.fees.find((f) => f.centre === showing) ?? emptyFeePlan(showing)), ...(feeDraft.key === feeKey ? feeDraft.values : {}) };
   const saveFee = (change: Partial<FeePlan>) => act({ action: "saveFee", centre: showing, plan: change });
   const feeLines = lines.filter((l) => l.kind === "income");
-  // Found by itself. The list only appears for a school whose fee line has an unusual name.
-  const feeLine = feeLines.find((l) => l.id === pickedFeeLine) ?? feeLineIn(feeLines);
+  // The school's own choice, else a first guess. Change line corrects a wrong guess.
+  const feeLine = feeLines.find((l) => l.id === feePlan.feeLineId) ?? feeLineIn(feeLines);
   const feesReady = !!feePlan.lastFee && !!feePlan.learners;
   const empty = !!budget && lines.length === 0;
   const columns = upload ? (upload.sheets[upload.sheet] || []).reduce((n, r) => Math.max(n, r.length), 0) : 0;
@@ -308,7 +312,7 @@ export default function BudgetPage() {
                 <div className="mb-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                   <h2 className="font-semibold text-dark mb-1">{t("Work out school fees")}</h2>
                   <p className="text-xs text-gray-500 mb-3">{t("See what each increase means for parents, then press Use this on the one you choose.")}</p>
-                  <div key={`${year}-${showing}`} className="flex flex-wrap gap-3 mb-3">
+                  <div className="flex flex-wrap gap-3 mb-3">
                     {[
                       { key: "lastFee" as const, label: t("Last year's fee for the year") },
                       { key: "months" as const, label: t("Months paid") },
@@ -317,15 +321,34 @@ export default function BudgetPage() {
                     ].map((f) => (
                       <label key={f.key} className="text-sm">
                         <span className="block text-gray-600 mb-1">{f.label}</span>
-                        <input type="number" min={0} disabled={!editable} defaultValue={feePlan[f.key]} onBlur={(e) => Number(e.target.value) !== feePlan[f.key] && saveFee({ [f.key]: Number(e.target.value) })} className={`${INPUT} w-36`} />
+                        <input
+                          type="number"
+                          min={0}
+                          disabled={!editable}
+                          value={feePlan[f.key] || ""}
+                          onChange={(e) => setFeeDraft({ key: feeKey, values: { ...(feeDraft.key === feeKey ? feeDraft.values : {}), [f.key]: Number(e.target.value) } })}
+                          onBlur={() => feeDraft.key === feeKey && feeDraft.values[f.key] !== undefined && saveFee({ [f.key]: feePlan[f.key] })}
+                          className={`${INPUT} w-36`}
+                        />
                       </label>
                     ))}
                   </div>
                   {editable && (
                     <p className="text-xs text-gray-500 mb-2">
                       {feeLine ? t("Use this puts the amount on the line {name}.", { name: feeLine.name }) : t("Choose the line for fee income.")}
-                      {(!feeLine || pickedFeeLine) && (
-                        <select aria-label={t("Choose the line for fee income.")} value={pickedFeeLine} onChange={(e) => setPickedFeeLine(e.target.value)} className={`${INPUT} text-xs ml-2`}>
+                      {feeLine && !changingLine && (
+                        <button onClick={() => setChangingLine(true)} className="text-primary font-medium ml-2">{t("Change line")}</button>
+                      )}
+                      {(!feeLine || changingLine) && (
+                        <select
+                          aria-label={t("Choose the line for fee income.")}
+                          value={feeLine?.id ?? ""}
+                          onChange={(e) => {
+                            setChangingLine(false);
+                            if (e.target.value) saveFee({ feeLineId: e.target.value });
+                          }}
+                          className={`${INPUT} text-xs ml-2`}
+                        >
                           <option value="">-</option>
                           {feeLines.map((l) => (
                             <option key={l.id} value={l.id}>{l.name}</option>
@@ -347,11 +370,13 @@ export default function BudgetPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[4, 5, 6, 7, 8, 9, 10].map((increase) => {
+                        {INCREASES.map((increase) => {
                           const fee = feeAfter(feePlan, increase);
                           const months = Math.max(1, feePlan.months);
                           const income = fee * feePlan.learners;
-                          const inBudget = feesReady && !!feeLine && lineAmount(feeLine) === income;
+                          // One row only: rounding can give two increases the same fee.
+                          const chosenAt = INCREASES.find((i) => feeAfter(feePlan, i) === feePlan.chosenFee);
+                          const inBudget = feesReady && increase === chosenAt && !!feeLine && lineAmount(feeLine) === income;
                           return (
                             <tr key={increase} className={inBudget ? "bg-emerald-50" : ""}>
                               <td className="pr-6 py-1">{increase}%</td>
@@ -369,7 +394,7 @@ export default function BudgetPage() {
                                       disabled={!feesReady}
                                       onClick={async () => {
                                         const note = t("{fee} a year \u00d7 {learners} learners ({increase}% increase)", { fee: rands(fee), learners: feePlan.learners, increase });
-                                        if (await saveLine(feeLine, { amount: income, items: [], note })) saveFee({ chosenFee: fee });
+                                        if (await saveLine(feeLine, { amount: income, items: [], note })) saveFee({ ...feePlan, chosenFee: fee, feeLineId: feeLine.id });
                                       }}
                                       className="text-primary text-xs font-medium disabled:opacity-40"
                                     >
