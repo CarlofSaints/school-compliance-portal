@@ -24,6 +24,8 @@ interface NavItem {
   icon: React.ReactNode;
   permission?: string;
   permissions?: string[];
+  // s38A binds public schools only.
+  publicSchoolOnly?: boolean;
   children?: NavChild[];
 }
 
@@ -175,6 +177,17 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    label: tk("Section 38A"),
+    href: "/section-38a",
+    permission: "manage_section_38a",
+    publicSchoolOnly: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+  {
     label: tk("Rooms"),
     href: "/bookings",
     permissions: ["book_rooms", "manage_rooms"],
@@ -263,8 +276,9 @@ export default function Sidebar() {
   // visible - otherwise a read-only child hides behind its manage-only parent.
   const filteredNav = navItems.filter(
     (item) =>
-      allows(item.permission, item.permissions) ||
-      (item.children || []).some((c) => allows(c.permission, c.permissions))
+      !(item.publicSchoolOnly && branding.schoolType === "private") &&
+      (allows(item.permission, item.permissions) ||
+        (item.children || []).some((c) => allows(c.permission, c.permissions)))
   );
 
   const toggleMenu = (label: string) => {

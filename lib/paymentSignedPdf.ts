@@ -18,7 +18,7 @@ const when = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: 
 const rand = (n: number | null) => (n === null ? "-" : `R ${n.toFixed(2)}`);
 
 /** Copies the invoice in. False when it cannot be: the signature page then says so. */
-async function addOriginal(pdf: PDFDocument, bytes: Buffer, ext: string, reserve = 0): Promise<boolean> {
+export async function addOriginal(pdf: PDFDocument, bytes: Buffer, ext: string, reserve = 0): Promise<boolean> {
   try {
     if (ext === "pdf") {
       // No ignoreEncryption: it copies encrypted pages in blank. Failing here shows the note instead.
