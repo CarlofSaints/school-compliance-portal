@@ -4,8 +4,9 @@ import { resolveBranding } from "@/lib/brandingData";
 import { NO_CHANGE } from "@/lib/controlData";
 import { sendSection38aProblemEmail } from "@/lib/email";
 import { SignatureError, decodeSignature } from "@/lib/minutesSigning";
+import { getPolicyById } from "@/lib/policyData";
 import { LIMITS, enforce, ipOf } from "@/lib/rateLimit";
-import { ACTIVITIES, BENEFITS, PAYS, TIMES, WILLINGNESS, applicationTerms, chairSigned, employeeSigned, employeeUndertaking, entryTerms, sgbUndertaking, yearMax, type Year } from "@/lib/section38a";
+import { ACTIVITIES, BENEFITS, PAYS, SOURCES, TIMES, WILLINGNESS, applicationTerms, chairSigned, employeeSigned, employeeUndertaking, entryTerms, sgbUndertaking, yearMax, type Year } from "@/lib/section38a";
 import { changeYear, getYear, openLink, parseToken, saveSignature, type LinkTarget } from "@/lib/section38aData";
 
 // A signer's link: no sign-in, the secret in the emailed link is the key. It
@@ -19,9 +20,9 @@ const termsOf = (y: Year, t: LinkTarget) => (t.kind === "chair" ? applicationTer
 const nameOf = (t: LinkTarget) => (t.kind === "chair" ? t.chair.name : `${t.entry.name} ${t.entry.surname}`);
 
 export async function GET(req: NextRequest, { params }: Ctx) {
-  const limited = await enforce([[LIMITS.section38aLink, ipOf(req)]]);
-  if (limited) return limited;
   const parsed = parseToken((await params).token);
+  const limited = await enforce(parsed ? [[LIMITS.section38aIp, ipOf(req)], [LIMITS.section38aLink, parsed.target]] : [[LIMITS.section38aIp, ipOf(req)]]);
+  if (limited) return limited;
   if (!parsed) return gone();
   const y = await getYear(parsed.year);
   const t = openLink(y, parsed.target, parsed.secret);
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const base = { school, year: y.year, name: nameOf(t), terms: termsOf(y, t) };
   if (t.kind === "chair") {
     const who = y.people.map((e) => `${e.name} ${e.surname}`).join(", ");
+    const policyName = (y.policyId && (await getPolicyById(y.policyId))?.name) || "-";
     return NextResponse.json(
       {
         ...base,
@@ -39,7 +41,35 @@ export async function GET(req: NextRequest, { params }: Ctx) {
         line: t.line,
         signed: chairSigned(y, t.chair),
         undertaking: sgbUndertaking(school, who),
-        people: y.people.map((e) => ({ name: `${e.name} ${e.surname}`, description: e.description, max: yearMax(e) })),
+        // Everything applicationTerms covers: a chair must see what the signature will stand for.
+        facts: [
+          { label: "Province", value: y.province },
+          { label: "District", value: y.district },
+          { label: "EMIS number", value: y.emis },
+          { label: "Date the budget is finalised", value: y.budgetDate },
+          { label: "Budget line for 38A, tax included", value: `R ${y.budgetLine.toFixed(2)}` },
+          { label: "Section 38A policy", value: policyName },
+          { label: "SGB meeting date", value: y.approval.meetingDate },
+          { label: "Minutes item", value: y.approval.item },
+          { label: "Who stepped out for this item (staff on the SGB who are on this list)", value: y.approval.steppedOut || "-" },
+        ],
+        sources: y.sources.map((s) => SOURCES[s]),
+        confirmations: [
+          ...(y.approval.sections20 ? ["SGB-employed staff comply with sections 20(5) to (9)."] : []),
+          ...(y.approval.funds ? ["None of this comes from the state allocation, and the budget includes tax."] : []),
+          ...(y.approval.affordable ? ["The school's assets will exceed its liabilities after these payments."] : []),
+        ],
+        people: y.people.map((e) => ({
+          name: `${e.name} ${e.surname}`,
+          persal: e.persal,
+          rank: e.rank,
+          benefit: BENEFITS[e.benefit],
+          description: e.description,
+          details: e.details,
+          pay: PAYS[e.pay],
+          amount: e.amount,
+          max: yearMax(e),
+        })),
       },
       { headers }
     );
@@ -62,6 +92,8 @@ export async function GET(req: NextRequest, { params }: Ctx) {
         timesOther: e.timesOther,
         pay: PAYS[e.pay],
         amount: e.amount,
+        hours: e.hours,
+        details: e.details,
         max: yearMax(e),
       },
     },
@@ -70,9 +102,9 @@ export async function GET(req: NextRequest, { params }: Ctx) {
 }
 
 export async function POST(req: NextRequest, { params }: Ctx) {
-  const limited = await enforce([[LIMITS.section38aLink, ipOf(req)]]);
-  if (limited) return limited;
   const parsed = parseToken((await params).token);
+  const limited = await enforce(parsed ? [[LIMITS.section38aIp, ipOf(req)], [LIMITS.section38aLink, parsed.target]] : [[LIMITS.section38aIp, ipOf(req)]]);
+  if (limited) return limited;
   if (!parsed) return gone();
   const { year, target, secret } = parsed;
   const b = (await req.json().catch(() => null)) as { action?: unknown; dataUrl?: unknown; kind?: unknown; terms?: unknown; note?: unknown } | null;

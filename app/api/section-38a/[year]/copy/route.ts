@@ -26,7 +26,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ yea
       policyId: y.policyId || last.policyId,
       sgbTagId: y.sgbTagId || last.sgbTagId,
       financeTagId: y.financeTagId || last.financeTagId,
-      people: last.people.map(({ link: _l, signature: _s, problem: _p, decision: _d, ...terms }) => ({ ...terms, id: randomUUID() })),
+      people: last.people.map(({ link: _l, signature: _s, problem: _p, decision: _d, confirmed: _c, ...terms }) => ({ ...terms, id: randomUUID() })),
     };
   });
   if (!copied) return NextResponse.json({ error: "This year already has people on it." }, { status: 409 });

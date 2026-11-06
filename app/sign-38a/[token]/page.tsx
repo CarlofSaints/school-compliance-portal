@@ -19,8 +19,11 @@ interface View {
   signed: boolean;
   undertaking: { intro: string; points: string[] };
   willingness?: string;
-  entry?: { persal: string; rank: string; benefit: string; activities: string[]; description: string; times: string[]; timesOther: string; pay: string; amount: number; max: number };
-  people?: { name: string; description: string; max: number }[];
+  entry?: { persal: string; rank: string; benefit: string; activities: string[]; description: string; times: string[]; timesOther: string; pay: string; amount: number; hours: number; details: string; max: number };
+  facts?: { label: string; value: string }[];
+  sources?: string[];
+  confirmations?: string[];
+  people?: { name: string; persal: string; rank: string; benefit: string; description: string; details: string; pay: string; amount: number; max: number }[];
 }
 
 const rand = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -45,9 +48,10 @@ export default function Sign38aPage({ params }: { params: Promise<{ token: strin
   useEffect(() => {
     fetch(url).then(async (r) => {
       if (r.ok) setView(await r.json());
-      else setMissing(true);
+      else if (r.status === 404) setMissing(true);
+      else setError(((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? t("Something went wrong. Please try again."));
     });
-  }, [url]);
+  }, [url, t]);
 
   const post = async (body: Record<string, unknown>, thanks: string) => {
     setBusy(true);
@@ -60,7 +64,7 @@ export default function Sign38aPage({ params }: { params: Promise<{ token: strin
 
   const body = () => {
     if (missing) return <p className="text-gray-600">{t("This link has expired or been replaced. Ask the school to send a new one.")}</p>;
-    if (!view) return <p className="text-gray-500">{t("Loading...")}</p>;
+    if (!view) return error ? <p role="alert" className="text-red-700">{error}</p> : <p className="text-gray-500">{t("Loading...")}</p>;
     if (done) return <p className="text-gray-700">{done}</p>;
     if (view.signed) return <p className="text-gray-700">{t("You have already signed this. Thank you.")}</p>;
     const e = view.entry;
@@ -83,15 +87,30 @@ export default function Sign38aPage({ params }: { params: Promise<{ token: strin
             <Row label={t("Duties")} value={e.description} />
             <Row label={t("When is the work done?")} value={[...e.times.map((x) => t(x)), e.timesOther].filter(Boolean).join(", ")} />
             <Row label={t("Paid")} value={`${rand(e.amount)}, ${t(e.pay)}`} />
+            {e.hours > 0 && <Row label={t("Hours in the year")} value={String(e.hours)} />}
+            {e.details && <Row label={t("Full details of the extent of the payment")} value={e.details} />}
             <Row label={t("Year maximum")} value={rand(e.max)} />
           </div>
         )}
-        {view.people && (
-          <table className="w-full text-sm mb-4">
-            <thead><tr className="text-left text-gray-500 border-b border-gray-100"><th className="py-1 pr-3 font-medium">{t("Person")}</th><th className="py-1 pr-3 font-medium">{t("Duties")}</th><th className="py-1 font-medium text-right">{t("Year maximum")}</th></tr></thead>
-            <tbody>{view.people.map((p, i) => <tr key={i} className="border-b border-gray-50 align-top"><td className="py-1 pr-3">{p.name}</td><td className="py-1 pr-3">{p.description}</td><td className="py-1 text-right whitespace-nowrap">{rand(p.max)}</td></tr>)}</tbody>
-          </table>
+        {view.facts && (
+          <div className="bg-gray-50 rounded-lg px-4 py-2 mb-4 divide-y divide-gray-100">
+            {view.facts.map((f) => <Row key={f.label} label={t(f.label)} value={f.value} />)}
+            <Row label={t("Where the money comes from")} value={(view.sources ?? []).map((s) => t(s)).join(", ")} />
+            {view.confirmations?.map((c) => <p key={c} className="py-1 text-sm">{t(c)}</p>)}
+          </div>
         )}
+        {view.people?.map((p, i) => (
+          <div key={i} className="bg-gray-50 rounded-lg px-4 py-2 mb-3 divide-y divide-gray-100">
+            <Row label={t("Name")} value={p.name} />
+            <Row label={t("PERSAL number")} value={p.persal} />
+            <Row label={t("Rank")} value={p.rank} />
+            <Row label={t("Type of payment")} value={t(p.benefit)} />
+            <Row label={t("Duties")} value={p.description} />
+            {p.details && <Row label={t("Full details of the extent of the payment")} value={p.details} />}
+            <Row label={t("Paid")} value={`${rand(p.amount)}, ${t(p.pay)}`} />
+            <Row label={t("Year maximum")} value={rand(p.max)} />
+          </div>
+        ))}
 
         <div lang="en" className="text-sm text-gray-700 space-y-2 border border-gray-100 rounded-lg p-4 mb-4">
           <p>{view.undertaking.intro}</p>

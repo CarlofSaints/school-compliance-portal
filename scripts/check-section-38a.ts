@@ -123,6 +123,33 @@ const PERSON = {
 
   assert.equal((await send.POST(await call(admin, "/x", "POST", { target: "sgb" }), Y)).status, 400, "a chair cannot be sent to before the SGB has approved");
 
+  // What a signer undertakes is part of what they signed.
+  const y0 = { ...lib.emptyYear(2027), province: "Limpopo" };
+  const t0 = lib.entryTerms(y0, PERSON as never);
+  assert.notEqual(t0, lib.entryTerms({ ...y0, province: "Gauteng" }, PERSON as never), "province");
+  assert.notEqual(t0, lib.entryTerms(y0, { ...PERSON, email: "other@example.com" } as never), "email");
+  assert.notEqual(t0, lib.entryTerms(y0, { ...PERSON, details: "more" } as never), "details");
+  const a0 = lib.applicationTerms(y0);
+  for (const change of [{ budgetLine: 1 }, { sources: ["fees"] }, { policyId: "x" }, { budgetDate: "2026-01-01" }]) {
+    assert.notEqual(a0, lib.applicationTerms({ ...y0, ...change } as never), JSON.stringify(change));
+  }
+
+  // Correcting the address kills the link that went to the wrong one.
+  const wrongBox = await people.POST(await call(admin, "/x", "POST", { ...PERSON, name: "Second", email: "typo@example.com" }), Y);
+  const second = (await wrongBox.json()).id;
+  const secondLink = data.mintLink(2027, second, { name: "Admin", email: "admin@example.com" });
+  await data.changeYear(2027, (y) => ({ ...y, people: y.people.map((e) => (e.id === second ? { ...e, link: secondLink.link } : e)) }));
+  const S2 = { params: Promise.resolve({ token: secondLink.token }) };
+  assert.equal((await pub.GET(await call(null, "/x", "GET"), S2)).status, 200);
+  const Pid2 = { params: Promise.resolve({ year: "2027", id: second }) };
+  assert.equal((await person.PUT(await call(admin, "/x", "PUT", { ...PERSON, name: "Second", email: "right@example.com" }), Pid2)).status, 200);
+  assert.equal((await pub.GET(await call(null, "/x", "GET"), S2)).status, 404, "old link dead");
+  assert.equal((await person.DELETE(await call(admin, "/x", "DELETE"), Pid2)).status, 200);
+
+  // A copied entry carries no confirmation, so lodging waits for one.
+  const noConfirm = lib.overview({ ...lib.emptyYear(2027), people: [{ ...PERSON, id: "c" } as never] }, "2026-06-01");
+  assert.ok(noConfirm.gaps.includes("The SGB's three confirmations for each person"));
+
   // Lodging waits for everything.
   const notReady = await lodge.POST(await call(admin, "/x", "POST", { date: "2026-07-01" }), Y);
   assert.equal(notReady.status, 409);
@@ -142,6 +169,18 @@ const PERSON = {
   };
   await chair("sgb", "Chair One");
   await chair("finance", "Chair Two");
+  const signedView = await data.getYear(2027);
+  assert.ok(lib.chairSigned(signedView, signedView.chairs.sgb));
+  assert.ok(!lib.chairSigned({ ...signedView, budgetLine: 1 }, signedView.chairs.sgb), "a new budget line voids a chair");
+
+  // A chair who has handed over: the tag has moved, so lodging refuses.
+  const { createTag } = await import("../lib/tagData");
+  await createTag({ id: "chair", name: "Chair" } as never);
+  await data.changeYear(2027, (y) => ({ ...y, sgbTagId: "chair" }));
+  const moved = await lodge.POST(await call(admin, "/x", "POST", { date: "2026-07-20" }), Y);
+  assert.equal(moved.status, 409);
+  assert.match((await moved.json()).error, /no longer carries/);
+  await data.changeYear(2027, (y) => ({ ...y, sgbTagId: "" }));
 
   read = await (await main.GET(await call(admin, "/api/section-38a/2027", "GET"), Y)).json();
   assert.equal(read.overview.chairsSigned, 2);
@@ -152,6 +191,7 @@ const PERSON = {
   assert.equal(Buffer.from(await pdf.arrayBuffer()).subarray(0, 4).toString(), "%PDF");
 
   assert.equal((await lodge.POST(await call(admin, "/x", "POST", { date: "2026-07-20", how: "By hand", reference: "" }), Y)).status, 200);
+  assert.equal((await lodge.POST(await call(admin, "/x", "POST", { date: "2026-07-20" }), Y)).status, 409, "lodging twice is refused");
   assert.equal((await person.PUT(await call(admin, "/x", "PUT", PERSON), P)).status, 409, "lodged locks the list");
   assert.equal((await person.DELETE(await call(admin, "/x", "DELETE"), P)).status, 409);
   assert.equal((await main.PUT(await call(admin, "/x", "PUT", setup), Y)).status, 409, "lodged locks the setup");
@@ -165,6 +205,9 @@ const PERSON = {
   assert.equal(read.overview.approved, 1);
   assert.equal(read.overview.step, lib.STEPS.length, "every step done");
   assert.equal((await lodge.DELETE(await call(admin, "/x", "DELETE"), Y)).status, 409, "decisions hold the lodgement");
+  assert.equal((await decision.PUT(await call(admin, "/x", "PUT", { id, decision: null }), Y)).status, 200);
+  assert.equal((await lodge.DELETE(await call(admin, "/x", "DELETE"), Y)).status, 200);
+  assert.equal((await data.getYear(2027)).letter, undefined, "the letter does not outlive its lodgement");
 
   console.log("check-section-38a: all passed");
 })().catch((e) => {

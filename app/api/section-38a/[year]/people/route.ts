@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ yea
   let locked = false;
   await changeYear(auth.year, (y) => {
     locked = !!y.lodged;
-    return locked ? NO_CHANGE : { ...y, people: [...y.people, { ...terms, id }] };
+    return locked ? NO_CHANGE : { ...y, people: [...y.people, { ...terms, id, confirmed: { by: `${auth.session.name} ${auth.session.surname}`.trim(), at: new Date().toISOString() } }] };
   });
   if (locked) return NextResponse.json({ error: LOCKED }, { status: 409 });
   await recordActivity({ ...actorFrom(req, auth.session), action: "section38a.person_added", entity: "section_38a", entityId: id, summary: `Added ${terms.name} ${terms.surname} to the section 38A list for ${auth.year}` });

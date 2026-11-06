@@ -25,6 +25,8 @@ export async function guard(req: NextRequest, param: string) {
   return { session, year: Number(param) };
 }
 
+export const sameEmail = (a?: string, b?: string) => a?.trim().toLowerCase() === b?.trim().toLowerCase();
+
 export const LOCKED = "This application has been lodged. Undo the lodgement to change it.";
 
 // --- Signing links ---------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth, authFetch, apiErrorMessage } from "@/lib/useAuth";
 import Toast from "@/components/Toast";
 import FileUpload from "@/components/FileUpload";
@@ -33,7 +33,7 @@ interface Data {
   people: { id: string; name: string; email: string }[];
 }
 type Setup = Pick<ClientYear, "budgetDate" | "province" | "district" | "emis" | "budgetLine" | "sources" | "policyId" | "sgbTagId" | "financeTagId" | "approval">;
-type Person = Omit<ClientYear["people"][number], "id" | "link" | "signature" | "problem" | "decision" | "status" | "max"> & { stateNotPaying: boolean; noInterference: boolean; coreActivity: boolean };
+type Person = Omit<ClientYear["people"][number], "id" | "link" | "signature" | "problem" | "decision" | "confirmed" | "status" | "max"> & { stateNotPaying: boolean; noInterference: boolean; coreActivity: boolean };
 
 const PROVINCES = ["Eastern Cape", "Free State", "Gauteng", "KwaZulu-Natal", "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape"];
 const BLANK: Person = {
@@ -92,10 +92,16 @@ export default function Section38aPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // The forms seed once per year, never on a refresh: a refresh must not wipe what someone is typing.
+  const shown = useRef(year);
+  useEffect(() => {
+    shown.current = year;
+  }, [year]);
   const load = useCallback(async (seed: boolean) => {
     const res = await authFetch(`/api/section-38a/${year}`);
+    if (shown.current !== year) return; // the year changed while this was on its way
     if (!res.ok) return setToast({ message: await apiErrorMessage(res), type: "error" });
     const d: Data = await res.json();
+    if (shown.current !== year) return;
     setData(d);
     if (seed) {
       const { budgetDate, province, district, emis, budgetLine, sources, policyId, sgbTagId, financeTagId, approval } = d.year;
@@ -279,7 +285,7 @@ export default function Section38aPage() {
                           {!locked && (
                             <>
                               {e.status !== "signed" && <button onClick={() => send(e.id)} disabled={busy} className="text-primary hover:underline text-xs mr-3">{e.link ? t("Send again") : t("Send to sign")}</button>}
-                              <button onClick={() => setEditing({ id: e.id, person: { name: e.name, surname: e.surname, email: e.email, persal: e.persal, rank: e.rank, benefit: e.benefit, activities: e.activities, description: e.description, times: e.times, timesOther: e.timesOther, pay: e.pay, amount: e.amount, hours: e.hours, details: e.details, stateNotPaying: true, noInterference: true, coreActivity: true } })} className="text-primary hover:underline text-xs mr-3">{t("Edit")}</button>
+                              <button onClick={() => setEditing({ id: e.id, person: { name: e.name, surname: e.surname, email: e.email, persal: e.persal, rank: e.rank, benefit: e.benefit, activities: e.activities, description: e.description, times: e.times, timesOther: e.timesOther, pay: e.pay, amount: e.amount, hours: e.hours, details: e.details, stateNotPaying: false, noInterference: false, coreActivity: false } })} className="text-primary hover:underline text-xs mr-3">{t("Edit")}</button>
                               <button onClick={async () => { if (await act(`${base}/people/${e.id}`, { method: "DELETE" }, t("Saved."))) await load(false); }} disabled={busy} className="text-red-600 hover:underline text-xs">{t("Remove")}</button>
                             </>
                           )}

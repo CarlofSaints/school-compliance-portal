@@ -20,7 +20,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     if (y.lodged) return (outcome = "locked"), NO_CHANGE;
     if (!y.people.some((e) => e.id === id)) return (outcome = "missing"), NO_CHANGE;
     outcome = "saved";
-    return { ...y, people: y.people.map((e) => (e.id === id ? { ...e, ...terms, problem: undefined } : e)) };
+    const confirmed = { by: `${auth.session.name} ${auth.session.surname}`.trim(), at: new Date().toISOString() };
+    // A link sent to the wrong address must stop working once the address is corrected.
+    return { ...y, people: y.people.map((e) => (e.id === id ? { ...e, ...terms, confirmed, problem: undefined, link: e.email === terms.email ? e.link : undefined } : e)) };
   });
   if (outcome === "locked") return NextResponse.json({ error: LOCKED }, { status: 409 });
   if (outcome === "missing") return NextResponse.json({ error: "That person is not on this list." }, { status: 404 });

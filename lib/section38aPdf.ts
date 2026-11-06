@@ -30,7 +30,7 @@ const MARGIN = 50;
 const WIDTH = A4[0] - MARGIN * 2;
 
 // The built-in PDF font takes Latin-1 only, and throws on anything else.
-const safe = (s: string) => s.replace(/[^\x20-\x7e\xa0-\xff]/g, "?");
+const safe = (s: string) => s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2018\u2019]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[^\x20-\x7e\xa0-\xff]/g, "?");
 const rand = (n: number) => `R ${n.toFixed(2)}`;
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "long" });
 
@@ -111,7 +111,10 @@ function partA(w: Writer, y: Year, e: Entry, school: string) {
   w.text("9. Confirmation of compliance in terms of Section 20 (5) - (9) of SASA with regard to additional staff employed by the SGB.", { f: w.bold });
   w.text(yesNo(y.approval.sections20));
   w.text("10. Confirmation that the SGB has budgeted for this section 38A expenditure (including taxes) and has calculated the reasonable monetary value of any benefit.", { f: w.bold });
-  w.text(yesNo(y.budgetLine > 0));
+  w.text(yesNo(y.budgetLine > 0 && y.people.reduce((sum, p) => sum + yearMax(p), 0) <= y.budgetLine));
+  w.y -= 6;
+  w.text("The SGB confirms that the state does not already pay for this work, that it will not interfere with the employee's normal duties, and that it supports the core activities of the school.");
+  if (e.confirmed) w.text(`Confirmed by ${e.confirmed.by} on ${day(e.confirmed.at)}.`);
 }
 
 function undertaking(w: Writer, u: { intro: string; points: string[] }) {
@@ -124,7 +127,8 @@ export async function section38aPack(y: Year, school: string, policy: { name: st
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const w = new Writer(pdf, font, bold);
-  const image = async (s?: Signature, counts = false) => (s && counts ? pdf.embedPng(decodeSignature(s.dataUrl).png) : null);
+  // A mark that will not embed leaves the line unsigned rather than losing the whole pack.
+  const image = async (s?: Signature, counts = false) => (s && counts ? pdf.embedPng(decodeSignature(s.dataUrl).png).catch(() => null) : null);
   const chair = async (c?: Chair) => ({ image: await image(c?.signature, chairSigned(y, c)), name: chairSigned(y, c) ? c!.signature!.name : "", on: chairSigned(y, c) ? day(c!.signature!.at) : "" });
   const [sgb, finance] = await Promise.all([chair(y.chairs.sgb), chair(y.chairs.finance)]);
 

@@ -70,6 +70,8 @@ export interface Entry extends EntryTerms {
   signature?: Signature;
   problem?: { note: string; at: string };
   decision?: Decision;
+  /** Who gave the SGB's three confirmations for these terms. Absent on a copied entry until someone gives them. */
+  confirmed?: { by: string; at: string };
 }
 
 export interface Chair {
@@ -158,12 +160,13 @@ export const isDate = (s: unknown): s is string =>
 
 // --- Terms and signatures --------------------------------------------------------
 
-export function entryTerms(y: Pick<Year, "year">, e: EntryTerms): string {
-  return JSON.stringify([y.year, e.name, e.surname, e.persal, e.rank, e.benefit, e.activities, e.description, e.times, e.timesOther, e.pay, e.amount, e.hours, e.details]);
+// Everything a signer is shown or undertakes. 🔴 A new field on the form or the undertaking belongs here too.
+export function entryTerms(y: Pick<Year, "year" | "province">, e: EntryTerms): string {
+  return JSON.stringify([y.year, y.province, e.name, e.surname, e.email, e.persal, e.rank, e.benefit, e.activities, e.description, e.times, e.timesOther, e.pay, e.amount, e.hours, e.details]);
 }
 
 export function applicationTerms(y: Year): string {
-  return JSON.stringify([y.emis, y.district, y.province, y.approval, y.people.map((e) => entryTerms(y, e))]);
+  return JSON.stringify([y.emis, y.district, y.province, y.budgetDate, y.budgetLine, y.sources, y.policyId, y.approval, y.people.map((e) => entryTerms(y, e))]);
 }
 
 export const employeeSigned = (y: Year, e: Entry) => e.signature?.terms === entryTerms(y, e);
@@ -251,6 +254,7 @@ export function overview(y: Year, today: string): Overview {
   const gaps = [
     ...setup,
     ...(y.people.length ? [] : [tk("At least one person")]),
+    ...(y.people.some((e) => !e.confirmed) ? [tk("The SGB's three confirmations for each person")] : []),
     ...(y.people.length && !allSigned ? [tk("Every employee's signature")] : []),
     ...sgb,
     ...(chairsSigned < 2 ? [tk("Both chairs' signatures")] : []),
