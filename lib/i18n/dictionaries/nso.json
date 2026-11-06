@@ -2501,7 +2501,6 @@
   "The rows above are left out. Everyone else loads.": "Methaladi ye e lego ka godimo e tlogelwa ntle. Ba bangwe ka moka ba a tsenywa.",
   "Load {count} people": "Tsenya batho ba {count}",
   "These rows were not loaded. Fix them and upload the file again.": "Methaladi ye ga se ya tsenywa. E lokiše gomme o tsenye faele gape.",
-  "SGB or State": "SGB goba Mmušo",
   "Staff number": "Nomoro ya mošomi",
   "SACE number": "Nomoro ya SACE",
   "Persal number": "Nomoro ya Persal",
@@ -2518,5 +2517,9 @@
   "Put a comma between each subject or grade. Leave Grade blank for a coach.": "Bea khoma magareng ga thuto goba kreiti ye nngwe le ye nngwe. Tlogela Kreiti e se na selo go mokwetliši.",
   "SGB or Board Teacher": "Morutiši wa SGB goba wa Boto",
   "State Teacher": "Morutiši wa Mmušo",
-  "Already have a login, so only their staff details change: {names}": "Ba šetše ba na le go tsena, ka fao go fetoga fela dintlha tša bona tša bašomi: {names}"
+  "Already have a login, so only their staff details change: {names}": "Ba šetše ba na le go tsena, ka fao go fetoga fela dintlha tša bona tša bašomi: {names}",
+  "Coach": "Mokwetliši",
+  "Staff type": "Mohuta wa mošomi",
+  "SACE number (optional)": "Nomoro ya SACE (ga se gapeletšo)",
+  "Choose Coach only for someone who does not teach. A coach who also teaches is a teacher.": "Kgetha Mokwetliši fela go motho yo a sa rutego. Mokwetliši yo a rutago gape ke morutiši."
 }
