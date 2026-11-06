@@ -17,7 +17,7 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
   lines: BudgetLine[];
   editable: boolean;
   onSave: (change: Partial<FeePlan>) => void;
-  onUse: (line: BudgetLine, amount: number, note: string, plan: FeePlan) => void;
+  onUse: (line: BudgetLine, amount: number, note: string, plan: FeePlan) => Promise<boolean>;
 }) {
   const t = useT();
   const [plan, setPlan] = useState<FeePlan>({ ...emptyFeePlan(centre), ...stored });
@@ -57,7 +57,14 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
     ) : (
       editable &&
       feeLine && (
-        <button disabled={!ready} onClick={() => onUse(feeLine, feeIncome(plan, s), note, { ...plan, chosenId: s.id, feeLineId: feeLine.id })} className="text-primary text-xs font-medium disabled:opacity-40">
+        <button
+          disabled={!ready}
+          onClick={async () => {
+            const chosen = { ...plan, chosenId: s.id, feeLineId: feeLine.id };
+            if (await onUse(feeLine, feeIncome(plan, s), note, chosen)) update({ chosenId: s.id, feeLineId: feeLine.id });
+          }}
+          className="text-primary text-xs font-medium disabled:opacity-40"
+        >
           {t("Use this")}
         </button>
       )
