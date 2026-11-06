@@ -67,6 +67,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id") ?? "";
   const removed = await removeScreen(id);
   if (!removed) return NextResponse.json({ error: "Screenshot not found." }, { status: 404 });
+  if (removed === "signed") return NextResponse.json({ error: "A signed payment notice cannot be removed." }, { status: 409 });
   await deleteFolder(`payments/screens/${id}`);
   await recordActivity({
     ...actorFrom(req, session),

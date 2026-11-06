@@ -10,15 +10,16 @@ import SortableTh from "@/components/SortableTh";
 import SignaturePad from "@/components/SignaturePad";
 import DownloadLink from "@/components/DownloadLink";
 import { useT } from "@/components/I18nProvider";
-import { CHECK_HOVER, NO_PROOF, PAID_UNSIGNED, STATUS_HOVER, STATUS_LABELS, type Check, type InboxRow, type InvoiceStatus, type UnmatchedLine } from "@/lib/payments";
+import { CHECK_HOVER, NO_PROOF, PAID_UNSIGNED, STATUS_HOVER, STATUS_LABELS, statusCount, type Check, type InboxRow, type InvoiceStatus, type NoticeRow, type Progress, type UnmatchedLine } from "@/lib/payments";
 
 // The invoice inbox. Files go up one at a time (a request is capped at 4.5 MB)
 // and three at once, so a month-end batch does not take all morning.
 
 interface Inbox {
   rows: InboxRow[];
+  notices: NoticeRow[];
   unmatched: UnmatchedLine[];
-  screens: { id: string; filename: string; loadedAt: string; payments: number; statement: boolean }[];
+  screens: { id: string; filename: string; loadedAt: string; payments: number; statement: boolean; signed: boolean }[];
   canSign: boolean;
   signersChosen: boolean;
   balance: number;
@@ -32,22 +33,13 @@ interface Result {
   done: boolean;
 }
 
-interface Signature {
-  name: string;
-  at: string;
-  dataUrl: string;
-  override: boolean;
-}
-
 const AT_ONCE = 3;
 const STATUS_ORDER = Object.keys(STATUS_LABELS) as InvoiceStatus[];
 const STATUS_LOOK: Record<InvoiceStatus, string> = {
   pending_approval: "bg-gray-100 text-gray-600",
   pending_signatures: "bg-amber-50 text-amber-700",
-  signed_one: "bg-blue-50 text-blue-700",
-  signed_all: "bg-blue-100 text-blue-800",
-  released_one: "bg-indigo-50 text-indigo-700",
-  released_all: "bg-indigo-100 text-indigo-800",
+  signing: "bg-blue-50 text-blue-700",
+  approving: "bg-indigo-50 text-indigo-700",
   paid: "bg-green-100 text-green-800",
 };
 const rand = (n: number | null) =>
@@ -69,16 +61,51 @@ function CheckIcon({ check }: { check: Check }) {
   );
 }
 
+/** Who has signed each line of the stamp, who has approved at the bank, who is still owed. */
+function Slots({ progress }: { progress: Progress }) {
+  const t = useT();
+  if (!progress.slots.length) return <>-</>;
+  return (
+    <ul className="text-xs space-y-1">
+      {progress.slots.map((s, i) => (
+        <li key={i}>
+          {s.label && <span className="text-gray-500">{s.label}: </span>}
+          {s.signer ? (
+            <>
+              <span className="text-dark font-medium">{s.signer}</span>{" "}
+              <span className={s.approved ? "text-green-700" : "text-gray-500"}>{s.approved ? t("signed and approved") : t("signed, not yet approved")}</span>
+            </>
+          ) : s.waitingOn.length ? (
+            <span className="text-amber-700">{t("waiting on {names}", { names: s.waitingOn.join(" / ") })}</span>
+          ) : (
+            <span className="text-red-600">{t("nobody with a login carries this tag")}</span>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function StatusPill({ row, hint = "" }: { row: { status: InvoiceStatus; progress: Progress }; hint?: string }) {
+  const t = useT();
+  return (
+    <span title={[t(STATUS_HOVER[row.status]), hint].filter(Boolean).join(" ")} className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${STATUS_LOOK[row.status]}`}>
+      {t(STATUS_LABELS[row.status], statusCount(row))}
+    </span>
+  );
+}
+
 export default function InvoiceInboxPage() {
   const t = useT();
   const { session, loading } = useAuth(["view_payments", "manage_payments"]);
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
-  const [signing, setSigning] = useState<InboxRow | null>(null);
+  const [signing, setSigning] = useState<NoticeRow | null>(null);
   const [mark, setMark] = useState<{ dataUrl: string; kind: "drawn" | "typed" } | null>(null);
   const [override, setOverride] = useState(false);
-  const [signatures, setSignatures] = useState<Signature[]>([]);
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signerSettings, setSignerSettings] = useState<{ signerTagIds: string[]; tags: { id: string; name: string }[] } | null>(null);
   const { sortKey, sortDir, toggle, sort } = useTableSort<InboxRow>("loadedAt", "desc");
@@ -163,22 +190,34 @@ export default function InvoiceInboxPage() {
     refresh();
   };
 
-  const openSign = async (r: InboxRow) => {
-    setSigning(r);
+  const openSign = (n: NoticeRow) => {
+    setSigning(n);
     setMark(null);
     setOverride(false);
-    setSignatures([]);
-    const res = await authFetch(`/api/payments/invoices/${r.id}/sign`);
-    if (res.ok) setSignatures(await res.json());
+    setCode("");
+    setCodeSent(false);
+  };
+
+  const sendCode = async () => {
+    if (!signing) return;
+    setBusy(true);
+    const res = await authFetch(`/api/payments/screens/${signing.id}/code`, { method: "POST" });
+    setBusy(false);
+    if (!res.ok) {
+      setToast({ message: await apiErrorMessage(res, t("Failed")), type: "error" });
+      return;
+    }
+    setCodeSent(true);
+    setToast({ message: t("Your code is on its way to your email."), type: "success" });
   };
 
   const sign = async () => {
     if (!signing || !mark) return;
     setBusy(true);
-    const res = await authFetch(`/api/payments/invoices/${signing.id}/sign`, {
+    const res = await authFetch(`/api/payments/screens/${signing.id}/sign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...mark, override }),
+      body: JSON.stringify({ ...mark, override, code }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -190,8 +229,8 @@ export default function InvoiceInboxPage() {
     refresh();
   };
 
-  const setReleased = async (r: InboxRow, released: boolean) => {
-    const res = await authFetch(`/api/payments/invoices/${r.id}/release`, {
+  const setReleased = async (n: NoticeRow, released: boolean) => {
+    const res = await authFetch(`/api/payments/screens/${n.id}/release`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ released }),
@@ -221,7 +260,7 @@ export default function InvoiceInboxPage() {
     if (k === "status") return STATUS_ORDER.indexOf(r.status);
     return String(r[k as keyof InboxRow] ?? "");
   });
-  const red = !!signing && (signing.bank.status !== "match" || signing.amount.status !== "match");
+  const red = !!signing && signing.lines.some((l) => l.bank.status !== "match" || l.amountMatch.status !== "match");
   const mine = !!signing && signing.signedBy.some((s) => s.userId === session?.id);
 
   return (
@@ -241,7 +280,7 @@ export default function InvoiceInboxPage() {
       </div>
 
       {inbox && !inbox.signersChosen && (
-        <p className="bg-amber-50 text-amber-800 text-sm rounded-lg px-4 py-3 mb-4">{t("Nobody can sign invoices yet. An administrator must choose the tags who sign.")}</p>
+        <p className="bg-amber-50 text-amber-800 text-sm rounded-lg px-4 py-3 mb-4">{t("Nobody can sign payment notices yet. An administrator must choose the tags who sign.")}</p>
       )}
 
       {manage && (
@@ -252,7 +291,7 @@ export default function InvoiceInboxPage() {
               <FileUpload multiple accept=".pdf,.png,.jpg,.jpeg,.webp" label={t("Drop one or many invoices here")} onChange={(f) => send(f, "/api/payments/invoices")} />
             </div>
             <div>
-              <h2 className="text-sm font-semibold text-dark mb-2">{t("2. Load the bank screen")}</h2>
+              <h2 className="text-sm font-semibold text-dark mb-2">{t("2. Load the bank payment notice")}</h2>
               <FileUpload multiple accept=".png,.jpg,.jpeg,.webp,.pdf" label={t("Drop a screenshot here, or paste it with Ctrl+V")} onChange={(f) => send(f, "/api/payments/screens")} />
             </div>
             <div>
@@ -282,6 +321,69 @@ export default function InvoiceInboxPage() {
         </>
       )}
 
+      {!!inbox?.notices.length && (
+        <>
+          <h2 className="text-sm font-semibold text-dark mb-2">{t("Bank payment notices")}</h2>
+          <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto mb-6">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-gray-100">
+                  <th className="px-4 py-3 font-medium">{t("Payment notice")}</th>
+                  <th className="px-4 py-3 font-medium">{t("Status")}</th>
+                  <th className="px-4 py-3 font-medium text-right">{t("Total")}</th>
+                  <th className="px-4 py-3 font-medium">{t("Signatures")}</th>
+                  <th className="px-4 py-3 font-medium">{t("Signed Notice")}</th>
+                  <th className="px-4 py-3 font-medium text-center">{t("Approved at bank")}</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {inbox.notices.map((n) => {
+                  const signedThis = n.signedBy.some((s) => s.userId === session?.id);
+                  return (
+                    <tr key={n.id} className="border-b border-gray-50 last:border-0 align-top">
+                      <td className="px-4 py-3 max-w-56">
+                        <a href={`/api/payments/files/screen/${n.id}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{n.filename}</a>
+                        <div className="text-xs text-gray-500">{t("{n} payment(s)", { n: n.lines.length })}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap"><StatusPill row={n} /></td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">{rand(n.total)}</td>
+                      <td className="px-4 py-3"><Slots progress={n.progress} /></td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {n.signedBy.length > 0 ? (
+                          <>
+                            <a href={`/api/payments/screens/${n.id}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
+                            <div><DownloadLink href={`/api/payments/screens/${n.id}/signed?download=1`} filename={`Signed - ${n.filename.replace(/\.[^.]+$/, "")}.pdf`} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
+                          </>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {signedThis ? (
+                          <input
+                            type="checkbox"
+                            checked={n.signedBy.some((s) => s.userId === session?.id && s.releasedAt)}
+                            onChange={(e) => setReleased(n, e.target.checked)}
+                            aria-label={t("I have approved this payment at the bank")}
+                            title={t("I have approved this payment at the bank")}
+                          />
+                        ) : (
+                          `${n.progress.approved} / ${n.progress.required}`
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {(inbox.canSign || n.signedBy.length > 0) && <button onClick={() => openSign(n)} className="text-primary hover:underline">{inbox.canSign && !signedThis ? t("Sign") : t("Signatures")}</button>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto mb-6">
         <table className="w-full text-sm">
           <thead>
@@ -294,9 +396,8 @@ export default function InvoiceInboxPage() {
               <SortableTh label={t("Bank Details Match")} sortKey="bank" align="center" {...th} />
               <SortableTh label={t("Amount Match")} sortKey="amount" align="center" {...th} />
               <SortableTh label={t("Difference")} sortKey="delta" align="right" {...th} />
-              <th className="px-4 py-3 font-medium">{t("Signed by")}</th>
-              <th className="px-4 py-3 font-medium">{t("Signed Invoice")}</th>
-              <th className="px-4 py-3 font-medium text-center">{t("Released")}</th>
+              <th className="px-4 py-3 font-medium">{t("Signatures")}</th>
+              <th className="px-4 py-3 font-medium">{t("Signed Notice")}</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -308,10 +409,8 @@ export default function InvoiceInboxPage() {
                   <div><DownloadLink href={`/api/payments/files/invoice/${r.id}?download=1`} filename={r.filename} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <span title={[t(STATUS_HOVER[r.status]), r.paidOn, r.paidUnsigned ? t(PAID_UNSIGNED) : ""].filter(Boolean).join(" ")} className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium cursor-help ${STATUS_LOOK[r.status]}`}>
-                    {t(STATUS_LABELS[r.status])}
-                    {r.paidUnsigned && " ⚠"}
-                  </span>
+                  <StatusPill row={r} hint={[r.paidOn, r.paidUnsigned ? t(PAID_UNSIGNED) : ""].filter(Boolean).join(" ")} />
+                  {r.paidUnsigned && " ⚠"}
                 </td>
                 <td className="px-4 py-3">
                   {r.supplierName || "-"}
@@ -322,9 +421,11 @@ export default function InvoiceInboxPage() {
                 <td className="px-4 py-3 text-center"><CheckIcon check={r.bank} /></td>
                 <td className="px-4 py-3 text-center"><CheckIcon check={r.amount} /></td>
                 <td className="px-4 py-3 text-right whitespace-nowrap text-red-700">{r.delta === null ? "" : `${r.delta > 0 ? "+" : "-"}${rand(Math.abs(r.delta))}`}</td>
-                <td className="px-4 py-3">{r.signedBy.map((s) => s.name).join(", ") || "-"}</td>
+                <td className="px-4 py-3"><Slots progress={r.progress} /></td>
                 <td className="px-4 py-3 whitespace-nowrap">
-                  {r.signedBy.length > 0 ? (
+                  {r.signedOnNotice ? (
+                    <a href={`/api/payments/screens/${r.noticeId}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
+                  ) : r.signedBy.length > 0 ? (
                     <>
                       <a href={`/api/payments/invoices/${r.id}/signed`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{t("View")}</a>
                       <div><DownloadLink href={`/api/payments/invoices/${r.id}/signed?download=1`} filename={`Signed - ${r.filename.replace(/\.[^.]+$/, "")}.pdf`} className="text-xs text-gray-500 hover:underline">{t("Download")}</DownloadLink></div>
@@ -333,28 +434,14 @@ export default function InvoiceInboxPage() {
                     "-"
                   )}
                 </td>
-                <td className="px-4 py-3 text-center">
-                  {r.signedBy.some((s) => s.userId === session?.id) ? (
-                    <input
-                      type="checkbox"
-                      checked={r.signedBy.some((s) => s.userId === session?.id && s.releasedAt)}
-                      onChange={(e) => setReleased(r, e.target.checked)}
-                      aria-label={t("I have released this payment at the bank")}
-                      title={t("I have released this payment at the bank")}
-                    />
-                  ) : (
-                    r.signedBy.filter((s) => s.releasedAt).length || ""
-                  )}
-                </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  {(inbox?.canSign || r.signedBy.length > 0) && <button onClick={() => openSign(r)} className="text-primary hover:underline">{inbox?.canSign && !r.signedBy.some((s) => s.userId === session?.id) ? t("Sign") : t("Signatures")}</button>}
                   {manage && r.signedBy.length === 0 && <button onClick={() => removeInvoice(r)} className="text-red-600 hover:underline ml-3">{t("Delete")}</button>}
                 </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-gray-400">{t("No invoices yet.")}</td>
+                <td colSpan={11} className="px-4 py-8 text-center text-gray-400">{t("No invoices yet.")}</td>
               </tr>
             )}
           </tbody>
@@ -401,7 +488,7 @@ export default function InvoiceInboxPage() {
                   s.filename
                 )}{" "}
                 <span className="text-gray-500">{t("{n} payment(s)", { n: s.payments })}</span>
-                {manage && <button onClick={() => removeScreen(s.id, s.filename)} className="text-red-600 hover:underline ml-3">{t("Remove")}</button>}
+                {manage && !s.signed && <button onClick={() => removeScreen(s.id, s.filename)} className="text-red-600 hover:underline ml-3">{t("Remove")}</button>}
               </li>
             ))}
           </ul>
@@ -410,8 +497,8 @@ export default function InvoiceInboxPage() {
 
       {signerSettings && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <h2 className="text-sm font-semibold text-dark mb-1">{t("Who can sign invoices")}</h2>
-          <p className="text-xs text-gray-500 mb-3">{t("Everyone carrying a ticked tag can sign. They also need the View Invoice Inbox permission on their role.")}</p>
+          <h2 className="text-sm font-semibold text-dark mb-1">{t("Who signs the payment notice")}</h2>
+          <p className="text-xs text-gray-500 mb-3">{t("Each ticked tag is one line on the stamp, for example Initiator, Principal and SGB or Board Representative. Anyone carrying that tag can sign that line. They also need the View Invoice Inbox permission on their role.")}</p>
           {signerSettings.tags.length === 0 && <p className="text-sm text-gray-500">{t("No tags yet. Create them under Admin > Tags.")}</p>}
           <div className="flex flex-wrap gap-4">
             {signerSettings.tags.map((tag) => (
@@ -430,24 +517,62 @@ export default function InvoiceInboxPage() {
 
       {signing && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
-          <div className="bg-white rounded-xl p-6 w-full max-w-xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-dark mb-1 break-all">{signing.filename}</h2>
-            <p className="text-sm text-gray-600 mb-4">{signing.supplierName || "-"}, {rand(signing.amountDue)}</p>
-            {signing.noProof && <p className="bg-orange-100 text-orange-800 text-sm rounded-lg px-3 py-2 mb-3">{t(NO_PROOF)}</p>}
-            <ul className="text-sm space-y-2 mb-4">
-              <li className="flex gap-2"><CheckIcon check={signing.bank} /><span>{t(CHECK_HOVER[signing.bank.code])}</span></li>
-              <li className="flex gap-2"><CheckIcon check={signing.amount} /><span>{t(CHECK_HOVER[signing.amount.code])}</span></li>
-            </ul>
-            {signatures.map((s) => (
-              <div key={s.at} className="border-t border-gray-100 py-2 text-sm">
-                <img src={s.dataUrl} alt={t("Signature of {name}", { name: s.name })} className="h-12" />
-                {s.name}, {new Date(s.at).toLocaleString("en-ZA")}
-                {s.override && <span className="text-red-600"> {t("(signed with a check not green)")}</span>}
-              </div>
-            ))}
+            <p className="text-sm text-gray-600 mb-3">
+              {t("{n} payment(s)", { n: signing.lines.length })}, {rand(signing.total)}{" "}
+              <a href={`/api/payments/files/screen/${signing.id}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-2">{t("Open the notice")}</a>
+            </p>
+            <div className="overflow-x-auto mb-4">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-gray-100">
+                    <th className="py-2 pr-3 font-medium">{t("Paid to")}</th>
+                    <th className="py-2 pr-3 font-medium text-right">{t("Amount")}</th>
+                    <th className="py-2 pr-3 font-medium">{t("Invoice")}</th>
+                    <th className="py-2 pr-3 font-medium text-center">{t("Bank Details Match")}</th>
+                    <th className="py-2 font-medium text-center">{t("Amount Match")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signing.lines.map((l, i) => (
+                    <tr key={i} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2 pr-3">
+                        {l.payee || "-"}
+                        {l.reference && <div className="text-xs text-gray-500">{l.reference}</div>}
+                        {l.noProof && <div><span className="inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">{t(NO_PROOF)}</span></div>}
+                      </td>
+                      <td className="py-2 pr-3 text-right whitespace-nowrap">
+                        {rand(l.amount)}
+                        {l.delta !== null && <div className="text-xs text-red-700">{l.delta > 0 ? "+" : "-"}{rand(Math.abs(l.delta))}</div>}
+                      </td>
+                      <td className="py-2 pr-3 break-all">
+                        {l.invoiceId ? <a href={`/api/payments/files/invoice/${l.invoiceId}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{l.invoiceName}</a> : "-"}
+                      </td>
+                      <td className="py-2 pr-3 text-center"><CheckIcon check={l.bank} /></td>
+                      <td className="py-2 text-center"><CheckIcon check={l.amountMatch} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Slots progress={signing.progress} />
             {inbox?.canSign && !mine && (
               <div className="mt-4">
                 <SignaturePad name={`${session?.name ?? ""} ${session?.surname ?? ""}`.trim()} onChange={setMark} />
+                <div className="flex flex-wrap items-center gap-3 mt-3">
+                  <button onClick={sendCode} disabled={busy} className="border border-gray-200 hover:border-primary text-dark px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                    {codeSent ? t("Send my code again") : t("Email me a code")}
+                  </button>
+                  <input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder={t("Code from your email")}
+                    aria-label={t("Code from your email")}
+                    autoComplete="one-time-code"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm w-48"
+                  />
+                </div>
                 {red && (
                   <label className="flex gap-2 text-sm text-red-700 mt-3">
                     <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
@@ -459,8 +584,8 @@ export default function InvoiceInboxPage() {
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setSigning(null)} className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">{t("Close")}</button>
               {inbox?.canSign && !mine && (
-                <button onClick={sign} disabled={busy || !mark || (red && !override)} className="bg-primary hover:bg-primary-dark disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                  {busy ? t("Signing...") : t("Sign invoice")}
+                <button onClick={sign} disabled={busy || !mark || !code.trim() || (red && !override)} className="bg-primary hover:bg-primary-dark disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                  {busy ? t("Signing...") : t("Sign payment notice")}
                 </button>
               )}
             </div>

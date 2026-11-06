@@ -7,7 +7,7 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import { writeFile } from "@/lib/controlData";
 import { getCredits, maySpendCredits } from "@/lib/contentTranslation";
 import { paidRead, readInvoice } from "@/lib/paymentAi";
-import { FILE_PATHS, NO_CREDITS, addInvoice, getContacts, getInvoices, getPaymentSettings, getScreens, readFailed, signingTags, uploadedFile } from "@/lib/paymentData";
+import { FILE_PATHS, NO_CREDITS, addInvoice, getContacts, getInvoices, getScreens, getSigningSlots, readFailed, tagsHeld, uploadedFile } from "@/lib/paymentData";
 import { buildInbox, cleanFilename, cleanInvoiceRead, type Invoice } from "@/lib/payments";
 
 // A long PDF can take a minute to read.
@@ -17,21 +17,20 @@ export const maxDuration = 120;
 export async function GET(req: NextRequest) {
   const session = await requireAnyPermission(req, ["view_payments", "manage_payments"]);
   if (session instanceof NextResponse) return session;
-  const [invoices, contacts, screens, settings, myTags, balance, canSpend] = await Promise.all([
+  const [invoices, contacts, screens, slots, balance, canSpend] = await Promise.all([
     getInvoices(),
     getContacts(),
     getScreens(),
-    getPaymentSettings(),
-    signingTags(session.id),
+    getSigningSlots(),
     getCredits(),
     maySpendCredits(session.id),
   ]);
   return NextResponse.json(
     {
-      ...buildInbox(invoices, contacts, screens, settings.signerTagIds),
-      screens: screens.map((s) => ({ id: s.id, filename: s.filename, loadedAt: s.loadedAt, payments: s.lines.length, statement: s.kind === "statement" })),
-      canSign: myTags.length > 0,
-      signersChosen: settings.signerTagIds.length > 0,
+      ...buildInbox(invoices, contacts, screens, slots),
+      screens: screens.map((s) => ({ id: s.id, filename: s.filename, loadedAt: s.loadedAt, payments: s.lines.length, statement: s.kind === "statement", signed: !!s.signedBy?.length })),
+      canSign: tagsHeld(slots, session.id).length > 0,
+      signersChosen: slots.length > 0,
       balance,
       canSpend,
     },

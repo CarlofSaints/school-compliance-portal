@@ -63,8 +63,10 @@ async function main() {
   const contact = await import("../app/api/payments/contacts/[id]/route");
   const invoices = await import("../app/api/payments/invoices/route");
   const invoice = await import("../app/api/payments/invoices/[id]/route");
-  const sign = await import("../app/api/payments/invoices/[id]/sign/route");
-  const release = await import("../app/api/payments/invoices/[id]/release/route");
+  const sign = await import("../app/api/payments/screens/[id]/sign/route");
+  const codeRoute = await import("../app/api/payments/screens/[id]/code/route");
+  const release = await import("../app/api/payments/screens/[id]/release/route");
+  const noticePdf = await import("../app/api/payments/screens/[id]/signed/route");
   const screens = await import("../app/api/payments/screens/route");
   const files = await import("../app/api/payments/files/[kind]/[id]/route");
   const settings = await import("../app/api/payments/settings/route");
@@ -84,6 +86,7 @@ async function main() {
   const clerk = await make("clerk", "clerk");
   const principal = await make("pat", "signer", ["principal"]);
   const sgb = await make("sam", "signer", ["sgb"]);
+  const deputy = await make("pam", "signer", ["principal"]);
   const stranger = await make("stray", "nobody");
   await updateUser(clerk.id, { canSpendTranslationCredits: true });
   await addCredits(5);
@@ -140,62 +143,124 @@ async function main() {
   check("green bank tick, grey amount, Pending approval", [row.bank.status, row.amount.status, row.status], ["match", "unknown", "pending_approval"]);
   check("invoice opens inline", (await files.GET(req(principal, "/x"), { params: Promise.resolve({ kind: "invoice", id: inv }) })).headers.get("content-disposition")?.startsWith("inline"), true);
   check("invoice closed to a stranger", (await files.GET(req(stranger, "/x"), { params: Promise.resolve({ kind: "invoice", id: inv }) })).status, 403);
-  check("a bad release body undoes nothing", (await release.POST(json(clerk, "/x", "POST", {}), ctx(inv))).status, 400);
   check("an unknown file kind is not found", (await files.GET(req(clerk, "/x"), { params: Promise.resolve({ kind: "secrets", id: inv }) })).status, 404);
 
   // --- Bank screen
   aiAnswer = { payments: [{ payee: "ACME SUPPLIES", amount: 1000, accountNumber: "62012345678", branchCode: "", reference: "INV-1" }, { payee: "Someone Else", amount: 50, accountNumber: "", branchCode: "", reference: "" }] };
   const screenRes = await screens.POST(req(clerk, "/api/payments/screens", "POST", form({ file: new File([Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1])], "bank.jpg") })));
   check("bank screen loaded", screenRes.status, 201);
+  const notice = (await screenRes.json()).id as string;
+  check("a bad release body undoes nothing", (await release.POST(json(clerk, "/x", "POST", {}), ctx(notice))).status, 400);
   row = await statusOf(inv);
   check("amount green, Pending signatures", [row.amount.status, row.status], ["match", "pending_signatures"]);
   check("the other payment shows with a grey question mark", (await inbox(clerk)).unmatched.map((u: { payee: string; check: { status: string } }) => [u.payee, u.check.status]), [["Someone Else", "unknown"]]);
 
   // --- Who signs
-  check("nobody can sign before tags are chosen", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv))).status, 403);
+  const { hashSigningCode } = await import("../lib/minutesSigning");
+  const { getNoticeCodes, noticeCodeSalt, saveNoticeCode } = await import("../lib/paymentData");
+  const MARK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  const CODE = "ABC234";
+  // The real code only goes to a mailbox, so the test files a known one the same way the route does.
+  const codeFor = (u: U, id = notice, code = CODE) => saveNoticeCode(id, u.id, hashSigningCode(code, noticeCodeSalt(id, u.id)));
+  const signNow = (u: U, extra: object = {}, id = notice) => sign.POST(json(u, "/x", "POST", { dataUrl: MARK, code: CODE, override: true, ...extra }), ctx(id));
+  const noticeRow = async () => (await inbox(clerk)).notices.find((n: { id: string }) => n.id === notice);
+
+  check("no code for someone who cannot sign yet", (await codeRoute.POST(req(principal, "/x", "POST"), ctx(notice))).status, 403);
+  check("nobody can sign before tags are chosen", (await signNow(principal)).status, 403);
   check("a clerk cannot choose the tags", (await settings.PUT(json(clerk, "/x", "PUT", { signerTagIds: ["principal"] }))).status, 403);
   check("a bad body clears nobody", (await settings.PUT(json(admin, "/x", "PUT", {}))).status, 400);
   check("an admin chooses them, junk ignored", await (await settings.PUT(json(admin, "/x", "PUT", { signerTagIds: ["principal", "sgb", "made-up"] }))).json(), { signerTagIds: ["principal", "sgb"] });
-  check("Super Admin with no tag cannot sign", (await sign.POST(json(admin, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv))).status, 403);
-  check("a page-sized picture is no signature", (await sign.POST(json(principal, "/x", "POST", { dataUrl: "x" }), ctx(inv))).status, 400);
-  check("release before signing refused", (await release.POST(json(principal, "/x", "POST", { released: true }), ctx(inv))).status, 409);
+  check("Super Admin with no tag cannot sign", (await signNow(admin)).status, 403);
+  check("a page-sized picture is no signature", (await signNow(principal, { dataUrl: "x" })).status, 400);
+  check("release before signing refused", (await release.POST(json(principal, "/x", "POST", { released: true }), ctx(notice))).status, 409);
+  check("signing a statement: not found", (await codeRoute.POST(req(principal, "/x", "POST"), ctx("no-such"))).status, 404);
 
-  check("first signature", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv))).status, 201);
-  check("Signed by one", (await statusOf(inv)).status, "signed_one");
-  check("nobody signs twice", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv))).status, 409);
-  check("a signed invoice cannot be deleted", (await invoice.DELETE(req(clerk, "/x", "DELETE"), ctx(inv))).status, 409);
-  await sign.POST(json(sgb, "/x", "POST", { dataUrl: PNG_MARK }), ctx(inv));
-  check("Signed by all", (await statusOf(inv)).status, "signed_all");
-  check("signatures come back with the marks", (await (await sign.GET(req(clerk, "/x"), ctx(inv))).json()).map((s: { name: string; dataUrl: string }) => [s.name, s.dataUrl]), [["pat T", PNG_MARK], ["sam T", PNG_MARK]]);
+  const sent = await codeRoute.POST(req(sgb, "/x", "POST"), ctx(notice));
+  const filed = (await getNoticeCodes(notice))[sgb.id];
+  check("asking files a keyed hash, and never answers with it", [sent.status === 200 || sent.status === 502, /^[0-9a-f]{64}$/.test(filed?.hash ?? ""), JSON.stringify(await sent.json()).includes(filed?.hash ?? "x")], [true, true, false]);
+  check("the inbox never carries a code", JSON.stringify(await inbox(clerk)).includes(filed.hash), false);
+  check("no code asked for: refused", (await signNow(principal)).status, 400);
+  await codeFor(principal);
+  check("the wrong code: refused", (await signNow(principal, { code: "ZZZZZZ" })).status, 400);
+  check("someone else's code: refused", (await signNow(sgb)).status, 400);
+  check("a payment with no invoice needs the tick", (await signNow(principal, { override: false })).status, 409);
+  check("code and tick: signed", (await signNow(principal)).status, 201);
+  check("the code is spent", (await getNoticeCodes(notice))[principal.id], undefined);
+  let n = await noticeRow();
+  check("1 of 2 have signed", [n.status, n.progress.signed, n.progress.required], ["signing", 1, 2]);
+  check("names: who signed, who is waited on", n.progress.slots, [
+    { label: "Principal", signer: "pat T", approved: false, waitingOn: [] },
+    { label: "SGB", signer: "", approved: false, waitingOn: ["sam T"] },
+  ]);
+  row = await statusOf(inv);
+  check("the invoice row follows its notice", [row.status, row.progress.signed, row.signedOnNotice, row.noticeId === notice], ["signing", 1, true, true]);
+  check("the signer's second go refused", (await codeRoute.POST(req(principal, "/x", "POST"), ctx(notice))).status, 409);
+  check("the same tag cannot sign the same line", (await codeRoute.POST(req(deputy, "/x", "POST"), ctx(notice))).status, 409);
+  await codeFor(deputy);
+  check("not even with a code in hand", (await signNow(deputy)).status, 409);
+  check("an invoice on a signed notice cannot be deleted", (await invoice.DELETE(req(clerk, "/x", "DELETE"), ctx(inv))).status, 409);
+  check("a signed notice cannot be removed", (await screens.DELETE(req(clerk, `/api/payments/screens?id=${notice}`, "DELETE"))).status, 409);
+  await codeFor(sgb);
+  check("second line signed", (await signNow(sgb)).status, 201);
+  check("2 of 2 have signed", (await noticeRow()).progress.signed, 2);
 
-  // --- The signed invoice
+  // --- The stamped notice
+  const { PDFDocument, degrees } = await import("pdf-lib");
+  const { signedNoticePdf } = await import("../lib/paymentSignedPdf");
+  check("closed to a stranger", (await noticePdf.GET(req(stranger, "/x"), ctx(notice))).status, 403);
+  check("a notice nobody signed has none", (await noticePdf.GET(req(clerk, "/x"), ctx("no-such"))).status, 404);
+  const stamped = await noticePdf.GET(req(principal, "/x?download=1"), ctx(notice));
+  check("a signer can open it", [stamped.status, stamped.headers.get("content-type"), stamped.headers.get("content-disposition")?.includes("Signed - ")], [200, "application/pdf", true]);
+  const stampSlots = [{ tagId: "a", label: "Initiator", members: [] }, { tagId: "b", label: "Principal", members: [] }, { tagId: "c", label: "SGB Representative", members: [] }];
+  const stampSig = { userId: "u", name: "Sipho Ndlovu š", at: new Date().toISOString(), tagIds: ["b"], dataUrl: MARK, kind: "drawn" as const, fileHash: "h", override: true };
+  const noticeFile = { filename: "fnb.pdf", ext: "pdf", hash: "h".repeat(64), lines: [] } as never;
+  const twoPages = await PDFDocument.create();
+  twoPages.addPage([595, 842]);
+  twoPages.addPage([595, 842]);
+  const out = await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from(await twoPages.save()), [stampSig, { ...stampSig, userId: "w", tagIds: [], dataUrl: PNG_MARK }], stampSlots));
+  check("stamped on the original, no page added", out.getPageCount(), 2);
+  check("the last page grows to hold it", [out.getPage(0).getHeight(), out.getPage(1).getHeight() > 842], [842, true]);
+  const turned = await PDFDocument.create();
+  turned.addPage([842, 595]).setRotation(degrees(90));
+  check("a turned page keeps its shape, stamp on its own page", (await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from(await turned.save()), [stampSig], stampSlots))).getPageCount(), 2);
+  check("a damaged PDF still gives the stamp", (await PDFDocument.load(await signedNoticePdf(noticeFile, Buffer.from("%PDF-junk"), [stampSig], stampSlots))).getPageCount(), 1);
+  const picture = Buffer.from(MARK.split(",")[1], "base64");
+  check("a screenshot becomes one stamped page", (await PDFDocument.load(await signedNoticePdf({ ...(noticeFile as object), ext: "png" } as never, picture, [stampSig], stampSlots))).getPageCount(), 1);
+
+  // --- The signed invoice, from when each invoice was signed: still opens
   const signed = await import("../app/api/payments/invoices/[id]/signed/route");
-  const { PDFDocument } = await import("pdf-lib");
   const { signedInvoicePdf } = await import("../lib/paymentSignedPdf");
-  check("not yet signed: nothing to show", (await signed.GET(req(clerk, "/x"), ctx("no-such-invoice"))).status, 404);
-  check("closed to a stranger", (await signed.GET(req(stranger, "/x"), ctx(inv))).status, 403);
-  const signedRes = await signed.GET(req(principal, "/x?download=1"), ctx(inv));
+  const { writeJson, updateInList } = await import("../lib/controlData");
+  aiAnswer = { supplierName: "Older Supplier", invoiceNumber: "OLD-1", invoiceDate: "2026-11-01", amountDue: 7, accountNumber: "", branchCode: "" };
+  const old = (await (await load(clerk, pdf("old"))).json()).id;
+  check("not yet signed: nothing to show", (await signed.GET(req(clerk, "/x"), ctx(old))).status, 409);
+  await writeJson(`payments/invoices/${old}/signatures.json`, [{ userId: "pat", name: "pat T", at: new Date().toISOString(), tagIds: ["principal"], dataUrl: MARK, kind: "drawn", fileHash: "h", bank: "match", amount: "match", override: false }]);
+  await updateInList<{ id: string; signedBy: unknown[] }>("payments/invoices.json", old, (i) => ({ ...i, signedBy: [{ userId: "pat", name: "pat T", at: new Date().toISOString(), tagIds: ["principal"] }] }));
+  check("an old signature still counts on its row", (await statusOf(old)).progress.signed, 1);
+  check("and its row cannot be deleted", (await invoice.DELETE(req(clerk, "/x", "DELETE"), ctx(old))).status, 409);
+  check("closed to a stranger", (await signed.GET(req(stranger, "/x"), ctx(old))).status, 403);
+  const signedRes = await signed.GET(req(principal, "/x?download=1"), ctx(old));
   check("a signer can open it", [signedRes.status, signedRes.headers.get("content-type")], [200, "application/pdf"]);
   check("named as signed", signedRes.headers.get("content-disposition")?.includes("Signed - "), true);
-  check("what comes back is a real PDF", (await PDFDocument.load(await signedRes.arrayBuffer())).getPageCount(), 1);
 
   const three = await PDFDocument.create();
   [0, 1, 2].forEach(() => three.addPage());
-  const realPng = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-  const sigBase = { userId: "u", name: "Sipho Ndlovu š", at: new Date().toISOString(), tagIds: [], dataUrl: realPng, kind: "drawn" as const, fileHash: "h", bank: "match", amount: "mismatch", override: true };
+  const sigBase = { userId: "u", name: "Sipho Ndlovu š", at: new Date().toISOString(), tagIds: [], dataUrl: MARK, kind: "drawn" as const, fileHash: "h", bank: "match", amount: "mismatch", override: true };
   const fake = { filename: "café € invoice.pdf", ext: "pdf", hash: "h", supplierName: "Ačme", invoiceNumber: "1", invoiceDate: "2026-11-01", amountDue: 10 } as never;
   const built = await signedInvoicePdf(fake, Buffer.from(await three.save()), [sigBase, { ...sigBase, userId: "v", dataUrl: PNG_MARK }]);
   check("original pages kept, one signature page added", (await PDFDocument.load(built)).getPageCount(), 4);
   const many = await signedInvoicePdf(fake, Buffer.from(await three.save()), Array.from({ length: 12 }, (_, i) => ({ ...sigBase, userId: String(i) })));
   check("many signatures run onto another page", (await PDFDocument.load(many)).getPageCount() > 4, true);
 
-  // --- Released, then Paid
-  await release.POST(json(principal, "/x", "POST", { released: true }), ctx(inv));
-  check("Released by one", (await statusOf(inv)).status, "released_one");
-  await release.POST(json(sgb, "/x", "POST", { released: true }), ctx(inv));
-  check("Released by all", (await statusOf(inv)).status, "released_all");
-  await release.POST(json(sgb, "/x", "POST", { released: false }), ctx(inv));
-  check("a tick can be taken back", (await statusOf(inv)).status, "released_one");
+  // --- Approved at the bank, then Paid
+  await release.POST(json(principal, "/x", "POST", { released: true }), ctx(notice));
+  n = await noticeRow();
+  check("1 of 2 have approved", [n.status, n.progress.approved, n.progress.slots[0].approved, n.progress.slots[1].approved], ["approving", 1, true, false]);
+  await release.POST(json(sgb, "/x", "POST", { released: true }), ctx(notice));
+  check("2 of 2 have approved", (await noticeRow()).progress.approved, 2);
+  await release.POST(json(sgb, "/x", "POST", { released: false }), ctx(notice));
+  check("a tick can be taken back", (await noticeRow()).progress.approved, 1);
+  check("the invoice row shows the same", (await statusOf(inv)).status, "approving");
   aiAnswer = { payments: [{ date: "2026-11-04", payee: "FNB APP PAYMENT ACME SUPP", amount: 1000, reference: "" }, { date: "2026-11-04", payee: "SALARIES", amount: 90000, reference: "" }] };
   const statementRes = await screens.POST(req(clerk, "/api/payments/screens?kind=statement", "POST", form({ file: pdf("statement") })));
   check("statement loaded", statementRes.status, 201);
@@ -203,21 +268,16 @@ async function main() {
   row = await statusOf(inv);
   check("Paid, with the date", [row.status, row.paidOn], ["paid", "2026-11-04"]);
   check("a statement line never shows as a bank payment with no invoice", (await inbox(clerk)).unmatched.length, 1);
+  check("a statement is no notice to sign", (await inbox(clerk)).notices.length, 1);
+  check("nor can it get a code", (await codeRoute.POST(req(deputy, "/x", "POST"), ctx(statementId))).status, 404);
   check("the statement is closed to a signer", (await files.GET(req(principal, "/x"), { params: Promise.resolve({ kind: "screen", id: statementId }) })).status, 403);
+  check("nor can a stamped copy open it", (await noticePdf.GET(req(principal, "/x"), ctx(statementId))).status, 404);
   check("and open to the clerk", (await files.GET(req(clerk, "/x"), { params: Promise.resolve({ kind: "screen", id: statementId }) })).status, 200);
 
-  // --- A red check needs a reason
+  // --- Red and grey still show on the invoice
   aiAnswer = { supplierName: "Acme Supplies", invoiceNumber: "INV-2", invoiceDate: "2026-11-02", amountDue: 200, accountNumber: "11111111111", branchCode: "" };
   const redId = (await (await load(clerk, pdf("inv2"))).json()).id;
   check("changed bank details: red", (await statusOf(redId)).bank.detail, "...1111 / ...5678");
-  check("cannot sign a red invoice without the tick", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(redId))).status, 409);
-  check("can with it", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK, override: true }), ctx(redId))).status, 201);
-  check("and it says so", (await (await sign.GET(req(clerk, "/x"), ctx(redId))).json())[0].override, true);
-
-  // --- Grey needs the same tick
-  aiAnswer = { supplierName: "Nobody On The List", invoiceNumber: "INV-9", invoiceDate: "2026-11-02", amountDue: 300, accountNumber: "22222222222", branchCode: "" };
-  const greyId = (await (await load(clerk, pdf("inv9"))).json()).id;
-  check("cannot sign a grey invoice without the tick", (await sign.POST(json(principal, "/x", "POST", { dataUrl: PNG_MARK }), ctx(greyId))).status, 409);
 
   // --- A deleted signing tag
   const { deleteTag } = await import("../lib/tagData");

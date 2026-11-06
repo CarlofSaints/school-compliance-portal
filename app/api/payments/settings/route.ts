@@ -5,7 +5,7 @@ import { actorFrom } from "@/lib/activityActor";
 import { getTags } from "@/lib/tagData";
 import { getPaymentSettings, savePaymentSettings } from "@/lib/paymentData";
 
-// Which tags may sign invoices. Same authority as the spend approval bands.
+// Which tags sign the payment notice. Same authority as the spend approval bands.
 export async function GET(req: NextRequest) {
   const session = await requirePermission(req, "manage_approval_settings");
   if (session instanceof NextResponse) return session;
@@ -25,7 +25,7 @@ export async function PUT(req: NextRequest) {
     ...actorFrom(req, session),
     action: "payment.signers_changed",
     entity: "payment",
-    summary: "Changed which tags may sign invoices",
+    summary: "Changed which tags sign the payment notice",
     detail: { signerTagIds: ids },
   });
   return NextResponse.json({ signerTagIds: ids });

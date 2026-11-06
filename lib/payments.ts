@@ -67,8 +67,31 @@ export interface SignedBy {
   at: string;
   /** Which signing tags this person held when they signed. Frozen, like approvers on a spend application. */
   tagIds: string[];
-  /** They ticked that they released it at the bank. Their word, not proof: only a statement makes it Paid. */
+  /** They ticked that they approved it at the bank. Their word, not proof: only a statement makes it Paid. */
   releasedAt?: string;
+}
+
+/** One line on the stamp: a signing tag and the people with a login who carry it. */
+export interface SignSlot {
+  tagId: string;
+  label: string;
+  members: { userId: string; name: string }[];
+}
+
+/** A stamp line as the page shows it. Blank label: a signature no ticked tag accounts for any more. */
+export interface SlotView {
+  label: string;
+  signer: string;
+  approved: boolean;
+  /** Who could still sign this line, when nobody has. */
+  waitingOn: string[];
+}
+
+export interface Progress {
+  signed: number;
+  approved: number;
+  required: number;
+  slots: SlotView[];
 }
 
 export interface Invoice extends InvoiceRead, StoredFile {
@@ -77,6 +100,7 @@ export interface Invoice extends InvoiceRead, StoredFile {
   loadedBy: string;
   loadedByName: string;
   loadedAt: string;
+  /** Only invoices signed before signing moved to the payment notice. Kept: they are the record. */
   signedBy: SignedBy[];
 }
 
@@ -101,6 +125,8 @@ export interface BankScreen extends StoredFile {
   loadedByName: string;
   loadedAt: string;
   lines: BankLine[];
+  /** The people who signed this payment notice. One notice covers many payments, so it is signed once. */
+  signedBy?: SignedBy[];
 }
 
 export type CheckStatus = "match" | "mismatch" | "unknown";
@@ -131,10 +157,8 @@ export interface Check {
 export const STATUS_LABELS = {
   pending_approval: tk("Pending approval"),
   pending_signatures: tk("Pending signatures"),
-  signed_one: tk("Signed by one"),
-  signed_all: tk("Signed by all"),
-  released_one: tk("Released by one"),
-  released_all: tk("Released by all"),
+  signing: tk("{n} of {total} have signed"),
+  approving: tk("{n} of {total} have approved"),
   paid: tk("Paid"),
 } as const;
 
@@ -143,10 +167,8 @@ export type InvoiceStatus = keyof typeof STATUS_LABELS;
 export const STATUS_HOVER: Record<InvoiceStatus, string> = {
   pending_approval: tk("The bank details and amount checks are not both green yet."),
   pending_signatures: tk("Both checks are green. Waiting for the first signature."),
-  signed_one: tk("Signed, but not yet by everyone who must sign."),
-  signed_all: tk("Everyone who must sign has signed."),
-  released_one: tk("A signer has ticked that they released this at the bank."),
-  released_all: tk("Everyone who must sign has ticked that they released this at the bank. Only the bank statement proves it was paid."),
+  signing: tk("How many of the people who must sign the payment notice have signed."),
+  approving: tk("How many signers have ticked that they approved this at the bank. Only the bank statement proves it was paid."),
   paid: tk("A payment for this exact amount is on a bank statement."),
 };
 
@@ -173,7 +195,35 @@ export interface InboxRow {
   /** Paid minus invoiced, in rand. Only on a mismatch. */
   delta: number | null;
   signedBy: SignedBy[];
+  progress: Progress;
+  /** The payment notice this invoice is paid on. */
+  noticeId: string;
+  /** Signed on the notice, not on the invoice itself as the first version did. */
+  signedOnNotice: boolean;
   loadedAt: string;
+}
+
+export interface NoticeLine {
+  payee: string;
+  amount: number | null;
+  reference: string;
+  invoiceId: string;
+  invoiceName: string;
+  bank: Check;
+  amountMatch: Check;
+  delta: number | null;
+  noProof: boolean;
+}
+
+export interface NoticeRow {
+  id: string;
+  filename: string;
+  loadedAt: string;
+  status: InvoiceStatus;
+  total: number;
+  lines: NoticeLine[];
+  signedBy: SignedBy[];
+  progress: Progress;
 }
 
 export interface UnmatchedLine {
@@ -329,29 +379,56 @@ export function amountCheck(inv: Invoice, line: BankLine | undefined): { check: 
     : { check: { status: "mismatch", code: "amount_differs" }, delta: delta / 100 };
 }
 
-/** Can every signing tag be given its own person? One person holding two tags
- *  counts once, so "the principal and an SGB member" stays two people. */
-function everyTag(who: SignedBy[], tagIds: string[]): boolean {
-  if (!tagIds.length) return false;
-  const holder = new Map<string, string>();
+/** Gives each signing tag its own person, as many as can be placed. One person
+ *  holding two tags counts once, so "the principal and an SGB member" stays two people. */
+export function fillSlots<T extends Pick<SignedBy, "userId" | "tagIds">>(who: T[], tagIds: string[]): Map<string, T> {
+  const holder = new Map<string, T>();
   const place = (tag: string, tried: Set<string>): boolean =>
     who.some((s) => {
       if (!s.tagIds.includes(tag) || tried.has(s.userId)) return false;
       tried.add(s.userId);
-      const taken = [...holder].find(([, u]) => u === s.userId)?.[0];
+      const taken = [...holder].find(([, h]) => h.userId === s.userId)?.[0];
       if (taken && !place(taken, tried)) return false;
-      holder.set(tag, s.userId);
+      holder.set(tag, s);
       return true;
     });
-  return tagIds.every((t) => place(t, new Set()));
+  tagIds.forEach((t) => place(t, new Set()));
+  return holder;
 }
 
-export function invoiceStatus(inv: Pick<Invoice, "signedBy">, bank: Check, amount: Check, paid: boolean, signerTagIds: string[]): InvoiceStatus {
+export function progressOf(signedBy: SignedBy[], slots: SignSlot[]): Progress {
+  const filled = fillSlots(signedBy, slots.map((s) => s.tagId));
+  const placed = [...filled.values()];
+  const views = slots.map((s): SlotView => {
+    const who = filled.get(s.tagId);
+    return {
+      label: s.label,
+      signer: who?.name ?? "",
+      approved: !!who?.releasedAt,
+      waitingOn: who ? [] : s.members.filter((m) => !signedBy.some((b) => b.userId === m.userId)).map((m) => m.name),
+    };
+  });
+  const loose = signedBy.filter((s) => !placed.includes(s)).map((s): SlotView => ({ label: "", signer: s.name, approved: !!s.releasedAt, waitingOn: [] }));
+  // Tags unticked after someone signed: count the people, never "0 of 0".
+  const counted = slots.length ? placed : signedBy;
+  return {
+    signed: counted.length,
+    approved: counted.filter((s) => s.releasedAt).length,
+    required: slots.length || signedBy.length,
+    slots: [...views, ...loose],
+  };
+}
+
+export function statusOf(signedBy: SignedBy[], greenChecks: boolean, paid: boolean, progress: Progress): InvoiceStatus {
   if (paid) return "paid";
-  const released = inv.signedBy.filter((s) => s.releasedAt);
-  if (released.length) return everyTag(released, signerTagIds) ? "released_all" : "released_one";
-  if (inv.signedBy.length) return everyTag(inv.signedBy, signerTagIds) ? "signed_all" : "signed_one";
-  return bank.status === "match" && amount.status === "match" ? "pending_signatures" : "pending_approval";
+  if (progress.approved) return "approving";
+  if (signedBy.length) return "signing";
+  return greenChecks ? "pending_signatures" : "pending_approval";
+}
+
+/** The numbers a status label needs. */
+export function statusCount(r: { status: InvoiceStatus; progress: Progress }): { n: number; total: number } {
+  return { n: r.status === "approving" ? r.progress.approved : r.progress.signed, total: r.progress.required };
 }
 
 /**
@@ -396,8 +473,8 @@ export function buildInbox(
   invoices: Invoice[],
   contacts: Contact[],
   allScreens: BankScreen[],
-  signerTagIds: string[] = []
-): { rows: InboxRow[]; unmatched: UnmatchedLine[] } {
+  slots: SignSlot[] = []
+): { rows: InboxRow[]; notices: NoticeRow[]; unmatched: UnmatchedLine[] } {
   // Invoices are from creditors. A debtor needs no proof, so never vouches for bank details.
   contacts = contacts.filter((c) => c.type === "creditor");
   const screens = allScreens.filter((s) => s.kind !== "statement");
@@ -407,17 +484,22 @@ export function buildInbox(
   const unpaidFirst = [...invoices].sort((a, b) => Number(paidLines.has(a.id)) - Number(paidLines.has(b.id)));
   const paired = pairPayments(unpaidFirst, contacts, lines);
   const lineOf = new Map([...paired].map(([line, inv]) => [inv.id, line]));
+  const noticeOf = new Map(screens.flatMap((s) => s.lines.map((l) => [l, s] as const)));
   const rows = invoices.map((inv): InboxRow => {
     const contact = contactOf(contacts, inv);
     const line = lineOf.get(inv.id);
     const { check, delta } = amountCheck(inv, line);
     const bank = bankCheck(inv, contact, line);
     const paid = paidLines.get(inv.id);
+    const notice = line && noticeOf.get(line);
+    const signedOnNotice = !!notice?.signedBy?.length;
+    const signedBy = signedOnNotice ? notice.signedBy! : inv.signedBy;
+    const progress = progressOf(signedBy, slots);
     return {
       id: inv.id,
-      status: invoiceStatus(inv, bank, check, !!paid, signerTagIds),
+      status: statusOf(signedBy, bank.status === "match" && check.status === "match", !!paid, progress),
       paidOn: paid?.date ?? "",
-      paidUnsigned: !!paid && !everyTag(inv.signedBy, signerTagIds),
+      paidUnsigned: !!paid && (!slots.length || progress.signed < slots.length),
       filename: inv.filename,
       supplierName: inv.supplierName,
       contactName: contact?.name ?? "",
@@ -428,8 +510,44 @@ export function buildInbox(
       bank,
       amount: check,
       delta,
-      signedBy: inv.signedBy,
+      signedBy,
+      progress,
+      noticeId: notice?.id ?? "",
+      signedOnNotice,
       loadedAt: inv.loadedAt,
+    };
+  });
+  const rowOf = new Map(rows.map((r) => [r.id, r]));
+  const notices = screens.map((s): NoticeRow => {
+    const lines = s.lines.map((l): NoticeLine => {
+      const inv = paired.get(l);
+      const row = inv && rowOf.get(inv.id);
+      const none: Check = { status: "unknown", code: "no_invoice" };
+      return {
+        payee: l.payee,
+        amount: l.amount,
+        reference: l.reference,
+        invoiceId: inv?.id ?? "",
+        invoiceName: inv?.filename ?? "",
+        bank: row?.bank ?? none,
+        amountMatch: row?.amount ?? none,
+        delta: row?.delta ?? null,
+        noProof: !!row?.noProof,
+      };
+    });
+    const signedBy = s.signedBy ?? [];
+    const progress = progressOf(signedBy, slots);
+    const allPaid = lines.every((l) => rowOf.get(l.invoiceId)?.status === "paid");
+    const green = lines.every((l) => l.bank.status === "match" && l.amountMatch.status === "match");
+    return {
+      id: s.id,
+      filename: s.filename,
+      loadedAt: s.loadedAt,
+      status: statusOf(signedBy, green, allPaid, progress),
+      total: s.lines.reduce((sum, l) => sum + cents(l.amount ?? 0), 0) / 100,
+      lines,
+      signedBy,
+      progress,
     };
   });
   const unmatched = screens.flatMap((s) =>
@@ -444,7 +562,7 @@ export function buildInbox(
         check: { status: "unknown", code: "no_invoice" },
       }))
   );
-  return { rows, unmatched };
+  return { rows, notices, unmatched };
 }
 
 // --- Cleaning what comes in ---------------------------------------------------

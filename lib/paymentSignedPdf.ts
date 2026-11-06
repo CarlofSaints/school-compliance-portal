@@ -1,12 +1,12 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import type { InvoiceSignature } from "./paymentData";
-import type { Invoice } from "./payments";
+import type { InvoiceSignature, NoticeSignature } from "./paymentData";
+import { fillSlots, type BankScreen, type Invoice, type SignSlot } from "./payments";
 
 // ---------------------------------------------------------------------------
-// The signed invoice: the original, untouched, with a signature page added at
-// the end. A page of its own because a stamp over the invoice could cover its
-// text. Built when asked for, from the stored file and signatures, so a second
-// signature appears without anything being re-saved.
+// The signed payment notice: the original with our stamp below its last page.
+// Also the signed invoice from before signing moved to the notice: the original
+// plus a signature page. Built when asked for, from the stored file and
+// signatures, so a second signature appears without anything being re-saved.
 // ---------------------------------------------------------------------------
 
 const A4: [number, number] = [595.28, 841.89];
@@ -18,7 +18,7 @@ const when = (iso: string) => new Date(iso).toLocaleString("en-ZA", { timeZone: 
 const rand = (n: number | null) => (n === null ? "-" : `R ${n.toFixed(2)}`);
 
 /** Copies the invoice in. False when it cannot be: the signature page then says so. */
-async function addOriginal(pdf: PDFDocument, bytes: Buffer, ext: string): Promise<boolean> {
+async function addOriginal(pdf: PDFDocument, bytes: Buffer, ext: string, reserve = 0): Promise<boolean> {
   try {
     if (ext === "pdf") {
       // No ignoreEncryption: it copies encrypted pages in blank. Failing here shows the note instead.
@@ -30,7 +30,7 @@ async function addOriginal(pdf: PDFDocument, bytes: Buffer, ext: string): Promis
     if (ext !== "png" && ext !== "jpg") return false;
     const image = ext === "png" ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
     const page = pdf.addPage(A4);
-    const fit = image.scaleToFit(A4[0] - MARGIN * 2, A4[1] - MARGIN * 2);
+    const fit = image.scaleToFit(A4[0] - MARGIN * 2, A4[1] - MARGIN * 2 - reserve);
     page.drawImage(image, { x: MARGIN, y: A4[1] - MARGIN - fit.height, ...fit });
     return true;
   } catch {
@@ -85,5 +85,75 @@ export async function signedInvoicePdf(invoice: Invoice, original: Buffer, signa
     if (s.override) line("Signed with a check not green, after ticking that it had been looked into.", 9, bold, 3);
     y -= 14;
   }
+  return pdf.save();
+}
+
+const STAMP_WIDTH = 340;
+const STAMP_ROW = 48;
+const STAMP_PAD = 10;
+const stampHeight = (rows: number) => STAMP_PAD * 2 + 20 + rows * STAMP_ROW + 22;
+
+/** Makes the page taller and clears the new strip. Nothing here can tell where a
+ *  PDF page is blank, and the stamp must never cover the notice. */
+function roomBelow(page: PDFPage, height: number): { x: number; y: number } | null {
+  if (page.getRotation().angle % 360 !== 0) return null;
+  const box = page.getCropBox();
+  page.setMediaBox(box.x, box.y - height, box.width, box.height + height);
+  page.setCropBox(box.x, box.y - height, box.width, box.height + height);
+  page.drawRectangle({ x: box.x, y: box.y - height, width: box.width, height, color: rgb(1, 1, 1) });
+  return { x: box.x + box.width, y: box.y - height };
+}
+
+export async function signedNoticePdf(notice: BankScreen, original: Buffer, signatures: NoticeSignature[], slots: SignSlot[]): Promise<Uint8Array> {
+  const filled = fillSlots(signatures, slots.map((s) => s.tagId));
+  const placed = [...filled.values()];
+  const rows = [
+    ...slots.map((s) => ({ label: s.label, sig: filled.get(s.tagId) })),
+    ...signatures.filter((s) => !placed.includes(s)).map((sig) => ({ label: "Signed", sig })),
+  ];
+  const height = stampHeight(rows.length);
+
+  const pdf = await PDFDocument.create();
+  const included = await addOriginal(pdf, original, notice.ext, height + 10);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  const pages = pdf.getPages();
+  const last = included ? pages[pages.length - 1] : null;
+  // A picture was fitted with this room left under it. A rotated PDF page cannot be extended.
+  const spot = last && notice.ext === "pdf" ? roomBelow(last, height + 20) : null;
+  const page = last && (spot || notice.ext !== "pdf") ? last : pdf.addPage(A4);
+  const right = spot ? spot.x - 20 : A4[0] - MARGIN;
+  const bottom = spot ? spot.y + 10 : 30;
+  const left = right - STAMP_WIDTH;
+
+  const ink = rgb(0.1, 0.1, 0.1);
+  const text = (t: string, x: number, at: number, size: number, f: PDFFont = font) =>
+    page.drawText(safe(t).slice(0, 70), { x, y: at, size, font: f, color: ink });
+  page.drawRectangle({ x: left, y: bottom, width: STAMP_WIDTH, height, borderColor: ink, borderWidth: 1 });
+  let y = bottom + height - STAMP_PAD;
+  text("AUTHORISATION", left + STAMP_PAD, y - 11, 11, bold);
+  y -= 20;
+  for (const { label, sig } of rows) {
+    text(`${label.slice(0, 20)}:`, left + STAMP_PAD, y - 12, 8, bold);
+    if (sig) {
+      try {
+        const mark = await pdf.embedPng(sig.dataUrl);
+        const fit = mark.scaleToFit(100, STAMP_ROW - 14);
+        page.drawImage(mark, { x: left + 100, y: y - 6 - fit.height, ...fit });
+      } catch {
+        text("(signature not shown)", left + 100, y - 12, 7);
+      }
+      text(sig.name.slice(0, 24), left + 205, y - 12, 8, bold);
+      text(when(sig.at), left + 205, y - 23, 7);
+      text(sig.override ? "One-time code. A check was not green." : "Verified with a one-time code", left + 205, y - 33, 6);
+    } else {
+      text("Not signed yet", left + 100, y - 12, 8);
+    }
+    page.drawLine({ start: { x: left + STAMP_PAD, y: y - STAMP_ROW + 2 }, end: { x: right - STAMP_PAD, y: y - STAMP_ROW + 2 }, thickness: 0.3, color: ink });
+    y -= STAMP_ROW;
+  }
+  text(`Signed on School Compliance. File SHA-256 ${notice.hash.slice(0, 32)}`, left + STAMP_PAD, y - 10, 6);
+  if (!included) text("This notice could not be copied in. Open the original beside it.", left + STAMP_PAD, y - 18, 6, bold);
   return pdf.save();
 }
