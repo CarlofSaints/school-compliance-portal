@@ -149,6 +149,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: tk("Budget"),
+    href: "/budget",
+    permissions: ["view_budget", "manage_budget"],
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m-6 4h6m-6 4h3M5 3h14a1 1 0 011 1v16a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" />
+      </svg>
+    ),
+  },
+  {
     label: tk("Spend"),
     href: "/spend",
     permission: "submit_spend",

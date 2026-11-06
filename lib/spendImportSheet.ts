@@ -12,7 +12,9 @@ export interface ParsedWorkbook {
 // starts further in (a list that begins at B2 is common). Without this the
 // preview would name the wrong row and column back to the user.
 export async function parseWorkbook(
-  buffer: ArrayBuffer
+  buffer: ArrayBuffer,
+  // true = numbers stay numbers. Formatted text loses cents and carries the school's currency style.
+  raw = false
 ): Promise<ParsedWorkbook> {
   const XLSX = await import("xlsx");
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
@@ -26,7 +28,7 @@ export async function parseWorkbook(
       defval: string;
       blankrows: boolean;
       range?: string;
-    } = { header: 1, raw: false, defval: "", blankrows: true };
+    } = { header: 1, raw, defval: "", blankrows: true };
 
     const ref = ws?.["!ref"];
     if (ref) {
