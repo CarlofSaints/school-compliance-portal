@@ -1,7 +1,7 @@
 // Budget totals, fees and reading a school's Excel. No store needed: all pure.
 //
 //   npx tsx scripts/check-budget.ts
-import { byGroup, cleanFee, emptyFeePlan, feeIncome, feeLineIn, gradeRows, rollFeePlan, cleanLine, feeAfter, guessColumns, numberIn, parseGrid, totals, type BudgetLine } from "../lib/budget";
+import { byGroup, chooseScenario, cleanFee, emptyFeePlan, feeIncome, feeLineIn, gradeRows, rollFeePlan, cleanLine, feeAfter, guessColumns, numberIn, parseGrid, totals, type BudgetLine } from "../lib/budget";
 
 let failed = 0;
 const check = (name: string, ok: boolean) => {
@@ -19,7 +19,7 @@ const plan = { lastFee: 12000, months: 12, roundTo: 10 };
 check("fee rounds the monthly amount", feeAfter(plan, 7) === 1070 * 12);
 const fees = [line({ name: "School Fees Received", lastBudget: 900 }), line({ name: "Early Payment Discount", lastBudget: -5 }), line({ name: "Application Fee", lastBudget: 950 }), line({ name: "Late Fee Interest", lastBudget: 999 }), line({ name: "Arrear fees received", lastBudget: 40 }), line({ name: "Feeding Scheme", lastBudget: 9999 }), line({ name: "Coffee", lastBudget: 9999 }), line({ name: "Uniform Sales", lastBudget: 5000 })];
 check("the fee line is found by itself", feeLineIn(fees)?.name === "School Fees Received");
-check("Use this cannot move the guess: last year decides", feeLineIn([line({ name: "School fees", lastBudget: 900, amount: 1 }), line({ name: "Aftercare fees", lastBudget: 200, amount: 200 })])?.name === "School fees");
+check("Use this cannot move the guess: last year decides", feeLineIn([line({ name: "School fees", lastBudget: 900, amount: 0 }), line({ name: "Aftercare fees", lastBudget: 200, amount: 1000 })])?.name === "School fees");
 check("a chosen line and fee survive cleaning", cleanFee({ centre: "main", feeLineId: "abc", chosenFee: 30030, chosenId: "x" }, [{ id: "main", name: "School" }])?.feeLineId === "abc");
 const one = [{ id: "main", name: "School" }];
 check("a new plan starts with one increase of 3%", emptyFeePlan("main").scenarios.length === 1 && emptyFeePlan("main").scenarios[0].increase === 3);
@@ -27,13 +27,20 @@ check("a saved plan with no increases still has one", cleanFee({ centre: "main",
 check("primary is Grade 0 to 7, high is 8 to 12", gradeRows({ phase: "primary", grades: [] }).map((g) => g.grade).join() === "0,1,2,3,4,5,6,7" && gradeRows({ phase: "high", grades: [] }).map((g) => g.grade).join() === "8,9,10,11,12");
 const graded = { ...emptyFeePlan("main"), mode: "grades" as const, months: 12, roundTo: 10, grades: [{ grade: "1", lastFee: 12000, learners: 10 }, { grade: "7", lastFee: 24000, learners: 5 }], scenarios: [{ id: "s", increase: 10, byGrade: { "7": 0 } }], chosenId: "s" };
 check("each grade uses its own increase", feeIncome(graded, graded.scenarios[0]) === 13200 * 10 + 24000 * 5);
-const rolled = rollFeePlan(graded, new Map());
+const pickedGrades = { ...graded, ...chooseScenario(graded, graded.scenarios[0]) };
+const rolled = rollFeePlan(pickedGrades, new Map());
 check("next year starts from each grade's chosen fee", rolled.grades[0].lastFee === 13200 && rolled.grades[1].lastFee === 24000 && rolled.scenarios.length === 1 && !rolled.chosenId);
+const base = { ...emptyFeePlan("main"), lastFee: 12000, months: 12, roundTo: 10, learners: 10 };
+const picked = { ...base, ...chooseScenario(base, { id: "a", increase: 5 }) };
+check("trying 8% afterwards does not change the fee that was chosen", rollFeePlan({ ...picked, scenarios: [{ id: "a", increase: 8 }] }, new Map()).lastFee === 12600);
+check("removing the chosen increase keeps the chosen fee", rollFeePlan({ ...picked, scenarios: [{ id: "b", increase: 2 }] }, new Map()).lastFee === 12600);
+check("a chosen grade fee survives cleaning", cleanFee({ centre: "main", chosenGrades: [{ grade: "1", fee: 5 }] }, one)?.chosenGrades?.[0].fee === 5);
 check("nothing chosen means the fee is typed in again", rollFeePlan({ ...emptyFeePlan("main"), lastFee: 500 }, new Map()).lastFee === 0);
 check("an old plan's chosen fee still carries over", rollFeePlan({ ...emptyFeePlan("main"), chosenFee: 700 }, new Map()).lastFee === 700);
 check("a grade outside the list is refused", cleanFee({ centre: "main", grades: [{ grade: "99", lastFee: 1 }] }, one)?.grades.length === 0);
 check("no fee line means the school chooses", feeLineIn([line({ name: "Tuition", amount: 9 })]) === null);
-check("fee never divides by nothing", feeAfter({ lastFee: 100, months: 0, roundTo: 0 }, 0) === 100);
+check("empty boxes behave as the server does: 11 months, no rounding", feeAfter({ lastFee: 110, months: 0, roundTo: 0 }, 0) === 110 && cleanFee({ centre: "main", months: 0, roundTo: 0 }, [{ id: "main", name: "School" }])?.months === 11);
+check("a negative fee counts as nothing", feeAfter({ lastFee: -100, months: 12, roundTo: 10 }, 5) === 0);
 
 const centres = [{ id: "main", name: "School" }];
 check("line needs a name", cleanLine({ group: "G", kind: "income", centre: "main" }, centres) === "Give the line a name.");

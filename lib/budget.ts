@@ -65,10 +65,12 @@ export interface FeePlan {
   grades: GradeFee[];
   /** The increases being tried. Always at least one. */
   scenarios: FeeScenario[];
-  /** The scenario put on a line. */
+  /** The scenario put on a line, for marking its row. */
   chosenId?: string;
-  /** The fee put on a line. A copied budget starts from this, the fee really charged. */
+  /** The fee put on a line, frozen then. A copied budget starts from this, not from later trying. */
   chosenFee?: number;
+  /** The same, per grade. */
+  chosenGrades?: { grade: string; fee: number }[];
   /** The line fee income goes on, once chosen. */
   feeLineId?: string;
 }
@@ -121,13 +123,17 @@ export const rands = (n: number) => `${n < 0 ? "-" : ""}R ${Math.abs(n).toLocale
 /** Every grade in the plan's phase, with what has been typed for it. */
 export const gradeRows = (p: Pick<FeePlan, "phase" | "grades">): GradeFee[] => GRADES[p.phase].map((grade) => p.grades.find((g) => g.grade === grade) ?? { grade, lastFee: 0, learners: 0 });
 
+/** The same rule on screen and on the server, so a figure cannot change after saving. */
+export const monthsOf = (p: Pick<FeePlan, "months">) => (p.months >= 1 ? Math.min(12, Math.round(p.months)) : 11);
+const learnersOf = (n: number) => Math.max(0, Math.round(n));
+
 export const gradeIncrease = (s: FeeScenario, grade: string) => s.byGrade?.[grade] ?? s.increase;
 
 /** Next year's fee: the increase is applied, then the MONTHLY amount is rounded, as schools publish it. */
 export function feeAfter(p: Pick<FeePlan, "lastFee" | "months" | "roundTo">, increase: number) {
-  const months = Math.max(1, p.months);
-  const step = p.roundTo > 0 ? p.roundTo : 1;
-  return (Math.round((p.lastFee * (1 + increase / 100)) / months / step) * step * months);
+  const months = monthsOf(p);
+  const step = p.roundTo >= 1 ? Math.round(p.roundTo) : 1;
+  return Math.round((Math.max(0, p.lastFee) * (1 + increase / 100)) / months / step) * step * months;
 }
 
 /**
@@ -136,25 +142,31 @@ export function feeAfter(p: Pick<FeePlan, "lastFee" | "months" | "roundTo">, inc
  * Sized by last year's figures, because this year's amount is what Use this changes.
  */
 export function feeLineIn(lines: BudgetLine[]): BudgetLine | null {
-  const size = (l: BudgetLine) => Math.max(l.lastBudget, l.actual, lineAmount(l));
+  const size = (l: BudgetLine) => Math.max(l.lastBudget, l.actual) || lineAmount(l);
   const fees = lines.filter((l) => l.kind === "income" && /\bfees?\b/i.test(l.name) && !/discount|concession|rebate|bad debt|interest|arrear|application|registration|exam|hiring|\blate\b/i.test(l.name));
   return [...fees].sort((a, b) => size(b) - size(a))[0] ?? null;
 }
 
 /** What a scenario brings in. */
 export function feeIncome(p: FeePlan, s: FeeScenario) {
-  if (p.mode === "same") return feeAfter(p, s.increase) * p.learners;
-  return gradeRows(p).reduce((sum, g) => sum + feeAfter({ ...p, lastFee: g.lastFee }, gradeIncrease(s, g.grade)) * g.learners, 0);
+  if (p.mode === "same") return feeAfter(p, s.increase) * learnersOf(p.learners);
+  return gradeRows(p).reduce((sum, g) => sum + feeAfter({ ...p, lastFee: g.lastFee }, gradeIncrease(s, g.grade)) * learnersOf(g.learners), 0);
+}
+
+/** What goes on the plan when a scenario is put on a line: the fees as they are at that moment. */
+export function chooseScenario(p: FeePlan, s: FeeScenario): Pick<FeePlan, "chosenId" | "chosenFee" | "chosenGrades"> {
+  return p.mode === "same"
+    ? { chosenId: s.id, chosenFee: feeAfter(p, s.increase), chosenGrades: [] }
+    : { chosenId: s.id, chosenFee: 0, chosenGrades: gradeRows(p).filter((g) => g.lastFee).map((g) => ({ grade: g.grade, fee: feeAfter({ ...p, lastFee: g.lastFee }, gradeIncrease(s, g.grade)) })) };
 }
 
 /** The plan a copied year starts from: what was chosen becomes last year's fee. Not chosen means the school types it. */
 export function rollFeePlan(p: FeePlan, lineIds: Map<string, string>): FeePlan {
-  const chosen = p.scenarios.find((s) => s.id === p.chosenId);
-  const { chosenId: _chosenId, chosenFee, feeLineId, ...rest } = p;
+  const { chosenId: _chosenId, chosenFee, chosenGrades, feeLineId, ...rest } = p;
   return {
     ...rest,
-    lastFee: chosen ? feeAfter(p, chosen.increase) : (chosenFee ?? 0),
-    grades: p.grades.map((g) => ({ ...g, lastFee: chosen ? feeAfter({ ...p, lastFee: g.lastFee }, gradeIncrease(chosen, g.grade)) : 0 })),
+    lastFee: chosenFee ?? 0,
+    grades: p.grades.map((g) => ({ ...g, lastFee: chosenGrades?.find((c) => c.grade === g.grade)?.fee ?? 0 })),
     scenarios: emptyFeePlan(p.centre).scenarios,
     ...(feeLineId && lineIds.has(feeLineId) ? { feeLineId: lineIds.get(feeLineId) } : {}),
   };
@@ -203,13 +215,14 @@ export function cleanFee(b: Record<string, unknown>, centres: Centre[]): FeePlan
     mode: b.mode === "grades" ? "grades" : "same",
     phase: b.phase === "high" || b.phase === "combined" ? b.phase : "primary",
     lastFee: Math.max(0, money(b.lastFee)),
-    months: Math.min(12, whole(b.months, 1, 11)),
+    months: monthsOf({ months: money(b.months) }),
     roundTo: whole(b.roundTo, 1, 1),
     learners: whole(b.learners, 0, 0),
     grades,
     scenarios: scenarios.length ? scenarios : emptyFeePlan(b.centre as string).scenarios,
     ...(typeof b.chosenId === "string" && b.chosenId ? { chosenId: b.chosenId.slice(0, 60) } : {}),
     ...(money(b.chosenFee) > 0 ? { chosenFee: money(b.chosenFee) } : {}),
+    ...(Array.isArray(b.chosenGrades) && b.chosenGrades.length ? { chosenGrades: b.chosenGrades.flatMap((c: { grade?: unknown; fee?: unknown }) => (known.includes(c?.grade as string) ? [{ grade: c.grade as string, fee: Math.max(0, money(c.fee)) }] : [])) } : {}),
     ...(typeof b.feeLineId === "string" && b.feeLineId ? { feeLineId: b.feeLineId.slice(0, 60) } : {}),
   };
 }

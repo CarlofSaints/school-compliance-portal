@@ -124,6 +124,18 @@ export async function POST(req: NextRequest, { params }: Ctx) {
         if (!plan) return refuse("Choose where this line belongs.");
         return { ...y, fees: [...y.fees.filter((f) => f.centre !== plan.centre), plan] };
       }
+      case "useFee": {
+        // The line and the choice in one write, so neither can be saved without the other.
+        const old = y.lines.find((l) => l.id === b.lineId);
+        if (!old) return refuse("That line has been removed. Reload the page.", 409);
+        const clean = cleanLine({ ...old, amount: b.amount, note: b.note, items: [] }, y.centres);
+        if (typeof clean === "string") return refuse(clean);
+        const current = y.fees.find((f) => f.centre === b.centre) ?? emptyFeePlan(text(b.centre, 60));
+        const plan = cleanFee({ ...current, ...((b.plan ?? {}) as object), centre: b.centre, feeLineId: old.id }, y.centres);
+        if (!plan) return refuse("Choose where this line belongs.");
+        log = `Put school fees of ${clean.amount} on ${clean.name} for ${year}`;
+        return { ...y, lines: y.lines.map((l) => (l.id === old.id ? { ...clean, id: old.id } : l)), fees: [...y.fees.filter((f) => f.centre !== plan.centre), plan] };
+      }
       case "approve": {
         if (!isDate(b.date)) return refuse("Give the date of the meeting that approved it.");
         if (!y.lines.length) return refuse("There is nothing to approve yet.");

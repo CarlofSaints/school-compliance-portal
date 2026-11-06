@@ -307,10 +307,7 @@ export default function BudgetPage() {
                   lines={feeLines}
                   editable={editable}
                   onSave={saveFee}
-                  onUse={async (line, amount, note, plan) => {
-                    if (!(await saveLine(line, { amount, items: [], note }))) return false;
-                    return saveFee(plan);
-                  }}
+                  onUse={(line, amount, note, plan) => act({ action: "useFee", centre: showing, lineId: line.id, amount, note, plan })}
                 />
               )}
 

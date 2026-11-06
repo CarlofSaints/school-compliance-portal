@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useT } from "@/components/I18nProvider";
-import { emptyFeePlan, feeAfter, feeIncome, feeLineIn, gradeIncrease, gradeRows, lineAmount, rands, type BudgetLine, type FeePlan, type FeeScenario, type SchoolPhase } from "@/lib/budget";
+import { chooseScenario, emptyFeePlan, feeAfter, feeIncome, feeLineIn, gradeIncrease, gradeRows, lineAmount, monthsOf, rands, type BudgetLine, type FeePlan, type FeeScenario, type SchoolPhase } from "@/lib/budget";
 
 const INPUT = "px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none disabled:bg-gray-50";
 const newId = () => String(Date.now());
@@ -17,22 +17,31 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
   lines: BudgetLine[];
   editable: boolean;
   onSave: (change: Partial<FeePlan>) => void;
-  onUse: (line: BudgetLine, amount: number, note: string, plan: FeePlan) => Promise<boolean>;
+  onUse: (line: BudgetLine, amount: number, note: string, change: Partial<FeePlan>) => Promise<boolean>;
 }) {
   const t = useT();
   const [plan, setPlan] = useState<FeePlan>({ ...emptyFeePlan(centre), ...stored });
   const [changingLine, setChangingLine] = useState(false);
-  const update = (change: Partial<FeePlan>) => setPlan((p) => ({ ...p, ...change }));
+  // What has been typed and not saved. Leaving a box writes only if it changed something.
+  const dirty = useRef(new Set<keyof FeePlan>());
+  const update = (change: Partial<FeePlan>) => {
+    (Object.keys(change) as (keyof FeePlan)[]).forEach((k) => dirty.current.add(k));
+    setPlan((p) => ({ ...p, ...change }));
+  };
+  const saveIfChanged = (key: keyof FeePlan) => {
+    if (dirty.current.delete(key)) onSave({ [key]: plan[key] });
+  };
   const commit = (change: Partial<FeePlan>) => {
-    update(change);
+    setPlan((p) => ({ ...p, ...change }));
     onSave(change);
   };
 
   const feeLine = lines.find((l) => l.id === plan.feeLineId) ?? feeLineIn(lines);
-  const months = Math.max(1, plan.months);
+  const months = monthsOf(plan);
   const perGrade = plan.mode === "grades";
   const rows = gradeRows(plan);
   const ready = perGrade ? rows.some((g) => g.lastFee && g.learners) : !!plan.lastFee && !!plan.learners;
+  const signed = (n: number) => `${n < 0 ? "" : "+"}${rands(n)}`;
   const inBudget = (s: FeeScenario) => ready && s.id === plan.chosenId && !!feeLine && lineAmount(feeLine) === feeIncome(plan, s);
 
   const setScenarios = (scenarios: FeeScenario[]) => update({ scenarios });
@@ -41,14 +50,24 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
     commit({ scenarios: [...plan.scenarios, { id: newId(), increase: top + 1 }] });
   };
   const removeScenario = (id: string) => commit({ scenarios: plan.scenarios.filter((s) => s.id !== id) });
+  const setColumn = (id: string, increase: number) => setScenarios(plan.scenarios.map((x) => (x.id === id ? { ...x, increase } : x)));
+  // Emptying a grade's own box puts it back on the column's increase.
+  const setGradeIncrease = (s: FeeScenario, grade: string, typed: string) => {
+    const { [grade]: _old, ...others } = s.byGrade ?? {};
+    setScenarios(plan.scenarios.map((x) => (x.id === s.id ? { ...x, byGrade: typed === "" ? others : { ...others, [grade]: Number(typed) } } : x)));
+  };
 
   const numberBox = (value: number, onChange: (n: number) => void, onBlur: () => void, label: string, width = "w-28") => (
-    <input type="number" aria-label={label} disabled={!editable} value={value || ""} onChange={(e) => onChange(Number(e.target.value))} onBlur={onBlur} className={`${INPUT} ${width}`} />
+    <input type="number" min={0} aria-label={label} disabled={!editable} value={value || ""} onChange={(e) => onChange(Math.max(0, Number(e.target.value)))} onBlur={onBlur} className={`${INPUT} ${width}`} />
+  );
+  // A percentage: 0 shows as 0, and it may be negative.
+  const percentBox = (value: number, onChange: (typed: string) => void) => (
+    <input type="number" aria-label={t("Increase")} disabled={!editable} value={value} onChange={(e) => onChange(e.target.value)} onBlur={() => saveIfChanged("scenarios")} className={`${INPUT} w-16`} />
   );
   const field = (key: "lastFee" | "months" | "roundTo" | "learners", label: string) => (
     <label className="text-sm">
       <span className="block text-gray-600 mb-1">{label}</span>
-      {numberBox(plan[key], (n) => update({ [key]: n }), () => onSave({ [key]: plan[key] }), label, "w-36")}
+      {numberBox(plan[key], (n) => update({ [key]: n }), () => saveIfChanged(key), label, "w-36")}
     </label>
   );
   const useButton = (s: FeeScenario, note: string) =>
@@ -60,8 +79,8 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
         <button
           disabled={!ready}
           onClick={async () => {
-            const chosen = { ...plan, chosenId: s.id, feeLineId: feeLine.id };
-            if (await onUse(feeLine, feeIncome(plan, s), note, chosen)) update({ chosenId: s.id, feeLineId: feeLine.id });
+            const chosen = { ...chooseScenario(plan, s), feeLineId: feeLine.id };
+            if (await onUse(feeLine, feeIncome(plan, s), note, chosen)) setPlan((p) => ({ ...p, ...chosen }));
           }}
           className="text-primary text-xs font-medium disabled:opacity-40"
         >
@@ -142,7 +161,7 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
                 <th className="text-left pr-4 py-1 font-medium text-gray-500">{t("Learners")}</th>
                 {plan.scenarios.map((s) => (
                   <th key={s.id} className="text-left pr-4 py-1 font-medium text-gray-500 whitespace-nowrap">
-                    {numberBox(s.increase, (n) => setScenarios(plan.scenarios.map((x) => (x.id === s.id ? { ...x, increase: n } : x))), () => onSave({ scenarios: plan.scenarios }), t("Increase"), "w-16")} %
+                    {percentBox(s.increase, (typed) => setColumn(s.id, Number(typed)))} %
                     {removeButton(s)}
                   </th>
                 ))}
@@ -151,8 +170,9 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
             </thead>
             <tbody>
               {rows.map((g) => {
-                const setGrade = (change: { lastFee?: number; learners?: number }) => update({ grades: rows.map((r) => (r.grade === g.grade ? { ...r, ...change } : r)) });
-                const saveGrades = () => onSave({ grades: rows });
+                // Only this grade changes, so a mistaken switch to High keeps the Primary figures.
+                const setGrade = (change: { lastFee?: number; learners?: number }) => update({ grades: [...plan.grades.filter((r) => r.grade !== g.grade), { ...g, ...change }] });
+                const saveGrades = () => saveIfChanged("grades");
                 return (
                   <tr key={g.grade} className="border-t border-gray-50 align-top">
                     <td className="pr-4 py-1.5 whitespace-nowrap">{t("Grade {grade}", { grade: g.grade })}</td>
@@ -163,10 +183,10 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
                       const fee = feeAfter({ ...plan, lastFee: g.lastFee }, increase);
                       return (
                         <td key={s.id} className="pr-4 py-1.5 whitespace-nowrap">
-                          {numberBox(increase, (n) => setScenarios(plan.scenarios.map((x) => (x.id === s.id ? { ...x, byGrade: { ...x.byGrade, [g.grade]: n } } : x))), () => onSave({ scenarios: plan.scenarios }), t("Increase"), "w-16")} %
+                          {percentBox(increase, (typed) => setGradeIncrease(s, g.grade, typed))} %
                           {!!g.lastFee && (
                             <span className="block text-xs text-gray-500 mt-0.5">
-                              {rands(fee)} · {rands(fee / months)} {t("Per month").toLowerCase()} · +{rands((fee - g.lastFee) / months)}
+                              {rands(fee)} · {rands(fee / months)} {t("Per month").toLowerCase()} · {signed((fee - g.lastFee) / months)}
                             </span>
                           )}
                         </td>
@@ -209,13 +229,13 @@ export default function FeeCalculator({ stored, centre, lines, editable, onSave,
                   return (
                     <tr key={s.id} className={inBudget(s) ? "bg-emerald-50" : ""}>
                       <td className="pr-6 py-1 whitespace-nowrap">
-                        {numberBox(s.increase, (n) => setScenarios(plan.scenarios.map((x) => (x.id === s.id ? { ...x, increase: n } : x))), () => onSave({ scenarios: plan.scenarios }), t("Increase"), "w-16")} %
+                        {percentBox(s.increase, (typed) => setColumn(s.id, Number(typed)))} %
                         {removeButton(s)}
                       </td>
                       <td className="pr-6 py-1 text-right">{rands(fee)}</td>
                       <td className="pr-6 py-1 text-right">{rands(fee / months)}</td>
                       <td className="pr-6 py-1 text-right">{rands((fee - plan.lastFee) / months)}</td>
-                      <td className="pr-6 py-1 text-right">{rands(fee * plan.learners)}</td>
+                      <td className="pr-6 py-1 text-right">{rands(feeIncome(plan, s))}</td>
                       <td className="py-1">{useButton(s, t("{fee} a year × {learners} learners ({increase}% increase)", { fee: rands(fee), learners: plan.learners, increase: s.increase }))}</td>
                     </tr>
                   );
