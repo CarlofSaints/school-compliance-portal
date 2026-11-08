@@ -902,6 +902,19 @@ export async function sendCreditsAddedEmail(
 // Whether a provider is actually wired up. sendEmail() deliberately returns
 // true and logs when RESEND_API_KEY is absent, which is fine for a one-off
 // action but would make the reminder cron report sends that never happened.
+/** To School Compliance, never the school: the AI provider refused because the account behind this deployment is empty. */
+export async function sendAiOutOfCreditEmail(orgId: string, requestId: string): Promise<boolean> {
+  const b = await mailBranding();
+  const body = `
+    <p style="color:#333;"><strong>${esc(b.fullName)}</strong> was refused by Anthropic: the credit balance is too low. Compliance checks, Ask Jono, translation, Compile a policy and invoice reading fail until it is fixed.</p>
+    <p style="color:#333;">Users are being told to contact their administrator. They do not need to buy anything.</p>
+    <p style="color:#333;">Anthropic organisation: <strong>${esc(orgId || "not given")}</strong><br>Request: ${esc(requestId || "not given")}</p>
+    <p style="color:#333;">Top up at <a href="https://console.anthropic.com/settings/billing">console.anthropic.com</a>. If that organisation is not the one you can see, make a new key in the funded one, put it in ANTHROPIC_API_KEY on this school's Vercel project and redeploy.</p>
+    <p style="color:#666;font-size:13px;">Sent at most once every six hours per deployment while this continues.</p>
+  `;
+  return sendEmail(b.fromEmail, creditOrdersTo(), `AI account out of credit: ${b.shortName}`, emailShell(b, "AI account out of credit", body), undefined, undefined, undefined, { kind: "ai.out_of_credit", personal: true });
+}
+
 export function isEmailConfigured(): boolean {
   return resend !== null;
 }

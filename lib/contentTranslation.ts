@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient, aiOutOfCreditMessage } from "./aiAccount";
+import { isAiOutOfCredit } from "./aiErrors";
 import { randomUUID } from "crypto";
 import { inflateSync } from "zlib";
 import { readJson, writeJson, updateJson, NO_CHANGE } from "./controlData";
@@ -113,7 +115,7 @@ function objStmObjects(raw: string, at: number, obj: string): string[] | null {
 async function apiPages(file: Buffer): Promise<number> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const { input_tokens } = await new Anthropic({ apiKey }).messages.countTokens({
+  const { input_tokens } = await aiClient({ apiKey }).messages.countTokens({
     model: MODEL,
     messages: [{ role: "user", content: [pdfBlock(file)] }],
   });
@@ -311,6 +313,7 @@ async function translateClaimed(opts: Parameters<typeof translateContent>[0]): P
     await addCredits(opts.credits).catch((e) =>
       console.error("[translate] 🔴 REFUND FAILED, add back by hand:", opts.credits, "credits", e)
     );
+    if (isAiOutOfCredit(err)) return { ok: false, status: 503, error: await aiOutOfCreditMessage() };
     return {
       ok: false,
       status: 502,
@@ -341,7 +344,7 @@ async function callModel(
   const language = LOCALES.find((l) => l.code === locale)!.label;
 
   // Few retries: each one restarts a long stream inside a time-limited function.
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  const client = aiClient({ apiKey, maxRetries: 2 });
   // Streamed: a long policy can take minutes to write out in full.
   const message = await client.messages
     .stream({

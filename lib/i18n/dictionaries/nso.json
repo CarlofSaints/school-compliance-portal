@@ -2225,8 +2225,6 @@
   "nobody tagged": "ga go yo a swailwego",
   "Select the words first, then pick the person.": "Kgetha mantšu pele, ke moka o kgethe motho.",
   "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e šetše e swailwe ka {name}. Tloša leswao leo pele.",
-  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono a ka se arabe gona bjale: tirelo ya AI yeo portal ye e e šomišago e feletšwe ke tšhelete. Se ga se dikhrediti tša sekolo sa gago, ka gona go reka dikhrediti go ka se se lokiše.",
-  "Tell us about it": "Re botše ka yona",
   "How do I create a new minutes template?": "Ke dira bjang thempleite ye mpsha ya metsotso?",
   "About your minutes, actions and projects, school law, or how to use the portal": "Mabapi le metsotso ya gago, ditiro le diprojeke, molao wa sekolo, goba ka mokgwa wa go šomiša portal",
   "Scroll to the bottom to send out for checking or send out for signing.": "Theoša go ya fase go romela gore go lekolwe goba go saennwe.",
@@ -2597,5 +2595,6 @@
   "Remove this increase": "Tloša koketšo ye",
   "Grade {grade}": "Kreiti {grade}",
   "Fees per grade, {learners} learners": "Ditefo ka kreiti, barutwana ba {learners}",
-  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Phesente ka godimo ga kholomo e tlatša dikreiti ka moka. Fetola lepokisi la kreiti go e fa koketšo ye e fapanego."
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Phesente ka godimo ga kholomo e tlatša dikreiti ka moka. Fetola lepokisi la kreiti go e fa koketšo ye e fapanego.",
+  "The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.": "Tirelo ya AI yeo phothale ye e e šomišago ga e hwetšagale nakwana ka gobane akhaonte ya yona e nyaka go tlatšwa. Ga o swanela go reka selo gomme dikhrediti tša sekolo sa gago ga di amege. Hle tsebiša molaodi wa phothale ya gago."
 }

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient } from "./aiAccount";
 import { extractTextFromBuffer } from "@/lib/pdfParser";
 
 interface ComplianceResult {
@@ -135,7 +136,7 @@ async function analyze(
   }
 
   // maxRetries covers transient Anthropic 5xx/overloaded errors with backoff.
-  const client = new Anthropic({ apiKey, maxRetries: 4 });
+  const client = aiClient({ apiKey, maxRetries: 4 });
 
   let message;
   try {

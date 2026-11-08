@@ -2225,8 +2225,6 @@
   "nobody tagged": "ha ho motho ya tshwailweng",
   "Select the words first, then pick the person.": "Kgetha mantswe pele, ebe o kgetha motho.",
   "Part of this is already tagged with {name}. Untag that first.": "Karolo ya sena e se e tshwailwe ka {name}. Tlosa letshwao leo pele.",
-  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono a ke ke a araba hona jwale: tshebeletso ya AI eo portal ena e e sebedisang e felletswe ke tjhelete. Sena hase dikhrediti tsa sekolo sa hao, kahoo ho reka dikhrediti ho ke ke ha se lokisa.",
-  "Tell us about it": "Re bolelle ka yona",
   "How do I create a new minutes template?": "Ke etsa jwang template e ntjha ya metsotso?",
   "About your minutes, actions and projects, school law, or how to use the portal": "Mabapi le metsotso ya hao, diketso le diprojeke, molao wa sekolo, kapa tsela ya ho sebedisa portal",
   "Scroll to the bottom to send out for checking or send out for signing.": "Theosa ho ya tlase ho romela hore ho hlahlojwe kapa ho saennwe.",
@@ -2597,5 +2595,6 @@
   "Remove this increase": "Tlosa keketso ena",
   "Grade {grade}": "Kereiti {grade}",
   "Fees per grade, {learners} learners": "Ditefiso ka kereiti, baithuti ba {learners}",
-  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Phesente ka hodima kholomo e tlatsa dikereiti tsohle. Fetola lebokose la kereiti ho e fa keketso e fapaneng."
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Phesente ka hodima kholomo e tlatsa dikereiti tsohle. Fetola lebokose la kereiti ho e fa keketso e fapaneng.",
+  "The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.": "Tshebeletso ya AI eo phothale ena e e sebedisang ha e fumanehe ka nakwana hobane akhaonte ya yona e hloka ho tlatswa. Ha o hloke ho reka letho mme dikhrediti tsa sekolo sa hao ha di amehe. Ka kopo tsebisa motsamaisi wa phothale ya hao."
 }

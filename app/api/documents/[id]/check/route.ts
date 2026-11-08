@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { requirePermission } from "@/lib/rolesData";
 import { getDocumentById, downloadDocumentFile, saveDocumentCheck } from "@/lib/documentData";
@@ -57,6 +58,8 @@ export async function POST(
 
     return NextResponse.json(check);
   } catch (err) {
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error("Document check failed:", err);
     return NextResponse.json(
       { error: "Document check failed. Check API key configuration." },

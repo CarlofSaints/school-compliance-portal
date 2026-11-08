@@ -3,7 +3,7 @@ import { NO_CHANGE, addToList, readJson, removeFromList, updateInList, updateJso
 import { getTagMembers, getTags } from "./tagData";
 import { getUsers } from "./userData";
 import { getPeople } from "./peopleData";
-import { isAiOutOfCredit } from "./aiErrors";
+import { aiOutOfCreditResponse } from "./aiAccount";
 import { ReadError } from "./paymentAi";
 import { fileKind, fillSlots, type BankScreen, type Contact, type ContactInput, type Invoice, type SignSlot, type SignedBy, type StoredFile } from "./payments";
 
@@ -185,8 +185,9 @@ export async function uploadedFile(
   return { bytes, name: file.name, ext };
 }
 
-export function readFailed(err: unknown): NextResponse {
-  if (isAiOutOfCredit(err)) return NextResponse.json({ error: "The AI service is out of credit. Please contact support." }, { status: 503 });
+export async function readFailed(err: unknown): Promise<NextResponse> {
+  const credit = await aiOutOfCreditResponse(err);
+  if (credit) return credit;
   if (err instanceof ReadError) return NextResponse.json({ error: err.message }, { status: 422 });
   console.error("[payments] read failed", err);
   return NextResponse.json({ error: "The file could not be read just now. Nothing was charged. Please try again." }, { status: 502 });

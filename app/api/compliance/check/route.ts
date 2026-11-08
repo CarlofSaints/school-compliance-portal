@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { createHash } from "crypto";
 import { requirePermission } from "@/lib/rolesData";
@@ -110,6 +111,8 @@ export async function POST(req: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Compliance check failed:", message, err);
     return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { createHash } from "crypto";
 import { requirePermission } from "@/lib/rolesData";
@@ -175,6 +176,8 @@ export async function POST(
       headers: { "Cache-Control": "no-store" },
     });
   } catch (err) {
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error("Compliance check failed:", err);
     return NextResponse.json(
       { error: "Compliance check failed. Check API key configuration." },

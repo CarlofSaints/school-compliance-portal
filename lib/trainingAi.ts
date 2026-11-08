@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient } from "./aiAccount";
 import { extractTextFromBuffer } from "./pdfParser";
 import { downloadGuidelineFile, getGuidelines } from "./guidelineData";
 
@@ -134,7 +135,7 @@ export async function generateModule(req: GenerateRequest, deadline: number): Pr
     .filter(Boolean)
     .join("\n");
 
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  const client = aiClient({ apiKey, maxRetries: 2 });
   const message = await client.messages
     .stream(
       {

@@ -236,10 +236,7 @@ export default function AskJono() {
           // Not the school credits (Jono does not use them): the AI account that
           // runs the portal is empty, so trying again cannot help.
           <p className="text-sm text-red-600">
-            {t("Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.")}{" "}
-            <a href="/feedback" className="underline font-medium">
-              {t("Tell us about it")}
-            </a>
+            {t("The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.")}
           </p>
         ) : (
           error && <p className="text-sm text-red-600">{error}</p>

@@ -2225,8 +2225,6 @@
   "nobody tagged": "ga go ope yo o tshwailweng",
   "Select the words first, then pick the person.": "Tlhopha mafoko pele, morago o tlhophe motho.",
   "Part of this is already tagged with {name}. Untag that first.": "Karolo ya se e setse e tshwailwe ka {name}. Tlosa letshwao leo pele.",
-  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "Jono ga a kgone go araba jaanong: tirelo ya AI e portal e e dirisang e feletswe ke madi. Se ga se dikhrediti tsa sekolo sa gago, ka jalo go reka dikhrediti ga go kitla go se baakanya.",
-  "Tell us about it": "Re bolelele ka yone",
   "How do I create a new minutes template?": "Ke dira jang tempolete e ntšhwa ya metsotso?",
   "About your minutes, actions and projects, school law, or how to use the portal": "Ka ga metsotso ya gago, ditiro le diporojeke, molao wa sekolo, kgotsa tsela ya go dirisa portal",
   "Scroll to the bottom to send out for checking or send out for signing.": "Theosa go ya kwa tlase go romela gore go tlhatlhobiwe kgotsa go saenwe.",
@@ -2597,5 +2595,6 @@
   "Remove this increase": "Tlosa koketso eno",
   "Grade {grade}": "Mophato {grade}",
   "Fees per grade, {learners} learners": "Dituelo ka mophato, baithuti ba le {learners}",
-  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Diphesente fa godimo ga kholomo di tlatsa mephato yotlhe. Fetola lebokoso la mophato go o naya koketso e e farologaneng."
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Diphesente fa godimo ga kholomo di tlatsa mephato yotlhe. Fetola lebokoso la mophato go o naya koketso e e farologaneng.",
+  "The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.": "Tirelo ya AI e phothale eno e e dirisang ga e yo ka nakwana ka gonne akhaonto ya yone e tlhoka go tlatswa. Ga o tlhoke go reka sepe mme dikhrediti tsa sekolo sa gago ga di amege. Tsweetswee itsise motsamaisi wa phothale ya gago."
 }

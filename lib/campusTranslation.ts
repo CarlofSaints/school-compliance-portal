@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient } from "./aiAccount";
 import { createHash, randomUUID } from "crypto";
 import { readJson, updateJson, NO_CHANGE } from "./controlData";
 import { LOCALES, type Locale } from "./i18n/locales";
@@ -192,7 +193,7 @@ export async function translateUnits(locale: Locale, units: Unit[], deadline: nu
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
   const language = LOCALES.find((l) => l.code === locale)!.label;
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  const client = aiClient({ apiKey, maxRetries: 2 });
   const message = await client.messages
     .stream(
       {
