@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { requirePermission } from "@/lib/rolesData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { cleanQuestion, int, str, type Material, type Question, type Test, type TrainingModule } from "@/lib/training";
@@ -88,6 +89,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: mod.id }, { status: 201 });
   } catch (err) {
     if (err instanceof GenerateError) return NextResponse.json({ error: err.message }, { status: 422 });
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error("[training generate] Failed:", err);
     const timedOut = err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError" || /abort/i.test(err.message));
     return NextResponse.json(

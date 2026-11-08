@@ -2225,8 +2225,6 @@
   "nobody tagged": "akukho mntu uthegiweyo",
   "Select the words first, then pick the person.": "Khetha amagama kuqala, emva koko ukhethe umntu.",
   "Part of this is already tagged with {name}. Untag that first.": "Inxalenye yoku sele ithegiwe ngo-{name}. Qala ususe loo thegi.",
-  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "UJono akakwazi ukuphendula ngoku: inkonzo ye-AI esetyenziswa yile portal iphelelwe yikhredithi. Ayingomakhredithi esikolo sakho, ngoko ukuthenga amakhredithi akuyi kukulungisa.",
-  "Tell us about it": "Sixelele ngayo",
   "How do I create a new minutes template?": "Ndiyenza njani itemplate entsha yemizuzu?",
   "About your minutes, actions and projects, school law, or how to use the portal": "Malunga nemizuzu yakho, izenzo neeprojekthi, umthetho wesikolo, okanye indlela yokusebenzisa iportal",
   "Scroll to the bottom to send out for checking or send out for signing.": "Skrolela ezantsi ukuze uthumele ukuze kujongwe okanye kutyikitywe.",
@@ -2597,5 +2595,6 @@
   "Remove this increase": "Susa oku konyuka",
   "Grade {grade}": "iBanga {grade}",
   "Fees per grade, {learners} learners": "Imirhumo ngebanga, abafundi abali-{learners}",
-  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Ipesenti phezulu kwikholamu lizalisa onke amabanga. Tshintsha ibhokisi yebanga ukuze ulinike ukonyuka okwahlukileyo."
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Ipesenti phezulu kwikholamu lizalisa onke amabanga. Tshintsha ibhokisi yebanga ukuze ulinike ukonyuka okwahlukileyo.",
+  "The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.": "Inkonzo ye-AI esetyenziswa yile phothali ayifumaneki okwexeshana kuba iakhawunti yayo ifuna ukufakwa imali. Akukho nto ofuna ukuyithenga kwaye iikhredithi zesikolo sakho azichaphazeleki. Nceda wazise umlawuli wephothali yakho."
 }

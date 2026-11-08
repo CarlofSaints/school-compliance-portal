@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { requirePermission } from "@/lib/rolesData";
 import {
   getPolicyById,
@@ -67,6 +68,8 @@ export async function POST(
     });
   } catch (err) {
     if (err instanceof TranscribeError) return NextResponse.json({ error: err.message }, { status: 422 });
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error("[policy word] Failed:", err);
     const timedOut = err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError" || /abort/i.test(err.message));
     return NextResponse.json(

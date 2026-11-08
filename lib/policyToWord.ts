@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient } from "./aiAccount";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "docx";
 import { parseTranscript } from "./policyText";
 
@@ -21,7 +22,7 @@ export class TranscribeError extends Error {}
 export async function transcribePdf(pdf: Buffer, title: string, deadline: number): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  const client = aiClient({ apiKey, maxRetries: 2 });
   // Streamed: a long policy takes minutes to write out in full.
   const message = await client.messages
     .stream(

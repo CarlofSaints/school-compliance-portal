@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient } from "./aiAccount";
 import { addCredits, spendCredits } from "./contentTranslation";
 import { creditsForUsd, tenth, usdCost, type AiUsage } from "./jonoBilling";
 import { PAYMENT_READ_MAX_CREDITS, PAYMENT_STATEMENT_MAX_CREDITS } from "./creditPack";
@@ -95,7 +96,7 @@ const UNREADABLE = "This file could not be read automatically.";
 async function read(file: Buffer, ext: string, task: string, schema: Record<string, unknown>, deadline: number, maxTokens = 8000): Promise<{ data: unknown; usage: AiUsage }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const client = new Anthropic({ apiKey, maxRetries: 2 });
+  const client = aiClient({ apiKey, maxRetries: 2 });
   const data = file.toString("base64");
   const source: Anthropic.ContentBlockParam =
     ext === "pdf"

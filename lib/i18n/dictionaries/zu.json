@@ -2225,8 +2225,6 @@
   "nobody tagged": "akekho othegiwe",
   "Select the words first, then pick the person.": "Khetha amagama kuqala, bese ukhetha umuntu.",
   "Part of this is already tagged with {name}. Untag that first.": "Ingxenye yalokhu isivele ithegiwe ngo-{name}. Qala ususe leyo thegi.",
-  "Jono cannot answer right now: the AI service this portal uses has run out of credit. This is not your school credits, so buying credits will not fix it.": "UJono akakwazi ukuphendula manje: isevisi ye-AI esetshenziswa yileli portal iphelelwe yikhredithi. Lokhu akuwona amakhredithi esikole sakho, ngakho ukuthenga amakhredithi ngeke kukulungise.",
-  "Tell us about it": "Sitshele ngakho",
   "How do I create a new minutes template?": "Ngiyenza kanjani ithempulethi entsha yamaminithi?",
   "About your minutes, actions and projects, school law, or how to use the portal": "Mayelana namaminithi akho, izenzo namaphrojekthi, umthetho wesikole, noma indlela yokusebenzisa iportal",
   "Scroll to the bottom to send out for checking or send out for signing.": "Skrolela phansi ukuze uthumele ukuze kuhlolwe noma kusayinwe.",
@@ -2597,5 +2595,6 @@
   "Remove this increase": "Susa lokhu kwenyuka",
   "Grade {grade}": "iBanga {grade}",
   "Fees per grade, {learners} learners": "Izimali ngebanga, abafundi abangu-{learners}",
-  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Iphesenti phezulu kwekholomu ligcwalisa wonke amabanga. Shintsha ibhokisi lebanga ukulinika ukwenyuka okuhlukile."
+  "The percentage at the top of a column fills every grade. Change a grade's own box to give it a different increase.": "Iphesenti phezulu kwekholomu ligcwalisa wonke amabanga. Shintsha ibhokisi lebanga ukulinika ukwenyuka okuhlukile.",
+  "The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.": "Isevisi ye-AI esetshenziswa yileli phothali ayitholakali okwesikhashana ngoba i-akhawunti yayo idinga ukufakwa imali. Awudingi ukuthenga lutho futhi amakhredithi esikole sakho awathintekile. Sicela wazise umlawuli wephothali yakho."
 }

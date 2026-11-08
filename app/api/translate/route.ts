@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import type Anthropic from "@anthropic-ai/sdk";
 import { requireLogin } from "@/lib/rolesData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
@@ -158,6 +159,8 @@ export async function POST(req: NextRequest) {
   try {
     loaded = await doc.source();
   } catch (err) {
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error("[translate] could not read the source", doc.kind, doc.id, err);
     return NextResponse.json({ error: "This document could not be read for translation." }, { status: 502 });
   }

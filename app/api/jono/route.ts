@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAiOutOfCredit } from "@/lib/aiErrors";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { requireLogin } from "@/lib/rolesData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { JonoError, askJono, cleanTurns, jonoRequest, countJonoTokens, JONO_MAX_OUTPUT } from "@/lib/askJono";
@@ -103,10 +103,8 @@ export async function POST(req: NextRequest) {
     }
     if (err instanceof JonoError) return NextResponse.json({ error: err.message }, { status: 422 });
     console.error("[jono] Failed:", err);
-    // Said plainly, with the page to report it on: "try again" never helps here.
-    if (isAiOutOfCredit(err)) {
-      return NextResponse.json({ error: "out-of-ai-credit", code: "out-of-ai-credit" }, { status: 503 });
-    }
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     return NextResponse.json({ error: "Jono could not answer just now. Please try again." }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { aiClient } from "./aiAccount";
 import type { SessionPayload } from "./roles";
 import { listMinutes, readOriginalFile, formatPeriod, type MinutesRecord } from "./minutesData";
 import { getMeetingTypes } from "./meetingTypesData";
@@ -174,7 +175,7 @@ ${portalHowTo(branding.fullName, branding.schoolType === "private" ? "Board" : "
  */
 export async function countJonoTokens(req: JonoRequest): Promise<number> {
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
+    const client = aiClient({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 1 });
     const { input_tokens } = await client.messages.countTokens({ model: req.model, system: req.system, messages: req.messages });
     return input_tokens;
   } catch {
@@ -187,7 +188,7 @@ export async function askJono(req: JonoRequest): Promise<{ text: string; usage: 
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
   // 🔴 Well inside the route's 120s: credits held for a paid answer are only
   // given back if this returns or throws, never if the platform kills it.
-  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 45_000 });
+  const client = aiClient({ apiKey, maxRetries: 1, timeout: 45_000 });
   const message = await client.messages.create(req);
 
   if (message.stop_reason === "refusal") throw new JonoError("Jono cannot answer that one.");

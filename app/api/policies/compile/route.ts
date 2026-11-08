@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { v4 as uuidv4 } from "uuid";
 import { requirePermission } from "@/lib/rolesData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
@@ -119,6 +120,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ draft: paid.result, balance: paid.balance });
   } catch (err) {
     if (err instanceof CompileError) return NextResponse.json({ error: err.message }, { status: 422 });
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error(`[policy compile] ${String(action)} failed:`, err);
     const timedOut = err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError" || /abort/i.test(err.message));
     return NextResponse.json(
