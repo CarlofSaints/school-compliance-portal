@@ -1,5 +1,6 @@
 import Anthropic, { type ClientOptions } from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { afterResponse } from "./activityActor";
 import { isAiOutOfCredit } from "./aiErrors";
 import { NO_CHANGE, updateJson, writeJson } from "./controlData";
 import { sendAiOutOfCreditEmail } from "./email";
@@ -14,8 +15,8 @@ const ALERT_EVERY_MS = 6 * 60 * 60 * 1000;
 
 /** At most one email per deployment per six hours, however many people are refused. Never throws: an alert must not change what the user sees. */
 async function alertOutOfCredit(res: Response, body: string): Promise<void> {
+  let claimed = false;
   try {
-    let claimed = false;
     await runInControlStore(() =>
       updateJson<{ at: number }>(ALERT_FILE, { at: 0 }, (cur) => {
         claimed = Date.now() - cur.at >= ALERT_EVERY_MS;
@@ -27,19 +28,21 @@ async function alertOutOfCredit(res: Response, body: string): Promise<void> {
     try {
       requestId ||= (JSON.parse(body) as { request_id?: string }).request_id ?? "";
     } catch {}
-    const sent = await sendAiOutOfCreditEmail(res.headers.get("anthropic-organization-id") ?? "", requestId);
-    // Not sent, so the next failure must be free to try again.
-    if (!sent) await runInControlStore(() => writeJson(ALERT_FILE, { at: 0 }));
+    if (await sendAiOutOfCreditEmail(res.headers.get("anthropic-organization-id") ?? "", requestId)) return;
+    console.error("[ai account] 🔴 the out-of-credit alert did not send");
   } catch (err) {
     console.error("[ai account] 🔴 could not send the out-of-credit alert:", err);
   }
+  // Not sent, so the next failure must be free to try again.
+  if (claimed) await runInControlStore(() => writeJson(ALERT_FILE, { at: 0 })).catch((err) => console.error("[ai account] could not release the alert:", err));
 }
 
 const watchedFetch: NonNullable<ClientOptions["fetch"]> = async (url, init) => {
   const res = await fetch(url, init);
   if (res.status === 400 || res.status === 402) {
     const body = await res.clone().text();
-    if (isAiOutOfCredit(new Error(body))) await alertOutOfCredit(res, body);
+    // After the response: a slow store or mail server must not hold up the error, or a refund behind it.
+    if (/credit balance/i.test(body)) await afterResponse(() => alertOutOfCredit(res, body));
   }
   return res;
 };

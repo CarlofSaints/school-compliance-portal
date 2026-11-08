@@ -74,11 +74,7 @@ export default function AskJono() {
         // Take the question back off so it can be asked again.
         setTurns(before);
         setDraft(q);
-        setError(
-          body.code === "out-of-ai-credit"
-            ? "out-of-ai-credit"
-            : body.error || t("Jono could not answer just now. Please try again.")
-        );
+        setError(body.error || t("Jono could not answer just now. Please try again."));
       }
     } catch {
       setTurns(before);
@@ -232,15 +228,7 @@ export default function AskJono() {
           </div>
         )}
         {busy && <p className="text-sm text-gray-400">{t("Jono is reading your records...")}</p>}
-        {error === "out-of-ai-credit" ? (
-          // Not the school credits (Jono does not use them): the AI account that
-          // runs the portal is empty, so trying again cannot help.
-          <p className="text-sm text-red-600">
-            {t("The AI service this portal uses is temporarily unavailable because its account needs a top-up. You do not need to buy anything and your school's credits are not affected. Please let your portal administrator know.")}
-          </p>
-        ) : (
-          error && <p className="text-sm text-red-600">{error}</p>
-        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <div ref={endRef} />
       </div>
 

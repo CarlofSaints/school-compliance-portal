@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { aiOutOfCreditResponse } from "@/lib/aiAccount";
 import { requireLogin } from "@/lib/rolesData";
 import { LIMITS, enforce } from "@/lib/rateLimit";
 import { getLocale } from "@/lib/i18n/server";
@@ -61,6 +62,8 @@ export async function POST(req: NextRequest) {
     if (!paid.ok) return NextResponse.json({ error: "Your school does not have enough credits for this. Buy more under Admin > Translation Credits.", balance: paid.balance }, { status: 402 });
     return NextResponse.json({ ok: true, balance: paid.balance });
   } catch (err) {
+    const credit = await aiOutOfCreditResponse(err);
+    if (credit) return credit;
     console.error("[campus translate] paid translation failed", kind, item.id, locale, err);
     return NextResponse.json(
       { error: err instanceof CampusTranslateError ? err.message : "The translation could not be done just now. Your credits were given back. Please try again." },
