@@ -35,8 +35,14 @@ export interface Meeting {
   status: "scheduled" | "cancelled";
   /** Calendar SEQUENCE: each change raises it, so calendars replace the old copy. */
   sequence: number;
-  /** The automatic reminder (day before) claimed or sent. */
+  /** When the last automatic reminder was claimed or sent. */
   reminderSentAt: string | null;
+  /** Days before the meeting a reminder email goes (0 = the morning of). Missing = [1]. */
+  reminderDays?: number[];
+  /** The reminder days already sent (or passed before they could go). */
+  remindersSent?: number[];
+  /** Calendar alert, minutes before the start; 0 = none. Missing = 60. */
+  alertMinutes?: number;
   lastReminderAt?: string;
   /** Who was last emailed it (has it in their calendar): told of changes and a cancel. */
   invited?: { name: string; email: string }[];
@@ -58,7 +64,16 @@ export interface MeetingInput {
   personKeys: string[];
   /** "" = no room. */
   roomId: string;
+  reminderDays: number[];
+  alertMinutes: number;
 }
+
+/** The reminder choices: days before, all sent on the 07:00 run. */
+export const REMINDER_DAYS = [7, 3, 2, 1, 0];
+export const ALERT_MINUTES = [0, 15, 30, 60, 120, 1440];
+export const reminderDaysOf = (m: Pick<Meeting, "reminderDays">) => m.reminderDays ?? [1];
+export const alertMinutesOf = (m: Pick<Meeting, "alertMinutes">) => m.alertMinutes ?? 60;
+export const meetingRemindersSent = (m: Meeting) => m.remindersSent ?? (m.reminderSentAt ? reminderDaysOf(m) : []);
 
 const ID = /^[A-Za-z0-9:_-]{1,80}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -80,17 +95,30 @@ export function parseMeetingInput(body: unknown): { ok: true; value: MeetingInpu
   if (!tagIds.length && !personKeys.length) return { ok: false, error: "Invite at least one tag or person" };
   const roomId = b.roomId === "" || b.roomId == null ? "" : typeof b.roomId === "string" && ID.test(b.roomId) ? b.roomId : null;
   if (roomId === null) return { ok: false, error: "Invalid room" };
-  return { ok: true, value: { title, typeId, date: b.date, startMinute: b.startMinute, endMinute: b.endMinute, venue: str(b.venue, 300), notes: str(b.notes, 2000), tagIds, personKeys, roomId } };
+  const reminderDays = b.reminderDays == null ? [1] : Array.isArray(b.reminderDays) && b.reminderDays.every((d) => REMINDER_DAYS.includes(d as number)) ? [...new Set(b.reminderDays as number[])].sort((x, y) => y - x) : null;
+  if (!reminderDays) return { ok: false, error: "Invalid reminders" };
+  const alertMinutes = b.alertMinutes == null ? 60 : ALERT_MINUTES.includes(b.alertMinutes as number) ? (b.alertMinutes as number) : null;
+  if (alertMinutes === null) return { ok: false, error: "Invalid calendar alert" };
+  return { ok: true, value: { title, typeId, date: b.date, startMinute: b.startMinute, endMinute: b.endMinute, venue: str(b.venue, 300), notes: str(b.notes, 2000), tagIds, personKeys, roomId, reminderDays, alertMinutes } };
 }
 
 export const meetingStartMs = (m: Pick<Meeting, "date" | "startMinute">) => startsAtMs(m.date, m.startMinute);
 
-/** Due for the automatic reminder on the 07:00 run: scheduled, not yet
- *  reminded, starting between now and the end of tomorrow (SAST). */
-export function meetingReminderDue(m: Meeting, today: string, now: Date): boolean {
-  if (m.status !== "scheduled" || m.reminderSentAt) return false;
-  return meetingStartMs(m) > now.getTime() && m.date <= addDays(today, 1);
+/** The reminder days whose day has come (on or before `today`) and not yet
+ *  sent, for a meeting still ahead. A missed day catches up on the next run;
+ *  several due together go as one email. */
+export function meetingRemindersDue(m: Meeting, today: string, now: Date): number[] {
+  if (m.status !== "scheduled" || meetingStartMs(m) <= now.getTime()) return [];
+  const sent = meetingRemindersSent(m);
+  return reminderDaysOf(m).filter((d) => !sent.includes(d) && addDays(m.date, -d) <= today);
 }
+
+/** Reminder days whose day was already over before the meeting was set up or
+ *  moved: never sent (the invite just went), so they count as sent. */
+export const passedReminders = (days: number[], date: string, today: string) => days.filter((d) => addDays(date, -d) < today);
+
+/** Whole days from `today` to the meeting, for "today", "tomorrow", "in 3 days". */
+export const daysUntil = (date: string, today: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
 
 // --- Calendar file (RFC 5545) ----------------------------------------------------
 
@@ -144,9 +172,9 @@ export function meetingIcs(
     `ORGANIZER;CN="${opts.organizerName.replace(/["\r\n]/g, "")}":mailto:${opts.organizerEmail}`,
     ...(opts.attendeeEmail ? [`ATTENDEE;ROLE=REQ-PARTICIPANT;RSVP=FALSE:mailto:${opts.attendeeEmail}`] : []),
     `STATUS:${opts.method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
-    ...(opts.method === "CANCEL"
+    ...(opts.method === "CANCEL" || !alertMinutesOf(m)
       ? []
-      : ["BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(m.title)}`, "TRIGGER:-PT1H", "END:VALARM"]),
+      : ["BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(m.title)}`, `TRIGGER:-PT${alertMinutesOf(m)}M`, "END:VALARM"]),
     "END:VEVENT",
     "END:VCALENDAR",
   ];

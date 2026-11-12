@@ -10,7 +10,7 @@ import { pause } from "./actionItemNotify";
 import { longDateLabel, slotLabel, sastToday } from "./roomBookings";
 import { MailQueue, notifyWithdrawn } from "./roomBookingNotify";
 import { cancelBooking, createBooking, updateBooking, getRoom, type Actor, type BookingInput, type Withdrawal } from "./roomBookingData";
-import { meetingIcs, meetingReminderDue, meetingStartMs, type Meeting, type MeetingInput, type MeetingRoomLink } from "./meetings";
+import { daysUntil, meetingIcs, meetingRemindersDue, meetingRemindersSent, meetingStartMs, passedReminders, type Meeting, type MeetingInput, type MeetingRoomLink } from "./meetings";
 
 // Events and meetings. Rules in lib/meetings.ts. One list, every change ONE
 // guarded write (updateJson), so two people scheduling at once both keep theirs.
@@ -190,6 +190,9 @@ export async function createMeeting(actor: Actor, input: MeetingInput): Promise<
     status: "scheduled",
     sequence: 0,
     reminderSentAt: null,
+    reminderDays: input.reminderDays,
+    remindersSent: passedReminders(input.reminderDays, input.date, sastToday()),
+    alertMinutes: input.alertMinutes,
     invited: list.value.map((i) => ({ name: i.name, email: i.email })),
     createdById: actor.id,
     createdByName: actor.name,
@@ -253,7 +256,15 @@ export async function editMeeting(
     personKeys: input.personKeys,
     room,
     sequence: cur.sequence + 1,
-    reminderSentAt: timeChanged ? null : cur.reminderSentAt,
+    reminderDays: input.reminderDays,
+    // A new date or time starts the reminders afresh; otherwise ones already sent stay sent.
+    remindersSent: [
+      ...new Set([
+        ...(timeChanged ? [] : meetingRemindersSent(cur).filter((d) => input.reminderDays.includes(d))),
+        ...passedReminders(input.reminderDays, input.date, sastToday()),
+      ]),
+    ],
+    alertMinutes: input.alertMinutes,
     invited: invitees.map((i) => ({ name: i.name, email: i.email })),
     updatedAt: new Date().toISOString(),
   }));
@@ -285,6 +296,7 @@ export async function emailMeeting(m: Meeting, kind: MeetingEmailKind, people?: 
     venue: m.venue,
     notes: m.notes,
     organiserName: m.createdByName,
+    daysAway: daysUntil(m.date, sastToday()),
   };
   let sent = 0;
   let failed = 0;
@@ -307,20 +319,24 @@ export async function remindMeetingNow(id: string): Promise<Outcome<{ sent: numb
   return { ok: true, value: r };
 }
 
-/** The 07:00 run: one reminder for every meeting today or tomorrow. Claimed
- *  before sending so two overlapping runs cannot both send it.
+/** The 07:00 run: one reminder email per meeting with a reminder day due
+ *  (its own choices: a week, 3 days, 2 days, the day before, the morning of).
+ *  Claimed before sending so two overlapping runs cannot both send it.
  *  shortcut: a run killed mid-send leaves the rest of that list unreminded
  *  (lists are capped at MAX_INVITEES); keep per-person stamps like room
  *  bookings if schools start inviting hundreds. */
 export async function runMeetingReminders(now: Date = new Date()): Promise<{ sent: number; failed: number; detail: string[] }> {
   const today = sastToday(now);
-  const due = (await getMeetings()).filter((m) => meetingReminderDue(m, today, now));
+  const due = (await getMeetings()).filter((m) => meetingRemindersDue(m, today, now).length);
   let sent = 0;
   let failed = 0;
   const detail: string[] = [];
   for (const m of due) {
     const stamp = now.toISOString();
-    const claimed = await change(m.id, (cur) => (meetingReminderDue(cur, today, now) ? { ...cur, reminderSentAt: stamp } : null));
+    const claimed = await change(m.id, (cur) => {
+      const days = meetingRemindersDue(cur, today, now);
+      return days.length ? { ...cur, reminderSentAt: stamp, remindersSent: [...meetingRemindersSent(cur), ...days] } : null;
+    });
     if (!claimed) continue;
     const r = await emailMeeting(claimed, "reminder");
     sent += r.sent;

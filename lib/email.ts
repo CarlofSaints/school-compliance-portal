@@ -1882,6 +1882,8 @@ export interface MeetingEmailFacts {
   venue: string;
   notes: string;
   organiserName: string;
+  /** Days from today to the meeting: the reminder says today, tomorrow, in 3 days. */
+  daysAway?: number;
 }
 
 export type MeetingEmailKind = "invite" | "changed" | "cancelled" | "reminder";
@@ -1909,7 +1911,7 @@ export async function sendMeetingEmail(to: string, name: string, kind: MeetingEm
     invite: `${esc(f.organiserName)} has invited you to this ${f.typeLabel ? esc(f.typeLabel) + " " : ""}meeting.`,
     changed: `The details of this meeting have changed. The new details are below.`,
     cancelled: `This meeting has been cancelled.`,
-    reminder: `A reminder that you are expected at this meeting.`,
+    reminder: `A reminder that you are expected at this meeting ${f.daysAway === 0 ? "today" : f.daysAway === 1 ? "tomorrow" : f.daysAway && f.daysAway > 1 ? `in ${f.daysAway} days` : "soon"}.`,
   }[kind];
   const calendarLine =
     kind === "cancelled"
