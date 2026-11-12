@@ -306,6 +306,7 @@ export default function MeetingsPage() {
             </div>
             <div className="text-sm">
               <span className="font-medium">{t("Invite people")}</span>
+              {form.tagIds.length > 0 && <p className="text-xs text-gray-500">{t("Everyone in the tags above is invited. Add people here who are not in those tags.")}</p>}
               <input value={search} onChange={(e) => setSearch(e.target.value)} className={input} placeholder={t("Search by name or email")} />
               <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
                 {people.map((p) => (
