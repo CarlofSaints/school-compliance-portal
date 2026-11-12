@@ -7,11 +7,12 @@ import DownloadLink from "@/components/DownloadLink";
 import { useT } from "@/components/I18nProvider";
 import { longDateLabel, slotLabel, sastToday } from "@/lib/roomBookings";
 import { meetingTypeLabel, type MeetingType } from "@/lib/meetingTypes";
-import type { Meeting } from "@/lib/meetings";
+import { ALERT_MINUTES, REMINDER_DAYS, alertMinutesOf, reminderDaysOf, type Meeting } from "@/lib/meetings";
 
 // Events and meetings (FINCOM, SGB, AGM, a fun day). Separate from room
 // bookings: a room is optional, booked through the room calendar when ticked.
-// Every invitee gets an email with a calendar file, and a reminder the day before.
+// Every invitee gets an email with a calendar file, and the reminder emails the
+// organiser picks (a week, 3 days, 2 days, the day before, the morning of).
 
 type Row = Meeting & { invitees: { name: string; email?: string }[] };
 interface Options {
@@ -39,6 +40,8 @@ const blank = () => ({
   notes: "",
   tagIds: [] as string[],
   personKeys: [] as string[],
+  reminderDays: [1],
+  alertMinutes: 60,
 });
 
 export default function MeetingsPage() {
@@ -91,6 +94,8 @@ export default function MeetingsPage() {
             notes: m.notes,
             tagIds: m.tagIds,
             personKeys: m.personKeys,
+            reminderDays: reminderDaysOf(m),
+            alertMinutes: alertMinutesOf(m),
           }
     );
   };
@@ -129,11 +134,13 @@ export default function MeetingsPage() {
       notes: form.notes,
       tagIds: form.tagIds,
       personKeys: form.personKeys,
+      reminderDays: form.reminderDays,
+      alertMinutes: form.alertMinutes,
     };
     const r = editing === "new" ? await call("/api/meetings", "POST", body) : await call(`/api/meetings/${editing.id}`, "PUT", body);
     if (!r) return;
     setEditing(null);
-    setToast(r.roomReleased === false ? roomNotice : sentNotice(r));
+    setToast(r.roomReleased === false ? roomNotice : r.quiet ? { message: t("Saved"), type: "success" } : sentNotice(r));
     apply(await load());
   };
 
@@ -157,6 +164,10 @@ export default function MeetingsPage() {
 
   if (loading) return <div className="p-6">{t("Loading...")}</div>;
 
+  const dayLabel = (d: number) =>
+    ({ 7: t("1 week before"), 3: t("3 days before"), 2: t("2 days before"), 1: t("The day before"), 0: t("The morning of the meeting") })[d] ?? "";
+  const alertLabel = (n: number) =>
+    ({ 0: t("No alert"), 15: t("15 minutes before"), 30: t("30 minutes before"), 60: t("1 hour before"), 120: t("2 hours before"), 1440: t("1 day before") })[n] ?? "";
   const people = opts.people.filter((p) => !search || `${p.name} ${p.email}`.toLowerCase().includes(search.toLowerCase()));
   const input = "mt-1 w-full border border-gray-300 rounded-lg px-3 py-2";
 
@@ -167,7 +178,7 @@ export default function MeetingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-dark">{t("Meetings & Events")}</h1>
-          <p className="text-gray-500 text-sm">{t("Everyone invited gets an email that adds the meeting to their own calendar, and a reminder the day before.")}</p>
+          <p className="text-gray-500 text-sm">{t("Everyone invited gets an email that adds the meeting to their own calendar, and reminder emails before it.")}</p>
         </div>
         {manager && (
           <button onClick={() => open("new")} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
@@ -205,6 +216,11 @@ export default function MeetingsPage() {
                   {m.invitees.length > 6 ? "…" : ""}
                 </p>
                 {m.notes && <p className="mt-1 whitespace-pre-wrap text-xs text-gray-500">{m.notes}</p>}
+                {manager && m.status === "scheduled" && (
+                  <p className="text-xs text-gray-400">
+                    {t("Reminder emails")}: {reminderDaysOf(m).map(dayLabel).join(", ") || t("none")}
+                  </p>
+                )}
                 {manager && m.lastReminderAt && (
                   <p className="text-xs text-gray-400">{t("Last reminder sent {when}", { when: new Date(m.lastReminderAt).toLocaleString() })}</p>
                 )}
@@ -317,6 +333,31 @@ export default function MeetingsPage() {
                   </label>
                 ))}
               </div>
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">{t("Reminders")}</span>
+              <p className="text-xs text-gray-500">{t("Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.")}</p>
+              <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                {REMINDER_DAYS.map((d) => (
+                  <label key={d} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={form.reminderDays.includes(d)}
+                      onChange={() => setForm({ ...form, reminderDays: form.reminderDays.includes(d) ? form.reminderDays.filter((x) => x !== d) : [...form.reminderDays, d] })}
+                    />
+                    {dayLabel(d)}
+                  </label>
+                ))}
+              </div>
+              <label className="mt-2 block">
+                <span>{t("Calendar alert (pops up in their calendar)")}</span>
+                <select value={form.alertMinutes} onChange={(e) => setForm({ ...form, alertMinutes: Number(e.target.value) })} className={input}>
+                  {ALERT_MINUTES.map((n) => (
+                    <option key={n} value={n}>{alertLabel(n)}</option>
+                  ))}
+                </select>
+              </label>
+              <p className="mt-1 text-xs text-gray-500">{t("Need one sooner? Use \"Send reminder now\" on the meeting.")}</p>
             </div>
             <label className="block text-sm">
               <span className="font-medium">{t("Notes (optional)")}</span>

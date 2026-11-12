@@ -343,7 +343,7 @@ async function runForSchool() {
     failed++;
     detail.push(`Room booking reminders failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-  // Events and meetings: one reminder each, today or tomorrow.
+  // Events and meetings: the reminder days each meeting's organiser ticked.
   try {
     const meetings = await runMeetingReminders(now);
     sent += meetings.sent;
