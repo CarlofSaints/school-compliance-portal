@@ -7,13 +7,13 @@ import { actorOf, getRooms } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel, sastToday } from "@/lib/roomBookings";
 import { addDays } from "@/lib/actionItems";
 import { parseMeetingInput } from "@/lib/meetings";
-import { createMeeting, emailMeeting, getMeetings, inviteOptions, meetingInvitees } from "@/lib/meetingData";
+import { createMeeting, emailMeeting, getMeetings, inviteOptions, loadDirectory, meetingInvitees } from "@/lib/meetingData";
 import { getTags } from "@/lib/tagData";
 import { getMeetingTypes } from "@/lib/meetingTypesData";
 
 export const dynamic = "force-dynamic";
 // Invites go out paced, one person after another.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /** Meetings from 60 days back. Everyone sees the ones they are invited to;
  *  manage_meetings sees all, plus what the schedule form needs. */
@@ -23,9 +23,10 @@ export async function GET(req: NextRequest) {
   const manager = session.permissions.includes("manage_meetings");
   const from = addDays(sastToday(), -60);
   const all = (await getMeetings()).filter((m) => m.date >= from);
+  const dir = await loadDirectory();
   const rows = [];
   for (const m of all) {
-    const invitees = await meetingInvitees(m);
+    const invitees = await meetingInvitees(m, dir);
     const mine = invitees.some((i) => i.userId === session.id || i.email.toLowerCase() === session.email.toLowerCase());
     if (!manager && !mine && m.createdById !== session.id) continue;
     rows.push({ ...m, invitees: manager ? invitees.map((i) => ({ name: i.name, email: i.email })) : invitees.map((i) => ({ name: i.name })) });
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const r = await createMeeting(actorOf(session), parsed.value);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  const m = r.value;
+  const { meeting: m, invitees } = r.value;
   await recordActivity({
     ...actorFrom(req, session),
     action: "meeting.scheduled",
@@ -64,6 +65,6 @@ export async function POST(req: NextRequest) {
     entityId: m.id,
     summary: `Scheduled "${m.title}" on ${longDateLabel(m.date)} ${slotLabel(m.startMinute, m.endMinute)}${m.room ? ` in ${m.room.roomName}` : ""}`,
   });
-  const mail = await emailMeeting(m, "invite");
+  const mail = await emailMeeting(m, "invite", invitees);
   return NextResponse.json({ meeting: m, ...mail }, { status: 201 });
 }

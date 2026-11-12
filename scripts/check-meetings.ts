@@ -35,4 +35,6 @@ assert.ok(ics.includes("SEQUENCE:2") && ics.includes("METHOD:REQUEST") && ics.in
 assert.ok(ics.split("\r\n").every((l) => Buffer.byteLength(l) <= 75), "lines folded");
 const cancel = meetingIcs(m, { method: "CANCEL", organizerEmail: "noreply@x.co.za", organizerName: "HVPS" });
 assert.ok(cancel.includes("STATUS:CANCELLED") && !cancel.includes("VALARM"));
+const named = meetingIcs(m, { method: "REQUEST", organizerEmail: "a@b.co", organizerName: 'Hillview Primary, "Compliance"' });
+assert.ok(named.includes('ORGANIZER;CN="Hillview Primary, Compliance":mailto:a@b.co'), "CN quoted, quotes dropped");
 console.log("check-meetings: all passed");

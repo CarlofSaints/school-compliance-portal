@@ -38,6 +38,8 @@ export interface Meeting {
   /** The automatic reminder (day before) claimed or sent. */
   reminderSentAt: string | null;
   lastReminderAt?: string;
+  /** Who was last emailed it (has it in their calendar): told of changes and a cancel. */
+  invited?: { name: string; email: string }[];
   createdById: string;
   createdByName: string;
   createdAt: string;
@@ -138,7 +140,8 @@ export function meetingIcs(
     `SUMMARY:${icsText(m.title)}`,
     ...(m.venue ? [`LOCATION:${icsText(m.venue)}`] : []),
     ...(description ? [`DESCRIPTION:${icsText(description)}`] : []),
-    `ORGANIZER;CN=${icsText(opts.organizerName)}:mailto:${opts.organizerEmail}`,
+    // A parameter value is quoted, not escaped (RFC 5545 3.2); it may not hold a quote.
+    `ORGANIZER;CN="${opts.organizerName.replace(/["\r\n]/g, "")}":mailto:${opts.organizerEmail}`,
     ...(opts.attendeeEmail ? [`ATTENDEE;ROLE=REQ-PARTICIPANT;RSVP=FALSE:mailto:${opts.attendeeEmail}`] : []),
     `STATUS:${opts.method === "CANCEL" ? "CANCELLED" : "CONFIRMED"}`,
     ...(opts.method === "CANCEL"

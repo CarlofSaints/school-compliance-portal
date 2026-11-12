@@ -102,6 +102,8 @@ export default function MeetingsPage() {
       ? { message: t("Emailed {n} people, but {f} could not be reached.", { n: r.sent, f: r.failed }), type: "error" as const }
       : { message: t("Emailed {n} people.", { n: r.sent }), type: "success" as const };
 
+  const roomNotice = { message: t("Emails sent, but the old room booking could not be let go. Cancel it on the room calendar."), type: "error" as const };
+
   const call = async (url: string, method: string, body?: unknown) => {
     setBusy(true);
     const res = await authFetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -131,7 +133,7 @@ export default function MeetingsPage() {
     const r = editing === "new" ? await call("/api/meetings", "POST", body) : await call(`/api/meetings/${editing.id}`, "PUT", body);
     if (!r) return;
     setEditing(null);
-    setToast(sentNotice(r));
+    setToast(r.roomReleased === false ? roomNotice : sentNotice(r));
     apply(await load());
   };
 
@@ -148,7 +150,7 @@ export default function MeetingsPage() {
     if (!confirm(t("Cancel \"{name}\"? Everyone invited is emailed, and the room booking (if any) is let go.", { name: m.title }))) return;
     const r = await call(`/api/meetings/${m.id}`, "DELETE");
     if (r) {
-      setToast(sentNotice(r));
+      setToast(r.roomReleased === false ? roomNotice : sentNotice(r));
       apply(await load());
     }
   };
@@ -258,7 +260,7 @@ export default function MeetingsPage() {
               </label>
             </div>
 
-            {opts.rooms.length > 0 && (
+            {(opts.rooms.length > 0 || form.withRoom) && (
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={form.withRoom} onChange={(e) => setForm({ ...form, withRoom: e.target.checked })} />
                 <span className="font-medium">{t("Would you like to book a room for this?")}</span>
@@ -269,6 +271,10 @@ export default function MeetingsPage() {
                 <span className="font-medium">{t("Room")}</span>
                 <select value={form.roomId} onChange={(e) => setForm({ ...form, roomId: e.target.value })} className={input}>
                   <option value="">{t("Pick a room")}</option>
+                  {/* The saved room, even if this person may not book rooms or it was retired. */}
+                  {editing !== "new" && editing.room && !opts.rooms.some((r) => r.id === editing.room?.roomId) && (
+                    <option value={editing.room.roomId}>{editing.room.roomName}</option>
+                  )}
                   {opts.rooms.map((r) => (
                     <option key={r.id} value={r.id}>{r.name} ({t("seats {n}", { n: r.capacity })})</option>
                   ))}

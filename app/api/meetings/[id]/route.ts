@@ -6,12 +6,12 @@ import { LIMITS, enforce } from "@/lib/rateLimit";
 import { actorOf } from "@/lib/roomBookingData";
 import { longDateLabel, slotLabel } from "@/lib/roomBookings";
 import { meetingIcs, parseMeetingInput } from "@/lib/meetings";
-import { cancelMeeting, editMeeting, emailMeeting, getMeeting, meetingInvitees, remindMeetingNow } from "@/lib/meetingData";
+import { cancelMeeting, editMeeting, emailMeeting, everyoneToTell, getMeeting, meetingInvitees, remindMeetingNow } from "@/lib/meetingData";
 import { meetingOrganizer } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 // Invites go out paced, one person after another.
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const r = await editMeeting(actorOf(session), (await params).id, parsed.value);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  const { before, after } = r.value;
+  const { after, invitees, dropped, roomReleased } = r.value;
   await recordActivity({
     ...actorFrom(req, session),
     action: "meeting.changed",
@@ -51,12 +51,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     summary: `Changed "${after.title}" (${longDateLabel(after.date)} ${slotLabel(after.startMinute, after.endMinute)})`,
   });
   // Someone taken off the list is told it is cancelled for them.
-  const [was, now] = await Promise.all([meetingInvitees(before), meetingInvitees(after)]);
-  const kept = new Set(now.map((i) => i.email.toLowerCase()));
-  const dropped = was.filter((i) => !kept.has(i.email.toLowerCase()));
-  const a = await emailMeeting(after, "changed", now);
+  const a = await emailMeeting(after, "changed", invitees);
   const b = dropped.length ? await emailMeeting({ ...after, status: "cancelled" }, "cancelled", dropped) : { sent: 0, failed: 0 };
-  return NextResponse.json({ meeting: after, sent: a.sent + b.sent, failed: a.failed + b.failed });
+  return NextResponse.json({ meeting: after, roomReleased, sent: a.sent + b.sent, failed: a.failed + b.failed });
 }
 
 /** Cancel: kept as the record, everyone emailed, the room let go. */
@@ -75,7 +72,8 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
     entityId: meeting.id,
     summary: `Cancelled "${meeting.title}" on ${longDateLabel(meeting.date)}`,
   });
-  const mail = await emailMeeting(meeting, "cancelled");
+  // Everyone who has it in their calendar, including anyone since taken off a tag.
+  const mail = await emailMeeting(meeting, "cancelled", everyoneToTell(meeting, await meetingInvitees(meeting)));
   return NextResponse.json({ ok: true, roomReleased, ...mail });
 }
 
