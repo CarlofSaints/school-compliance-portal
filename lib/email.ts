@@ -1871,3 +1871,72 @@ export function sendGuestBookingDeclinedEmail(to: string, name: string, roomId: 
     ${bookingButton(P, GUEST_LINK(site, roomId), "Pick another time")}
   `, { kind: "booking.guest_declined" });
 }
+
+// --- Events and meetings (lib/meetingData.ts) -------------------------------------
+
+export interface MeetingEmailFacts {
+  title: string;
+  typeLabel: string;
+  dateLabel: string;
+  timeLabel: string;
+  venue: string;
+  notes: string;
+  organiserName: string;
+}
+
+export type MeetingEmailKind = "invite" | "changed" | "cancelled" | "reminder";
+
+/** The school's sending address and name, for the calendar file's organiser. */
+export async function meetingOrganizer(): Promise<{ email: string; name: string; site: string }> {
+  const b = await mailBranding();
+  const m = /^(.*?)\s*<([^>]+)>$/.exec(b.fromEmail);
+  return { name: (m ? m[1] : b.shortName) || b.shortName, email: m ? m[2] : b.fromEmail, site: siteOf(b) };
+}
+
+/** One email per invitee, with the calendar file attached so it lands in their
+ *  own calendar (Outlook, Gmail, phone). `ics` is built per person. */
+export async function sendMeetingEmail(to: string, name: string, kind: MeetingEmailKind, f: MeetingEmailFacts, ics: string): Promise<boolean> {
+  const b = await mailBranding();
+  const site = siteOf(b);
+  const head = { invite: "You are invited", changed: "Meeting changed", cancelled: "Meeting cancelled", reminder: "Reminder" }[kind];
+  const subject = {
+    invite: `Invitation: ${f.title}, ${f.dateLabel}`,
+    changed: `Changed: ${f.title}, ${f.dateLabel}`,
+    cancelled: `Cancelled: ${f.title}, ${f.dateLabel}`,
+    reminder: `Reminder: ${f.title}, ${f.dateLabel} ${f.timeLabel}`,
+  }[kind];
+  const intro = {
+    invite: `${esc(f.organiserName)} has invited you to this ${f.typeLabel ? esc(f.typeLabel) + " " : ""}meeting.`,
+    changed: `The details of this meeting have changed. The new details are below.`,
+    cancelled: `This meeting has been cancelled.`,
+    reminder: `A reminder that you are expected at this meeting.`,
+  }[kind];
+  const calendarLine =
+    kind === "cancelled"
+      ? "Open the attached calendar file to remove it from your calendar."
+      : "Open the attached calendar file to add it to your calendar, or update it if it is already there.";
+  const body = `
+    <p style="color:#333;">Dear ${esc(name)},</p>
+    <p style="color:#333;">${intro}</p>
+    ${boxOpen("#f4f4f5", "16px", "16px 0")}
+      ${bookingRow("Meeting", f.title)}
+      ${f.typeLabel ? bookingRow("Type", f.typeLabel) : ""}
+      ${bookingRow("When", `${f.dateLabel}, ${f.timeLabel}`)}
+      ${f.venue ? bookingRow("Where", f.venue) : ""}
+      ${bookingRow("Arranged by", f.organiserName)}
+    ${BOX_CLOSE}
+    ${f.notes ? `<p style="color:#333;white-space:pre-wrap;">${esc(f.notes)}</p>` : ""}
+    <p style="color:#666;font-size:13px;">${calendarLine}</p>
+    ${button(`${site}/meetings`, "View meetings", b.colors.primary)}
+  `;
+  return sendEmail(
+    b.fromEmail,
+    to,
+    subject,
+    emailShell(b, head, body),
+    b.replyTo,
+    [{ filename: kind === "cancelled" ? "cancel.ics" : "invite.ics", content: Buffer.from(ics, "utf8") }],
+    emailShell(b, head, body.replace(calendarLine, "")),
+    { kind: `meeting.${kind}` }
+  );
+}

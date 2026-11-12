@@ -27,6 +27,7 @@ import {
   sendActionSummary,
 } from "@/lib/actionSummaryData";
 import { runRequestLapses, runRoomBookingReminders, runSettleMoves } from "@/lib/roomBookingNotify";
+import { runMeetingReminders } from "@/lib/meetingData";
 import { isMultiTenant, listTenants } from "@/lib/tenantRegistry";
 import { remindToday } from "@/lib/schoolRetention";
 import { runAsTenant } from "@/lib/tenantContext";
@@ -341,6 +342,16 @@ async function runForSchool() {
   } catch (err) {
     failed++;
     detail.push(`Room booking reminders failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  // Events and meetings: one reminder each, today or tomorrow.
+  try {
+    const meetings = await runMeetingReminders(now);
+    sent += meetings.sent;
+    failed += meetings.failed;
+    detail.push(...meetings.detail);
+  } catch (err) {
+    failed++;
+    detail.push(`Meeting reminders failed: ${err instanceof Error ? err.message : String(err)}`);
   }
   try {
     detail.push(...(await runSettleMoves(now)));
