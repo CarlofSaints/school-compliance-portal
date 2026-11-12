@@ -70,6 +70,9 @@ export const DEFAULT_PERMISSIONS: Permission[] = [
   { key: "manage_payments", name: "Load Invoices and Manage Contacts", category: "Payments" },
   // The list holds PERSAL numbers, so seeing it and working on it are one key. The two chairs sign by emailed link.
   { key: "manage_section_38a", name: "Manage Section 38A Applications", category: "Section 38A" },
+  // Schedule, change and cancel events and meetings, and send reminders.
+  // Everyone sees the ones they are invited to without it.
+  { key: "manage_meetings", name: "Schedule Meetings & Events", category: "Meetings" },
   // Booking covers making, editing and cancelling your OWN bookings, and asking
   // a holder for their room. Anyone who can book sees the calendar.
   { key: "book_rooms", name: "Book Meeting Rooms", category: "Rooms" },

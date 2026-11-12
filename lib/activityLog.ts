@@ -48,6 +48,7 @@ export type ActivityEntity =
   | "training"
   | "payment"
   | "section_38a"
+  | "meeting"
   | "budget"
   | "auth"
   | "password"
