@@ -6,7 +6,7 @@
 // the booking lives in the room calendar and the event only points at it.
 
 import { startsAtMs } from "./roomBookings";
-import { addDays } from "./actionItems";
+import { addDays, daysBetween } from "./actionItems";
 
 export interface MeetingRoomLink {
   roomId: string;
@@ -35,7 +35,7 @@ export interface Meeting {
   status: "scheduled" | "cancelled";
   /** Calendar SEQUENCE: each change raises it, so calendars replace the old copy. */
   sequence: number;
-  /** When the last automatic reminder was claimed or sent. */
+  /** Legacy (before reminderDays): the one day-before reminder went. Read only. */
   reminderSentAt: string | null;
   /** Days before the meeting a reminder email goes (0 = the morning of). Missing = [1]. */
   reminderDays?: number[];
@@ -113,12 +113,16 @@ export function meetingRemindersDue(m: Meeting, today: string, now: Date): numbe
   return reminderDaysOf(m).filter((d) => !sent.includes(d) && addDays(m.date, -d) <= today);
 }
 
-/** Reminder days whose day was already over before the meeting was set up or
- *  moved: never sent (the invite just went), so they count as sent. */
-export const passedReminders = (days: number[], date: string, today: string) => days.filter((d) => addDays(date, -d) < today);
+/** Reminder days already reached when the meeting is set up or moved: the
+ *  invite has just gone, so they count as sent. Except a meeting today or
+ *  tomorrow: its reminder still goes on the meeting morning. */
+export function passedReminders(days: number[], date: string, today: string): number[] {
+  const soon = date <= addDays(today, 1);
+  return days.filter((d) => addDays(date, -d) < today || (addDays(date, -d) === today && !soon));
+}
 
 /** Whole days from `today` to the meeting, for "today", "tomorrow", "in 3 days". */
-export const daysUntil = (date: string, today: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+export const daysUntil = (date: string, today: string) => daysBetween(today, date);
 
 // --- Calendar file (RFC 5545) ----------------------------------------------------
 

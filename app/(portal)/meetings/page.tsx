@@ -140,7 +140,7 @@ export default function MeetingsPage() {
     const r = editing === "new" ? await call("/api/meetings", "POST", body) : await call(`/api/meetings/${editing.id}`, "PUT", body);
     if (!r) return;
     setEditing(null);
-    setToast(r.roomReleased === false ? roomNotice : sentNotice(r));
+    setToast(r.roomReleased === false ? roomNotice : r.quiet ? { message: t("Saved"), type: "success" } : sentNotice(r));
     apply(await load());
   };
 
@@ -336,7 +336,7 @@ export default function MeetingsPage() {
             </div>
             <div className="text-sm">
               <span className="font-medium">{t("Reminders")}</span>
-              <p className="text-xs text-gray-500">{t("Reminder emails go to everyone invited at 07:00 on each day you tick. Tick none for no reminders.")}</p>
+              <p className="text-xs text-gray-500">{t("Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.")}</p>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                 {REMINDER_DAYS.map((d) => (
                   <label key={d} className="flex items-center gap-2">

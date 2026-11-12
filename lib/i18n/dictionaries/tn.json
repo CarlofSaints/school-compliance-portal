@@ -2646,7 +2646,7 @@
   "Reminder emails": "Diimeile tsa kgopotso",
   "none": "ga go",
   "Reminders": "Dikgopotso",
-  "Reminder emails go to everyone invited at 07:00 on each day you tick. Tick none for no reminders.": "Diimeile tsa kgopotso di ya kwa go botlhe ba ba laleditsweng ka 07:00 mo letsatsing lengwe le lengwe le o le tshwayang. O se tshwaye sepe fa o sa batle dikgopotso.",
   "Calendar alert (pops up in their calendar)": "Tlhagiso ya khalendara (e tlhagelela mo khalendareng ya bone)",
-  "Need one sooner? Use \"Send reminder now\" on the meeting.": "O batla e e bonako? Dirisa \"Romela kgopotso jaanong\" mo kopanong."
+  "Need one sooner? Use \"Send reminder now\" on the meeting.": "O batla e e bonako? Dirisa \"Romela kgopotso jaanong\" mo kopanong.",
+  "Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.": "Diimeile tsa kgopotso di ya kwa go botlhe ba ba laleditsweng ka 07:00 mo letsatsing lengwe le lengwe le o le tshwayang, ka jalo ya mo mosong wa letsatsi la kopano e siametse dikopano go simolola ka 08:00. O se tshwaye sepe fa o sa batle dikgopotso."
 }

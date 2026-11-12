@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const r = await editMeeting(actorOf(session), (await params).id, parsed.value);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
-  const { after, invitees, dropped, roomReleased } = r.value;
+  const { after, invitees, dropped, roomReleased, quiet } = r.value;
   await recordActivity({
     ...actorFrom(req, session),
     action: "meeting.changed",
@@ -50,6 +50,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
     entityId: after.id,
     summary: `Changed "${after.title}" (${longDateLabel(after.date)} ${slotLabel(after.startMinute, after.endMinute)})`,
   });
+  if (quiet) return NextResponse.json({ meeting: after, roomReleased, quiet, sent: 0, failed: 0 });
   // Someone taken off the list is told it is cancelled for them.
   const a = await emailMeeting(after, "changed", invitees);
   const b = dropped.length ? await emailMeeting({ ...after, status: "cancelled" }, "cancelled", dropped) : { sent: 0, failed: 0 };

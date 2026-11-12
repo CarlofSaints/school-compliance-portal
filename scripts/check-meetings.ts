@@ -38,6 +38,8 @@ assert.deepEqual(due({ ...w, reminderDays: [] }), [], "no reminders chosen");
 // Set up on the 14th: the week-before day (12th) is past, the rest still go.
 assert.deepEqual(passedReminders([7, 2, 0], "2026-11-19", "2026-11-14"), [7]);
 assert.deepEqual(passedReminders([1], "2026-11-13", "2026-11-12"), [], "tomorrow's FINCOM still reminded");
+assert.deepEqual(passedReminders([7], "2026-11-19", "2026-11-12"), [7], "set up on the week-before day: the invite is the reminder");
+assert.deepEqual(passedReminders([1, 0], "2026-11-12", "2026-11-12"), [1], "meeting today: the morning-of still goes");
 assert.equal(daysUntil("2026-11-19", "2026-11-12"), 7);
 const parsed = parseMeetingInput({ title: "x", date: "2026-11-13", startMinute: 600, endMinute: 660, tagIds: ["t"], personKeys: [], reminderDays: [0, 7, 7], alertMinutes: 15 });
 assert.ok(parsed.ok && parsed.value.reminderDays.join() === "7,0" && parsed.value.alertMinutes === 15);

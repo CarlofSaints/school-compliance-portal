@@ -2646,7 +2646,7 @@
   "Reminder emails": "Ii-imeyile zesikhumbuzi",
   "none": "akukho",
   "Reminders": "Izikhumbuzi",
-  "Reminder emails go to everyone invited at 07:00 on each day you tick. Tick none for no reminders.": "Ii-imeyile zesikhumbuzi ziya kubo bonke abamenyiweyo ngo-07:00 ngosuku ngalunye oluthikayo. Musa ukuthika nanye ukuba akufuni zikhumbuzi.",
   "Calendar alert (pops up in their calendar)": "Isilumkiso sekhalenda (sivela kwikhalenda yabo)",
-  "Need one sooner? Use \"Send reminder now\" on the meeting.": "Ufuna esikhawulezayo? Sebenzisa \"Thumela isikhumbuzi ngoku\" kwintlanganiso."
+  "Need one sooner? Use \"Send reminder now\" on the meeting.": "Ufuna esikhawulezayo? Sebenzisa \"Thumela isikhumbuzi ngoku\" kwintlanganiso.",
+  "Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.": "Ii-imeyile zesikhumbuzi ziya kubo bonke abamenyiweyo ngo-07:00 ngosuku ngalunye oluthikayo, ngoko esakusasa ngosuku lwentlanganiso silungele iintlanganiso ukusuka ku-08:00. Musa ukuthika nanye ukuba akufuni zikhumbuzi."
 }

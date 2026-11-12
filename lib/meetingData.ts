@@ -10,7 +10,7 @@ import { pause } from "./actionItemNotify";
 import { longDateLabel, slotLabel, sastToday } from "./roomBookings";
 import { MailQueue, notifyWithdrawn } from "./roomBookingNotify";
 import { cancelBooking, createBooking, updateBooking, getRoom, type Actor, type BookingInput, type Withdrawal } from "./roomBookingData";
-import { daysUntil, meetingIcs, meetingRemindersDue, meetingRemindersSent, meetingStartMs, passedReminders, type Meeting, type MeetingInput, type MeetingRoomLink } from "./meetings";
+import { alertMinutesOf, daysUntil, meetingIcs, meetingRemindersDue, meetingRemindersSent, meetingStartMs, passedReminders, type Meeting, type MeetingInput, type MeetingRoomLink } from "./meetings";
 
 // Events and meetings. Rules in lib/meetings.ts. One list, every change ONE
 // guarded write (updateJson), so two people scheduling at once both keep theirs.
@@ -204,13 +204,14 @@ export async function createMeeting(actor: Actor, input: MeetingInput): Promise<
 }
 
 /** The new details, with the room moved, booked or released to match. A
- *  date or time change clears the automatic reminder so it goes again.
- *  `dropped` = had it in their calendar, no longer invited: they get a cancel. */
+ *  date or time change starts the reminders afresh. `dropped` = had it in
+ *  their calendar, no longer invited: they get a cancel. `quiet` = only the
+ *  reminder days changed: nothing for invitees to hear about. */
 export async function editMeeting(
   actor: Actor,
   id: string,
   input: MeetingInput
-): Promise<Outcome<{ before: Meeting; after: Meeting; invitees: Invitee[]; dropped: Invitee[]; roomReleased: boolean }>> {
+): Promise<Outcome<{ before: Meeting; after: Meeting; invitees: Invitee[]; dropped: Invitee[]; roomReleased: boolean; quiet: boolean }>> {
   const before = await getMeeting(id);
   if (!before) return fail(404, "That meeting no longer exists");
   if (before.status !== "scheduled") return fail(400, "That meeting has been cancelled");
@@ -243,6 +244,19 @@ export async function editMeeting(
 
   const kept = new Set(invitees.map((i) => i.email.toLowerCase()));
   const dropped = everyoneToTell(before, []).filter((i) => !kept.has(i.email.toLowerCase()));
+  const venue = room ? room.roomName : input.venue;
+  const had = new Set((before.invited ?? []).map((i) => i.email.toLowerCase()));
+  const quiet =
+    !timeChanged &&
+    before.endMinute === input.endMinute &&
+    before.title === input.title &&
+    before.typeId === input.typeId &&
+    before.venue === venue &&
+    before.notes === input.notes &&
+    before.room?.roomId === room?.roomId &&
+    alertMinutesOf(before) === input.alertMinutes &&
+    had.size === kept.size &&
+    [...kept].every((e) => had.has(e));
   const after = await change(id, (cur) => ({
     ...cur,
     title: input.title,
@@ -250,17 +264,18 @@ export async function editMeeting(
     date: input.date,
     startMinute: input.startMinute,
     endMinute: input.endMinute,
-    venue: room ? room.roomName : input.venue,
+    venue,
     notes: input.notes,
     tagIds: input.tagIds,
     personKeys: input.personKeys,
     room,
-    sequence: cur.sequence + 1,
+    sequence: quiet ? cur.sequence : cur.sequence + 1,
     reminderDays: input.reminderDays,
-    // A new date or time starts the reminders afresh; otherwise ones already sent stay sent.
+    // A new date or time starts the reminders afresh; otherwise ones already sent
+    // stay sent, even unticked, so re-ticking one cannot send it twice.
     remindersSent: [
       ...new Set([
-        ...(timeChanged ? [] : meetingRemindersSent(cur).filter((d) => input.reminderDays.includes(d))),
+        ...(timeChanged ? [] : meetingRemindersSent(cur)),
         ...passedReminders(input.reminderDays, input.date, sastToday()),
       ]),
     ],
@@ -269,7 +284,7 @@ export async function editMeeting(
     updatedAt: new Date().toISOString(),
   }));
   if (!after) return fail(404, "That meeting no longer exists");
-  return { ok: true, value: { before, after, invitees, dropped, roomReleased } };
+  return { ok: true, value: { before, after, invitees, dropped, roomReleased, quiet } };
 }
 
 export async function cancelMeeting(actor: Actor, id: string): Promise<Outcome<{ meeting: Meeting; roomReleased: boolean | null }>> {
@@ -286,7 +301,7 @@ export async function cancelMeeting(actor: Actor, id: string): Promise<Outcome<{
 
 /** Emails each person (paced like every portal mailout), the calendar file
  *  attached. Resolves to how many were sent and how many failed. */
-export async function emailMeeting(m: Meeting, kind: MeetingEmailKind, people?: Invitee[]): Promise<{ sent: number; failed: number }> {
+export async function emailMeeting(m: Meeting, kind: MeetingEmailKind, people?: Invitee[], today = sastToday()): Promise<{ sent: number; failed: number }> {
   const [invitees, org, types] = await Promise.all([people ?? meetingInvitees(m), meetingOrganizer(), getMeetingTypes()]);
   const facts = {
     title: m.title,
@@ -296,7 +311,7 @@ export async function emailMeeting(m: Meeting, kind: MeetingEmailKind, people?: 
     venue: m.venue,
     notes: m.notes,
     organiserName: m.createdByName,
-    daysAway: daysUntil(m.date, sastToday()),
+    daysAway: daysUntil(m.date, today),
   };
   let sent = 0;
   let failed = 0;
@@ -332,13 +347,12 @@ export async function runMeetingReminders(now: Date = new Date()): Promise<{ sen
   let failed = 0;
   const detail: string[] = [];
   for (const m of due) {
-    const stamp = now.toISOString();
     const claimed = await change(m.id, (cur) => {
       const days = meetingRemindersDue(cur, today, now);
-      return days.length ? { ...cur, reminderSentAt: stamp, remindersSent: [...meetingRemindersSent(cur), ...days] } : null;
+      return days.length ? { ...cur, remindersSent: [...meetingRemindersSent(cur), ...days] } : null;
     });
     if (!claimed) continue;
-    const r = await emailMeeting(claimed, "reminder");
+    const r = await emailMeeting(claimed, "reminder", undefined, today);
     sent += r.sent;
     failed += r.failed;
     detail.push(`Meeting "${m.title}" ${m.date}: reminder sent to ${r.sent}${r.failed ? `, ${r.failed} failed` : ""}`);
