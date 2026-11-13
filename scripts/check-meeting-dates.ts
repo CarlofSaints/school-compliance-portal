@@ -7,7 +7,7 @@ import { withMeetingDates, type ActionItem } from "../lib/actionItems";
 import { buildSummaryRows } from "../lib/actionSummary";
 import { buildWeeklyFacts } from "../lib/weeklyUpdate";
 import type { MinutesRecord } from "../lib/minutesData";
-import { formatMeetingDate } from "../lib/minutes";
+import { formatMeetingDate, meetingDateInFuture } from "../lib/minutes";
 import { makeT } from "../lib/i18n/translate";
 import { readFileSync } from "node:fs";
 
@@ -70,6 +70,15 @@ for (const [code, month] of Object.entries(october)) {
   check(`page date in ${code}`, formatMeetingDate("2026-10-15", t), `15 ${month} 2026`);
 }
 check("English (emails, Word) unchanged", formatMeetingDate("2026-10-15"), "15 October 2026");
+
+// Future meeting dates are asked about. "Today" is the device's LOCAL day,
+// so 23:30 on the 13th is still the 13th.
+const late = new Date(2026, 10, 13, 23, 30);
+check("today is not future", meetingDateInFuture("2026-11-13", late), false);
+check("tomorrow is future", meetingDateInFuture("2026-11-14", late), true);
+check("yesterday is not future", meetingDateInFuture("2026-11-12", late), false);
+check("next year is future", meetingDateInFuture("2027-01-01", late), true);
+check("just after midnight is the new day", meetingDateInFuture("2026-11-14", new Date(2026, 10, 14, 0, 5)), false);
 
 console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
 process.exit(failures === 0 ? 0 : 1);

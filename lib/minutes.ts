@@ -91,7 +91,9 @@ export function checkMeetingDate(d: unknown): string | null {
 /** After today on this device. Carl, 13 Nov 2026: minutes for a meeting that
  *  has not happened yet is usually a typo, so it is asked about, not refused. */
 export function meetingDateInFuture(d: string, now: Date = new Date()): boolean {
-  return d > now.toLocaleDateString("en-CA"); // en-CA = YYYY-MM-DD, local day
+  // The device's own day, built by hand: a locale's date format can change.
+  const p = (n: number) => String(n).padStart(2, "0");
+  return d > `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
 
 /** A well-formed calendar date, for SHOWING a stored date. Not checkMeetingDate,
