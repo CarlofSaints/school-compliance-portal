@@ -10,14 +10,18 @@ import { RAND_PER_CREDIT, USD_TO_ZAR } from "@/lib/jonoBilling";
 export const WA_USD_PER_MESSAGE = 0.0095;
 /** Margin on the selling price (not markup): price = cost / (1 - margin). */
 export const WA_MARGIN = 0.25;
+/** OuterJoin is VAT-registered (Carl, 13 Nov 2026): credit packs ("R100 for 10
+ *  credits") are VAT-inclusive, so 15% of every credit goes to SARS. Meta's VAT
+ *  is claimed back, so the cost is ex-VAT. The margin is on the ex-VAT price. */
+export const VAT = 0.15;
 
-/** Rand a school pays per delivered message (R0.2407 at R19/$). */
+/** Rand (incl. VAT) a school pays per delivered message: R0.2768 at R19/$. */
 export function waRandPerMessage(): number {
-  return (WA_USD_PER_MESSAGE * USD_TO_ZAR) / (1 - WA_MARGIN);
+  return ((WA_USD_PER_MESSAGE * USD_TO_ZAR) / (1 - WA_MARGIN)) * (1 + VAT);
 }
 
 /**
- * Credits are kept to tenths (R1), and one message is ~R0.24, so a per-message
+ * Credits are kept to tenths (R1), and one message is ~R0.28, so a per-message
  * charge would round to nothing or to 4x the price. Instead each school keeps
  * a carried rand amount: delivered messages add to it, and every whole tenth
  * of a credit in it is taken off the balance. Exactly 25% margin, no rounding gift.
