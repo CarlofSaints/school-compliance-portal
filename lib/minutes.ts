@@ -88,6 +88,12 @@ export function checkMeetingDate(d: unknown): string | null {
   return null;
 }
 
+/** After today on this device. Carl, 13 Nov 2026: minutes for a meeting that
+ *  has not happened yet is usually a typo, so it is asked about, not refused. */
+export function meetingDateInFuture(d: string, now: Date = new Date()): boolean {
+  return d > now.toLocaleDateString("en-CA"); // en-CA = YYYY-MM-DD, local day
+}
+
 /** A well-formed calendar date, for SHOWING a stored date. Not checkMeetingDate,
  *  whose limits are rules for entering one. */
 function isIsoDate(d: string | undefined): d is string {

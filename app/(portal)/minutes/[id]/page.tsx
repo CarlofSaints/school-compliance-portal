@@ -57,6 +57,7 @@ import {
   periodForDate,
   meetingDateOutsidePeriod,
   checkMeetingDate,
+  meetingDateInFuture,
   isLocked,
   MINUTES_STATUS_LABELS,
   type MeetingBody,
@@ -955,6 +956,11 @@ export default function MinutesDetailPage() {
                 // Empty is NOT saved yet: the browser reports "" while one part
                 // of the date is being retyped. It clears on leaving the box.
                 if (d && !checkMeetingDate(d)) {
+                  // Asked once per new future date; No puts the saved date back.
+                  if (d !== record.meetingDate && meetingDateInFuture(d) && !window.confirm(t("This meeting date is in the future. Are you sure you want to continue?"))) {
+                    setDateDraft(null);
+                    return;
+                  }
                   patch({ meetingDate: d, period: periodForDate(d, record.period) });
                   setDateDraft(null);
                 }

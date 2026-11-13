@@ -15,6 +15,7 @@ import {
   formatMeetingDate,
   periodForDate,
   checkMeetingDate,
+  meetingDateInFuture,
   meetingDateOutsidePeriod,
   isLocked,
   periodSortKey,
@@ -299,6 +300,7 @@ function AddMinutes({
     if (!meetingDate) return onError(t("Choose the meeting date."));
     if (checkMeetingDate(meetingDate)) return onError(t("That date can't be used. Pick a date from 2000 onwards."));
     if (mode === "upload" && !file) return onError(t("Choose a file, or switch to writing them here."));
+    if (meetingDateInFuture(meetingDate) && !window.confirm(t("This meeting date is in the future. Are you sure you want to continue?"))) return;
 
     setSaving(true);
     try {
