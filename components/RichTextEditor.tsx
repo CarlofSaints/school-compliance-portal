@@ -365,6 +365,29 @@ export default function RichTextEditor({
   );
 }
 
+type Person = { id: string; name: string };
+
+// The "@" being typed, read fresh from the editor: the words after it (one
+// letter at least, so a bare "@" leaves Enter and Tab alone; up to two words,
+// for "Mr Lester") and the people they match.
+function findMention(editor: Editor, people: Person[], dismissed: string | null) {
+  const sel = editor.state.selection;
+  if (!sel.empty) return null;
+  // A Shift+Enter line break reads as a newline, so "@" after it still opens.
+  const before = sel.$from.parent.textBetween(0, sel.$from.parentOffset, undefined, (n) => (n.type.name === "hardBreak" ? "\n" : "￼"));
+  const at = /(?:^|\s)@([^\s@]+(?: [^\s@]*)?)$/.exec(before);
+  if (!at) return null;
+  const from = sel.from - at[1].length - 1;
+  // Escape is remembered by the block's start and the "@"'s place in it.
+  const key = `${sel.$from.start()}:${before.length - at[1].length - 1}`;
+  if (key === dismissed) return null;
+  const query = at[1].toLowerCase();
+  const matches = people
+    .filter((p) => p.name.toLowerCase().split(/\s+/).some((_w, i, ws) => ws.slice(i).join(" ").startsWith(query)))
+    .slice(0, 8);
+  return matches.length ? { from, to: sel.from, query, key, matches } : null;
+}
+
 // The "@name" menu. Its own component so its hooks never sit behind the
 // editor's loading return above.
 function MentionMenu({
@@ -373,87 +396,102 @@ function MentionMenu({
   keysRef,
 }: {
   editor: Editor;
-  people: { id: string; name: string }[];
+  people: Person[];
   keysRef: React.RefObject<((e: KeyboardEvent) => boolean) | null>;
 }) {
   const t = useT();
-  const [mentionPick, setMentionPick] = useState({ q: "", i: 0 });
-  const [mentionDismissed, setMentionDismissed] = useState<number | null>(null);
+  const [pick, setPick] = useState({ q: "", i: 0 });
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const m = findMention(editor, people, dismissed);
+  const index = m && pick.q === m.query ? Math.min(pick.i, m.matches.length - 1) : 0;
 
-  // "@" typed: the words after it (up to two, for "Mr Lester") filter the
-  // People register; picking one puts the name in, tagged like the 👤 menu does.
-  const sel = editor.state.selection;
-  const before = sel.empty ? sel.$from.parent.textBetween(0, sel.$from.parentOffset, undefined, "\ufffc") : "";
-  const at = /(?:^|\s)@([^\s@]*(?: [^\s@]*)?)$/.exec(before);
-  const mFrom = at ? sel.from - at[1].length - 1 : -1;
-  const mQuery = at ? at[1].toLowerCase() : "";
-  const mentionMatches =
-    at && mFrom !== mentionDismissed
-      ? people.filter((p) => p.name.toLowerCase().split(/\s+/).some((w, i, ws) => ws.slice(i).join(" ").startsWith(mQuery))).slice(0, 8)
-      : [];
-  const mIndex = mentionPick.q === mQuery ? Math.min(mentionPick.i, mentionMatches.length - 1) : 0;
-  const pickMention = (p: { id: string; name: string }) => {
+  const choose = (p: Person, from: number, to: number) => {
+    // The name keeps the formatting being typed in (bold, colour, size...).
+    const marks = (editor.state.storedMarks ?? editor.state.selection.$from.marks())
+      .filter((mk) => mk.type.name !== "personTag")
+      .map((mk) => mk.toJSON());
     editor
       .chain()
       .focus()
-      .insertContentAt({ from: mFrom, to: sel.from }, [
-        { type: "text", text: p.name, marks: [{ type: "personTag", attrs: { id: p.id, name: p.name } }] },
-        { type: "text", text: " " },
+      .insertContentAt({ from, to }, [
+        { type: "text", text: p.name, marks: [...marks, { type: "personTag", attrs: { id: p.id, name: p.name } }] },
+        { type: "text", text: " ", marks },
       ])
       .run();
   };
-  let mentionPos: { left: number; top: number } | null = null;
-  const wrap = mentionMatches.length ? editor.view.dom.closest("[data-mention-root]") : null;
-  if (wrap) {
-    const c = editor.view.coordsAtPos(mFrom);
-    const w = wrap.getBoundingClientRect();
-    mentionPos = { left: c.left - w.left, top: c.bottom - w.top + 4 };
-  }
-  const onMentionKey = mentionMatches.length
-    ? (e: KeyboardEvent) => {
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          const n = mentionMatches.length;
-          setMentionPick({ q: mQuery, i: (mIndex + (e.key === "ArrowDown" ? 1 : n - 1)) % n });
-          return true;
-        }
-        if (e.key === "Enter" || e.key === "Tab") {
-          pickMention(mentionMatches[mIndex]);
-          return true;
-        }
-        if (e.key === "Escape") {
-          setMentionDismissed(mFrom);
-          return true;
-        }
-        return false;
-      }
-    : null;
+
+  // 🔴 The key handler reads the editor AT KEY TIME, not from this render: a
+  // fast "@jo" + Enter can land before React has re-rendered.
   useEffect(() => {
-    keysRef.current = onMentionKey;
+    keysRef.current = (e) => {
+      const now = findMention(editor, people, dismissed);
+      if (!now || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return false;
+      const i = pick.q === now.query ? Math.min(pick.i, now.matches.length - 1) : 0;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        const n = now.matches.length;
+        setPick({ q: now.query, i: (i + (e.key === "ArrowDown" ? 1 : n - 1)) % n });
+        return true;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        choose(now.matches[i], now.from, now.to);
+        return true;
+      }
+      if (e.key === "Escape") {
+        setDismissed(now.key);
+        return true;
+      }
+      return false;
+    };
+    return () => {
+      keysRef.current = null;
+    };
   });
 
-  if (!mentionPos) return null;
+  // Screen readers: the editor announces the list and the highlighted name.
+  const listId = `mention-${editor.instanceId}`;
+  const optionId = m ? `${listId}-${index}` : "";
+  useEffect(() => {
+    const dom = editor.view.dom;
+    if (optionId) {
+      dom.setAttribute("aria-expanded", "true");
+      dom.setAttribute("aria-controls", listId);
+      dom.setAttribute("aria-activedescendant", optionId);
+    } else {
+      dom.removeAttribute("aria-expanded");
+      dom.removeAttribute("aria-controls");
+      dom.removeAttribute("aria-activedescendant");
+    }
+  }, [editor, listId, optionId]);
+
+  if (!m) return null;
+  const wrap = editor.view.dom.closest("[data-mention-root]");
+  if (!wrap) return null;
+  const c = editor.view.coordsAtPos(m.from);
+  const w = wrap.getBoundingClientRect();
   return (
-        <ul
-          role="listbox"
-          aria-label={t("Tag person")}
-          style={{ left: mentionPos.left, top: mentionPos.top }}
-          className="absolute z-20 min-w-[12rem] max-w-xs rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+    <ul
+      id={listId}
+      role="listbox"
+      aria-label={t("Tag person")}
+      style={{ left: c.left - w.left, top: c.bottom - w.top + 4 }}
+      className="absolute z-20 min-w-[12rem] max-w-xs rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+    >
+      {m.matches.map((p, i) => (
+        <li
+          key={p.id}
+          id={`${listId}-${i}`}
+          role="option"
+          aria-selected={i === index}
+          // Kept from taking focus, so the cursor is still after the "@".
+          onMouseDown={(e) => {
+            e.preventDefault();
+            choose(p, m.from, m.to);
+          }}
+          className={`cursor-pointer px-3 py-1.5 text-sm ${i === index ? "bg-primary/10 text-dark" : "text-gray-700 hover:bg-gray-50"}`}
         >
-          {mentionMatches.map((p, i) => (
-            <li
-              key={p.id}
-              role="option"
-              aria-selected={i === mIndex}
-              // Kept from taking focus, so the cursor is still after the "@".
-              onMouseDown={(e) => {
-                e.preventDefault();
-                pickMention(p);
-              }}
-              className={`cursor-pointer px-3 py-1.5 text-sm ${i === mIndex ? "bg-primary/10 text-dark" : "text-gray-700 hover:bg-gray-50"}`}
-            >
-              👤 {p.name}
-            </li>
-          ))}
-        </ul>
+          👤 {p.name}
+        </li>
+      ))}
+    </ul>
   );
 }
