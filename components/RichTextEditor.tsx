@@ -75,6 +75,8 @@ export default function RichTextEditor({
 
   // The editor, for the paste and drop handlers (set once it exists).
   const editorRef = useRef<Editor | null>(null);
+  // "@name" tagging: the menu's keys, read by the editor's key handler.
+  const mentionKeys = useRef<((e: KeyboardEvent) => boolean) | null>(null);
   // The document this editor last reported, by reference.
   const lastDoc = useRef<RichNode | undefined>(doc);
 
@@ -150,6 +152,7 @@ export default function RichTextEditor({
         if (editorRef.current) addPictures(editorRef.current, files);
         return true;
       },
+      handleKeyDown: (_view, event) => mentionKeys.current?.(event) ?? false,
       handleDrop: (view, event) => {
         const files = Array.from((event as DragEvent).dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
         if (!files.length) return false;
@@ -205,7 +208,7 @@ export default function RichTextEditor({
   const inTable = editor.isActive("table");
 
   return (
-    <div className="rounded-lg border border-gray-200 focus-within:ring-2 focus-within:ring-primary">
+    <div data-mention-root className="relative rounded-lg border border-gray-200 focus-within:ring-2 focus-within:ring-primary">
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 bg-gray-50 px-2 py-1.5">
         <button type="button" onMouseDown={keep} onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive("bold"))} title={t("Bold")} aria-label={t("Bold")}>
           <b>B</b>
@@ -356,7 +359,101 @@ export default function RichTextEditor({
         </button>
       </div>
       <EditorContent editor={editor} />
+      {!!people?.length && <MentionMenu editor={editor} people={people} keysRef={mentionKeys} />}
       {note && <p className="px-3 pb-2 text-xs text-red-600">{note}</p>}
     </div>
+  );
+}
+
+// The "@name" menu. Its own component so its hooks never sit behind the
+// editor's loading return above.
+function MentionMenu({
+  editor,
+  people,
+  keysRef,
+}: {
+  editor: Editor;
+  people: { id: string; name: string }[];
+  keysRef: React.RefObject<((e: KeyboardEvent) => boolean) | null>;
+}) {
+  const t = useT();
+  const [mentionPick, setMentionPick] = useState({ q: "", i: 0 });
+  const [mentionDismissed, setMentionDismissed] = useState<number | null>(null);
+
+  // "@" typed: the words after it (up to two, for "Mr Lester") filter the
+  // People register; picking one puts the name in, tagged like the 👤 menu does.
+  const sel = editor.state.selection;
+  const before = sel.empty ? sel.$from.parent.textBetween(0, sel.$from.parentOffset, undefined, "\ufffc") : "";
+  const at = /(?:^|\s)@([^\s@]*(?: [^\s@]*)?)$/.exec(before);
+  const mFrom = at ? sel.from - at[1].length - 1 : -1;
+  const mQuery = at ? at[1].toLowerCase() : "";
+  const mentionMatches =
+    at && mFrom !== mentionDismissed
+      ? people.filter((p) => p.name.toLowerCase().split(/\s+/).some((w, i, ws) => ws.slice(i).join(" ").startsWith(mQuery))).slice(0, 8)
+      : [];
+  const mIndex = mentionPick.q === mQuery ? Math.min(mentionPick.i, mentionMatches.length - 1) : 0;
+  const pickMention = (p: { id: string; name: string }) => {
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from: mFrom, to: sel.from }, [
+        { type: "text", text: p.name, marks: [{ type: "personTag", attrs: { id: p.id, name: p.name } }] },
+        { type: "text", text: " " },
+      ])
+      .run();
+  };
+  let mentionPos: { left: number; top: number } | null = null;
+  const wrap = mentionMatches.length ? editor.view.dom.closest("[data-mention-root]") : null;
+  if (wrap) {
+    const c = editor.view.coordsAtPos(mFrom);
+    const w = wrap.getBoundingClientRect();
+    mentionPos = { left: c.left - w.left, top: c.bottom - w.top + 4 };
+  }
+  const onMentionKey = mentionMatches.length
+    ? (e: KeyboardEvent) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          const n = mentionMatches.length;
+          setMentionPick({ q: mQuery, i: (mIndex + (e.key === "ArrowDown" ? 1 : n - 1)) % n });
+          return true;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          pickMention(mentionMatches[mIndex]);
+          return true;
+        }
+        if (e.key === "Escape") {
+          setMentionDismissed(mFrom);
+          return true;
+        }
+        return false;
+      }
+    : null;
+  useEffect(() => {
+    keysRef.current = onMentionKey;
+  });
+
+  if (!mentionPos) return null;
+  return (
+        <ul
+          role="listbox"
+          aria-label={t("Tag person")}
+          style={{ left: mentionPos.left, top: mentionPos.top }}
+          className="absolute z-20 min-w-[12rem] max-w-xs rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+        >
+          {mentionMatches.map((p, i) => (
+            <li
+              key={p.id}
+              role="option"
+              aria-selected={i === mIndex}
+              // Kept from taking focus, so the cursor is still after the "@".
+              onMouseDown={(e) => {
+                e.preventDefault();
+                pickMention(p);
+              }}
+              className={`cursor-pointer px-3 py-1.5 text-sm ${i === mIndex ? "bg-primary/10 text-dark" : "text-gray-700 hover:bg-gray-50"}`}
+            >
+              👤 {p.name}
+            </li>
+          ))}
+        </ul>
   );
 }

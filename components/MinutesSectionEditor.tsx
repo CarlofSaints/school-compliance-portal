@@ -361,7 +361,7 @@ export default function MinutesSectionEditor({
                 }}
               />
               <p className="mt-1 text-xs text-gray-400">
-                {t("Format it like Word, paste tables and screenshots straight in.")}
+                {t("Format it like Word, paste tables and screenshots straight in.")}{taggable.length > 0 && " " + t("Type @ to tag someone.")}
               </p>
               {onCaptureAction && !isApologies(s) && (
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
