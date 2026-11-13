@@ -9,6 +9,7 @@ import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import DownloadLink from "@/components/DownloadLink";
 import DangerConfirmModal from "@/components/DangerConfirmModal";
+import FutureDateModal from "@/components/FutureDateModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
@@ -294,13 +295,27 @@ function AddMinutes({
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  // A future meeting date is asked about once picked (after typing settles),
+  // and again on Save only if it was never answered.
+  const [futureOk, setFutureOk] = useState("");
+  const [futureAsk, setFutureAsk] = useState<{ date: string; thenSave: boolean } | null>(null);
+  const futureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleFuture = (d: string | null) => {
+    if (futureTimer.current) clearTimeout(futureTimer.current);
+    futureTimer.current = d ? setTimeout(() => setFutureAsk({ date: d, thenSave: false }), 800) : null;
+  };
+  const needsFutureAsk = (d: string) => !!d && !checkMeetingDate(d) && meetingDateInFuture(d) && d !== futureOk;
 
-  const save = async () => {
+  // okDate: the future date just confirmed (state has not caught up yet).
+  const save = async (okDate?: unknown) => {
     if (!title.trim()) return onError(t("Give these minutes a name."));
     if (!meetingDate) return onError(t("Choose the meeting date."));
     if (checkMeetingDate(meetingDate)) return onError(t("That date can't be used. Pick a date from 2000 onwards."));
     if (mode === "upload" && !file) return onError(t("Choose a file, or switch to writing them here."));
-    if (meetingDateInFuture(meetingDate) && !window.confirm(t("This meeting date is in the future. Are you sure you want to continue?"))) return;
+    if (needsFutureAsk(meetingDate) && okDate !== meetingDate) {
+      settleFuture(null);
+      return setFutureAsk({ date: meetingDate, thenSave: true });
+    }
 
     setSaving(true);
     try {
@@ -328,6 +343,21 @@ function AddMinutes({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 space-y-5">
+      {futureAsk && (
+        <FutureDateModal
+          date={futureAsk.date}
+          onYes={() => {
+            const { date, thenSave } = futureAsk;
+            setFutureOk(date);
+            setFutureAsk(null);
+            if (thenSave) save(date);
+          }}
+          onNo={() => {
+            setMeetingDate("");
+            setFutureAsk(null);
+          }}
+        />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
@@ -363,6 +393,13 @@ function AddMinutes({
             const d = e.target.value;
             setMeetingDate(d);
             if (d && !checkMeetingDate(d)) setPeriod(periodForDate(d, period));
+            settleFuture(needsFutureAsk(d) ? d : null);
+          }}
+          onBlur={() => {
+            if (futureTimer.current && needsFutureAsk(meetingDate)) {
+              settleFuture(null);
+              setFutureAsk({ date: meetingDate, thenSave: false });
+            }
           }}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
         />

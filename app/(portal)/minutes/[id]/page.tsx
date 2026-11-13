@@ -50,6 +50,7 @@ import MinutesSigningPanel from "@/components/MinutesSigningPanel";
 import MinutesDistributePanel from "@/components/MinutesDistributePanel";
 import MinutesActionsPanel from "@/components/MinutesActionsPanel";
 import DangerConfirmModal from "@/components/DangerConfirmModal";
+import FutureDateModal from "@/components/FutureDateModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
@@ -203,6 +204,14 @@ export default function MinutesDetailPage() {
   // The date when the box was entered: Cancel on the future-date question
   // goes back to THIS, not to a part-typed date saved on the way.
   const dateAtFocus = useRef<string>("");
+  // A future date waits in the box; the question opens once typing or the
+  // calendar has settled (or on leaving the box), never per keystroke.
+  const [futureAsk, setFutureAsk] = useState<string | null>(null);
+  const futureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const settleFuture = (d: string | null) => {
+    if (futureTimer.current) clearTimeout(futureTimer.current);
+    futureTimer.current = d ? setTimeout(() => setFutureAsk(d), 800) : null;
+  };
   const [dateProblem, setDateProblem] = useState("");
   // The server's Retry-After on the last transient failure, if it sent one.
   const retryAfter = useRef<string | null>(null);
@@ -959,9 +968,11 @@ export default function MinutesDetailPage() {
                 // Empty is NOT saved yet: the browser reports "" while one part
                 // of the date is being retyped. It clears on leaving the box.
                 if (d && !checkMeetingDate(d)) {
-                  // A future date waits in the box and is asked about ONCE, on
-                  // leaving it: asking per keystroke or arrow press nags.
-                  if (d !== record.meetingDate && meetingDateInFuture(d)) return;
+                  if (d !== record.meetingDate && meetingDateInFuture(d)) {
+                    settleFuture(d);
+                    return;
+                  }
+                  settleFuture(null);
                   patch({ meetingDate: d, period: periodForDate(d, record.period) });
                   setDateDraft(null);
                 }
@@ -971,9 +982,9 @@ export default function MinutesDetailPage() {
               }}
               onBlur={() => {
                 if (dateDraft && !checkMeetingDate(dateDraft) && meetingDateInFuture(dateDraft)) {
-                  const back = dateAtFocus.current;
-                  if (window.confirm(t("This meeting date is in the future. Are you sure you want to continue?"))) patch({ meetingDate: dateDraft, period: periodForDate(dateDraft, record.period) });
-                  else if ((record.meetingDate ?? "") !== back) patch(back ? { meetingDate: back, period: periodForDate(back, record.period) } : { meetingDate: "" });
+                  settleFuture(null);
+                  setFutureAsk(dateDraft);
+                  return; // the draft stays until the question is answered
                 } else if (dateDraft === "") patch({ meetingDate: "" });
                 else if (dateDraft) setDateProblem(t("That date can't be used. Pick a date from 2000 onwards."));
                 setDateDraft(null);
@@ -1108,6 +1119,24 @@ export default function MinutesDetailPage() {
             {t("Delete minutes")}
           </button>
         </div>
+      )}
+
+      {futureAsk && (
+        <FutureDateModal
+          date={futureAsk}
+          onYes={() => {
+            patch({ meetingDate: futureAsk, period: periodForDate(futureAsk, record.period) });
+            setFutureAsk(null);
+            setDateDraft(null);
+          }}
+          onNo={() => {
+            // Back to the date the box had when entered, not a part-typed one.
+            const back = dateAtFocus.current;
+            if ((record.meetingDate ?? "") !== back) patch(back ? { meetingDate: back, period: periodForDate(back, record.period) } : { meetingDate: "" });
+            setFutureAsk(null);
+            setDateDraft(null);
+          }}
+        />
       )}
 
       {confirmingDelete && (
