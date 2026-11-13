@@ -2649,5 +2649,6 @@
   "Calendar alert (pops up in their calendar)": "Isexwayiso sekhalenda (siqhamuka kukhalenda yabo)",
   "Need one sooner? Use \"Send reminder now\" on the meeting.": "Udinga esisheshayo? Sebenzisa \"Thumela isikhumbuzi manje\" emhlanganweni.",
   "Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.": "Ama-imeyili esikhumbuzi aya kubo bonke abamenyiwe ngo-07:00 ngosuku ngalunye oluthikayo, ngakho esasekuseni ngosuku lomhlangano silungele imihlangano esuka ku-08:00. Ungathiki lutho uma ungafuni izikhumbuzi.",
-  "Type @ to tag someone.": "Thayipha @ ukuze umake umuntu."
+  "Type @ to tag someone.": "Thayipha @ ukuze umake umuntu.",
+  "This meeting date is in the future. Are you sure you want to continue?": "Lolu suku lomhlangano lusesikhathini esizayo. Uqinisekile ukuthi ufuna ukuqhubeka?"
 }
