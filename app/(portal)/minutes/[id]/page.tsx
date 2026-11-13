@@ -50,7 +50,7 @@ import MinutesSigningPanel from "@/components/MinutesSigningPanel";
 import MinutesDistributePanel from "@/components/MinutesDistributePanel";
 import MinutesActionsPanel from "@/components/MinutesActionsPanel";
 import DangerConfirmModal from "@/components/DangerConfirmModal";
-import FutureDateModal from "@/components/FutureDateModal";
+import FutureDateModal, { useSettled } from "@/components/FutureDateModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
@@ -207,11 +207,8 @@ export default function MinutesDetailPage() {
   // A future date waits in the box; the question opens once typing or the
   // calendar has settled (or on leaving the box), never per keystroke.
   const [futureAsk, setFutureAsk] = useState<string | null>(null);
-  const futureTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const settleFuture = (d: string | null) => {
-    if (futureTimer.current) clearTimeout(futureTimer.current);
-    futureTimer.current = d ? setTimeout(() => setFutureAsk(d), 800) : null;
-  };
+  const settled = useSettled();
+  const settleFuture = (d: string | null) => settled(d ? () => setFutureAsk(d) : null);
   const [dateProblem, setDateProblem] = useState("");
   // The server's Retry-After on the last transient failure, if it sent one.
   const retryAfter = useRef<string | null>(null);
@@ -962,6 +959,8 @@ export default function MinutesDetailPage() {
               value={dateDraft ?? record.meetingDate ?? ""}
               onChange={(e) => {
                 const d = e.target.value;
+                // Any change (even a part-typed year) cancels a waiting question.
+                settleFuture(null);
                 setDateDraft(d);
                 setDateProblem("");
                 // A whole valid date is saved at once (the period follows it).
