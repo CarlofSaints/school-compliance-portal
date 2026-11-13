@@ -2650,5 +2650,7 @@
   "Need one sooner? Use \"Send reminder now\" on the meeting.": "O nyaka ye e akgofilego? Šomiša \"Romela kgopotšo bjale\" kopanong.",
   "Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.": "Diimeile tša kgopotšo di ya go bohle bao ba laleditšwego ka 07:00 letšatšing le lengwe le le lengwe leo o le swayago, ka gona ya mesong ya letšatši la kopano e loketše dikopano go tloga ka 08:00. O se swaye selo ge o sa nyake dikgopotšo.",
   "Type @ to tag someone.": "Thaepa @ go swaya motho.",
-  "This meeting date is in the future. Are you sure you want to continue?": "Letšatšikgwedi la kopano le ke la ka moso. Na o kgonthišitše gore o nyaka go tšwela pele?"
+  "This meeting date is in the future. Are you sure you want to continue?": "Letšatšikgwedi la kopano le ke la ka moso. Na o kgonthišitše gore o nyaka go tšwela pele?",
+  "Yes, continue": "Ee, tšwela pele",
+  "Change the date": "Fetola letšatšikgwedi"
 }

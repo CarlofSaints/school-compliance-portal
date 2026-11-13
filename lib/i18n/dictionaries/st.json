@@ -2650,5 +2650,7 @@
   "Need one sooner? Use \"Send reminder now\" on the meeting.": "O hloka e potlakileng? Sebedisa \"Romela kgopotso hona joale\" kopanong.",
   "Reminder emails go to everyone invited at 07:00 on each day you tick, so the morning-of one suits meetings from 08:00. Tick none for no reminders.": "Diimeile tsa kgopotso di ya ho bohle ba memilweng ka 07:00 letsatsing le leng le le leng leo o le tshwayang, kahoo ya hoseng ha letsatsi la kopano e loketse dikopano ho tloha ka 08:00. O se ke wa tshwaya letho haeba o sa batle dikgopotso.",
   "Type @ to tag someone.": "Thaepa @ ho tshwaya motho.",
-  "This meeting date is in the future. Are you sure you want to continue?": "Letsatsi lena la kopano le nakong e tlang. Na o na le bonnete ba hore o batla ho tswela pele?"
+  "This meeting date is in the future. Are you sure you want to continue?": "Letsatsi lena la kopano le nakong e tlang. Na o na le bonnete ba hore o batla ho tswela pele?",
+  "Yes, continue": "E, tswela pele",
+  "Change the date": "Fetola letsatsi"
 }

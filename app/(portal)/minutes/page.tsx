@@ -9,6 +9,7 @@ import Toast from "@/components/Toast";
 import PeriodPicker from "@/components/PeriodPicker";
 import DownloadLink from "@/components/DownloadLink";
 import DangerConfirmModal from "@/components/DangerConfirmModal";
+import FutureDateModal, { useSettled } from "@/components/FutureDateModal";
 import { useT } from "@/components/I18nProvider";
 import {
   formatPeriod,
@@ -294,20 +295,32 @@ function AddMinutes({
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  // A future meeting date is asked about once picked (after typing settles),
+  // and again on Save only if it was never answered.
+  const [futureOk, setFutureOk] = useState("");
+  const [futureAsk, setFutureAsk] = useState<{ date: string; thenSave: boolean } | null>(null);
+  const settled = useSettled();
+  const settleFuture = (d: string | null) => settled(d ? () => setFutureAsk({ date: d, thenSave: false }) : null);
+  const needsFutureAsk = (d: string) => !!d && !checkMeetingDate(d) && meetingDateInFuture(d) && d !== futureOk;
 
-  const save = async () => {
+  // okDate/okPeriod: the future date just confirmed and the period it moved
+  // to (state has not caught up yet).
+  const save = async (okDate?: string, okPeriod?: MeetingPeriod) => {
     if (!title.trim()) return onError(t("Give these minutes a name."));
     if (!meetingDate) return onError(t("Choose the meeting date."));
     if (checkMeetingDate(meetingDate)) return onError(t("That date can't be used. Pick a date from 2000 onwards."));
     if (mode === "upload" && !file) return onError(t("Choose a file, or switch to writing them here."));
-    if (meetingDateInFuture(meetingDate) && !window.confirm(t("This meeting date is in the future. Are you sure you want to continue?"))) return;
+    if (needsFutureAsk(meetingDate) && okDate !== meetingDate) {
+      settleFuture(null);
+      return setFutureAsk({ date: meetingDate, thenSave: true });
+    }
 
     setSaving(true);
     try {
       const fd = new FormData();
       fd.set("title", title.trim());
       fd.set("body", body);
-      fd.set("period", JSON.stringify(period));
+      fd.set("period", JSON.stringify(okPeriod ?? period));
       fd.set("meetingDate", meetingDate);
       if (mode === "upload" && file) fd.set("file", file);
       if (mode === "write") {
@@ -328,6 +341,25 @@ function AddMinutes({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 space-y-5">
+      {futureAsk && (
+        <FutureDateModal
+          date={futureAsk.date}
+          onYes={() => {
+            const { date, thenSave } = futureAsk;
+            // The period follows a future date only once it is confirmed, so
+            // Change the date leaves a chosen Term or Year alone.
+            const p = periodForDate(date, period);
+            setPeriod(p);
+            setFutureOk(date);
+            setFutureAsk(null);
+            if (thenSave) save(date, p);
+          }}
+          onNo={() => {
+            setMeetingDate("");
+            setFutureAsk(null);
+          }}
+        />
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t("Name")}</label>
@@ -362,7 +394,13 @@ function AddMinutes({
           onChange={(e) => {
             const d = e.target.value;
             setMeetingDate(d);
-            if (d && !checkMeetingDate(d)) setPeriod(periodForDate(d, period));
+            // No ask on leaving the box: a click on Save would land on the
+            // pop-up instead. Save asks itself if the wait has not run out.
+            if (needsFutureAsk(d)) settleFuture(d);
+            else {
+              settleFuture(null);
+              if (d && !checkMeetingDate(d)) setPeriod(periodForDate(d, period));
+            }
           }}
           className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
         />
@@ -464,7 +502,7 @@ function AddMinutes({
 
       <div className="flex gap-3 pt-2 border-t border-gray-100">
         <button
-          onClick={save}
+          onClick={() => save()}
           disabled={saving}
           className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-lg font-medium transition-colors disabled:opacity-50"
         >
