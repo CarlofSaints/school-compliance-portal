@@ -2660,5 +2660,6 @@
   "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} sebesayinile. Amasiginesha abo azosuswa futhi kuzodingeka basayine futhi.",
   "Back to draft. You can edit the minutes now.": "Ibuyele kudrafti. Ungayihlela imizuzu manje.",
   "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "Kukhona ofuna ukukushintsha? Buyisela imizuzu kudrafti, uyihlele, bese uyithumela futhi.",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Le mizuzu ithunyelwe ukuze isayinwe, ngakho umbhalo ukhiyiwe: wonke umuntu kumele asayine amagama afanayo. Ukushintsha okuthile, sebenzisa Buyela kudrafti ngaphansi kokuSayina."
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Le mizuzu ithunyelwe ukuze isayinwe, ngakho umbhalo ukhiyiwe: wonke umuntu kumele asayine amagama afanayo. Ukushintsha okuthile, sebenzisa Buyela kudrafti ngaphansi kokuSayina.",
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, take them back to draft.": "Le mizuzu ithunyelwe ukuze isayinwe, ngakho umbhalo ukhiyiwe: wonke umuntu kumele asayine amagama afanayo. Ukushintsha okuthile, yibuyisele kudrafti."
 }

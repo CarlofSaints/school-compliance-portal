@@ -45,6 +45,10 @@ interface Props {
   onToast: (message: string, type: "success" | "error") => void;
   /** Saves unsaved typing before acting on the saved copy (SaveFirst says why). */
   ensureSaved?: SaveFirst;
+  /** The Back to draft pop-up, held by the page so the lock banner at the top
+   *  can open it too (Carl couldn't find the button at the bottom). */
+  askBack: boolean;
+  onAskBack: (open: boolean) => void;
 }
 
 function when(iso: string): string {
@@ -70,6 +74,8 @@ export default function MinutesSigningPanel({
   onChanged,
   onToast,
   ensureSaved,
+  askBack,
+  onAskBack: setAskBack,
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -77,7 +83,6 @@ export default function MinutesSigningPanel({
   // "upload" = the drop box is showing.
   const [paperStep, setPaperStep] = useState<"" | "pick" | "ask" | "upload">("");
   const [ticked, setTicked] = useState<string[]>([]);
-  const [askBack, setAskBack] = useState(false);
 
   const me = myEmail.trim().toLowerCase();
   const mine = signatories.find((s) => s.email.trim().toLowerCase() === me);
