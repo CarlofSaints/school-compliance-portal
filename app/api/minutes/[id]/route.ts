@@ -86,7 +86,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "These minutes are out for signing, so the text cannot change. Delete them and start again, or record the correction in the next set of minutes.",
+          "These minutes are out for signing, so the text cannot change. Use Back to draft under Signing to edit them, then send them out again.",
       },
       { status: 409 }
     );

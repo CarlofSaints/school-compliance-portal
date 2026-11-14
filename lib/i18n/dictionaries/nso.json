@@ -2652,5 +2652,13 @@
   "Type @ to tag someone.": "Thaepa @ go swaya motho.",
   "This meeting date is in the future. Are you sure you want to continue?": "Letšatšikgwedi la kopano le ke la ka moso. Na o kgonthišitše gore o nyaka go tšwela pele?",
   "Yes, continue": "Ee, tšwela pele",
-  "Change the date": "Fetola letšatšikgwedi"
+  "Change the date": "Fetola letšatšikgwedi",
+  "Back to draft": "Boela go thalwa",
+  "Take these minutes back to draft?": "Bušetša metsotso ye go thalwa?",
+  "Keep out for signing": "E tlogele e le go saenwa",
+  "Signing stops and the codes already emailed stop working. You can edit the minutes, then send them out for signing again.": "Go saena go a emišwa gomme dikhoutu tšeo di šetšego di romilwe ka imeile ga di sa šoma. O ka fetoša metsotso, ke moka wa e romela gape gore e saenwe.",
+  "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} ba šetše ba saenne. Mesaeno ya bona e tla tlošwa gomme ba tla swanela go saena gape.",
+  "Back to draft. You can edit the minutes now.": "E boetše go thalwa. O ka fetoša metsotso bjale.",
+  "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "O swanetše go fetoša se sengwe? Bušetša metsotso go thalwa, e fetoše, gomme o e romele gape.",
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Metsotso ye e romilwe go saenwa, ka gona mongwalo o notletšwe: bohle ba swanetše go saena mantšu a swanago. Go fetoša se sengwe, šomiša Boela go thalwa ka fase ga Go saena."
 }

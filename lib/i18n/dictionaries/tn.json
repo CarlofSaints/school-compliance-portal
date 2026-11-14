@@ -2652,5 +2652,13 @@
   "Type @ to tag someone.": "Tshwaela @ go tshwaya motho.",
   "This meeting date is in the future. Are you sure you want to continue?": "Letlha leno la kopano le mo isagweng. A o tlhomamisega gore o batla go tswelela?",
   "Yes, continue": "Ee, tswelela",
-  "Change the date": "Fetola letlha"
+  "Change the date": "Fetola letlha",
+  "Back to draft": "Boela kwa tshitshinyong",
+  "Take these minutes back to draft?": "Busetsa metsotso e kwa tshitshinyong?",
+  "Keep out for signing": "E tlogele e ntse e saenwa",
+  "Signing stops and the codes already emailed stop working. You can edit the minutes, then send them out for signing again.": "Go saena go a emisiwa mme dikhoutu tse di setseng di rometswe ka imeile ga di tlhole di dira. O ka fetola metsotso, morago o e romele gape gore e saenwe.",
+  "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} ba setse ba saenne. Mesaeno ya bone e tla tlosiwa mme ba tla tshwanelwa ke go saena gape.",
+  "Back to draft. You can edit the minutes now.": "E boetse kwa tshitshinyong. O ka fetola metsotso jaanong.",
+  "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "O tlhoka go fetola sengwe? Busetsa metsotso kwa tshitshinyong, o e fetole, mme o e romele gape.",
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Metsotso e e rometswe go saenwa, ka jalo mokwalo o notletswe: botlhe ba tshwanetse go saena mafoko a a tshwanang. Go fetola sengwe, dirisa Boela kwa tshitshinyong fa tlase ga Go saena."
 }
