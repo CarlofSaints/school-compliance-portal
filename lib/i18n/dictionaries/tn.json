@@ -667,7 +667,6 @@
   "These minutes have been signed.": "Metsotso e e saenilwe.",
   "A signed record cannot be changed. If something needs correcting, record it in the next set of minutes.": "Rekoto e e saenilweng ga e kgone go fetolwa. Fa sengwe se tlhoka go baakanngwa, se kwale mo metsotsong e e latelang.",
   "Uploaded file:": "Faele e e tsentsweng:",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. If something needs changing, delete these minutes and start them again, or record the correction in the next set.": "Metsotso e e rometswe go saenwa, ka jalo mokwalo o notletswe: botlhe ba tshwanetse go saena mafoko a a tshwanang. Fa sengwe se tlhoka go fetolwa, phimola metsotso e mme o e simolole sešwa, kgotsa o kwale paakanyo mo seteng e e latelang.",
   "Review history": "Hisitori ya tshekatsheko",
   "approved draft {n} on {date}": "o dumetse thulaganyo {n} ka {date}",
   "asked for changes to draft {n} on {date}": "o kopile diphetogo mo thulaganyong {n} ka {date}",
@@ -2660,5 +2659,5 @@
   "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} ba setse ba saenne. Mesaeno ya bone e tla tlosiwa mme ba tla tshwanelwa ke go saena gape.",
   "Back to draft. You can edit the minutes now.": "E boetse kwa tshitshinyong. O ka fetola metsotso jaanong.",
   "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "O tlhoka go fetola sengwe? Busetsa metsotso kwa tshitshinyong, o e fetole, mme o e romele gape.",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Metsotso e e rometswe go saenwa, ka jalo mokwalo o notletswe: botlhe ba tshwanetse go saena mafoko a a tshwanang. Go fetola sengwe, dirisa Boela kwa tshitshinyong fa tlase ga Go saena."
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, take them back to draft.": "Metsotso e e rometswe go saenwa, ka jalo mokwalo o notletswe: botlhe ba tshwanetse go saena mafoko a a tshwanang. Go fetola sengwe, e busetse kwa tshitshinyong."
 }

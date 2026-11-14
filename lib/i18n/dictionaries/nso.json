@@ -667,7 +667,6 @@
   "These minutes have been signed.": "Metsotso ye e saennwe.",
   "A signed record cannot be changed. If something needs correcting, record it in the next set of minutes.": "Rekhoto ye e saennwego e ka se fetolwe. Ge go na le seo se swanetšego go lokišwa, se ngwale metsotsong ya kopano ye e latelago.",
   "Uploaded file:": "Faele ye e laišitšwego:",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. If something needs changing, delete these minutes and start them again, or record the correction in the next set.": "Metsotso ye e rometšwe go saenwa, ka fao mongwalo o notletšwe: bohle ba swanetše go saena mantšu a a swanago. Ge go na le seo se swanetšego go fetolwa, phumola metsotso ye gomme o e thome gape, goba o ngwale tokišo metsotsong ye e latelago.",
   "Review history": "Histori ya tekolo",
   "approved draft {n} on {date}": "o amogetše tokumente ya {n} ka {date}",
   "asked for changes to draft {n} on {date}": "o kgopetše diphetogo go tokumente ya {n} ka {date}",
@@ -2660,5 +2659,5 @@
   "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} ba šetše ba saenne. Mesaeno ya bona e tla tlošwa gomme ba tla swanela go saena gape.",
   "Back to draft. You can edit the minutes now.": "E boetše go thalwa. O ka fetoša metsotso bjale.",
   "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "O swanetše go fetoša se sengwe? Bušetša metsotso go thalwa, e fetoše, gomme o e romele gape.",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Metsotso ye e romilwe go saenwa, ka gona mongwalo o notletšwe: bohle ba swanetše go saena mantšu a swanago. Go fetoša se sengwe, šomiša Boela go thalwa ka fase ga Go saena."
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, take them back to draft.": "Metsotso ye e romilwe go saenwa, ka gona mongwalo o notletšwe: bohle ba swanetše go saena mantšu a swanago. Go fetoša se sengwe, e bušetše go thalwa."
 }

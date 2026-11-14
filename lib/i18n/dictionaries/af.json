@@ -667,7 +667,6 @@
   "These minutes have been signed.": "Hierdie notule is onderteken.",
   "A signed record cannot be changed. If something needs correcting, record it in the next set of minutes.": "’n Ondertekende rekord kan nie verander word nie. As iets reggestel moet word, teken dit in die volgende notule aan.",
   "Uploaded file:": "Opgelaaide lêer:",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. If something needs changing, delete these minutes and start them again, or record the correction in the next set.": "Hierdie notule is uit vir ondertekening, dus is die teks gesluit: almal moet dieselfde woorde onderteken. As iets verander moet word, skrap hierdie notule en begin dit weer, of teken die regstelling in die volgende stel aan.",
   "Review history": "Hersieningsgeskiedenis",
   "approved draft {n} on {date}": "het konsep {n} op {date} goedgekeur",
   "asked for changes to draft {n} on {date}": "het op {date} vir veranderinge aan konsep {n} gevra",
@@ -2660,5 +2659,5 @@
   "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} het reeds onderteken. Hul handtekeninge sal verwyder word en hulle sal weer moet onderteken.",
   "Back to draft. You can edit the minutes now.": "Terug na konsep. Jy kan die notule nou wysig.",
   "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "Moet jy iets verander? Neem die notule terug na konsep, wysig dit en stuur dit weer uit.",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Hierdie notule is uit vir ondertekening, so die teks is gesluit: almal moet dieselfde woorde onderteken. Gebruik Terug na konsep onder Ondertekening om iets te verander."
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, take them back to draft.": "Hierdie notule is uit vir ondertekening, so die teks is gesluit: almal moet dieselfde woorde onderteken. Neem dit terug na konsep om iets te verander."
 }

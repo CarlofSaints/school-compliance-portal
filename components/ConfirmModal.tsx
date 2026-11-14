@@ -22,12 +22,14 @@ export default function ConfirmModal({
   onNo: () => void;
 }) {
   const onNoRef = useRef(onNo);
+  const busyRef = useRef(busy);
   useEffect(() => {
     onNoRef.current = onNo;
+    busyRef.current = busy;
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onNoRef.current();
+      if (e.key === "Escape" && !busyRef.current) onNoRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -45,6 +45,10 @@ interface Props {
   onToast: (message: string, type: "success" | "error") => void;
   /** Saves unsaved typing before acting on the saved copy (SaveFirst says why). */
   ensureSaved?: SaveFirst;
+  /** The Back to draft pop-up, held by the page so the lock banner at the top
+   *  can open it too (Carl couldn't find the button at the bottom). */
+  askBack: boolean;
+  onAskBack: (open: boolean) => void;
 }
 
 function when(iso: string): string {
@@ -70,6 +74,8 @@ export default function MinutesSigningPanel({
   onChanged,
   onToast,
   ensureSaved,
+  askBack,
+  onAskBack: setAskBack,
 }: Props) {
   const t = useT();
   const [busy, setBusy] = useState(false);
@@ -77,7 +83,6 @@ export default function MinutesSigningPanel({
   // "upload" = the drop box is showing.
   const [paperStep, setPaperStep] = useState<"" | "pick" | "ask" | "upload">("");
   const [ticked, setTicked] = useState<string[]>([]);
-  const [askBack, setAskBack] = useState(false);
 
   const me = myEmail.trim().toLowerCase();
   const mine = signatories.find((s) => s.email.trim().toLowerCase() === me);
@@ -179,19 +184,24 @@ export default function MinutesSigningPanel({
 
   // Carl, 14 Nov 2026: out for signing, the words are frozen; this takes them
   // back to Draft so they can be edited and sent out again.
-  const alreadySigned = signatories.filter((s) => s.signedAt).map((s) => s.name);
+  const signedNow = signatories.filter((s) => s.signedAt);
+  const alreadySigned = signedNow.map((s) => s.name);
   async function backToDraft() {
+    // The emails of the signatures this pop-up NAMES: the server refuses if
+    // anyone else has signed since, so nobody's signature goes unannounced.
     const data = await post(
       "back-to-draft",
-      { discardSignatures: alreadySigned.length > 0 },
+      { discardSignatures: signedNow.map((s) => s.email) },
       t("Back to draft. You can edit the minutes now."),
     );
-    if (data) setAskBack(false);
+    setAskBack(false);
+    if (!data) onChanged(); // refused: reload, so the list of who signed is current
   }
 
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      {askBack && (
+      {/* Only while out for signing: it may close (last signature) with the pop-up open. */}
+      {askBack && open && (
         <ConfirmModal
           title={t("Take these minutes back to draft?")}
           yesLabel={t("Back to draft")}

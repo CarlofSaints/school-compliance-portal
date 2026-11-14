@@ -207,6 +207,7 @@ export default function MinutesDetailPage() {
   // A future date waits in the box; the question opens once typing or the
   // calendar has settled (or on leaving the box), never per keystroke.
   const [futureAsk, setFutureAsk] = useState<string | null>(null);
+  const [askBack, setAskBack] = useState(false);
   const settled = useSettled();
   const settleFuture = (d: string | null) => settled(d ? () => setFutureAsk(d) : null);
   const [dateProblem, setDateProblem] = useState("");
@@ -921,8 +922,15 @@ export default function MinutesDetailPage() {
       )}
 
       {signingOpen && canManage && (
-        <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {t("These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.")}
+        <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 flex flex-wrap items-center justify-between gap-3">
+          <span>{t("These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, take them back to draft.")}</span>
+          <button
+            type="button"
+            onClick={() => setAskBack(true)}
+            className="shrink-0 px-4 py-2 rounded-lg bg-white border border-amber-300 text-amber-900 font-medium hover:bg-amber-100 transition-colors"
+          >
+            {t("Back to draft")}
+          </button>
         </div>
       )}
 
@@ -1041,6 +1049,8 @@ export default function MinutesDetailPage() {
         onChanged={load}
         onToast={(message, type) => setToast({ message, type })}
         ensureSaved={ensureSaved}
+        askBack={askBack}
+        onAskBack={setAskBack}
       />
 
       {/* 🔴 Above signing, and NOT gated on the minutes being editable.
