@@ -667,7 +667,6 @@
   "These minutes have been signed.": "Metsotso ena e saennwe.",
   "A signed record cannot be changed. If something needs correcting, record it in the next set of minutes.": "Rekoto e saennweng e ke ke ya fetolwa. Haeba ho na le se lokelang ho lokiswa, se ngole metsotsong e latelang.",
   "Uploaded file:": "Faele e kentsweng:",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. If something needs changing, delete these minutes and start them again, or record the correction in the next set.": "Metsotso ena e romeletswe ho saenwa, kahoo mongolo o notletswe: bohle ba lokela ho saena mantswe a tshwanang. Haeba ho na le se lokelang ho fetolwa, hlakola metsotso ena mme o e qale hape, kapa o ngole tokiso metsotsong e latelang.",
   "Review history": "Nalane ya tlhahlobo",
   "approved draft {n} on {date}": "o dumetse moralo {n} ka {date}",
   "asked for changes to draft {n} on {date}": "o kopile diphetoho moralong {n} ka {date}",
@@ -2660,6 +2659,5 @@
   "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} ba se ba saenne. Ditshaeno tsa bona di tla tloswa mme ba tla tlameha ho saena hape.",
   "Back to draft. You can edit the minutes now.": "E kgutletse ho moralo. O ka fetola metsotso jwale.",
   "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "O hloka ho fetola ho hong? Kgutlisetsa metsotso ho moralo, o e fetole, ebe o e romela hape.",
-  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Metsotso ena e rometswe ho saenwa, kahoo mongolo o notletswe: bohle ba tlameha ho saena mantswe a tshwanang. Ho fetola ho hong, sebedisa Kgutlela ho moralo tlasa Ho saena.",
   "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, take them back to draft.": "Metsotso ena e rometswe ho saenwa, kahoo mongolo o notletswe: bohle ba tlameha ho saena mantswe a tshwanang. Ho fetola ho hong, e kgutlisetse ho moralo."
 }

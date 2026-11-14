@@ -196,7 +196,8 @@ export default function MinutesSigningPanel({
 
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      {askBack && (
+      {/* Only while out for signing: it may close (last signature) with the pop-up open. */}
+      {askBack && open && (
         <ConfirmModal
           title={t("Take these minutes back to draft?")}
           yesLabel={t("Back to draft")}
