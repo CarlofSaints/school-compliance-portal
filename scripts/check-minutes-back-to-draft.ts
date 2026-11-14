@@ -69,17 +69,25 @@ async function main() {
   // Somebody has signed: refused unless the caller says to remove it.
   await outForSigning("m2", true);
   const r2 = await back(admin, "m2");
-  check("signed: refused without discardSignatures", r2.status, 409);
+  check("signed: refused without naming them", r2.status, 409);
+  check("signed: refused when the page named someone else", (await back(admin, "m2", { discardSignatures: ["principal@example.test"] })).status, 409);
   check("signed: the signature survives the refusal", (await getMinutes("m2"))?.signatories.filter((s) => s.signedAt).length, 1);
-  const r3 = await back(admin, "m2", { discardSignatures: true });
-  check("signed: allowed when told", r3.status, 200);
+  const r3 = await back(admin, "m2", { discardSignatures: ["CHAIR@example.test "] });
+  check("signed: allowed when the page named them (case/space ignored)", r3.status, 200);
   check("signed: names who lost a signature", (await r3.json()).dropped, ["Chair"]);
   check("signed: back to Draft, nobody on the list", [(await getMinutes("m2"))?.status, (await getMinutes("m2"))?.signatories.length], ["draft", 0]);
+
+  // A paper scan uploaded during signing carries the old words: it goes too.
+  await outForSigning("m4", false);
+  await updateMinutes("m4", { signedCopy: { filename: "scan.pdf", contentType: "application/pdf", size: 1, uploadedAt: "x", uploadedBy: "sam" } } as never);
+  check("scan present while out for signing", !!(await getMinutes("m4"))?.signedCopy, true);
+  check("back to draft with a scan", (await back(admin, "m4")).status, 200);
+  check("old scan dropped", (await getMinutes("m4"))?.signedCopy, undefined);
 
   // Signed by everyone = closed for good.
   await outForSigning("m3", true);
   await updateMinutes("m3", { status: "signed" } as never);
-  check("fully signed minutes cannot go back", (await back(admin, "m3", { discardSignatures: true })).status, 409);
+  check("fully signed minutes cannot go back", (await back(admin, "m3", { discardSignatures: ["chair@example.test"] })).status, 409);
   check("still signed", (await getMinutes("m3"))?.status, "signed");
 
   console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILED`}`);
