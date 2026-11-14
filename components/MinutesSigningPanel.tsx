@@ -179,14 +179,18 @@ export default function MinutesSigningPanel({
 
   // Carl, 14 Nov 2026: out for signing, the words are frozen; this takes them
   // back to Draft so they can be edited and sent out again.
-  const alreadySigned = signatories.filter((s) => s.signedAt).map((s) => s.name);
+  const signedNow = signatories.filter((s) => s.signedAt);
+  const alreadySigned = signedNow.map((s) => s.name);
   async function backToDraft() {
+    // The emails of the signatures this pop-up NAMES: the server refuses if
+    // anyone else has signed since, so nobody's signature goes unannounced.
     const data = await post(
       "back-to-draft",
-      { discardSignatures: alreadySigned.length > 0 },
+      { discardSignatures: signedNow.map((s) => s.email) },
       t("Back to draft. You can edit the minutes now."),
     );
-    if (data) setAskBack(false);
+    setAskBack(false);
+    if (!data) onChanged(); // refused: reload, so the list of who signed is current
   }
 
   return (
