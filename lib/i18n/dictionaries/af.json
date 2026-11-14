@@ -2652,5 +2652,13 @@
   "Type @ to tag someone.": "Tik @ om iemand te merk.",
   "This meeting date is in the future. Are you sure you want to continue?": "Hierdie vergaderingsdatum is in die toekoms. Is jy seker jy wil voortgaan?",
   "Yes, continue": "Ja, gaan voort",
-  "Change the date": "Verander die datum"
+  "Change the date": "Verander die datum",
+  "Back to draft": "Terug na konsep",
+  "Take these minutes back to draft?": "Neem hierdie notule terug na konsep?",
+  "Keep out for signing": "Hou uit vir ondertekening",
+  "Signing stops and the codes already emailed stop working. You can edit the minutes, then send them out for signing again.": "Ondertekening stop en die kodes wat reeds gestuur is, werk nie meer nie. Jy kan die notule wysig en dit dan weer vir ondertekening uitstuur.",
+  "{names} already signed. Their signatures will be removed and they will need to sign again.": "{names} het reeds onderteken. Hul handtekeninge sal verwyder word en hulle sal weer moet onderteken.",
+  "Back to draft. You can edit the minutes now.": "Terug na konsep. Jy kan die notule nou wysig.",
+  "Need to change something? Take the minutes back to draft, edit them, and send them out again.": "Moet jy iets verander? Neem die notule terug na konsep, wysig dit en stuur dit weer uit.",
+  "These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.": "Hierdie notule is uit vir ondertekening, so die teks is gesluit: almal moet dieselfde woorde onderteken. Gebruik Terug na konsep onder Ondertekening om iets te verander."
 }

@@ -172,7 +172,7 @@ export class MinutesLockedError extends Error {
 const SIGNED_CONTENT_FIELDS = [...MINUTES_TEXT_FIELDS, "original"] as const;
 
 const SIGNING_FREEZE_MESSAGE =
-  "These minutes are out for signing, so the text cannot change. Delete them and start again, or record the correction in the next set of minutes.";
+  "These minutes are out for signing, so the text cannot change. Use Back to draft under Signing to edit them, then send them out again.";
 
 export async function createMinutes(
   input: Omit<

@@ -922,7 +922,7 @@ export default function MinutesDetailPage() {
 
       {signingOpen && canManage && (
         <div className="mb-6 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {t("These minutes are out for signing, so the text is locked: everyone must sign the same words. If something needs changing, delete these minutes and start them again, or record the correction in the next set.")}
+          {t("These minutes are out for signing, so the text is locked: everyone must sign the same words. To change something, use Back to draft under Signing.")}
         </div>
       )}
 

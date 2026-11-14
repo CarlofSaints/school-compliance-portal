@@ -8,6 +8,7 @@ import DownloadLink from "@/components/DownloadLink";
 import FileUpload from "@/components/FileUpload";
 import { useT } from "@/components/I18nProvider";
 import AudiencePreview from "@/components/AudiencePreview";
+import ConfirmModal from "@/components/ConfirmModal";
 import {
   canOpenSigning,
   signatureMatchesDocument,
@@ -76,6 +77,7 @@ export default function MinutesSigningPanel({
   // "upload" = the drop box is showing.
   const [paperStep, setPaperStep] = useState<"" | "pick" | "ask" | "upload">("");
   const [ticked, setTicked] = useState<string[]>([]);
+  const [askBack, setAskBack] = useState(false);
 
   const me = myEmail.trim().toLowerCase();
   const mine = signatories.find((s) => s.email.trim().toLowerCase() === me);
@@ -175,8 +177,37 @@ export default function MinutesSigningPanel({
 
   if (!open && status !== "signed" && !canOpenSigning(status)) return null;
 
+  // Carl, 14 Nov 2026: out for signing, the words are frozen; this takes them
+  // back to Draft so they can be edited and sent out again.
+  const alreadySigned = signatories.filter((s) => s.signedAt).map((s) => s.name);
+  async function backToDraft() {
+    const data = await post(
+      "back-to-draft",
+      { discardSignatures: alreadySigned.length > 0 },
+      t("Back to draft. You can edit the minutes now."),
+    );
+    if (data) setAskBack(false);
+  }
+
   return (
     <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      {askBack && (
+        <ConfirmModal
+          title={t("Take these minutes back to draft?")}
+          yesLabel={t("Back to draft")}
+          noLabel={t("Keep out for signing")}
+          busy={busy}
+          onYes={backToDraft}
+          onNo={() => setAskBack(false)}
+        >
+          <p>{t("Signing stops and the codes already emailed stop working. You can edit the minutes, then send them out for signing again.")}</p>
+          {alreadySigned.length > 0 && (
+            <p className="font-medium text-risk-high">
+              {t("{names} already signed. Their signatures will be removed and they will need to sign again.", { names: alreadySigned.join(", ") })}
+            </p>
+          )}
+        </ConfirmModal>
+      )}
       <h2 className="text-sm font-semibold text-dark mb-1">{t("Signing")}</h2>
 
       {canOpenSigning(status) && (
@@ -443,6 +474,19 @@ export default function MinutesSigningPanel({
             </p>
           )}
         </>
+      )}
+      {open && canManage && (
+        <div className="mt-5 pt-5 border-t border-gray-100">
+          <p className="text-sm text-gray-500 mb-2">{t("Need to change something? Take the minutes back to draft, edit them, and send them out again.")}</p>
+          <button
+            type="button"
+            onClick={() => setAskBack(true)}
+            disabled={busy}
+            className="px-4 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm transition-colors disabled:opacity-50"
+          >
+            {t("Back to draft")}
+          </button>
+        </div>
       )}
     </div>
   );
